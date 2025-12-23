@@ -1,1 +1,29 @@
-# Placeholder for future compose configuration (intentionally empty).
+services:
+  tool-b:
+    build: ../services/tool-b
+    container_name: spiffe-tool-b
+    ports:
+      - "8443:8443"
+    command: ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8443"]
+
+  agent-a:
+    build: ../agents/agent-a
+    container_name: spiffe-agent-a
+    depends_on:
+      - tool-b
+    environment:
+      TOOL_B_URL: http://tool-b:8443
+    command: ["/app/client.sh"]
+    profiles:
+      - clients
+
+  rogue:
+    build: ../agents/rogue
+    container_name: spiffe-rogue
+    depends_on:
+      - tool-b
+    environment:
+      TOOL_B_URL: http://tool-b:8443
+    command: ["/app/rogue.sh"]
+    profiles:
+      - clients
