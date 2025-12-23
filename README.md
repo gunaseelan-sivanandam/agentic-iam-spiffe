@@ -1,4 +1,4 @@
-# agentic_iam_spiffe
+# agentic-iam-spiffe
 
 Learning project:
 Agentic IAM using SPIFFE / SPIRE
