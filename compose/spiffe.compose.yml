@@ -1,19 +1,92 @@
 services:
+  spire-server:
+    image: ghcr.io/spiffe/spire-server:1.9.0
+    container_name: spiffe-spire-server
+    volumes:
+      - ../spire/server:/run/spire/server
+      - ../spire/server/server.conf:/run/spire/server/server.conf:ro
+      - ../spire/shared:/run/spire/shared
+    command: ["-config", "/run/spire/server/server.conf"]
+
+  spire-token-init:
+    build: ../spire/token-init
+    container_name: spiffe-spire-token-init
+    depends_on:
+      - spire-server
+    volumes:
+      - ../spire/server:/run/spire/server
+      - ../spire/shared:/run/spire/shared
+
+  spire-agent:
+    build: ../spire/agent-wrapper
+    container_name: spiffe-spire-agent
+    pid: host
+    labels:
+      spiffe.node: "true"
+    depends_on:
+      - spire-server
+      - spire-token-init
+    volumes:
+      - ../spire/agent:/run/spire/agent
+      - ../spire/agent/agent.conf:/run/spire/agent/agent.conf:ro
+      - ../spire/shared:/run/spire/shared
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  spire-rogue-agent:
+    image: ghcr.io/spiffe/spire-agent:1.9.0
+    container_name: spiffe-spire-rogue-agent
+    depends_on:
+      - spire-server
+      - spire-token-init
+      - spire-agent
+    volumes:
+      - ../spire/rogue:/run/spire/rogue
+      - ../spire/rogue/agent.conf:/run/spire/rogue/agent.conf:ro
+    command: ["run", "-config", "/run/spire/rogue/agent.conf", "-joinToken", "not-a-real-token"]
+    profiles:
+      - tests
+
+  rogue-tests:
+    build:
+      context: ..
+      dockerfile: spire/rogue-tests/Dockerfile
+    container_name: spiffe-rogue-tests
+    depends_on:
+      - spire-server
+      - spire-token-init
+      - spire-agent
+      - spire-rogue-agent
+    volumes:
+      - ../spire/rogue:/run/spire/rogue
+      - ../spire/shared:/run/spire/shared:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    profiles:
+      - tests
+
   tool-b:
     build: ../services/tool-b
     container_name: spiffe-tool-b
+    labels:
+      spiffe.workload: "tool-b"
     ports:
       - "8443:8443"
-    command: ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8443"]
+    environment:
+      ALLOWED_CLIENT_SPIFFE_ID: spiffe://example.org/agent-a
+    volumes:
+      - ../spire/agent:/run/spire/agent:ro
 
   agent-a:
     build: ../agents/agent-a
     container_name: spiffe-agent-a
+    labels:
+      spiffe.workload: "agent-a"
     depends_on:
       - tool-b
     environment:
-      TOOL_B_URL: http://tool-b:8443
+      TOOL_B_URL: https://tool-b:8443
     command: ["/app/client.sh"]
+    volumes:
+      - ../spire/agent:/run/spire/agent:ro
     profiles:
       - clients
 
