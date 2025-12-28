@@ -8,6 +8,20 @@ Goals:
 - mTLS without OAuth tokens
 - Compare against OAuth + mTLS + PoP lab
 
+## Cleanup (stop all containers and reset data)
+
+Stop all services and remove the join token + data dirs:
+```bash
+docker compose --profile tests --profile clients -f compose/spiffe.compose.yml down
+sudo rm -rf spire/server/data spire/agent/data
+rm -f spire/shared/join_token
+```
+
+Test report output location:
+```text
+test_report.log
+```
+
 ## SPIRE (Milestone 1)
 
 Start SPIRE + tool-b:
@@ -20,6 +34,22 @@ Check logs for successful startup:
 docker compose -f compose/spiffe.compose.yml logs -f spire-server spire-token-init spire-agent
 ```
 You should see the server listening on its API port, the token init container generating a join token (only when missing) and ensuring a node entry, and the agent connecting to `spire-server:8081` without fatal errors.
+
+Server logs only:
+```bash
+docker compose -f compose/spiffe.compose.yml logs -f spire-server
+```
+
+Node (agent) logs only:
+```bash
+docker compose -f compose/spiffe.compose.yml logs -f spire-agent
+```
+
+Check server entries and agents:
+```bash
+docker exec -it spiffe-spire-server /opt/spire/bin/spire-server entry show -socketPath /run/spire/server/data/private/api.sock
+docker exec -it spiffe-spire-server /opt/spire/bin/spire-server agent list -socketPath /run/spire/server/data/private/api.sock
+```
 
 ## Milestone 1.5: Rogue node checks
 
@@ -40,6 +70,12 @@ What to look for in logs:
 - `tool-b` prints its SPIFFE ID and only accepts `spiffe://example.org/agent-a`
 - `agent-a` prints its SPIFFE ID and verifies `spiffe://example.org/tool-b`
 - `rogue` should fail (no Workload API socket mount)
+
+Check server entries and agents:
+```bash
+docker exec -it spiffe-spire-server /opt/spire/bin/spire-server entry show -socketPath /run/spire/server/data/private/api.sock
+docker exec -it spiffe-spire-server /opt/spire/bin/spire-server agent list -socketPath /run/spire/server/data/private/api.sock
+```
 
 ## Milestone 2 security tests (unified suite)
 

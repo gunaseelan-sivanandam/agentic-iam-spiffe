@@ -1,0 +1,20 @@
+Test run started: 2025-12-28T18:58:00+0000 (UTC)
+
+Milestone 1 - Server and agent connection and successful entry
+[T1] Rogue missing join token rejects attestation     .... [32mPASS[0m
+[T2] Rogue forged join token rejects attestation      .... [32mPASS[0m
+[T3] Rogue replayed join token rejects attestation    .... [32mPASS[0m
+[T4] Rogue cannot read join token                     .... [32mPASS[0m
+[T5] Only intended node entries exist                 .... [32mPASS[0m
+
+Milestone 2 - Workload identities security tests
+[T1] Rogue without SVID cannot access /secret         .... [32mPASS[0m
+[T2] Rogue with invalid client cert is rejected       .... [32mPASS[0m
+[T3] Rogue with expired client cert is rejected       .... [32mPASS[0m
+[T4] Rogue with wrong SPIFFE ID is rejected           .... [32mPASS[0m
+[T5] Rogue without Workload API socket cannot fetch SVID .... [32mPASS[0m
+[T6] Rogue with socket but no entry cannot fetch SVID .... [32mPASS[0m
+[T7] Rogue cannot read SVIDs or keys                  .... [32mPASS[0m
+[T8] No unintended SPIRE entries created              .... [32mPASS[0m
+
+Total: 13  Passed: 13  Failed: 0

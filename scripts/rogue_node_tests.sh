@@ -5,6 +5,19 @@ GREEN='\033[32m'
 RED='\033[31m'
 RESET='\033[0m'
 
+LOG_FILE="${TEST_LOG_FILE:-/repo/test_report.log}"
+LOG_PIPE="/tmp/rogue_test_log.pipe"
+
+mkdir -p "$(dirname "$LOG_FILE")"
+: > "$LOG_FILE"
+date '+Test run started: %Y-%m-%dT%H:%M:%S%z (%Z)' >> "$LOG_FILE"
+rm -f "$LOG_PIPE"
+mkfifo "$LOG_PIPE"
+tee -a "$LOG_FILE" <"$LOG_PIPE" &
+TEE_PID=$!
+exec >"$LOG_PIPE" 2>&1
+trap 'rm -f "$LOG_PIPE"; kill "$TEE_PID" >/dev/null 2>&1 || true' EXIT
+
 TOTAL=0
 PASSED=0
 FAILED=0
