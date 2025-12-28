@@ -40,3 +40,11 @@ What to look for in logs:
 - `tool-b` prints its SPIFFE ID and only accepts `spiffe://example.org/agent-a`
 - `agent-a` prints its SPIFFE ID and verifies `spiffe://example.org/tool-b`
 - `rogue` should fail (no Workload API socket mount)
+
+## Milestone 2 security tests (unified suite)
+
+Run the full security test suite (includes Milestone 1 + Milestone 2 checks):
+```bash
+docker compose --profile tests -f compose/spiffe.compose.yml up --build --abort-on-container-exit rogue-tests
+```
+Expected behavior: each test prints an ID, name, and a green PASS; the runner prints totals and exits 0 if all checks pass.

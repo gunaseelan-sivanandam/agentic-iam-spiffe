@@ -46,6 +46,17 @@ services:
     profiles:
       - tests
 
+  rogue-socket:
+    build: ../agents/rogue
+    container_name: spiffe-rogue-socket
+    depends_on:
+      - spire-agent
+    volumes:
+      - ../spire/agent:/run/spire/agent:ro
+    command: ["sleep", "infinity"]
+    profiles:
+      - tests
+
   rogue-tests:
     build:
       context: ..
@@ -56,6 +67,8 @@ services:
       - spire-token-init
       - spire-agent
       - spire-rogue-agent
+      - rogue-socket
+      - tool-b
     volumes:
       - ../spire/rogue:/run/spire/rogue
       - ../spire/shared:/run/spire/shared:ro
