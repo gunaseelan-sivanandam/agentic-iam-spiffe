@@ -197,6 +197,14 @@ fi
 
 TOOLB_READY=0
 TOOLB_REASON=""
+CAPISS_READY=0
+CAPISS_REASON=""
+CAPISS_AGENT_CERT=""
+CAPISS_AGENT_KEY=""
+CAPISS_ROGUE_CERT=""
+CAPISS_ROGUE_KEY=""
+CAPISS_MINT_URL="https://capability-issuer-envoy:9443/capabilities/mint"
+CAPISS_NO_OPA_URL="https://capability-issuer-no-opa-envoy:9444/capabilities/mint"
 
 ensure_toolb_material() {
   if [ "$TOOLB_READY" -eq 1 ]; then
@@ -217,6 +225,110 @@ ensure_toolb_material() {
   fi
   TOOLB_READY=1
   return 0
+}
+
+prepare_client_material() {
+  service_name="$1"
+  tmpdir="$2"
+  outdir="/repo/tmp_svid/${service_name}_out"
+  cert="$tmpdir/${service_name}_svid.pem"
+  key="$tmpdir/${service_name}_svid.key"
+  host_repo="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/repo"}}{{.Source}}{{end}}{{end}}' spiffe-rogue-tests 2>/dev/null || true)"
+  if [ -z "$host_repo" ]; then
+    host_repo="$(awk '$5=="/repo"{print $4; exit}' /proc/self/mountinfo 2>/dev/null || true)"
+  fi
+
+  rm -rf "$outdir"
+  mkdir -p "$outdir"
+
+  if [ -z "$host_repo" ]; then
+    set_reason "failed to resolve host repo path"
+    return 1
+  fi
+
+  err_log="/tmp/${service_name}_svid_fetch.err"
+  if ! docker run --rm \
+    --entrypoint /opt/spire/bin/spire-agent \
+    -v "$host_repo/spire/agent":/run/spire/agent:ro \
+    -v "$host_repo":/repo \
+    -l "com.docker.compose.service=${service_name}" \
+    ghcr.io/spiffe/spire-agent:1.9.0 \
+    api fetch x509 -socketPath /run/spire/agent/private/api.sock -write "$outdir" \
+    >"$err_log" 2>&1; then
+    set_reason "failed to fetch SVID for ${service_name}: $(tail -n 2 "$err_log" 2>/dev/null | tr '\n' ' ')"
+    return 1
+  fi
+
+  if [ ! -s "$outdir/svid.0.pem" ] || [ ! -s "$outdir/svid.0.key" ]; then
+    set_reason "missing SVID material for ${service_name}"
+    return 1
+  fi
+
+  cp "$outdir/svid.0.pem" "$cert"
+  cp "$outdir/svid.0.key" "$key"
+
+  CLIENT_CERT="$cert"
+  CLIENT_KEY="$key"
+  return 0
+}
+
+ensure_capiss_material() {
+  if [ "$CAPISS_READY" -eq 1 ]; then
+    return 0
+  fi
+  if [ "$CAPISS_READY" -eq -1 ]; then
+    set_reason "$CAPISS_REASON"
+    return 1
+  fi
+
+  tmpdir="/tmp/capiss_material"
+  rm -rf "$tmpdir"
+  mkdir -p "$tmpdir"
+
+  if ! prepare_client_material "agent-a" "$tmpdir"; then
+    CAPISS_READY=-1
+    CAPISS_REASON="$FAIL_REASON"
+    set_reason "$FAIL_REASON"
+    return 1
+  fi
+  CAPISS_AGENT_CERT="$CLIENT_CERT"
+  CAPISS_AGENT_KEY="$CLIENT_KEY"
+
+  if ! prepare_client_material "rogue" "$tmpdir"; then
+    CAPISS_READY=-1
+    CAPISS_REASON="$FAIL_REASON"
+    set_reason "$FAIL_REASON"
+    return 1
+  fi
+  CAPISS_ROGUE_CERT="$CLIENT_CERT"
+  CAPISS_ROGUE_KEY="$CLIENT_KEY"
+
+  CAPISS_READY=1
+  return 0
+}
+
+mint_with_cert() {
+  cert="$1"
+  key="$2"
+  url="$3"
+  out="$4"
+  : >"$out"
+  status="$(curl -sS -o "$out" -w '%{http_code}' --insecure --cert "$cert" --key "$key" \
+    -H "Content-Type: application/json" -d '{}' "$url" || true)"
+  printf '%s' "$status"
+}
+
+expect_edge_unreachable() {
+  url="$1"
+  out="$2"
+  set +e
+  curl -sS --max-time 2 "$url" >"$out" 2>&1
+  rc=$?
+  set -e
+  if [ $rc -ne 0 ]; then
+    return 0
+  fi
+  return 1
 }
 
 # M1-T1
@@ -527,6 +639,93 @@ M25_T3_test() {
   return 0
 }
 
+M3S2_T1_test() {
+  if ! ensure_capiss_material; then
+    return 1
+  fi
+  out="/tmp/capiss_t1.out"
+  status="$(mint_with_cert "$CAPISS_AGENT_CERT" "$CAPISS_AGENT_KEY" "$CAPISS_MINT_URL" "$out")"
+  if [ "$status" != "200" ]; then
+    set_reason "expected 200, got ${status:-none}; body: $(cat "$out")"
+    return 1
+  fi
+  if ! grep -Fq '"token_type":"biscuit"' "$out" || \
+    ! grep -Fq '"token":""' "$out" || \
+    ! grep -Fq '"issued_to":"spiffe://example.org/agent-a"' "$out" || \
+    ! grep -Fq '"aud":"tool-b"' "$out" || \
+    ! grep -Fq '"act":"read"' "$out" || \
+    ! grep -Fq '"res":"/secret"' "$out"; then
+    set_reason "unexpected mint response: $(cat "$out")"
+    return 1
+  fi
+  return 0
+}
+
+M3S2_T2_test() {
+  if ! ensure_capiss_material; then
+    return 1
+  fi
+  out="/tmp/capiss_t2.out"
+  status="$(mint_with_cert "$CAPISS_ROGUE_CERT" "$CAPISS_ROGUE_KEY" "$CAPISS_MINT_URL" "$out")"
+  if [ "$status" != "403" ]; then
+    set_reason "expected 403, got ${status:-none}; body: $(cat "$out")"
+    return 1
+  fi
+  if ! grep -Fq '"error":"denied"' "$out" || ! grep -Fq '"reason":"policy"' "$out"; then
+    set_reason "unexpected deny response: $(cat "$out")"
+    return 1
+  fi
+  return 0
+}
+
+M3S2_T3_test() {
+  out="/tmp/capiss_t3.out"
+  if expect_edge_unreachable "http://opa:8181/v1/data/capiss/allow" "$out"; then
+    return 0
+  fi
+  set_reason "OPA reachable from edge network"
+  return 1
+}
+
+M3S2_T4_test() {
+  if ! ensure_capiss_material; then
+    return 1
+  fi
+  ready=0
+  for i in $(seq 1 40); do
+    if curl -sS --insecure --cert "$CAPISS_AGENT_CERT" --key "$CAPISS_AGENT_KEY" \
+      https://capability-issuer-no-opa-envoy:9444/health >/dev/null 2>&1; then
+      ready=1
+      break
+    fi
+    sleep 0.2
+  done
+  if [ "$ready" -ne 1 ]; then
+    set_reason "capability-issuer-no-opa-envoy not reachable"
+    return 1
+  fi
+  out="/tmp/capiss_t4.out"
+  status="$(mint_with_cert "$CAPISS_AGENT_CERT" "$CAPISS_AGENT_KEY" "$CAPISS_NO_OPA_URL" "$out")"
+  if [ "$status" != "503" ] && [ "$status" != "403" ]; then
+    set_reason "expected 503/403, got ${status:-none}; body: $(cat "$out")"
+    return 1
+  fi
+  if ! grep -Fq '"error":"denied"' "$out" || ! grep -Fq '"reason":"opa_unavailable"' "$out"; then
+    set_reason "unexpected deny response: $(cat "$out")"
+    return 1
+  fi
+  return 0
+}
+
+M3S2_T5_test() {
+  out="/tmp/capiss_t5.out"
+  if expect_edge_unreachable "http://capability-issuer:8000/health" "$out"; then
+    return 0
+  fi
+  set_reason "capability-issuer app reachable from edge network"
+  return 1
+}
+
 print_section "Milestone 1 - Server and agent connection and successful entry"
 run_test "T1" "Rogue missing join token rejects attestation" c1_test
 run_test "T2" "Rogue forged join token rejects attestation" c2_test
@@ -548,6 +747,13 @@ print_section "Milestone 2.5 - Envoy ingress boundary"
 run_test "T1" "tool-b app not reachable from edge network" M25_T1_test
 run_test "T2" "tool-b rejects missing x-spiffe-id header" M25_T2_test
 run_test "T3" "tool-b rejects mismatched x-spiffe-id header" M25_T3_test
+
+print_section "M3.S2 — OPA-gated capability minting"
+run_test "T1" "agent-a can mint (allowed by OPA)" M3S2_T1_test
+run_test "T2" "rogue mint denied by policy" M3S2_T2_test
+run_test "T3" "OPA is not reachable from edge" M3S2_T3_test
+run_test "T4" "Fail closed when OPA is unavailable" M3S2_T4_test
+run_test "T5" "Issuer denies when x-spiffe-id missing (structural guard)" M3S2_T5_test
 
 printf '\nTotal: %d  Passed: %d  Failed: %d\n' "$TOTAL" "$PASSED" "$FAILED"
 if [ "$FAILED" -ne 0 ]; then

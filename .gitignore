@@ -1,3 +1,5 @@
 spire/shared/join_token
 spire/server/data
 spire/agent/data
+spire/agent/private
+tmp_svid/

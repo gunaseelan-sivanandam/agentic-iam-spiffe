@@ -111,3 +111,33 @@ docker compose --profile clients -f compose/spiffe.compose.yml up -d \
 What to look for:
 - `agent-a` calls `POST /capabilities/mint` via `capability-issuer-envoy` and prints a JSON response
 - `capability-issuer` rejects missing `x-spiffe-id` because it only trusts the header behind `capiss_app_net`
+
+Policy boundary note:
+OPA is deployed as a private, internal policy decision point with no externally
+exposed ports. The capability issuer fails closed if OPA is unavailable. This setup
+reflects common sidecar-style policy integration and is sufficient to demonstrate
+the semantic separation of identity and authority.
+
+## M3.S2 tests
+
+Run the OPA-gated capability minting tests:
+```bash
+docker compose --profile tests -f compose/spiffe.compose.yml up --build --abort-on-container-exit rogue-tests
+```
+
+### Note on test-only services
+
+The service `capability-issuer-no-opa-envoy` exists **only for tests**.
+
+Its purpose is to deterministically validate **fail-closed behavior**
+of the Capability Issuer when the policy decision point (OPA) is
+unavailable.
+
+Key points:
+- It is used exclusively in test profiles.
+- It has a SPIRE workload entry solely so Envoy can enforce SPIFFE mTLS
+  during tests.
+- It is not intended as a production deployment pattern.
+
+This service ensures that capability minting never succeeds without
+an explicit policy decision.

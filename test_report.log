@@ -1,4 +1,4 @@
-Test run started: 2026-01-02T14:12:53+0000 (UTC)
+Test run started: 2026-01-03T19:13:53+0000 (UTC)
 
 Milestone 1 - Server and agent connection and successful entry
 [T1] Rogue missing join token rejects attestation     .... [32mPASS[0m
@@ -22,4 +22,11 @@ Milestone 2.5 - Envoy ingress boundary
 [T2] tool-b rejects missing x-spiffe-id header        .... [32mPASS[0m
 [T3] tool-b rejects mismatched x-spiffe-id header     .... [32mPASS[0m
 
-Total: 16  Passed: 16  Failed: 0
+M3.S2 — OPA-gated capability minting
+[T1] agent-a can mint (allowed by OPA)                .... [32mPASS[0m
+[T2] rogue mint denied by policy                      .... [32mPASS[0m
+[T3] OPA is not reachable from edge                   .... [32mPASS[0m
+[T4] Fail closed when OPA is unavailable              .... [32mPASS[0m
+[T5] Issuer denies when x-spiffe-id missing (structural guard) .... [32mPASS[0m
+
+Total: 21  Passed: 21  Failed: 0

@@ -69,6 +69,10 @@ services:
       - spire-rogue-agent
       - rogue-socket
       - tool-b-envoy
+      - capability-issuer-envoy
+      - capability-issuer-no-opa-envoy
+      - agent-a
+      - rogue
     volumes:
       - ../spire/rogue:/run/spire/rogue
       - ../spire/shared:/run/spire/shared:ro
@@ -78,6 +82,7 @@ services:
       TEST_LOG_FILE: /repo/test_report.log
     networks:
       - toolb_edge_net
+      - capiss_edge_net
     profiles:
       - tests
 
@@ -116,6 +121,8 @@ services:
       spiffe.workload: "capability-issuer"
     networks:
       - capiss_app_net
+    depends_on:
+      - opa
 
   capability-issuer-envoy:
     build: ../services/capability-issuer-envoy
@@ -131,6 +138,44 @@ services:
       - ../spire/agent:/run/spire/agent:ro
     networks:
       - capiss_edge_net
+      - capiss_app_net
+
+  capability-issuer-no-opa:
+    build: ../services/capability-issuer
+    container_name: spiffe-capability-issuer-no-opa
+    labels:
+      spiffe.workload: "capability-issuer-no-opa"
+    environment:
+      OPA_URL: http://opa-missing:8181/v1/data/capiss/allow
+    networks:
+      - capiss_app_net
+    profiles:
+      - tests
+
+  capability-issuer-no-opa-envoy:
+    build: ../services/capability-issuer-envoy
+    container_name: spiffe-capability-issuer-no-opa-envoy
+    labels:
+      spiffe.workload: "capability-issuer-no-opa-envoy"
+    depends_on:
+      - spire-agent
+      - capability-issuer-no-opa
+    volumes:
+      - ../spire/agent:/run/spire/agent:ro
+      - ../services/capability-issuer-envoy/envoy-no-opa.yaml:/etc/envoy/envoy.yaml:ro
+    networks:
+      - capiss_edge_net
+      - capiss_app_net
+    profiles:
+      - tests
+
+  opa:
+    image: openpolicyagent/opa:latest
+    container_name: spiffe-opa
+    command: ["run", "--server", "--addr=0.0.0.0:8181", "/policies/policy.rego"]
+    volumes:
+      - ../services/opa:/policies:ro
+    networks:
       - capiss_app_net
 
   agent-a:
@@ -152,6 +197,7 @@ services:
       - capiss_edge_net
     profiles:
       - clients
+      - tests
 
   rogue:
     build: ../agents/rogue
@@ -170,6 +216,7 @@ services:
       - capiss_edge_net
     profiles:
       - clients
+      - tests
 
 networks:
   toolb_edge_net: {}
