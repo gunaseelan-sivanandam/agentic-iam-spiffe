@@ -1,12 +1,11 @@
 FROM ghcr.io/spiffe/spire-agent:1.9.0 AS spire
 
-FROM python:3.11-slim
+FROM envoyproxy/envoy:v1.29.2
 
-WORKDIR /app
-RUN pip install --no-cache-dir cryptography
+USER root
 COPY --from=spire /opt/spire/bin/spire-agent /opt/spire/bin/spire-agent
-COPY server.py /app/server.py
 COPY entrypoint.sh /app/entrypoint.sh
+COPY envoy.yaml /etc/envoy/envoy.yaml
 RUN chmod 0755 /opt/spire/bin/spire-agent /app/entrypoint.sh
-EXPOSE 8080
+EXPOSE 9443
 ENTRYPOINT ["/app/entrypoint.sh"]

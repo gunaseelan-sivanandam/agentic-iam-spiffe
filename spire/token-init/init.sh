@@ -6,7 +6,10 @@ SOCKET="/run/spire/server/data/private/api.sock"
 TOKEN_FILE="/run/spire/shared/join_token"
 NODE_SPIFFE_ID="spiffe://example.org/agent/spire-agent"
 TOOL_B_SPIFFE_ID="spiffe://example.org/tool-b"
+TOOL_B_ENVOY_SPIFFE_ID="spiffe://example.org/tool-b-envoy"
+CAPISS_ENVOY_SPIFFE_ID="spiffe://example.org/capability-issuer-envoy"
 AGENT_A_SPIFFE_ID="spiffe://example.org/agent-a"
+ROGUE_SPIFFE_ID="spiffe://example.org/rogue"
 
 while [ ! -S "$SOCKET" ]; do
   sleep 0.5
@@ -58,4 +61,7 @@ if ! wait_for_node_entry; then
 fi
 
 create_workload_entry "$TOOL_B_SPIFFE_ID" "docker:label:com.docker.compose.service:tool-b"
+create_workload_entry "$TOOL_B_ENVOY_SPIFFE_ID" "docker:label:com.docker.compose.service:tool-b-envoy"
+create_workload_entry "$CAPISS_ENVOY_SPIFFE_ID" "docker:label:com.docker.compose.service:capability-issuer-envoy"
 create_workload_entry "$AGENT_A_SPIFFE_ID" "docker:label:com.docker.compose.service:agent-a"
+create_workload_entry "$ROGUE_SPIFFE_ID" "docker:label:com.docker.compose.service:rogue"

@@ -68,7 +68,7 @@ services:
       - spire-agent
       - spire-rogue-agent
       - rogue-socket
-      - tool-b
+      - tool-b-envoy
     volumes:
       - ../spire/rogue:/run/spire/rogue
       - ../spire/shared:/run/spire/shared:ro
@@ -76,6 +76,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       TEST_LOG_FILE: /repo/test_report.log
+    networks:
+      - toolb_edge_net
     profiles:
       - tests
 
@@ -84,12 +86,52 @@ services:
     container_name: spiffe-tool-b
     labels:
       spiffe.workload: "tool-b"
-    ports:
-      - "8443:8443"
     environment:
       ALLOWED_CLIENT_SPIFFE_ID: spiffe://example.org/agent-a
     volumes:
       - ../spire/agent:/run/spire/agent:ro
+    networks:
+      - toolb_app_net
+
+  tool-b-envoy:
+    build: ../services/tool-b-envoy
+    container_name: spiffe-tool-b-envoy
+    labels:
+      spiffe.workload: "tool-b-envoy"
+    depends_on:
+      - spire-agent
+      - tool-b
+    ports:
+      - "8443:8443"
+    volumes:
+      - ../spire/agent:/run/spire/agent:ro
+    networks:
+      - toolb_edge_net
+      - toolb_app_net
+
+  capability-issuer:
+    build: ../services/capability-issuer
+    container_name: spiffe-capability-issuer
+    labels:
+      spiffe.workload: "capability-issuer"
+    networks:
+      - capiss_app_net
+
+  capability-issuer-envoy:
+    build: ../services/capability-issuer-envoy
+    container_name: spiffe-capability-issuer-envoy
+    labels:
+      spiffe.workload: "capability-issuer-envoy"
+    depends_on:
+      - spire-agent
+      - capability-issuer
+    ports:
+      - "9443:9443"
+    volumes:
+      - ../spire/agent:/run/spire/agent:ro
+    networks:
+      - capiss_edge_net
+      - capiss_app_net
 
   agent-a:
     build: ../agents/agent-a
@@ -97,22 +139,40 @@ services:
     labels:
       spiffe.workload: "agent-a"
     depends_on:
-      - tool-b
+      - tool-b-envoy
+      - capability-issuer-envoy
     environment:
-      TOOL_B_URL: https://tool-b:8443
+      TOOL_B_URL: https://tool-b-envoy:8443
+      CAPABILITY_ISSUER_URL: https://capability-issuer-envoy:9443
     command: ["/app/client.sh"]
     volumes:
       - ../spire/agent:/run/spire/agent:ro
+    networks:
+      - toolb_edge_net
+      - capiss_edge_net
     profiles:
       - clients
 
   rogue:
     build: ../agents/rogue
     container_name: spiffe-rogue
+    labels:
+      spiffe.workload: "rogue"
     depends_on:
-      - tool-b
+      - tool-b-envoy
     environment:
-      TOOL_B_URL: http://tool-b:8443
+      TOOL_B_URL: https://tool-b-envoy:8443
     command: ["/app/rogue.sh"]
+    volumes:
+      - ../spire/agent:/run/spire/agent:ro
+    networks:
+      - toolb_edge_net
+      - capiss_edge_net
     profiles:
       - clients
+
+networks:
+  toolb_edge_net: {}
+  toolb_app_net: {}
+  capiss_edge_net: {}
+  capiss_app_net: {}

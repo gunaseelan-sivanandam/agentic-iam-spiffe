@@ -125,24 +125,24 @@ prepare_toolb_material() {
 
   i=0
   while [ $i -lt 30 ]; do
-    if docker exec spiffe-tool-b test -s /run/spire/svid/svid.pem 2>/dev/null; then
+    if docker exec spiffe-tool-b-envoy test -s /run/spire/svid/svid.pem 2>/dev/null; then
       break
     fi
     i=$((i + 1))
     sleep 1
   done
 
-  if ! docker exec spiffe-tool-b test -s /run/spire/svid/svid.pem 2>/dev/null; then
-    set_reason "tool-b SVID not available"
+  if ! docker exec spiffe-tool-b-envoy test -s /run/spire/svid/svid.pem 2>/dev/null; then
+    set_reason "tool-b-envoy SVID not available"
     return 1
   fi
 
-  docker exec spiffe-tool-b cat /run/spire/svid/svid.pem >"$cert"
-  docker exec spiffe-tool-b cat /run/spire/svid/svid.key >"$key"
-  docker exec spiffe-tool-b cat /run/spire/svid/bundle.pem >"$bundle"
+  docker exec spiffe-tool-b-envoy cat /run/spire/svid/svid.pem >"$cert"
+  docker exec spiffe-tool-b-envoy cat /run/spire/svid/svid.key >"$key"
+  docker exec spiffe-tool-b-envoy cat /run/spire/svid/bundle.pem >"$bundle"
 
   if [ ! -s "$cert" ] || [ ! -s "$key" ] || [ ! -s "$bundle" ]; then
-    set_reason "failed to copy tool-b cert material"
+    set_reason "failed to copy tool-b-envoy cert material"
     return 1
   fi
 
@@ -290,7 +290,7 @@ T1_test() {
   fi
   out="/tmp/toolb_material/t1.out"
   set +e
-  $TIMEOUT_BIN 6s openssl s_client -connect tool-b:8443 -CAfile "$TOOLB_BUNDLE" \
+  $TIMEOUT_BIN 6s openssl s_client -connect tool-b-envoy:8443 -CAfile "$TOOLB_BUNDLE" \
     -verify_return_error < /dev/null >"$out" 2>&1
   rc=$?
   set -e
@@ -311,7 +311,7 @@ T2_test() {
     -out "$tmpdir/bad.pem" -days 1 -subj "/CN=rogue" >/dev/null 2>&1
   out="/tmp/toolb_material/t2.out"
   set +e
-  $TIMEOUT_BIN 6s openssl s_client -connect tool-b:8443 -cert "$tmpdir/bad.pem" \
+  $TIMEOUT_BIN 6s openssl s_client -connect tool-b-envoy:8443 -cert "$tmpdir/bad.pem" \
     -key "$tmpdir/bad.key" -CAfile "$TOOLB_BUNDLE" -verify_return_error \
     < /dev/null >"$out" 2>&1
   rc=$?
@@ -338,7 +338,7 @@ T3_test() {
     >/dev/null 2>&1
   out="/tmp/toolb_material/t3.out"
   set +e
-  $TIMEOUT_BIN 6s openssl s_client -connect tool-b:8443 -cert "$tmpdir/exp.pem" \
+  $TIMEOUT_BIN 6s openssl s_client -connect tool-b-envoy:8443 -cert "$tmpdir/exp.pem" \
     -key "$tmpdir/exp.key" -CAfile "$TOOLB_BUNDLE" -verify_return_error \
     < /dev/null >"$out" 2>&1
   rc=$?
@@ -356,8 +356,8 @@ T4_test() {
     return 1
   fi
   out="/tmp/toolb_material/t4.out"
-  printf "GET /secret HTTP/1.1\r\nHost: tool-b\r\nConnection: close\r\n\r\n" | \
-    $TIMEOUT_BIN 6s openssl s_client -connect tool-b:8443 -cert "$TOOLB_CERT" \
+  printf "GET /secret HTTP/1.1\r\nHost: tool-b-envoy\r\nConnection: close\r\n\r\n" | \
+    $TIMEOUT_BIN 6s openssl s_client -connect tool-b-envoy:8443 -cert "$TOOLB_CERT" \
       -key "$TOOLB_KEY" -CAfile "$TOOLB_BUNDLE" -verify_return_error \
       -showcerts -ign_eof >"$out" 2>&1 || true
   if ! grep -q "Verify return code: 0 (ok)" "$out"; then
@@ -468,6 +468,65 @@ T8_test() {
   return 1
 }
 
+M25_T1_test() {
+  out="/tmp/toolb_direct.out"
+  set +e
+  curl -sS --max-time 2 http://tool-b:8080/health >"$out" 2>&1
+  rc=$?
+  set -e
+  if [ $rc -eq 0 ]; then
+    set_reason "tool-b app reachable from edge network"
+    return 1
+  fi
+  return 0
+}
+
+M25_T2_test() {
+  set +e
+  docker exec spiffe-tool-b python - <<'PY'
+import sys
+import urllib.error
+import urllib.request
+
+try:
+    urllib.request.urlopen("http://127.0.0.1:8080/secret")
+    print("unexpected success")
+    sys.exit(1)
+except urllib.error.HTTPError as exc:
+    code = exc.code
+    print(code)
+    sys.exit(0 if code == 401 else 1)
+PY
+  rc=$?
+  set -e
+  if [ $rc -ne 0 ]; then
+    set_reason "missing x-spiffe-id not rejected by tool-b"
+    return 1
+  fi
+  return 0
+}
+
+M25_T3_test() {
+  if ! ensure_toolb_material; then
+    return 1
+  fi
+  out="/tmp/toolb_material/m25_t3.out"
+  printf "GET /secret HTTP/1.1\r\nHost: tool-b-envoy\r\nConnection: close\r\n\r\n" | \
+    $TIMEOUT_BIN 6s openssl s_client -connect tool-b-envoy:8443 -cert "$TOOLB_CERT" \
+      -key "$TOOLB_KEY" -CAfile "$TOOLB_BUNDLE" -verify_return_error \
+      -showcerts -ign_eof >"$out" 2>&1 || true
+  if ! grep -q "Verify return code: 0 (ok)" "$out"; then
+    set_reason "server verification did not succeed"
+    return 1
+  fi
+  status=$(tr -d '\r' <"$out" | grep -m1 '^HTTP/' | awk '{print $2}')
+  if [ "$status" != "403" ]; then
+    set_reason "expected HTTP 403, got ${status:-none}"
+    return 1
+  fi
+  return 0
+}
+
 print_section "Milestone 1 - Server and agent connection and successful entry"
 run_test "T1" "Rogue missing join token rejects attestation" c1_test
 run_test "T2" "Rogue forged join token rejects attestation" c2_test
@@ -484,6 +543,11 @@ run_test "T5" "Rogue without Workload API socket cannot fetch SVID" T5_test
 run_test "T6" "Rogue with socket but no entry cannot fetch SVID" T6_test
 run_test "T7" "Rogue cannot read SVIDs or keys" T7_test
 run_test "T8" "No unintended SPIRE entries created" T8_test
+
+print_section "Milestone 2.5 - Envoy ingress boundary"
+run_test "T1" "tool-b app not reachable from edge network" M25_T1_test
+run_test "T2" "tool-b rejects missing x-spiffe-id header" M25_T2_test
+run_test "T3" "tool-b rejects mismatched x-spiffe-id header" M25_T3_test
 
 printf '\nTotal: %d  Passed: %d  Failed: %d\n' "$TOTAL" "$PASSED" "$FAILED"
 if [ "$FAILED" -ne 0 ]; then

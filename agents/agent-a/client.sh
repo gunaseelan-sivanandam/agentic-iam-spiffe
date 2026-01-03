@@ -4,7 +4,7 @@ set -e
 
 SPIRE_SOCKET="${SPIRE_AGENT_SOCKET:-/run/spire/agent/private/api.sock}"
 SVID_DIR="${SPIRE_SVID_DIR:-/run/spire/svid}"
-SERVER_EXPECTED_SPIFFE_ID="${TOOL_B_SPIFFE_ID:-spiffe://example.org/tool-b}"
+SERVER_EXPECTED_SPIFFE_ID="${TOOL_B_SPIFFE_ID:-spiffe://example.org/tool-b-envoy}"
 
 if [ -z "$TOOL_B_URL" ]; then
   echo "ERROR: TOOL_B_URL is not set"
@@ -41,7 +41,7 @@ fi
 CLIENT_SPIFFE_ID="$(openssl x509 -in "$SVID_DIR/svid.pem" -noout -ext subjectAltName | sed -n 's/.*URI:\(spiffe:[^,]*\).*/\1/p' | head -n 1)"
 echo "agent-a SPIFFE ID: $CLIENT_SPIFFE_ID"
 
-echo "Waiting for tool-b to startup..."
+echo "Waiting for tool-b-envoy to startup..."
 ready=0
 for i in $(seq 1 40); do
   if curl -sS --fail --insecure --cert "$SVID_DIR/svid.pem" --key "$SVID_DIR/svid.key" "$TOOL_B_URL/health" >/dev/null 2>&1; then
@@ -52,7 +52,7 @@ for i in $(seq 1 40); do
 done
 
 if [ "$ready" -ne 1 ]; then
-  echo "ERROR: tool-b not reachable at $TOOL_B_URL after 40 attempts"
+  echo "ERROR: tool-b-envoy not reachable at $TOOL_B_URL after 40 attempts"
   exit 1
 fi
 
@@ -72,7 +72,7 @@ request_secret_via_openssl() {
   exec 3<>"$fifo"
 
   stdbuf -oL -eL openssl s_client \
-    -connect tool-b:8443 \
+    -connect tool-b-envoy:8443 \
     -cert "$SVID_DIR/svid.pem" \
     -key "$SVID_DIR/svid.key" \
     -CAfile "$SVID_DIR/bundle.pem" \
@@ -99,7 +99,7 @@ request_secret_via_openssl() {
 
   awk 'BEGIN{p=0} /BEGIN CERTIFICATE/{p=1} p{print} /END CERTIFICATE/{exit}' "$out" >"$tmpdir/server.pem"
   SERVER_SPIFFE_ID="$(openssl x509 -in "$tmpdir/server.pem" -noout -ext subjectAltName | sed -n 's/.*URI:\(spiffe:[^,]*\).*/\1/p' | head -n 1)"
-  echo "tool-b SPIFFE ID: $SERVER_SPIFFE_ID"
+  echo "tool-b-envoy SPIFFE ID: $SERVER_SPIFFE_ID"
 
   i=0
   verified="unknown"
@@ -120,22 +120,22 @@ request_secret_via_openssl() {
     sleep 0.1
   done
 
-  echo "tool-b verification result: $verified"
+  echo "tool-b-envoy verification result: $verified"
   if [ "$verified" != "ok" ]; then
     kill "$pid" 2>/dev/null || true
     rm -rf "$tmpdir"
-    echo "ERROR: tool-b certificate verification failed" >&2
+    echo "ERROR: tool-b-envoy certificate verification failed" >&2
     exit 1
   fi
 
   if [ "$SERVER_SPIFFE_ID" != "$SERVER_EXPECTED_SPIFFE_ID" ]; then
     kill "$pid" 2>/dev/null || true
     rm -rf "$tmpdir"
-    echo "ERROR: tool-b SPIFFE ID mismatch (got: $SERVER_SPIFFE_ID)" >&2
+    echo "ERROR: tool-b-envoy SPIFFE ID mismatch (got: $SERVER_SPIFFE_ID)" >&2
     exit 1
   fi
-  echo "tool-b SPIFFE ID match: yes"
-  printf 'GET /secret HTTP/1.1\r\nHost: tool-b\r\nConnection: close\r\n\r\n' >&3
+  echo "tool-b-envoy SPIFFE ID match: yes"
+  printf 'GET /secret HTTP/1.1\r\nHost: tool-b-envoy\r\nConnection: close\r\n\r\n' >&3
 
   wait "$pid" || true
 
@@ -144,7 +144,7 @@ request_secret_via_openssl() {
 
   if [ "$status" != "200" ]; then
     rm -rf "$tmpdir"
-    echo "ERROR: tool-b /secret returned status $status" >&2
+    echo "ERROR: tool-b-envoy /secret returned status $status" >&2
     exit 1
   fi
   echo "$body"
@@ -156,3 +156,29 @@ request_secret_via_openssl() {
 echo "Calling: $TOOL_B_URL/secret"
 request_secret_via_openssl
 echo ""
+
+if [ -n "${CAPABILITY_ISSUER_URL:-}" ]; then
+  echo "Waiting for capability-issuer-envoy to startup..."
+  ready=0
+  for i in $(seq 1 40); do
+    if curl -sS --fail --insecure --cert "$SVID_DIR/svid.pem" --key "$SVID_DIR/svid.key" \
+      "$CAPABILITY_ISSUER_URL/health" >/dev/null 2>&1; then
+      ready=1
+      break
+    fi
+    sleep 0.2
+  done
+
+  if [ "$ready" -ne 1 ]; then
+    echo "ERROR: capability-issuer-envoy not reachable at $CAPABILITY_ISSUER_URL after 40 attempts"
+    exit 1
+  fi
+
+  echo "Calling: $CAPABILITY_ISSUER_URL/capabilities/mint"
+  if ! curl -sS --fail --insecure --cert "$SVID_DIR/svid.pem" --key "$SVID_DIR/svid.key" \
+    -H "Content-Type: application/json" -d '{}' "$CAPABILITY_ISSUER_URL/capabilities/mint"; then
+    echo "ERROR: capability-issuer mint failed"
+    exit 1
+  fi
+  echo ""
+fi

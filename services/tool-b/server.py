@@ -1,26 +1,13 @@
 import json
 import os
-import ssl
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from cryptography import x509
 from cryptography.x509.oid import ExtensionOID
 
 SVID_CERT = os.getenv("SPIFFE_SVID_CERT", "/run/spire/svid/svid.pem")
-SVID_KEY = os.getenv("SPIFFE_SVID_KEY", "/run/spire/svid/svid.key")
-TRUST_BUNDLE = os.getenv("SPIFFE_TRUST_BUNDLE", "/run/spire/svid/bundle.pem")
 ALLOWED_CLIENT = os.getenv("ALLOWED_CLIENT_SPIFFE_ID", "spiffe://example.org/agent-a")
-
-
-def spiffe_id_from_cert_bytes(cert_bytes):
-    cert = x509.load_der_x509_certificate(cert_bytes)
-    san = cert.extensions.get_extension_for_oid(
-        ExtensionOID.SUBJECT_ALTERNATIVE_NAME
-    ).value
-    for uri in san.get_values_for_type(x509.UniformResourceIdentifier):
-        if uri.startswith("spiffe://"):
-            return uri
-    return None
+SPIFFE_HEADER = "x-spiffe-id"
 
 
 def spiffe_id_from_cert_path(path):
@@ -32,13 +19,6 @@ def spiffe_id_from_cert_path(path):
     for uri in san.get_values_for_type(x509.UniformResourceIdentifier):
         if uri.startswith("spiffe://"):
             return uri
-    return None
-
-
-def client_spiffe_id_from_socket(sock):
-    cert_bytes = sock.getpeercert(binary_form=True)
-    if cert_bytes:
-        return spiffe_id_from_cert_bytes(cert_bytes)
     return None
 
 
@@ -57,8 +37,11 @@ class ToolBHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _authorize(self):
-        spiffe_id = client_spiffe_id_from_socket(self.connection)
+        spiffe_id = self.headers.get(SPIFFE_HEADER)
         print(f"tool-b client SPIFFE ID: {spiffe_id}")
+        if not spiffe_id:
+            self._send_json(401, {"detail": "missing x-spiffe-id"})
+            return False
         if spiffe_id != ALLOWED_CLIENT:
             self._send_json(403, {"detail": "forbidden"})
             return False
@@ -80,14 +63,8 @@ def main():
     spiffe_id = spiffe_id_from_cert_path(SVID_CERT)
     print(f"tool-b SPIFFE ID: {spiffe_id}")
 
-    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    context.load_cert_chain(certfile=SVID_CERT, keyfile=SVID_KEY)
-    context.load_verify_locations(cafile=TRUST_BUNDLE)
-    context.verify_mode = ssl.CERT_REQUIRED
-
-    httpd = HTTPServer(("0.0.0.0", 8443), ToolBHandler)
-    httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
-    print("tool-b listening on https://0.0.0.0:8443")
+    httpd = HTTPServer(("0.0.0.0", 8080), ToolBHandler)
+    print("tool-b listening on http://0.0.0.0:8080")
     httpd.serve_forever()
 
 

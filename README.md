@@ -84,3 +84,30 @@ Run the full security test suite (includes Milestone 1 + Milestone 2 checks):
 docker compose --profile tests -f compose/spiffe.compose.yml up --build --abort-on-container-exit rogue-tests
 ```
 Expected behavior: each test prints an ID, name, and a green PASS; the runner prints totals and exits 0 if all checks pass.
+
+## Milestone 3: Envoy ingress (SPIFFE mTLS boundary)
+
+Start SPIRE + tool-b + Envoy + clients:
+```bash
+docker compose --profile clients -f compose/spiffe.compose.yml up -d spire-server spire-token-init spire-agent tool-b tool-b-envoy agent-a rogue
+```
+
+What to look for:
+- Envoy terminates SPIFFE mTLS and injects `x-spiffe-id`
+- tool-b trusts `x-spiffe-id` only because it is isolated on `toolb_app_net`
+- tool-b does not authenticate clients directly in this milestone
+
+## Milestone 3 Step 1: Capability issuer (Envoy ingress)
+
+Start SPIRE + tool-b + capability issuer + Envoy + clients:
+```bash
+docker compose --profile clients -f compose/spiffe.compose.yml up -d \
+  spire-server spire-token-init spire-agent \
+  tool-b tool-b-envoy \
+  capability-issuer capability-issuer-envoy \
+  agent-a rogue
+```
+
+What to look for:
+- `agent-a` calls `POST /capabilities/mint` via `capability-issuer-envoy` and prints a JSON response
+- `capability-issuer` rejects missing `x-spiffe-id` because it only trusts the header behind `capiss_app_net`

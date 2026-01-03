@@ -1,4 +1,4 @@
-Test run started: 2025-12-28T18:58:00+0000 (UTC)
+Test run started: 2026-01-02T14:12:53+0000 (UTC)
 
 Milestone 1 - Server and agent connection and successful entry
 [T1] Rogue missing join token rejects attestation     .... [32mPASS[0m
@@ -17,4 +17,9 @@ Milestone 2 - Workload identities security tests
 [T7] Rogue cannot read SVIDs or keys                  .... [32mPASS[0m
 [T8] No unintended SPIRE entries created              .... [32mPASS[0m
 
-Total: 13  Passed: 13  Failed: 0
+Milestone 2.5 - Envoy ingress boundary
+[T1] tool-b app not reachable from edge network       .... [32mPASS[0m
+[T2] tool-b rejects missing x-spiffe-id header        .... [32mPASS[0m
+[T3] tool-b rejects mismatched x-spiffe-id header     .... [32mPASS[0m
+
+Total: 16  Passed: 16  Failed: 0
