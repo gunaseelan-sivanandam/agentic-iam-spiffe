@@ -92,8 +92,9 @@ services:
     labels:
       spiffe.workload: "tool-b"
     environment:
-      ALLOWED_CLIENT_SPIFFE_ID: spiffe://example.org/agent-a
+      CAPISS_PUBLIC_KEY_PATH: /var/lib/capiss/keys/root_public_key.b64
     volumes:
+      - ../capiss_keys:/var/lib/capiss/keys:ro
       - ../spire/agent:/run/spire/agent:ro
     networks:
       - toolb_app_net
@@ -119,10 +120,14 @@ services:
     container_name: spiffe-capability-issuer
     labels:
       spiffe.workload: "capability-issuer"
+    environment:
+      CAPISS_KEY_DIR: /var/lib/capiss/keys
     networks:
       - capiss_app_net
     depends_on:
       - opa
+    volumes:
+      - ../capiss_keys:/var/lib/capiss/keys
 
   capability-issuer-envoy:
     build: ../services/capability-issuer-envoy
@@ -147,10 +152,13 @@ services:
       spiffe.workload: "capability-issuer-no-opa"
     environment:
       OPA_URL: http://opa-missing:8181/v1/data/capiss/allow
+      CAPISS_KEY_DIR: /var/lib/capiss/keys
     networks:
       - capiss_app_net
     profiles:
       - tests
+    volumes:
+      - ../capiss_keys:/var/lib/capiss/keys
 
   capability-issuer-no-opa-envoy:
     build: ../services/capability-issuer-envoy

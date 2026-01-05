@@ -2,4 +2,7 @@ spire/shared/join_token
 spire/server/data
 spire/agent/data
 spire/agent/private
+spire/agent/svid
 tmp_svid/
+capiss_keys/
+test_report.log

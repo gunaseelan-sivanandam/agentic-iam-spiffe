@@ -118,6 +118,19 @@ exposed ports. The capability issuer fails closed if OPA is unavailable. This se
 reflects common sidecar-style policy integration and is sufficient to demonstrate
 the semantic separation of identity and authority.
 
+## Milestone 3 Step 3: Biscuit minting
+
+The capability issuer now mints real Biscuit tokens on allowed requests, with a
+short, configurable TTL.
+Tests now assert non-empty tokens and verify the expiry is short-lived.
+
+## Milestone 3 Step 4: Capability enforcement at tool-b
+
+tool-b now requires a capability token (Biscuit) in addition to identity.
+Identity-only access is denied; capabilities are explicit, scoped, and short-lived.
+For this lab, error responses include explicit reasons to make failures easy to observe.
+In real-world deployments, those reasons are typically generalized to avoid leaking policy details.
+
 ## M3.S2 tests
 
 Run the OPA-gated capability minting tests:

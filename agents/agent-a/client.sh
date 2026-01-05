@@ -176,7 +176,9 @@ if [ -n "${CAPABILITY_ISSUER_URL:-}" ]; then
 
   echo "Calling: $CAPABILITY_ISSUER_URL/capabilities/mint"
   if ! curl -sS --fail --insecure --cert "$SVID_DIR/svid.pem" --key "$SVID_DIR/svid.key" \
-    -H "Content-Type: application/json" -d '{}' "$CAPABILITY_ISSUER_URL/capabilities/mint"; then
+    -H "Content-Type: application/json" \
+    -d '{"aud":"tool-b","act":"read","res":"/secret"}' \
+    "$CAPABILITY_ISSUER_URL/capabilities/mint"; then
     echo "ERROR: capability-issuer mint failed"
     exit 1
   fi

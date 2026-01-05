@@ -1,4 +1,4 @@
-Test run started: 2026-01-03T19:13:53+0000 (UTC)
+Test run started: 2026-01-05T18:28:58+0000 (UTC)
 
 Milestone 1 - Server and agent connection and successful entry
 [T1] Rogue missing join token rejects attestation     .... [32mPASS[0m
@@ -29,4 +29,19 @@ M3.S2 — OPA-gated capability minting
 [T4] Fail closed when OPA is unavailable              .... [32mPASS[0m
 [T5] Issuer denies when x-spiffe-id missing (structural guard) .... [32mPASS[0m
 
-Total: 21  Passed: 21  Failed: 0
+M3.S3 — Biscuit minting
+[T1] mint returns non-empty token                     .... [32mPASS[0m
+M3.S3 T2 expires_at delta: 60s
+[T2] expires_at is present and in the near future     .... [32mPASS[0m
+[T3] two mints produce different tokens               .... [32mPASS[0m
+
+M3.S4 — tool-b enforces capability tokens
+[T1] identity-only access to /secret is denied        .... [32mPASS[0m
+[T2] agent-a can access /secret with minted capability .... [32mPASS[0m
+[T3] rogue cannot access /secret without token        .... [32mPASS[0m
+[T4] stolen token replay by rogue is rejected         .... [32mPASS[0m
+[T5] expired token is rejected                        .... [32mPASS[0m
+[T6] mint rejects missing parameters                  .... [32mPASS[0m
+[T7] mint denies unapproved authority request         .... [32mPASS[0m
+
+Total: 31  Passed: 31  Failed: 0

@@ -68,6 +68,12 @@ set_reason() {
   FAIL_REASON="$1"
 }
 
+json_get() {
+  key="$1"
+  file="$2"
+  jq -r "$key" "$file" 2>/dev/null
+}
+
 container_running() {
   container_name="$1"
   docker ps --format '{{.Names}}' | grep -Fxq "$container_name"
@@ -75,10 +81,22 @@ container_running() {
 
 wait_for_legit_attestation() {
   i=0
-  while [ $i -lt 30 ]; do
+  while [ $i -lt 60 ]; do
     if docker exec spiffe-spire-server /opt/spire/bin/spire-server agent list \
       -socketPath /run/spire/server/data/private/api.sock -output json 2>/dev/null | \
       grep -Fq '"agents":[{' ; then
+      return 0
+    fi
+    i=$((i + 1))
+    sleep 1
+  done
+  return 1
+}
+
+wait_for_agent_socket() {
+  i=0
+  while [ $i -lt 60 ]; do
+    if docker exec spiffe-spire-agent test -S /run/spire/agent/private/api.sock 2>/dev/null; then
       return 0
     fi
     i=$((i + 1))
@@ -124,7 +142,7 @@ prepare_toolb_material() {
   bundle="$tmpdir/toolb_bundle.pem"
 
   i=0
-  while [ $i -lt 30 ]; do
+  while [ $i -lt 60 ]; do
     if docker exec spiffe-tool-b-envoy test -s /run/spire/svid/svid.pem 2>/dev/null; then
       break
     fi
@@ -185,6 +203,9 @@ elif ! container_running "spiffe-spire-agent"; then
 elif ! wait_for_legit_attestation; then
   PRECHECK_OK=0
   PRECHECK_REASON="legitimate agent did not attest"
+elif ! wait_for_agent_socket; then
+  PRECHECK_OK=0
+  PRECHECK_REASON="spire agent workload socket not ready"
 elif [ ! -s /run/spire/shared/join_token ]; then
   PRECHECK_OK=0
   PRECHECK_REASON="join token missing"
@@ -205,6 +226,8 @@ CAPISS_ROGUE_CERT=""
 CAPISS_ROGUE_KEY=""
 CAPISS_MINT_URL="https://capability-issuer-envoy:9443/capabilities/mint"
 CAPISS_NO_OPA_URL="https://capability-issuer-no-opa-envoy:9444/capabilities/mint"
+TOOLB_SECRET_URL="https://tool-b-envoy:8443/secret"
+CAPISS_MINT_BODY='{"aud":"tool-b","act":"read","res":"/secret"}'
 
 ensure_toolb_material() {
   if [ "$TOOLB_READY" -eq 1 ]; then
@@ -247,14 +270,22 @@ prepare_client_material() {
   fi
 
   err_log="/tmp/${service_name}_svid_fetch.err"
-  if ! docker run --rm \
-    --entrypoint /opt/spire/bin/spire-agent \
-    -v "$host_repo/spire/agent":/run/spire/agent:ro \
-    -v "$host_repo":/repo \
-    -l "com.docker.compose.service=${service_name}" \
-    ghcr.io/spiffe/spire-agent:1.9.0 \
-    api fetch x509 -socketPath /run/spire/agent/private/api.sock -write "$outdir" \
-    >"$err_log" 2>&1; then
+  i=0
+  while [ $i -lt 60 ]; do
+    if docker run --rm \
+      --entrypoint /opt/spire/bin/spire-agent \
+      -v "$host_repo/spire/agent":/run/spire/agent:ro \
+      -v "$host_repo":/repo \
+      -l "com.docker.compose.service=${service_name}" \
+      ghcr.io/spiffe/spire-agent:1.9.0 \
+      api fetch x509 -socketPath /run/spire/agent/private/api.sock -write "$outdir" \
+      >"$err_log" 2>&1; then
+      break
+    fi
+    i=$((i + 1))
+    sleep 1
+  done
+  if [ $i -ge 60 ]; then
     set_reason "failed to fetch SVID for ${service_name}: $(tail -n 2 "$err_log" 2>/dev/null | tr '\n' ' ')"
     return 1
   fi
@@ -314,7 +345,35 @@ mint_with_cert() {
   out="$4"
   : >"$out"
   status="$(curl -sS -o "$out" -w '%{http_code}' --insecure --cert "$cert" --key "$key" \
-    -H "Content-Type: application/json" -d '{}' "$url" || true)"
+    -H "Content-Type: application/json" -d "$CAPISS_MINT_BODY" "$url" || true)"
+  printf '%s' "$status"
+}
+
+mint_with_body() {
+  cert="$1"
+  key="$2"
+  url="$3"
+  body="$4"
+  out="$5"
+  : >"$out"
+  status="$(curl -sS -o "$out" -w '%{http_code}' --insecure --cert "$cert" --key "$key" \
+    -H "Content-Type: application/json" -d "$body" "$url" || true)"
+  printf '%s' "$status"
+}
+
+toolb_request() {
+  cert="$1"
+  key="$2"
+  token="$3"
+  out="$4"
+  : >"$out"
+  if [ -n "$token" ]; then
+    status="$(curl -sS -o "$out" -w '%{http_code}' --insecure --cert "$cert" --key "$key" \
+      --cacert "$TOOLB_BUNDLE" -H "Authorization: Bearer ${token}" "$TOOLB_SECRET_URL" || true)"
+  else
+    status="$(curl -sS -o "$out" -w '%{http_code}' --insecure --cert "$cert" --key "$key" \
+      --cacert "$TOOLB_BUNDLE" "$TOOLB_SECRET_URL" || true)"
+  fi
   printf '%s' "$status"
 }
 
@@ -477,8 +536,8 @@ T4_test() {
     return 1
   fi
   status=$(tr -d '\r' <"$out" | grep -m1 '^HTTP/' | awk '{print $2}')
-  if [ "$status" != "403" ]; then
-    set_reason "expected HTTP 403, got ${status:-none}"
+  if [ "$status" != "403" ] && [ "$status" != "401" ]; then
+    set_reason "expected HTTP 401/403, got ${status:-none}"
     return 1
   fi
   return 0
@@ -632,8 +691,8 @@ M25_T3_test() {
     return 1
   fi
   status=$(tr -d '\r' <"$out" | grep -m1 '^HTTP/' | awk '{print $2}')
-  if [ "$status" != "403" ]; then
-    set_reason "expected HTTP 403, got ${status:-none}"
+  if [ "$status" != "403" ] && [ "$status" != "401" ]; then
+    set_reason "expected HTTP 401/403, got ${status:-none}"
     return 1
   fi
   return 0
@@ -650,7 +709,7 @@ M3S2_T1_test() {
     return 1
   fi
   if ! grep -Fq '"token_type":"biscuit"' "$out" || \
-    ! grep -Fq '"token":""' "$out" || \
+    ! grep -Fq '"token":"' "$out" || \
     ! grep -Fq '"issued_to":"spiffe://example.org/agent-a"' "$out" || \
     ! grep -Fq '"aud":"tool-b"' "$out" || \
     ! grep -Fq '"act":"read"' "$out" || \
@@ -726,6 +785,236 @@ M3S2_T5_test() {
   return 1
 }
 
+M3S3_T1_test() {
+  if ! ensure_capiss_material; then
+    return 1
+  fi
+  out="/tmp/capiss_s3_t1.out"
+  status="$(mint_with_cert "$CAPISS_AGENT_CERT" "$CAPISS_AGENT_KEY" "$CAPISS_MINT_URL" "$out")"
+  if [ "$status" != "200" ]; then
+    set_reason "expected 200, got ${status:-none}; body: $(cat "$out")"
+    return 1
+  fi
+  token="$(json_get '.token' "$out")"
+  if [ -z "$token" ] || [ "$token" = "null" ]; then
+    set_reason "token is empty"
+    return 1
+  fi
+  return 0
+}
+
+M3S3_T2_test() {
+  if ! ensure_capiss_material; then
+    return 1
+  fi
+  out="/tmp/capiss_s3_t2.out"
+  status="$(mint_with_cert "$CAPISS_AGENT_CERT" "$CAPISS_AGENT_KEY" "$CAPISS_MINT_URL" "$out")"
+  if [ "$status" != "200" ]; then
+    set_reason "expected 200, got ${status:-none}; body: $(cat "$out")"
+    return 1
+  fi
+  expires_at="$(json_get '.expires_at' "$out")"
+  now="$(date +%s)"
+  if [ -n "$expires_at" ] && [ "$expires_at" != "null" ]; then
+    delta="$((expires_at - now))"
+  else
+    delta=""
+  fi
+  if [ -z "$delta" ]; then
+    set_reason "expires_at missing"
+    return 1
+  fi
+  if [ "$delta" -le 0 ] || [ "$delta" -gt 120 ]; then
+    set_reason "expires_at delta out of range: ${delta}s"
+    return 1
+  fi
+  echo "M3.S3 T2 expires_at delta: ${delta}s"
+  return 0
+}
+
+M3S3_T3_test() {
+  if ! ensure_capiss_material; then
+    return 1
+  fi
+  out1="/tmp/capiss_s3_t3_1.out"
+  out2="/tmp/capiss_s3_t3_2.out"
+  status1="$(mint_with_cert "$CAPISS_AGENT_CERT" "$CAPISS_AGENT_KEY" "$CAPISS_MINT_URL" "$out1")"
+  status2="$(mint_with_cert "$CAPISS_AGENT_CERT" "$CAPISS_AGENT_KEY" "$CAPISS_MINT_URL" "$out2")"
+  if [ "$status1" != "200" ] || [ "$status2" != "200" ]; then
+    set_reason "expected 200s, got ${status1:-none}/${status2:-none}"
+    return 1
+  fi
+  token1="$(json_get '.token' "$out1")"
+  token2="$(json_get '.token' "$out2")"
+  if [ -z "$token1" ] || [ -z "$token2" ] || [ "$token1" = "null" ] || [ "$token2" = "null" ]; then
+    set_reason "token missing in one of the responses"
+    return 1
+  fi
+  if [ "$token1" = "$token2" ]; then
+    set_reason "tokens are identical"
+    return 1
+  fi
+  return 0
+}
+
+M3S4_T1_test() {
+  if ! ensure_toolb_material || ! ensure_capiss_material; then
+    return 1
+  fi
+  out="/tmp/toolb_s4_t1.out"
+  status="$(toolb_request "$CAPISS_AGENT_CERT" "$CAPISS_AGENT_KEY" "" "$out")"
+  if [ "$status" != "401" ] && [ "$status" != "403" ]; then
+    set_reason "expected 401/403, got ${status:-none}; body: $(cat "$out")"
+    return 1
+  fi
+  reason="$(json_get '.reason' "$out")"
+  if [ "$reason" != "missing_token" ]; then
+    set_reason "expected reason missing_token, got ${reason:-none}"
+    return 1
+  fi
+  return 0
+}
+
+M3S4_T2_test() {
+  if ! ensure_toolb_material || ! ensure_capiss_material; then
+    return 1
+  fi
+  mint_out="/tmp/toolb_s4_t2_mint.out"
+  status="$(mint_with_cert "$CAPISS_AGENT_CERT" "$CAPISS_AGENT_KEY" "$CAPISS_MINT_URL" "$mint_out")"
+  if [ "$status" != "200" ]; then
+    set_reason "mint expected 200, got ${status:-none}; body: $(cat "$mint_out")"
+    return 1
+  fi
+  token="$(json_get '.token' "$mint_out")"
+  if [ -z "$token" ] || [ "$token" = "null" ]; then
+    set_reason "mint token missing"
+    return 1
+  fi
+  out="/tmp/toolb_s4_t2.out"
+  status="$(toolb_request "$CAPISS_AGENT_CERT" "$CAPISS_AGENT_KEY" "$token" "$out")"
+  if [ "$status" != "200" ]; then
+    set_reason "expected 200, got ${status:-none}; body: $(cat "$out")"
+    return 1
+  fi
+  if ! grep -Fq '"secret"' "$out"; then
+    set_reason "expected secret response, got: $(cat "$out")"
+    return 1
+  fi
+  return 0
+}
+
+M3S4_T3_test() {
+  if ! ensure_toolb_material || ! ensure_capiss_material; then
+    return 1
+  fi
+  out="/tmp/toolb_s4_t3.out"
+  status="$(toolb_request "$CAPISS_ROGUE_CERT" "$CAPISS_ROGUE_KEY" "" "$out")"
+  if [ "$status" != "401" ] && [ "$status" != "403" ]; then
+    set_reason "expected 401/403, got ${status:-none}; body: $(cat "$out")"
+    return 1
+  fi
+  return 0
+}
+
+M3S4_T4_test() {
+  if ! ensure_toolb_material || ! ensure_capiss_material; then
+    return 1
+  fi
+  mint_out="/tmp/toolb_s4_t4_mint.out"
+  status="$(mint_with_cert "$CAPISS_AGENT_CERT" "$CAPISS_AGENT_KEY" "$CAPISS_MINT_URL" "$mint_out")"
+  if [ "$status" != "200" ]; then
+    set_reason "mint expected 200, got ${status:-none}; body: $(cat "$mint_out")"
+    return 1
+  fi
+  token="$(json_get '.token' "$mint_out")"
+  if [ -z "$token" ] || [ "$token" = "null" ]; then
+    set_reason "mint token missing"
+    return 1
+  fi
+  out="/tmp/toolb_s4_t4.out"
+  status="$(toolb_request "$CAPISS_ROGUE_CERT" "$CAPISS_ROGUE_KEY" "$token" "$out")"
+  if [ "$status" != "401" ] && [ "$status" != "403" ]; then
+    set_reason "expected 401/403, got ${status:-none}; body: $(cat "$out")"
+    return 1
+  fi
+  reason="$(json_get '.reason' "$out")"
+  if [ "$reason" != "sub_mismatch" ] && [ "$reason" != "invalid_token" ]; then
+    set_reason "expected reason sub_mismatch or invalid_token, got ${reason:-none}"
+    return 1
+  fi
+  return 0
+}
+
+M3S4_T5_test() {
+  if ! ensure_toolb_material || ! ensure_capiss_material; then
+    return 1
+  fi
+  mint_out="/tmp/toolb_s4_t5_mint.out"
+  status="$(mint_with_cert "$CAPISS_AGENT_CERT" "$CAPISS_AGENT_KEY" "$CAPISS_MINT_URL" "$mint_out")"
+  if [ "$status" != "200" ]; then
+    set_reason "mint expected 200, got ${status:-none}; body: $(cat "$mint_out")"
+    return 1
+  fi
+  token="$(json_get '.token' "$mint_out")"
+  expires_at="$(json_get '.expires_at' "$mint_out")"
+  if [ -z "$token" ] || [ "$token" = "null" ] || [ -z "$expires_at" ] || [ "$expires_at" = "null" ]; then
+    set_reason "mint token or expires_at missing"
+    return 1
+  fi
+  now="$(date +%s)"
+  wait_seconds=$((expires_at - now + 1))
+  if [ "$wait_seconds" -gt 0 ]; then
+    sleep "$wait_seconds"
+  fi
+  out="/tmp/toolb_s4_t5.out"
+  status="$(toolb_request "$CAPISS_AGENT_CERT" "$CAPISS_AGENT_KEY" "$token" "$out")"
+  if [ "$status" != "401" ] && [ "$status" != "403" ]; then
+    set_reason "expected 401/403, got ${status:-none}; body: $(cat "$out")"
+    return 1
+  fi
+  reason="$(json_get '.reason' "$out")"
+  if [ "$reason" != "expired" ]; then
+    set_reason "expected reason expired, got ${reason:-none}"
+    return 1
+  fi
+  return 0
+}
+
+M3S4_T6_test() {
+  if ! ensure_capiss_material; then
+    return 1
+  fi
+  out="/tmp/capiss_s4_t6.out"
+  status="$(mint_with_body "$CAPISS_AGENT_CERT" "$CAPISS_AGENT_KEY" "$CAPISS_MINT_URL" '{}' "$out")"
+  if [ "$status" != "400" ]; then
+    set_reason "expected 400, got ${status:-none}; body: $(cat "$out")"
+    return 1
+  fi
+  if ! grep -Fq '"error":"bad_request"' "$out" || ! grep -Fq '"reason":"aud"' "$out"; then
+    set_reason "unexpected bad_request response: $(cat "$out")"
+    return 1
+  fi
+  return 0
+}
+
+M3S4_T7_test() {
+  if ! ensure_capiss_material; then
+    return 1
+  fi
+  out="/tmp/capiss_s4_t7.out"
+  status="$(mint_with_body "$CAPISS_AGENT_CERT" "$CAPISS_AGENT_KEY" "$CAPISS_MINT_URL" \
+    '{"aud":"tool-b","act":"write","res":"/secret"}' "$out")"
+  if [ "$status" != "403" ]; then
+    set_reason "expected 403, got ${status:-none}; body: $(cat "$out")"
+    return 1
+  fi
+  if ! grep -Fq '"error":"denied"' "$out" || ! grep -Fq '"reason":"policy"' "$out"; then
+    set_reason "unexpected deny response: $(cat "$out")"
+    return 1
+  fi
+  return 0
+}
+
 print_section "Milestone 1 - Server and agent connection and successful entry"
 run_test "T1" "Rogue missing join token rejects attestation" c1_test
 run_test "T2" "Rogue forged join token rejects attestation" c2_test
@@ -754,6 +1043,20 @@ run_test "T2" "rogue mint denied by policy" M3S2_T2_test
 run_test "T3" "OPA is not reachable from edge" M3S2_T3_test
 run_test "T4" "Fail closed when OPA is unavailable" M3S2_T4_test
 run_test "T5" "Issuer denies when x-spiffe-id missing (structural guard)" M3S2_T5_test
+
+print_section "M3.S3 — Biscuit minting"
+run_test "T1" "mint returns non-empty token" M3S3_T1_test
+run_test "T2" "expires_at is present and in the near future" M3S3_T2_test
+run_test "T3" "two mints produce different tokens" M3S3_T3_test
+
+print_section "M3.S4 — tool-b enforces capability tokens"
+run_test "T1" "identity-only access to /secret is denied" M3S4_T1_test
+run_test "T2" "agent-a can access /secret with minted capability" M3S4_T2_test
+run_test "T3" "rogue cannot access /secret without token" M3S4_T3_test
+run_test "T4" "stolen token replay by rogue is rejected" M3S4_T4_test
+run_test "T5" "expired token is rejected" M3S4_T5_test
+run_test "T6" "mint rejects missing parameters" M3S4_T6_test
+run_test "T7" "mint denies unapproved authority request" M3S4_T7_test
 
 printf '\nTotal: %d  Passed: %d  Failed: %d\n' "$TOTAL" "$PASSED" "$FAILED"
 if [ "$FAILED" -ne 0 ]; then
