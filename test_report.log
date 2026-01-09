@@ -1,4 +1,4 @@
-Test run started: 2026-01-05T18:28:58+0000 (UTC)
+Test run started: 2026-01-08T09:26:29+0000 (UTC)
 
 Milestone 1 - Server and agent connection and successful entry
 [T1] Rogue missing join token rejects attestation     .... [32mPASS[0m
@@ -8,40 +8,125 @@ Milestone 1 - Server and agent connection and successful entry
 [T5] Only intended node entries exist                 .... [32mPASS[0m
 
 Milestone 2 - Workload identities security tests
+[gate] DNS check tool-b-envoy
+[gate] DNS OK tool-b-envoy
+[gate] TCP check tool-b-envoy:8443
+[gate] TCP OK tool-b-envoy:8443
 [T1] Rogue without SVID cannot access /secret         .... [32mPASS[0m
+[gate] DNS check tool-b-envoy
+[gate] DNS OK tool-b-envoy
+[gate] TCP check tool-b-envoy:8443
+[gate] TCP OK tool-b-envoy:8443
 [T2] Rogue with invalid client cert is rejected       .... [32mPASS[0m
+[gate] DNS check tool-b-envoy
+[gate] DNS OK tool-b-envoy
+[gate] TCP check tool-b-envoy:8443
+[gate] TCP OK tool-b-envoy:8443
 [T3] Rogue with expired client cert is rejected       .... [32mPASS[0m
+[gate] DNS check tool-b-envoy
+[gate] DNS OK tool-b-envoy
+[gate] TCP check tool-b-envoy:8443
+[gate] TCP OK tool-b-envoy:8443
 [T4] Rogue with wrong SPIFFE ID is rejected           .... [32mPASS[0m
 [T5] Rogue without Workload API socket cannot fetch SVID .... [32mPASS[0m
 [T6] Rogue with socket but no entry cannot fetch SVID .... [32mPASS[0m
 [T7] Rogue cannot read SVIDs or keys                  .... [32mPASS[0m
 [T8] No unintended SPIRE entries created              .... [32mPASS[0m
+[T9] Rogue with expired short-lived SVID is rejected  .... [32mPASS[0m
 
 Milestone 2.5 - Envoy ingress boundary
 [T1] tool-b app not reachable from edge network       .... [32mPASS[0m
 [T2] tool-b rejects missing x-spiffe-id header        .... [32mPASS[0m
+[gate] DNS check tool-b-envoy
+[gate] DNS OK tool-b-envoy
+[gate] TCP check tool-b-envoy:8443
+[gate] TCP OK tool-b-envoy:8443
 [T3] tool-b rejects mismatched x-spiffe-id header     .... [32mPASS[0m
 
 M3.S2 — OPA-gated capability minting
+[gate] DNS check capability-issuer-envoy
+[gate] DNS OK capability-issuer-envoy
+[gate] TCP check capability-issuer-envoy:9443
+[gate] TCP OK capability-issuer-envoy:9443
 [T1] agent-a can mint (allowed by OPA)                .... [32mPASS[0m
+[gate] DNS check capability-issuer-envoy
+[gate] DNS OK capability-issuer-envoy
+[gate] TCP check capability-issuer-envoy:9443
+[gate] TCP OK capability-issuer-envoy:9443
 [T2] rogue mint denied by policy                      .... [32mPASS[0m
 [T3] OPA is not reachable from edge                   .... [32mPASS[0m
+[gate] DNS check capability-issuer-no-opa-envoy
+[gate] DNS OK capability-issuer-no-opa-envoy
+[gate] TCP check capability-issuer-no-opa-envoy:9444
+[gate] TCP OK capability-issuer-no-opa-envoy:9444
 [T4] Fail closed when OPA is unavailable              .... [32mPASS[0m
 [T5] Issuer denies when x-spiffe-id missing (structural guard) .... [32mPASS[0m
 
 M3.S3 — Biscuit minting
+[gate] DNS check capability-issuer-envoy
+[gate] DNS OK capability-issuer-envoy
+[gate] TCP check capability-issuer-envoy:9443
+[gate] TCP OK capability-issuer-envoy:9443
 [T1] mint returns non-empty token                     .... [32mPASS[0m
+[gate] DNS check capability-issuer-envoy
+[gate] DNS OK capability-issuer-envoy
+[gate] TCP check capability-issuer-envoy:9443
+[gate] TCP OK capability-issuer-envoy:9443
 M3.S3 T2 expires_at delta: 60s
 [T2] expires_at is present and in the near future     .... [32mPASS[0m
+[gate] DNS check capability-issuer-envoy
+[gate] DNS OK capability-issuer-envoy
+[gate] TCP check capability-issuer-envoy:9443
+[gate] TCP OK capability-issuer-envoy:9443
 [T3] two mints produce different tokens               .... [32mPASS[0m
 
 M3.S4 — tool-b enforces capability tokens
+[gate] DNS check tool-b-envoy
+[gate] DNS OK tool-b-envoy
+[gate] TCP check tool-b-envoy:8443
+[gate] TCP OK tool-b-envoy:8443
 [T1] identity-only access to /secret is denied        .... [32mPASS[0m
+[gate] DNS check capability-issuer-envoy
+[gate] DNS OK capability-issuer-envoy
+[gate] TCP check capability-issuer-envoy:9443
+[gate] TCP OK capability-issuer-envoy:9443
+[gate] DNS check tool-b-envoy
+[gate] DNS OK tool-b-envoy
+[gate] TCP check tool-b-envoy:8443
+[gate] TCP OK tool-b-envoy:8443
 [T2] agent-a can access /secret with minted capability .... [32mPASS[0m
+[gate] DNS check tool-b-envoy
+[gate] DNS OK tool-b-envoy
+[gate] TCP check tool-b-envoy:8443
+[gate] TCP OK tool-b-envoy:8443
 [T3] rogue cannot access /secret without token        .... [32mPASS[0m
+[gate] DNS check capability-issuer-envoy
+[gate] DNS OK capability-issuer-envoy
+[gate] TCP check capability-issuer-envoy:9443
+[gate] TCP OK capability-issuer-envoy:9443
+[gate] DNS check tool-b-envoy
+[gate] DNS OK tool-b-envoy
+[gate] TCP check tool-b-envoy:8443
+[gate] TCP OK tool-b-envoy:8443
 [T4] stolen token replay by rogue is rejected         .... [32mPASS[0m
+[gate] DNS check capability-issuer-envoy
+[gate] DNS OK capability-issuer-envoy
+[gate] TCP check capability-issuer-envoy:9443
+[gate] TCP OK capability-issuer-envoy:9443
+[gate] DNS check tool-b-envoy
+[gate] DNS OK tool-b-envoy
+[gate] TCP check tool-b-envoy:8443
+[gate] TCP OK tool-b-envoy:8443
 [T5] expired token is rejected                        .... [32mPASS[0m
+[gate] DNS check capability-issuer-envoy
+[gate] DNS OK capability-issuer-envoy
+[gate] TCP check capability-issuer-envoy:9443
+[gate] TCP OK capability-issuer-envoy:9443
 [T6] mint rejects missing parameters                  .... [32mPASS[0m
+[gate] DNS check capability-issuer-envoy
+[gate] DNS OK capability-issuer-envoy
+[gate] TCP check capability-issuer-envoy:9443
+[gate] TCP OK capability-issuer-envoy:9443
 [T7] mint denies unapproved authority request         .... [32mPASS[0m
 
-Total: 31  Passed: 31  Failed: 0
+Total: 32  Passed: 32  Failed: 0

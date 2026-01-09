@@ -23,6 +23,9 @@ SPIFFE_HEADER = "x-spiffe-id"
 CAPISS_PUBLIC_KEY_PATH = os.getenv(
     "CAPISS_PUBLIC_KEY_PATH", "/var/lib/capiss/keys/root_public_key.b64"
 )
+REQUIRED_AUD = "tool-b"
+REQUIRED_ACT = "read"
+REQUIRED_RES = "/secret"
 
 
 def spiffe_id_from_cert_path(path):
@@ -41,6 +44,7 @@ _CAPISS_PUBLIC_KEY = None
 
 
 def load_capiss_public_key():
+    # Trust bootstrap: issuer public key is provided via configured volume.
     global _CAPISS_PUBLIC_KEY
     if _CAPISS_PUBLIC_KEY is not None:
         return _CAPISS_PUBLIC_KEY
@@ -76,7 +80,8 @@ def verify_biscuit(token_value, spiffe_id):
 
     now = int(time.time())
     allow_policy = (
-        'allow if sub({sub}), aud("tool-b"), act("read"), res("/secret"), exp($t), '
+        f'allow if sub({{sub}}), aud("{REQUIRED_AUD}"), '
+        f'act("{REQUIRED_ACT}"), res("{REQUIRED_RES}"), exp($t), '
         "$t > {now}"
     )
     if policy_allows(biscuit, allow_policy, {"sub": spiffe_id, "now": now}):
@@ -84,11 +89,11 @@ def verify_biscuit(token_value, spiffe_id):
 
     if not policy_allows(biscuit, "allow if sub({sub})", {"sub": spiffe_id}):
         return False, "sub_mismatch"
-    if not policy_allows(biscuit, 'allow if aud("tool-b")'):
+    if not policy_allows(biscuit, f'allow if aud("{REQUIRED_AUD}")'):
         return False, "insufficient_authority"
-    if not policy_allows(biscuit, 'allow if act("read")'):
+    if not policy_allows(biscuit, f'allow if act("{REQUIRED_ACT}")'):
         return False, "insufficient_authority"
-    if not policy_allows(biscuit, 'allow if res("/secret")'):
+    if not policy_allows(biscuit, f'allow if res("{REQUIRED_RES}")'):
         return False, "insufficient_authority"
     if not policy_allows(biscuit, "allow if exp($t), $t > {now}", {"now": now}):
         return False, "expired"
@@ -111,6 +116,7 @@ class ToolBHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _authorize(self):
+        # Identity-only access is denied; capability token is required for /secret.
         spiffe_id = self.headers.get(SPIFFE_HEADER)
         if not spiffe_id:
             self._send_json(401, {"error": "denied", "reason": "missing_spiffe_id"})
@@ -127,6 +133,7 @@ class ToolBHandler(BaseHTTPRequestHandler):
             print(f"tool-b decision: sub={spiffe_id} result=deny reason=missing_token")
             return False
 
+        # Capability enforcement: sub must match x-spiffe-id and be scoped to aud/act/res.
         allowed, reason = verify_biscuit(token_value, spiffe_id)
         if not allowed:
             status = 401 if reason in ("invalid_token", "issuer_key_unavailable") else 403
@@ -145,7 +152,7 @@ class ToolBHandler(BaseHTTPRequestHandler):
             return
         if not self._authorize():
             return
-        self._send_json(200, {"secret": "not-yet-protected"})
+        self._send_json(200, {"secret": "super sensitive demo secret"})
 
 
 def main():

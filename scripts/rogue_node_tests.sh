@@ -33,6 +33,13 @@ if ! command -v timeout >/dev/null 2>&1; then
   fi
 fi
 
+if ! command -v jq >/dev/null 2>&1; then
+  echo "jq command not available"
+  exit 1
+fi
+
+TLS_CLIENT_ARGS="-tls1_2"
+
 print_result() {
   id="$1"
   name="$2"
@@ -74,6 +81,344 @@ json_get() {
   jq -r "$key" "$file" 2>/dev/null
 }
 
+fail_simple() {
+  set_reason "$1"
+  return 1
+}
+
+is_json_file() {
+  jq -e . "$1" >/dev/null 2>&1
+}
+
+fail_with_body() {
+  msg="$1"
+  file="$2"
+  body="$(cat "$file" 2>/dev/null || true)"
+  set_reason "${msg} body=${body}"
+  return 1
+}
+
+wait_dns() {
+  host="$1"
+  timeout="${2:-30}"
+  start="$(date +%s)"
+  echo "[gate] DNS check ${host}"
+  while true; do
+    if command -v getent >/dev/null 2>&1; then
+      if getent hosts "$host" >/dev/null 2>&1; then
+        echo "[gate] DNS OK ${host}"
+        return 0
+      fi
+    elif command -v nslookup >/dev/null 2>&1; then
+      if nslookup "$host" >/dev/null 2>&1; then
+        echo "[gate] DNS OK ${host}"
+        return 0
+      fi
+    elif command -v ping >/dev/null 2>&1; then
+      if ping -c1 -W1 "$host" >/dev/null 2>&1; then
+        echo "[gate] DNS OK ${host}"
+        return 0
+      fi
+    fi
+    now="$(date +%s)"
+    if [ $((now - start)) -ge "$timeout" ]; then
+      set_reason "DNS did not resolve ${host} in ${timeout}s"
+      return 1
+    fi
+    sleep 0.3
+  done
+}
+
+wait_tcp() {
+  host="$1"
+  port="$2"
+  timeout="${3:-30}"
+  start="$(date +%s)"
+  last_out=""
+  echo "[gate] TCP check ${host}:${port}"
+  while true; do
+    if command -v nc >/dev/null 2>&1; then
+      if nc -z -w1 "$host" "$port" >/dev/null 2>&1; then
+        echo "[gate] TCP OK ${host}:${port}"
+        return 0
+      fi
+    else
+      last_out="$(timeout 2s openssl s_client -connect "${host}:${port}" -servername "$host" < /dev/null 2>&1 || true)"
+      if printf '%s' "$last_out" | grep -Fq "CONNECTED"; then
+        echo "[gate] TCP OK ${host}:${port}"
+        return 0
+      fi
+    fi
+    now="$(date +%s)"
+    if [ $((now - start)) -ge "$timeout" ]; then
+      set_reason "TCP not reachable ${host}:${port} in ${timeout}s: ${last_out:-none}"
+      return 1
+    fi
+    sleep 0.3
+  done
+}
+
+wait_http_ready() {
+  url="$1"
+  curl_args="$2"
+  timeout="${3:-30}"
+  start="$(date +%s)"
+  err_file="/tmp/http_ready.err"
+  host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\\([^/:]*\\).*#\\1#p')"
+  port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\\([0-9]*\\).*#\\1#p')"
+  if [ -z "$port" ]; then
+    case "$url" in
+      https://*) port="443" ;;
+      http://*) port="80" ;;
+    esac
+  fi
+  resolved_ip=""
+  if [ -n "$host" ] && command -v getent >/dev/null 2>&1; then
+    resolved_ip="$(getent hosts "$host" | awk 'NR==1{print $1}')"
+  fi
+  echo "[gate] HTTP check ${url}"
+  while true; do
+    : >"$err_file"
+    if [ -n "$resolved_ip" ] && [ -n "$port" ]; then
+      status="$(sh -c "curl -sS ${curl_args} --max-time 2 --resolve ${host}:${port}:${resolved_ip} -o /dev/null -w '%{http_code}' '${url}'" 2>"$err_file" || true)"
+    else
+      status="$(sh -c "curl -sS ${curl_args} --max-time 2 -o /dev/null -w '%{http_code}' '${url}'" 2>"$err_file" || true)"
+    fi
+    if [ -n "$status" ] && [ "$status" != "000" ]; then
+      echo "[gate] HTTP OK ${url}"
+      return 0
+    fi
+    now="$(date +%s)"
+    if [ $((now - start)) -ge "$timeout" ]; then
+      set_reason "No HTTP response from ${url} in ${timeout}s: $(cat "$err_file" 2>/dev/null || true)"
+      return 1
+    fi
+    sleep 0.3
+  done
+}
+
+resolve_host_ip() {
+  host="$1"
+  if command -v getent >/dev/null 2>&1; then
+    ip="$(getent hosts "$host" | awk '$1 ~ /^[0-9.]+$/{print $1; exit}')"
+    if [ -n "$ip" ]; then
+      printf '%s\n' "$ip"
+      return 0
+    fi
+  fi
+  if command -v nslookup >/dev/null 2>&1; then
+    ip="$(nslookup "$host" 2>/dev/null | awk '/^Address: / && $2 ~ /^[0-9.]+$/{print $2; exit}')"
+    if [ -n "$ip" ]; then
+      printf '%s\n' "$ip"
+      return 0
+    fi
+  fi
+  if command -v ping >/dev/null 2>&1; then
+    ip="$(ping -c1 -W1 "$host" 2>/dev/null | sed -n 's/.*(\\([0-9.]*\\)).*/\\1/p')"
+    if [ -n "$ip" ]; then
+      printf '%s\n' "$ip"
+      return 0
+    fi
+  fi
+  if command -v docker >/dev/null 2>&1; then
+    case "$host" in
+      tool-b-envoy)
+        container="spiffe-tool-b-envoy"
+        network_suffix="toolb_edge_net"
+        ;;
+      capability-issuer-envoy)
+        container="spiffe-capability-issuer-envoy"
+        network_suffix="capiss_edge_net"
+        ;;
+      capability-issuer-no-opa-envoy)
+        container="spiffe-capability-issuer-no-opa-envoy"
+        network_suffix="capiss_edge_net"
+        ;;
+      *)
+        container=""
+        network_suffix=""
+        ;;
+    esac
+    if [ -n "$container" ]; then
+      net_dump="$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k " " $v.IPAddress}}{{end}}' "$container" 2>/dev/null || true)"
+      if [ -n "$network_suffix" ]; then
+        ip="$(printf '%s\n' "$net_dump" | awk -v suf="$network_suffix" '$1 ~ suf "$" {print $2; exit}')"
+      else
+        ip="$(printf '%s\n' "$net_dump" | awk 'NF>=2{print $2; exit}')"
+      fi
+      if [ -n "$ip" ]; then
+        printf '%s\n' "$ip"
+        return 0
+      fi
+    fi
+  fi
+  return 1
+}
+
+resolve_ip_for_host() {
+  host="$1"
+  i=0
+  while [ $i -lt 10 ]; do
+    ip=""
+    if command -v getent >/dev/null 2>&1; then
+      ip="$(getent hosts "$host" | awk 'NR==1{print $1}')"
+    fi
+    if [ -z "$ip" ] && command -v docker >/dev/null 2>&1; then
+      net_dump="$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k " " $v.IPAddress}}{{end}}' "spiffe-${host}" 2>/dev/null || true)"
+      ip="$(printf '%s\n' "$net_dump" | awk 'NF>=2{print $2; exit}')"
+    fi
+    if [ -n "$ip" ]; then
+      printf '%s\n' "$ip"
+      return 0
+    fi
+    i=$((i + 1))
+    sleep 0.2
+  done
+  return 1
+}
+
+resolve_arg_for_url() {
+  url="$1"
+  host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\\([^/:]*\\).*#\\1#p')"
+  port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\\([0-9]*\\).*#\\1#p')"
+  if [ -z "$port" ]; then
+    case "$url" in
+      https://*) port="443" ;;
+      http://*) port="80" ;;
+    esac
+  fi
+  if [ -n "$host" ] && [ -n "$port" ]; then
+    ip="$(resolve_ip_for_host "$host" || true)"
+    if [ -n "$ip" ]; then
+      printf -- "--resolve %s:%s:%s" "$host" "$port" "$ip"
+      return 0
+    fi
+  fi
+  return 1
+}
+
+assert_json_eq() {
+  file="$1"
+  jq_expr="$2"
+  expected="$3"
+  actual="$(jq -r "$jq_expr" "$file" 2>/dev/null || printf "__JQ_ERROR__")"
+  if [ "$actual" = "__JQ_ERROR__" ]; then
+    fail_with_body "failed to parse json for $jq_expr" "$file"
+    return 1
+  fi
+  if [ "$actual" != "$expected" ]; then
+    fail_with_body "expected $jq_expr=$expected got $actual" "$file"
+    return 1
+  fi
+  return 0
+}
+
+assert_json_present() {
+  file="$1"
+  jq_expr="$2"
+  if ! jq -e "$jq_expr != null" "$file" >/dev/null 2>&1; then
+    fail_with_body "missing $jq_expr" "$file"
+    return 1
+  fi
+  if jq -e "$jq_expr | type == \"string\"" "$file" >/dev/null 2>&1; then
+    if ! jq -e "$jq_expr | length > 0" "$file" >/dev/null 2>&1; then
+      fail_with_body "empty $jq_expr" "$file"
+      return 1
+    fi
+  fi
+  return 0
+}
+
+assert_text_contains() {
+  file="$1"
+  pattern="$2"
+  if ! grep -Fq "$pattern" "$file"; then
+    fail_with_body "expected text to contain: $pattern" "$file"
+    return 1
+  fi
+  return 0
+}
+
+assert_text_matches() {
+  file="$1"
+  regex="$2"
+  if ! grep -Eq "$regex" "$file"; then
+    fail_with_body "expected text to match: $regex" "$file"
+    return 1
+  fi
+  return 0
+}
+
+text_contains() {
+  file="$1"
+  pattern="$2"
+  grep -Fq "$pattern" "$file"
+}
+
+text_contains_str() {
+  text="$1"
+  pattern="$2"
+  printf '%s' "$text" | grep -Fq "$pattern"
+}
+
+assert_contains_json_or_text() {
+  file="$1"
+  jq_check="$2"
+  text_pattern="$3"
+  if is_json_file "$file"; then
+    if ! jq -e "$jq_check" "$file" >/dev/null 2>&1; then
+      fail_with_body "JSON check failed: $jq_check" "$file"
+      return 1
+    fi
+  else
+    if ! assert_text_contains "$file" "$text_pattern"; then
+      return 1
+    fi
+  fi
+  return 0
+}
+
+extract_http_status() {
+  file="$1"
+  code=""
+  while IFS= read -r line; do
+    line="$(printf '%s' "$line" | tr -d '\r')"
+    case "$line" in
+      HTTP/*)
+        set -- $line
+        code="$2"
+        break
+        ;;
+    esac
+  done <"$file"
+  if [ -z "$code" ]; then
+    fail_with_body "no HTTP status line found" "$file"
+    return 1
+  fi
+  printf '%s' "$code"
+}
+
+assert_http_code() {
+  actual="$1"
+  expected="$2"
+  ctx="$3"
+  case "$expected" in
+    *"|"*)
+      if ! printf '%s' "$actual" | grep -Eq "^(${expected})$"; then
+        fail_simple "${ctx}: expected HTTP ${expected} got ${actual:-none}"
+        return 1
+      fi
+      ;;
+    *)
+      if [ "$actual" != "$expected" ]; then
+        fail_simple "${ctx}: expected HTTP ${expected} got ${actual:-none}"
+        return 1
+      fi
+      ;;
+  esac
+  return 0
+}
+
 container_running() {
   container_name="$1"
   docker ps --format '{{.Names}}' | grep -Fxq "$container_name"
@@ -82,10 +427,14 @@ container_running() {
 wait_for_legit_attestation() {
   i=0
   while [ $i -lt 60 ]; do
+    out="/tmp/spire_agent_list.json"
     if docker exec spiffe-spire-server /opt/spire/bin/spire-server agent list \
-      -socketPath /run/spire/server/data/private/api.sock -output json 2>/dev/null | \
-      grep -Fq '"agents":[{' ; then
-      return 0
+      -socketPath /run/spire/server/data/private/api.sock -output json >"$out" 2>/dev/null; then
+      if assert_contains_json_or_text "$out" \
+        '.agents and (.agents|type=="array") and (.agents|length>0)' \
+        '"agents"'; then
+        return 0
+      fi
     fi
     i=$((i + 1))
     sleep 1
@@ -122,7 +471,7 @@ run_rogue_attest_should_fail() {
   rc=$?
   set -e
 
-  if grep -q "Node attestation was successful" "$log_file"; then
+  if text_contains "$log_file" "Node attestation was successful"; then
     set_reason "rogue attestation succeeded"
     return 1
   fi
@@ -168,21 +517,6 @@ prepare_toolb_material() {
   TOOLB_KEY="$key"
   TOOLB_BUNDLE="$bundle"
   return 0
-}
-
-expect_tls_fail() {
-  out_file="$1"
-  rc="$2"
-
-  if [ $rc -ne 0 ]; then
-    return 0
-  fi
-
-  if grep -Eiq 'alert|handshake|certificate required|bad certificate|no peer certificate' "$out_file"; then
-    return 0
-  fi
-
-  return 1
 }
 
 capture_entries() {
@@ -338,14 +672,46 @@ ensure_capiss_material() {
   return 0
 }
 
+ensure_toolb_envoy_ready() {
+  if ! wait_dns "tool-b-envoy" 30; then
+    return 1
+  fi
+  if ! wait_tcp "tool-b-envoy" "8443" 30; then
+    return 1
+  fi
+  TOOLB_ENVOY_IP="$(resolve_host_ip "tool-b-envoy")"
+  return 0
+}
+
+ensure_capiss_envoy_ready() {
+  if ! wait_dns "capability-issuer-envoy" 30; then
+    return 1
+  fi
+  if ! wait_tcp "capability-issuer-envoy" "9443" 30; then
+    return 1
+  fi
+  CAPISS_ENVOY_IP="$(resolve_host_ip "capability-issuer-envoy")"
+  return 0
+}
+
 mint_with_cert() {
   cert="$1"
   key="$2"
   url="$3"
   out="$4"
   : >"$out"
-  status="$(curl -sS -o "$out" -w '%{http_code}' --insecure --cert "$cert" --key "$key" \
-    -H "Content-Type: application/json" -d "$CAPISS_MINT_BODY" "$url" || true)"
+  resolve_arg="$(resolve_arg_for_url "$url" || true)"
+  host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\\([^/:]*\\).*#\\1#p')"
+  port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\\([0-9]*\\).*#\\1#p')"
+  ip="$(resolve_ip_for_host "$host" || true)"
+  curl_url="$url"
+  host_header=""
+  if [ -n "$ip" ] && [ -n "$port" ]; then
+    curl_url="$(printf '%s' "$url" | sed "s#^\\(https\\?://\\)[^/]*#\\1${ip}:${port}#")"
+    host_header="-H Host: ${host}"
+  fi
+  status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
+    $host_header -H "Content-Type: application/json" -d "$CAPISS_MINT_BODY" "$curl_url" || true)"
   printf '%s' "$status"
 }
 
@@ -356,8 +722,18 @@ mint_with_body() {
   body="$4"
   out="$5"
   : >"$out"
-  status="$(curl -sS -o "$out" -w '%{http_code}' --insecure --cert "$cert" --key "$key" \
-    -H "Content-Type: application/json" -d "$body" "$url" || true)"
+  resolve_arg="$(resolve_arg_for_url "$url" || true)"
+  host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\\([^/:]*\\).*#\\1#p')"
+  port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\\([0-9]*\\).*#\\1#p')"
+  ip="$(resolve_ip_for_host "$host" || true)"
+  curl_url="$url"
+  host_header=""
+  if [ -n "$ip" ] && [ -n "$port" ]; then
+    curl_url="$(printf '%s' "$url" | sed "s#^\\(https\\?://\\)[^/]*#\\1${ip}:${port}#")"
+    host_header="-H Host: ${host}"
+  fi
+  status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
+    $host_header -H "Content-Type: application/json" -d "$body" "$curl_url" || true)"
   printf '%s' "$status"
 }
 
@@ -367,12 +743,22 @@ toolb_request() {
   token="$3"
   out="$4"
   : >"$out"
+  resolve_arg="$(resolve_arg_for_url "$TOOLB_SECRET_URL" || true)"
+  host="$(printf '%s' "$TOOLB_SECRET_URL" | sed -n 's#^[a-zA-Z]*://\\([^/:]*\\).*#\\1#p')"
+  port="$(printf '%s' "$TOOLB_SECRET_URL" | sed -n 's#^[a-zA-Z]*://[^/:]*:\\([0-9]*\\).*#\\1#p')"
+  ip="$(resolve_ip_for_host "$host" || true)"
+  curl_url="$TOOLB_SECRET_URL"
+  host_header=""
+  if [ -n "$ip" ] && [ -n "$port" ]; then
+    curl_url="$(printf '%s' "$TOOLB_SECRET_URL" | sed "s#^\\(https\\?://\\)[^/]*#\\1${ip}:${port}#")"
+    host_header="-H Host: ${host}"
+  fi
   if [ -n "$token" ]; then
-    status="$(curl -sS -o "$out" -w '%{http_code}' --insecure --cert "$cert" --key "$key" \
-      --cacert "$TOOLB_BUNDLE" -H "Authorization: Bearer ${token}" "$TOOLB_SECRET_URL" || true)"
+    status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
+      --cacert "$TOOLB_BUNDLE" $host_header -H "Authorization: Bearer ${token}" "$curl_url" || true)"
   else
-    status="$(curl -sS -o "$out" -w '%{http_code}' --insecure --cert "$cert" --key "$key" \
-      --cacert "$TOOLB_BUNDLE" "$TOOLB_SECRET_URL" || true)"
+    status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
+      --cacert "$TOOLB_BUNDLE" $host_header "$curl_url" || true)"
   fi
   printf '%s' "$status"
 }
@@ -422,7 +808,7 @@ c3_test() {
 # M1-T4
 c4_test() {
   mounts="$(docker inspect -f '{{range .Mounts}}{{.Destination}} {{end}}' spiffe-spire-rogue-agent 2>/dev/null || true)"
-  if echo "$mounts" | grep -q "/run/spire/shared"; then
+  if text_contains_str "$mounts" "/run/spire/shared"; then
     set_reason "shared token mount present"
     return 1
   fi
@@ -459,17 +845,27 @@ T1_test() {
   if ! ensure_toolb_material; then
     return 1
   fi
+  if ! wait_dns "tool-b-envoy" 30; then
+    return 1
+  fi
+  if ! wait_tcp "tool-b-envoy" "8443" 30; then
+    return 1
+  fi
   out="/tmp/toolb_material/t1.out"
   set +e
-  $TIMEOUT_BIN 6s openssl s_client -connect tool-b-envoy:8443 -CAfile "$TOOLB_BUNDLE" \
+  $TIMEOUT_BIN 6s openssl s_client $TLS_CLIENT_ARGS -connect tool-b-envoy:8443 -CAfile "$TOOLB_BUNDLE" \
     -verify_return_error < /dev/null >"$out" 2>&1
   rc=$?
   set -e
-  if expect_tls_fail "$out" "$rc"; then
-    return 0
+  if [ $rc -eq 0 ]; then
+    set_reason "TLS succeeded without client cert"
+    return 1
   fi
-  set_reason "TLS succeeded without client cert"
-  return 1
+  if ! assert_text_matches "$out" '(handshake failure|certificate required|no peer certificate)'; then
+    set_reason "TLS failure did not indicate missing client cert: $(cat "$out")"
+    return 1
+  fi
+  return 0
 }
 
 # M2-T2
@@ -477,21 +873,31 @@ T2_test() {
   if ! ensure_toolb_material; then
     return 1
   fi
+  if ! wait_dns "tool-b-envoy" 30; then
+    return 1
+  fi
+  if ! wait_tcp "tool-b-envoy" "8443" 30; then
+    return 1
+  fi
   tmpdir="/tmp/toolb_material"
   openssl req -x509 -newkey rsa:2048 -nodes -keyout "$tmpdir/bad.key" \
     -out "$tmpdir/bad.pem" -days 1 -subj "/CN=rogue" >/dev/null 2>&1
   out="/tmp/toolb_material/t2.out"
   set +e
-  $TIMEOUT_BIN 6s openssl s_client -connect tool-b-envoy:8443 -cert "$tmpdir/bad.pem" \
+  $TIMEOUT_BIN 6s openssl s_client $TLS_CLIENT_ARGS -connect tool-b-envoy:8443 -cert "$tmpdir/bad.pem" \
     -key "$tmpdir/bad.key" -CAfile "$TOOLB_BUNDLE" -verify_return_error \
     < /dev/null >"$out" 2>&1
   rc=$?
   set -e
-  if expect_tls_fail "$out" "$rc"; then
-    return 0
+  if [ $rc -eq 0 ]; then
+    set_reason "TLS succeeded with invalid client cert"
+    return 1
   fi
-  set_reason "TLS succeeded with invalid client cert"
-  return 1
+  if ! assert_text_matches "$out" '(unknown ca|bad certificate|certificate unknown)'; then
+    set_reason "TLS failure did not indicate invalid client cert: $(cat "$out")"
+    return 1
+  fi
+  return 0
 }
 
 # M2-T3
@@ -499,26 +905,224 @@ T3_test() {
   if ! ensure_toolb_material; then
     return 1
   fi
+  if ! wait_dns "tool-b-envoy" 30; then
+    return 1
+  fi
+  if ! wait_tcp "tool-b-envoy" "8443" 30; then
+    return 1
+  fi
   tmpdir="/tmp/toolb_material"
-  start=$(date -u -d "2 days ago" +%Y%m%d%H%M%SZ)
-  end=$(date -u -d "1 day ago" +%Y%m%d%H%M%SZ)
+  ca_dir="$tmpdir/ca"
+  rm -rf "$ca_dir"
+  mkdir -p "$ca_dir/certs" "$ca_dir/newcerts" "$ca_dir/private"
+  : >"$ca_dir/index.txt"
+  echo 1000 >"$ca_dir/serial"
+  openssl req -x509 -newkey rsa:2048 -nodes -keyout "$ca_dir/private/ca.key" \
+    -out "$ca_dir/certs/ca.pem" -days 365 -subj "/CN=toolb-test-ca" >/dev/null 2>&1
+  cat >"$ca_dir/ca.conf" <<EOF
+[ ca ]
+default_ca = CA_default
+
+[ CA_default ]
+dir = $ca_dir
+database = \$dir/index.txt
+new_certs_dir = \$dir/newcerts
+certificate = \$dir/certs/ca.pem
+private_key = \$dir/private/ca.key
+serial = \$dir/serial
+default_md = sha256
+policy = policy_any
+x509_extensions = usr_cert
+unique_subject = no
+
+[ policy_any ]
+commonName = supplied
+
+[ usr_cert ]
+basicConstraints = CA:FALSE
+keyUsage = digitalSignature, keyEncipherment
+extendedKeyUsage = clientAuth
+EOF
+  start="20000101000000Z"
+  end="20000102000000Z"
   openssl req -newkey rsa:2048 -nodes -keyout "$tmpdir/exp.key" \
     -out "$tmpdir/exp.csr" -subj "/CN=rogue-expired" >/dev/null 2>&1
-  openssl x509 -req -in "$tmpdir/exp.csr" -signkey "$tmpdir/exp.key" \
-    -set_serial 01 -out "$tmpdir/exp.pem" -startdate "$start" -enddate "$end" \
-    >/dev/null 2>&1
+  if ! openssl ca -batch -config "$ca_dir/ca.conf" -in "$tmpdir/exp.csr" \
+    -startdate "$start" -enddate "$end" -out "$tmpdir/exp.pem" >/tmp/exp_ca.log 2>&1; then
+    set_reason "failed to sign expired cert: $(cat /tmp/exp_ca.log)"
+    return 1
+  fi
+  if [ ! -s "$tmpdir/exp.pem" ]; then
+    set_reason "expired cert not created"
+    return 1
+  fi
+  if ! openssl x509 -noout -enddate -in "$tmpdir/exp.pem" >"$tmpdir/exp_end.txt" 2>/tmp/exp_end.err; then
+    set_reason "failed to read expired cert enddate: $(cat /tmp/exp_end.err)"
+    return 1
+  fi
+  if ! assert_text_matches "$tmpdir/exp_end.txt" 'notAfter=.* 2000 GMT$'; then
+    set_reason "expired cert enddate not in the past: $(cat "$tmpdir/exp_end.txt")"
+    return 1
+  fi
   out="/tmp/toolb_material/t3.out"
   set +e
-  $TIMEOUT_BIN 6s openssl s_client -connect tool-b-envoy:8443 -cert "$tmpdir/exp.pem" \
+  $TIMEOUT_BIN 6s openssl s_client $TLS_CLIENT_ARGS -connect tool-b-envoy:8443 -cert "$tmpdir/exp.pem" \
     -key "$tmpdir/exp.key" -CAfile "$TOOLB_BUNDLE" -verify_return_error \
     < /dev/null >"$out" 2>&1
   rc=$?
   set -e
-  if expect_tls_fail "$out" "$rc"; then
-    return 0
+  if [ $rc -eq 0 ]; then
+    set_reason "TLS succeeded with expired client cert"
+    return 1
   fi
-  set_reason "TLS succeeded with expired client cert"
-  return 1
+  if ! assert_text_matches "$out" '(alert unknown ca|unknown ca|unable to get local issuer certificate|verify error:num=20)'; then
+    set_reason "TLS failure did not indicate unknown CA: $(cat "$out")"
+    return 1
+  fi
+  return 0
+}
+
+# M2-T9
+T9_test() {
+  if ! ensure_toolb_material; then
+    return 1
+  fi
+
+  spiffe_id="spiffe://example.org/rogue-socket-shortttl"
+  selector="docker:label:com.docker.compose.service:rogue-socket"
+  tmpdir="/tmp/toolb_material"
+  short_dir="/tmp/short_svid"
+  rm -rf "$short_dir"
+
+  existing_id="$(docker exec spiffe-spire-server /opt/spire/bin/spire-server entry show \
+    -spiffeID "$spiffe_id" -socketPath /run/spire/server/data/private/api.sock -output json 2>/dev/null | jq -r '.entries[0].id // empty')"
+  if [ -n "$existing_id" ]; then
+    docker exec spiffe-spire-server /opt/spire/bin/spire-server entry delete \
+      -id "$existing_id" -socketPath /run/spire/server/data/private/api.sock >/dev/null 2>&1 || true
+  fi
+
+  entry_json="$(docker exec spiffe-spire-server /opt/spire/bin/spire-server entry create \
+    -parentID spiffe://example.org/agent/spire-agent \
+    -spiffeID "$spiffe_id" \
+    -selector "$selector" \
+    -x509SVIDTTL 20 \
+    -socketPath /run/spire/server/data/private/api.sock \
+    -output json 2>/tmp/short_entry.err || true)"
+  entry_id="$(echo "$entry_json" | jq -r '.results[0].entry.id // empty')"
+  status_code="$(echo "$entry_json" | jq -r '.results[0].status.code // empty')"
+  if [ -z "$entry_id" ] && [ "$status_code" = "6" ]; then
+    existing_json="$(docker exec spiffe-spire-server /opt/spire/bin/spire-server entry show \
+      -spiffeID "$spiffe_id" -socketPath /run/spire/server/data/private/api.sock -output json 2>/dev/null)"
+    entry_id="$(echo "$existing_json" | jq -r '.entries[0].id // empty')"
+    existing_ttl="$(echo "$existing_json" | jq -r '.entries[0].x509_svid_ttl // empty')"
+    if [ -n "$existing_ttl" ] && [ "$existing_ttl" != "20" ]; then
+      docker exec spiffe-spire-server /opt/spire/bin/spire-server entry delete \
+        -id "$entry_id" -socketPath /run/spire/server/data/private/api.sock >/dev/null 2>&1 || true
+      entry_id=""
+    fi
+  fi
+  if [ -z "$entry_id" ]; then
+    err_msg="$(cat /tmp/short_entry.err 2>/dev/null || true)"
+    set_reason "failed to create short-lived entry: status=${status_code:-none} err=${err_msg:-none}"
+    return 1
+  fi
+
+  if [ "$status_code" = "6" ] && [ -z "$entry_id" ]; then
+    entry_json="$(docker exec spiffe-spire-server /opt/spire/bin/spire-server entry create \
+      -parentID spiffe://example.org/agent/spire-agent \
+      -spiffeID "$spiffe_id" \
+      -selector "$selector" \
+      -x509SVIDTTL 20 \
+      -socketPath /run/spire/server/data/private/api.sock \
+      -output json 2>/tmp/short_entry.err || true)"
+    entry_id="$(echo "$entry_json" | jq -r '.results[0].entry.id // empty')"
+    status_code="$(echo "$entry_json" | jq -r '.results[0].status.code // empty')"
+    if [ -z "$entry_id" ]; then
+      err_msg="$(cat /tmp/short_entry.err 2>/dev/null || true)"
+      set_reason "failed to recreate short-lived entry: status=${status_code:-none} err=${err_msg:-none}"
+      return 1
+    fi
+  fi
+
+  cleanup_entry() {
+    docker exec spiffe-spire-server /opt/spire/bin/spire-server entry delete \
+      -id "$entry_id" -socketPath /run/spire/server/data/private/api.sock >/dev/null 2>&1 || true
+  }
+
+  mkdir -p "$short_dir"
+  docker exec spiffe-rogue-socket mkdir -p "$short_dir"
+  fetched=0
+  i=0
+  while [ $i -lt 30 ]; do
+    if docker exec spiffe-rogue-socket /opt/spire/bin/spire-agent api fetch x509 \
+      -socketPath /run/spire/agent/private/api.sock -write "$short_dir" >/dev/null 2>/tmp/short_fetch.err; then
+      fetched=1
+      break
+    fi
+    i=$((i + 1))
+    sleep 1
+  done
+  if [ "$fetched" -ne 1 ]; then
+    err_msg="$(cat /tmp/short_fetch.err 2>/dev/null || true)"
+    cleanup_entry
+    set_reason "failed to fetch short-lived SVID: ${err_msg:-none}"
+    return 1
+  fi
+
+  if ! docker exec spiffe-rogue-socket test -s "$short_dir/bundle.pem" 2>/dev/null; then
+    if docker exec spiffe-rogue-socket test -s "$short_dir/bundle.0.pem" 2>/dev/null; then
+      docker exec spiffe-rogue-socket cp "$short_dir/bundle.0.pem" "$short_dir/bundle.pem" >/dev/null 2>&1 || true
+    fi
+    if docker exec spiffe-rogue-socket test -s /run/spire/agent/bundle.pem 2>/dev/null; then
+      docker exec spiffe-rogue-socket cp /run/spire/agent/bundle.pem "$short_dir/bundle.pem" >/dev/null 2>&1 || true
+    fi
+  fi
+  if ! docker exec spiffe-rogue-socket test -s "$short_dir/bundle.pem" 2>/dev/null; then
+    cleanup_entry
+    set_reason "missing short-lived bundle.pem"
+    return 1
+  fi
+
+  end_date="$(docker exec spiffe-rogue-socket openssl x509 -noout -enddate -in "$short_dir/svid.0.pem" | sed 's/notAfter=//')"
+  end_epoch="$(docker exec spiffe-rogue-socket date -d "$end_date" +%s 2>/dev/null || true)"
+  now_epoch="$(docker exec spiffe-rogue-socket date -u +%s)"
+  if [ -z "$end_epoch" ]; then
+    cleanup_entry
+    set_reason "failed to parse SVID expiry"
+    return 1
+  fi
+  sleep_for=$((end_epoch - now_epoch + 2))
+  if [ "$sleep_for" -lt 1 ]; then
+    sleep_for=1
+  fi
+  docker exec spiffe-rogue-socket sleep "$sleep_for"
+
+  docker exec spiffe-rogue-socket cat "$short_dir/svid.0.pem" >"$short_dir/svid.0.pem"
+  docker exec spiffe-rogue-socket cat "$short_dir/svid.0.key" >"$short_dir/svid.0.key"
+  if docker exec spiffe-rogue-socket test -s "$short_dir/bundle.pem" 2>/dev/null; then
+    docker exec spiffe-rogue-socket cat "$short_dir/bundle.pem" >"$short_dir/bundle.pem"
+  else
+    docker exec spiffe-rogue-socket cat "$short_dir/bundle.0.pem" >"$short_dir/bundle.pem"
+  fi
+
+  out="$short_dir/expired.out"
+  set +e
+  $TIMEOUT_BIN 6s openssl s_client $TLS_CLIENT_ARGS -connect tool-b-envoy:8443 -servername tool-b-envoy \
+    -cert "$short_dir/svid.0.pem" -key "$short_dir/svid.0.key" \
+    -CAfile "$short_dir/bundle.pem" -verify_return_error < /dev/null >"$out" 2>&1
+  rc=$?
+  set -e
+  cleanup_entry
+
+  if [ $rc -eq 0 ]; then
+    set_reason "TLS succeeded with expired short-lived SVID"
+    return 1
+  fi
+  if ! assert_text_matches "$out" '(expired|certificate has expired|verify error:num=10|verify return code: 10)'; then
+    set_reason "TLS failure did not indicate expiry: $(cat "$out")"
+    return 1
+  fi
+  return 0
 }
 
 # M2-T4
@@ -526,18 +1130,26 @@ T4_test() {
   if ! ensure_toolb_material; then
     return 1
   fi
-  out="/tmp/toolb_material/t4.out"
-  printf "GET /secret HTTP/1.1\r\nHost: tool-b-envoy\r\nConnection: close\r\n\r\n" | \
-    $TIMEOUT_BIN 6s openssl s_client -connect tool-b-envoy:8443 -cert "$TOOLB_CERT" \
-      -key "$TOOLB_KEY" -CAfile "$TOOLB_BUNDLE" -verify_return_error \
-      -showcerts -ign_eof >"$out" 2>&1 || true
-  if ! grep -q "Verify return code: 0 (ok)" "$out"; then
-    set_reason "server verification did not succeed"
+  if ! wait_dns "tool-b-envoy" 30; then
     return 1
   fi
-  status=$(tr -d '\r' <"$out" | grep -m1 '^HTTP/' | awk '{print $2}')
-  if [ "$status" != "403" ] && [ "$status" != "401" ]; then
-    set_reason "expected HTTP 401/403, got ${status:-none}"
+  if ! wait_tcp "tool-b-envoy" "8443" 30; then
+    return 1
+  fi
+  out="/tmp/toolb_material/t4.out"
+  set +e
+  printf "GET /secret HTTP/1.1\r\nHost: tool-b-envoy\r\nConnection: close\r\n\r\n" | \
+    $TIMEOUT_BIN 6s openssl s_client $TLS_CLIENT_ARGS -connect tool-b-envoy:8443 -cert "$TOOLB_CERT" \
+      -key "$TOOLB_KEY" -CAfile "$TOOLB_BUNDLE" -verify_return_error \
+      -showcerts -ign_eof >"$out" 2>&1
+  rc=$?
+  set -e
+  if [ $rc -eq 0 ]; then
+    set_reason "TLS succeeded with wrong SPIFFE ID"
+    return 1
+  fi
+  if ! assert_text_matches "$out" '(alert bad certificate|alert certificate unknown|bad certificate|certificate unknown|handshake failure)'; then
+    set_reason "TLS failure did not indicate SPIFFE ID mismatch: $(cat "$out")"
     return 1
   fi
   return 0
@@ -596,11 +1208,11 @@ T6_test() {
 # M2-T7
 T7_test() {
   mounts="$(docker inspect -f '{{range .Mounts}}{{.Destination}} {{end}}' spiffe-spire-rogue-agent 2>/dev/null || true)"
-  if echo "$mounts" | grep -q "/run/spire/svid"; then
+  if text_contains_str "$mounts" "/run/spire/svid"; then
     set_reason "workload SVID mount present"
     return 1
   fi
-  if echo "$mounts" | grep -q "/run/spire/agent/data"; then
+  if text_contains_str "$mounts" "/run/spire/agent/data"; then
     set_reason "agent data mount present"
     return 1
   fi
@@ -681,18 +1293,26 @@ M25_T3_test() {
   if ! ensure_toolb_material; then
     return 1
   fi
-  out="/tmp/toolb_material/m25_t3.out"
-  printf "GET /secret HTTP/1.1\r\nHost: tool-b-envoy\r\nConnection: close\r\n\r\n" | \
-    $TIMEOUT_BIN 6s openssl s_client -connect tool-b-envoy:8443 -cert "$TOOLB_CERT" \
-      -key "$TOOLB_KEY" -CAfile "$TOOLB_BUNDLE" -verify_return_error \
-      -showcerts -ign_eof >"$out" 2>&1 || true
-  if ! grep -q "Verify return code: 0 (ok)" "$out"; then
-    set_reason "server verification did not succeed"
+  if ! wait_dns "tool-b-envoy" 30; then
     return 1
   fi
-  status=$(tr -d '\r' <"$out" | grep -m1 '^HTTP/' | awk '{print $2}')
-  if [ "$status" != "403" ] && [ "$status" != "401" ]; then
-    set_reason "expected HTTP 401/403, got ${status:-none}"
+  if ! wait_tcp "tool-b-envoy" "8443" 30; then
+    return 1
+  fi
+  out="/tmp/toolb_material/m25_t3.out"
+  set +e
+  printf "GET /secret HTTP/1.1\r\nHost: tool-b-envoy\r\nConnection: close\r\n\r\n" | \
+    $TIMEOUT_BIN 6s openssl s_client $TLS_CLIENT_ARGS -connect tool-b-envoy:8443 -cert "$TOOLB_CERT" \
+      -key "$TOOLB_KEY" -CAfile "$TOOLB_BUNDLE" -verify_return_error \
+      -showcerts -ign_eof >"$out" 2>&1
+  rc=$?
+  set -e
+  if [ $rc -eq 0 ]; then
+    set_reason "TLS succeeded with mismatched SPIFFE ID"
+    return 1
+  fi
+  if ! assert_text_matches "$out" '(alert bad certificate|alert certificate unknown|bad certificate|certificate unknown|handshake failure)'; then
+    set_reason "TLS failure did not indicate SPIFFE ID mismatch: $(cat "$out")"
     return 1
   fi
   return 0
@@ -702,19 +1322,34 @@ M3S2_T1_test() {
   if ! ensure_capiss_material; then
     return 1
   fi
+  if ! ensure_capiss_envoy_ready; then
+    return 1
+  fi
   out="/tmp/capiss_t1.out"
   status="$(mint_with_cert "$CAPISS_AGENT_CERT" "$CAPISS_AGENT_KEY" "$CAPISS_MINT_URL" "$out")"
   if [ "$status" != "200" ]; then
     set_reason "expected 200, got ${status:-none}; body: $(cat "$out")"
     return 1
   fi
-  if ! grep -Fq '"token_type":"biscuit"' "$out" || \
-    ! grep -Fq '"token":"' "$out" || \
-    ! grep -Fq '"issued_to":"spiffe://example.org/agent-a"' "$out" || \
-    ! grep -Fq '"aud":"tool-b"' "$out" || \
-    ! grep -Fq '"act":"read"' "$out" || \
-    ! grep -Fq '"res":"/secret"' "$out"; then
-    set_reason "unexpected mint response: $(cat "$out")"
+  if ! assert_json_eq "$out" '.token_type' 'biscuit'; then
+    return 1
+  fi
+  if ! assert_json_present "$out" '.token'; then
+    return 1
+  fi
+  if ! assert_json_present "$out" '.expires_at'; then
+    return 1
+  fi
+  if ! assert_json_eq "$out" '.issued_to' 'spiffe://example.org/agent-a'; then
+    return 1
+  fi
+  if ! assert_json_eq "$out" '.aud' 'tool-b'; then
+    return 1
+  fi
+  if ! assert_json_eq "$out" '.act' 'read'; then
+    return 1
+  fi
+  if ! assert_json_eq "$out" '.res' '/secret'; then
     return 1
   fi
   return 0
@@ -724,14 +1359,19 @@ M3S2_T2_test() {
   if ! ensure_capiss_material; then
     return 1
   fi
+  if ! ensure_capiss_envoy_ready; then
+    return 1
+  fi
   out="/tmp/capiss_t2.out"
   status="$(mint_with_cert "$CAPISS_ROGUE_CERT" "$CAPISS_ROGUE_KEY" "$CAPISS_MINT_URL" "$out")"
   if [ "$status" != "403" ]; then
     set_reason "expected 403, got ${status:-none}; body: $(cat "$out")"
     return 1
   fi
-  if ! grep -Fq '"error":"denied"' "$out" || ! grep -Fq '"reason":"policy"' "$out"; then
-    set_reason "unexpected deny response: $(cat "$out")"
+  if ! assert_json_eq "$out" '.error' 'denied'; then
+    return 1
+  fi
+  if ! assert_json_eq "$out" '.reason' 'policy'; then
     return 1
   fi
   return 0
@@ -750,9 +1390,16 @@ M3S2_T4_test() {
   if ! ensure_capiss_material; then
     return 1
   fi
+  if ! wait_dns "capability-issuer-no-opa-envoy" 30; then
+    return 1
+  fi
+  if ! wait_tcp "capability-issuer-no-opa-envoy" "9444" 30; then
+    return 1
+  fi
+  resolve_arg="$(resolve_arg_for_url "https://capability-issuer-no-opa-envoy:9444/health" || true)"
   ready=0
   for i in $(seq 1 40); do
-    if curl -sS --insecure --cert "$CAPISS_AGENT_CERT" --key "$CAPISS_AGENT_KEY" \
+    if curl -sS --insecure $resolve_arg --cert "$CAPISS_AGENT_CERT" --key "$CAPISS_AGENT_KEY" \
       https://capability-issuer-no-opa-envoy:9444/health >/dev/null 2>&1; then
       ready=1
       break
@@ -769,8 +1416,10 @@ M3S2_T4_test() {
     set_reason "expected 503/403, got ${status:-none}; body: $(cat "$out")"
     return 1
   fi
-  if ! grep -Fq '"error":"denied"' "$out" || ! grep -Fq '"reason":"opa_unavailable"' "$out"; then
-    set_reason "unexpected deny response: $(cat "$out")"
+  if ! assert_json_eq "$out" '.error' 'denied'; then
+    return 1
+  fi
+  if ! assert_json_eq "$out" '.reason' 'opa_unavailable'; then
     return 1
   fi
   return 0
@@ -789,6 +1438,9 @@ M3S3_T1_test() {
   if ! ensure_capiss_material; then
     return 1
   fi
+  if ! ensure_capiss_envoy_ready; then
+    return 1
+  fi
   out="/tmp/capiss_s3_t1.out"
   status="$(mint_with_cert "$CAPISS_AGENT_CERT" "$CAPISS_AGENT_KEY" "$CAPISS_MINT_URL" "$out")"
   if [ "$status" != "200" ]; then
@@ -805,6 +1457,9 @@ M3S3_T1_test() {
 
 M3S3_T2_test() {
   if ! ensure_capiss_material; then
+    return 1
+  fi
+  if ! ensure_capiss_envoy_ready; then
     return 1
   fi
   out="/tmp/capiss_s3_t2.out"
@@ -836,6 +1491,9 @@ M3S3_T3_test() {
   if ! ensure_capiss_material; then
     return 1
   fi
+  if ! ensure_capiss_envoy_ready; then
+    return 1
+  fi
   out1="/tmp/capiss_s3_t3_1.out"
   out2="/tmp/capiss_s3_t3_2.out"
   status1="$(mint_with_cert "$CAPISS_AGENT_CERT" "$CAPISS_AGENT_KEY" "$CAPISS_MINT_URL" "$out1")"
@@ -861,6 +1519,9 @@ M3S4_T1_test() {
   if ! ensure_toolb_material || ! ensure_capiss_material; then
     return 1
   fi
+  if ! ensure_toolb_envoy_ready; then
+    return 1
+  fi
   out="/tmp/toolb_s4_t1.out"
   status="$(toolb_request "$CAPISS_AGENT_CERT" "$CAPISS_AGENT_KEY" "" "$out")"
   if [ "$status" != "401" ] && [ "$status" != "403" ]; then
@@ -877,6 +1538,12 @@ M3S4_T1_test() {
 
 M3S4_T2_test() {
   if ! ensure_toolb_material || ! ensure_capiss_material; then
+    return 1
+  fi
+  if ! ensure_capiss_envoy_ready; then
+    return 1
+  fi
+  if ! ensure_toolb_envoy_ready; then
     return 1
   fi
   mint_out="/tmp/toolb_s4_t2_mint.out"
@@ -896,8 +1563,9 @@ M3S4_T2_test() {
     set_reason "expected 200, got ${status:-none}; body: $(cat "$out")"
     return 1
   fi
-  if ! grep -Fq '"secret"' "$out"; then
-    set_reason "expected secret response, got: $(cat "$out")"
+  secret_value="$(json_get '.secret' "$out")"
+  if [ "$secret_value" != "super sensitive demo secret" ]; then
+    set_reason "expected secret value, got: $(cat "$out")"
     return 1
   fi
   return 0
@@ -905,6 +1573,9 @@ M3S4_T2_test() {
 
 M3S4_T3_test() {
   if ! ensure_toolb_material || ! ensure_capiss_material; then
+    return 1
+  fi
+  if ! ensure_toolb_envoy_ready; then
     return 1
   fi
   out="/tmp/toolb_s4_t3.out"
@@ -918,6 +1589,12 @@ M3S4_T3_test() {
 
 M3S4_T4_test() {
   if ! ensure_toolb_material || ! ensure_capiss_material; then
+    return 1
+  fi
+  if ! ensure_capiss_envoy_ready; then
+    return 1
+  fi
+  if ! ensure_toolb_envoy_ready; then
     return 1
   fi
   mint_out="/tmp/toolb_s4_t4_mint.out"
@@ -947,6 +1624,12 @@ M3S4_T4_test() {
 
 M3S4_T5_test() {
   if ! ensure_toolb_material || ! ensure_capiss_material; then
+    return 1
+  fi
+  if ! ensure_capiss_envoy_ready; then
+    return 1
+  fi
+  if ! ensure_toolb_envoy_ready; then
     return 1
   fi
   mint_out="/tmp/toolb_s4_t5_mint.out"
@@ -984,14 +1667,19 @@ M3S4_T6_test() {
   if ! ensure_capiss_material; then
     return 1
   fi
+  if ! ensure_capiss_envoy_ready; then
+    return 1
+  fi
   out="/tmp/capiss_s4_t6.out"
   status="$(mint_with_body "$CAPISS_AGENT_CERT" "$CAPISS_AGENT_KEY" "$CAPISS_MINT_URL" '{}' "$out")"
   if [ "$status" != "400" ]; then
     set_reason "expected 400, got ${status:-none}; body: $(cat "$out")"
     return 1
   fi
-  if ! grep -Fq '"error":"bad_request"' "$out" || ! grep -Fq '"reason":"aud"' "$out"; then
-    set_reason "unexpected bad_request response: $(cat "$out")"
+  if ! assert_json_eq "$out" '.error' 'bad_request'; then
+    return 1
+  fi
+  if ! assert_json_eq "$out" '.reason' 'aud'; then
     return 1
   fi
   return 0
@@ -1001,6 +1689,9 @@ M3S4_T7_test() {
   if ! ensure_capiss_material; then
     return 1
   fi
+  if ! ensure_capiss_envoy_ready; then
+    return 1
+  fi
   out="/tmp/capiss_s4_t7.out"
   status="$(mint_with_body "$CAPISS_AGENT_CERT" "$CAPISS_AGENT_KEY" "$CAPISS_MINT_URL" \
     '{"aud":"tool-b","act":"write","res":"/secret"}' "$out")"
@@ -1008,8 +1699,10 @@ M3S4_T7_test() {
     set_reason "expected 403, got ${status:-none}; body: $(cat "$out")"
     return 1
   fi
-  if ! grep -Fq '"error":"denied"' "$out" || ! grep -Fq '"reason":"policy"' "$out"; then
-    set_reason "unexpected deny response: $(cat "$out")"
+  if ! assert_json_eq "$out" '.error' 'denied'; then
+    return 1
+  fi
+  if ! assert_json_eq "$out" '.reason' 'policy'; then
     return 1
   fi
   return 0
@@ -1031,6 +1724,7 @@ run_test "T5" "Rogue without Workload API socket cannot fetch SVID" T5_test
 run_test "T6" "Rogue with socket but no entry cannot fetch SVID" T6_test
 run_test "T7" "Rogue cannot read SVIDs or keys" T7_test
 run_test "T8" "No unintended SPIRE entries created" T8_test
+run_test "T9" "Rogue with expired short-lived SVID is rejected" T9_test
 
 print_section "Milestone 2.5 - Envoy ingress boundary"
 run_test "T1" "tool-b app not reachable from edge network" M25_T1_test

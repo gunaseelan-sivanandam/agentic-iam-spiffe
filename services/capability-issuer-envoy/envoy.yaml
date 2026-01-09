@@ -1,3 +1,10 @@
+admin:
+  access_log_path: /tmp/admin_access.log
+  address:
+    socket_address:
+      address: 127.0.0.1
+      port_value: 9901
+
 static_resources:
   listeners:
     - name: capiss_listener
@@ -12,6 +19,9 @@ static_resources:
               "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
               require_client_certificate: true
               common_tls_context:
+                tls_params:
+                  tls_minimum_protocol_version: TLSv1_2
+                  tls_maximum_protocol_version: TLSv1_2
                 tls_certificates:
                   - certificate_chain:
                       filename: /run/spire/svid/svid.pem
@@ -20,6 +30,15 @@ static_resources:
                 validation_context:
                   trusted_ca:
                     filename: /run/spire/svid/bundle.pem
+                  trust_chain_verification: VERIFY_TRUST_CHAIN
+                  allow_expired_certificate: false
+                  match_typed_subject_alt_names:
+                    - san_type: URI
+                      matcher:
+                        exact: "spiffe://example.org/agent-a"
+                    - san_type: URI
+                      matcher:
+                        exact: "spiffe://example.org/rogue"
           filters:
             - name: envoy.filters.network.http_connection_manager
               typed_config:
@@ -30,6 +49,7 @@ static_resources:
                   virtual_hosts:
                     - name: capiss_service
                       domains: ["*"]
+                      # Trust boundary: x-spiffe-id is injected only after Envoy mTLS verifies the client.
                       request_headers_to_add:
                         - header:
                             key: x-spiffe-id

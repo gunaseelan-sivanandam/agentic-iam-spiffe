@@ -31,4 +31,4 @@ if [ -f "$SVID_DIR/svid.0.pem" ] && [ -f "$SVID_DIR/svid.0.key" ] && [ -f "$SVID
   ln -sf "$SVID_DIR/bundle.0.pem" "$SVID_DIR/bundle.pem"
 fi
 
-exec /usr/local/bin/envoy -c /etc/envoy/envoy.yaml
+exec /usr/local/bin/envoy -l debug -c /etc/envoy/envoy.yaml

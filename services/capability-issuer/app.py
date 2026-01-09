@@ -27,6 +27,7 @@ CAPISS_PUBLIC_KEY_FILE = os.path.join(CAPISS_KEY_DIR, "root_public_key.b64")
 
 
 def check_opa_allow(input_payload: dict) -> tuple[bool | None, str | None]:
+    # OPA is private on capiss_app_net; we fail closed if it is unavailable.
     data = json.dumps({"input": input_payload}).encode("utf-8")
     req = request.Request(
         OPA_URL,
@@ -43,6 +44,7 @@ def check_opa_allow(input_payload: dict) -> tuple[bool | None, str | None]:
 
 
 def load_or_create_root_private_key() -> PrivateKey:
+    # Issuer key material is bootstrapped via configuration/volume, not code.
     os.makedirs(CAPISS_KEY_DIR, exist_ok=True)
     if os.path.exists(CAPISS_KEY_FILE):
         with open(CAPISS_KEY_FILE, "rb") as handle:
@@ -69,6 +71,50 @@ def write_public_key(private_key: PrivateKey) -> None:
 ROOT_PRIVATE_KEY = load_or_create_root_private_key()
 write_public_key(ROOT_PRIVATE_KEY)
 
+def validate_mint_payload(payload: dict | None) -> tuple[dict | None, JSONResponse | None]:
+    if payload is None:
+        return None, JSONResponse(
+            status_code=400,
+            content={"error": "bad_request", "reason": "body"},
+        )
+
+    required_fields = ("aud", "act", "res")
+    cleaned = {}
+    for field in required_fields:
+        if field not in payload:
+            return None, JSONResponse(
+                status_code=400,
+                content={"error": "bad_request", "reason": field},
+            )
+        value = payload[field]
+        if not isinstance(value, str):
+            return None, JSONResponse(
+                status_code=400,
+                content={"error": "bad_request", "reason": field},
+            )
+        value = value.strip()
+        if not value:
+            return None, JSONResponse(
+                status_code=400,
+                content={"error": "bad_request", "reason": field},
+            )
+        cleaned[field] = value
+
+    return cleaned, None
+
+
+def mint_biscuit(sub: str, aud: str, act: str, res: str) -> tuple[str, int]:
+    expires_at = int(time.time()) + CAPABILITY_TTL_SECONDS
+    builder = BiscuitBuilder()
+    builder.add_fact(Fact(f'sub("{sub}")'))
+    builder.add_fact(Fact(f'aud("{aud}")'))
+    builder.add_fact(Fact(f'act("{act}")'))
+    builder.add_fact(Fact(f'res("{res}")'))
+    builder.add_fact(Fact(f"exp({expires_at})"))
+    token = builder.build(ROOT_PRIVATE_KEY)
+    token_value = token.to_base64() if hasattr(token, "to_base64") else base64.b64encode(token.to_bytes()).decode("utf-8")
+    return token_value, expires_at
+
 
 @app.post("/capabilities/mint")
 def mint(
@@ -82,33 +128,9 @@ def mint(
     if not x_spiffe_id.startswith("spiffe://"):
         raise HTTPException(status_code=400, detail="invalid x-spiffe-id")
 
-    if payload is None:
-        return JSONResponse(
-            status_code=400,
-            content={"error": "bad_request", "reason": "body"},
-        )
-
-    required_fields = ("aud", "act", "res")
-    cleaned = {}
-    for field in required_fields:
-        if field not in payload:
-            return JSONResponse(
-                status_code=400,
-                content={"error": "bad_request", "reason": field},
-            )
-        value = payload[field]
-        if not isinstance(value, str):
-            return JSONResponse(
-                status_code=400,
-                content={"error": "bad_request", "reason": field},
-            )
-        value = value.strip()
-        if not value:
-            return JSONResponse(
-                status_code=400,
-                content={"error": "bad_request", "reason": field},
-            )
-        cleaned[field] = value
+    cleaned, error_response = validate_mint_payload(payload)
+    if error_response is not None:
+        return error_response
 
     input_payload = {
         "sub": x_spiffe_id,
@@ -139,15 +161,12 @@ def mint(
             content={"error": "denied", "reason": "policy"},
         )
 
-    expires_at = int(time.time()) + CAPABILITY_TTL_SECONDS
-    builder = BiscuitBuilder()
-    builder.add_fact(Fact(f'sub("{x_spiffe_id}")'))
-    builder.add_fact(Fact(f'aud("{cleaned["aud"]}")'))
-    builder.add_fact(Fact(f'act("{cleaned["act"]}")'))
-    builder.add_fact(Fact(f'res("{cleaned["res"]}")'))
-    builder.add_fact(Fact(f"exp({expires_at})"))
-    token = builder.build(ROOT_PRIVATE_KEY)
-    token_value = token.to_base64() if hasattr(token, "to_base64") else base64.b64encode(token.to_bytes()).decode("utf-8")
+    token_value, expires_at = mint_biscuit(
+        x_spiffe_id,
+        cleaned["aud"],
+        cleaned["act"],
+        cleaned["res"],
+    )
     print(
         "capability-issuer mint:",
         f"sub={x_spiffe_id}",
