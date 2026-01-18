@@ -1,4 +1,7 @@
 #!/bin/sh
+# Evidence model: Premise proves inputs/env are as expected, Exercise proves the SUT
+# was actually invoked, Outcome proves expected result and fails on harness errors.
+# Evidence artifacts are stored under /tmp/rogue-tests/<TEST_ID>_<slug>/.
 set -eu
 
 GREEN='\033[32m'
@@ -22,6 +25,7 @@ TOTAL=0
 PASSED=0
 FAILED=0
 FAIL_REASON=""
+EVDIR=""
 
 TIMEOUT_BIN="timeout"
 if ! command -v timeout >/dev/null 2>&1; then
@@ -73,6 +77,90 @@ run_test() {
 
 set_reason() {
   FAIL_REASON="$1"
+  if [ -n "${EVDIR:-}" ]; then
+    printf '%s\n' "$FAIL_REASON" >"${EVDIR}/fail_reason.txt" 2>/dev/null || true
+  fi
+}
+
+begin_test_evidence() {
+  ev_test_id="$1"
+  ev_slug="$2"
+  base="${ROGUE_TEST_EVIDENCE_DIR:-/tmp/rogue-tests}"
+  EVDIR="${base}/${ev_test_id}_${ev_slug}"
+  mkdir -p "$EVDIR"
+  export EVDIR
+}
+
+ev_note() {
+  note="$1"
+  if [ -n "${EVDIR:-}" ]; then
+    printf '[%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$note" >>"${EVDIR}/notes.txt"
+  fi
+}
+
+ev_save_cmd() {
+  ev_name="$1"
+  cmd="$2"
+  if [ -n "${EVDIR:-}" ]; then
+    printf '%s\n' "$cmd" >"${EVDIR}/cmd_${ev_name}.txt"
+  fi
+}
+
+premise_guard() {
+  msg="$1"
+  cmd="$2"
+  if [ -z "${EVDIR:-}" ]; then
+    set_reason "PREMISE FAILED: $msg"
+    return 1
+  fi
+  idx="$(ls "${EVDIR}"/premise_*.txt 2>/dev/null | wc -l | tr -d ' ')"
+  idx=$((idx + 1))
+  out="${EVDIR}/premise_${idx}.txt"
+  ev_save_cmd "premise_${idx}" "$cmd"
+  eval "$cmd" >"$out" 2>&1
+  if [ $? -ne 0 ]; then
+    set_reason "PREMISE FAILED: $msg"
+    return 1
+  fi
+  return 0
+}
+
+exercise_guard() {
+  msg="$1"
+  cmd="$2"
+  if [ -z "${EVDIR:-}" ]; then
+    set_reason "EXERCISE FAILED: $msg"
+    return 1
+  fi
+  idx="$(ls "${EVDIR}"/exercise_*.txt 2>/dev/null | wc -l | tr -d ' ')"
+  idx=$((idx + 1))
+  out="${EVDIR}/exercise_${idx}.txt"
+  ev_save_cmd "exercise_${idx}" "$cmd"
+  eval "$cmd" >"$out" 2>&1
+  if [ $? -ne 0 ]; then
+    set_reason "EXERCISE FAILED: $msg"
+    return 1
+  fi
+  return 0
+}
+
+outcome_guard() {
+  msg="$1"
+  cmd="$2"
+  if [ -z "${EVDIR:-}" ]; then
+    set_reason "OUTCOME FAILED: $msg"
+    return 1
+  fi
+  idx="$(ls "${EVDIR}"/outcome_*.txt 2>/dev/null | wc -l | tr -d ' ')"
+  idx=$((idx + 1))
+  out="${EVDIR}/outcome_${idx}.txt"
+  ev_save_cmd "outcome_${idx}" "$cmd"
+  eval "$cmd" >"$out" 2>&1
+  if [ $? -ne 0 ]; then
+    set_reason "OUTCOME FAILED: $msg"
+    return 1
+  fi
+  return 0
 }
 
 json_get() {
@@ -129,6 +217,48 @@ wait_dns() {
   done
 }
 
+resolve_service_ip() {
+  svc_name="$1"
+  ip=""
+  if command -v getent >/dev/null 2>&1; then
+    ip="$(getent hosts "$svc_name" 2>/dev/null | awk 'NR==1{print $1}')"
+  fi
+  if [ -z "$ip" ] && command -v nslookup >/dev/null 2>&1; then
+    ip="$(nslookup "$svc_name" 127.0.0.11 2>/dev/null | awk '/^Address: /{print $2; exit}')"
+  fi
+  if [ -z "$ip" ] && command -v ping >/dev/null 2>&1; then
+    ip="$(ping -c1 "$svc_name" 2>/dev/null | awk -F'[()]' 'NR==1{print $2; exit}')"
+  fi
+  if [ -n "$ip" ]; then
+    printf '%s\n' "$ip"
+    return 0
+  fi
+  return 1
+}
+
+wait_resolve_ip() {
+  svc_name="$1"
+  timeout="${2:-10}"
+  i=0
+  while [ $i -lt "$timeout" ]; do
+    ip="$(resolve_service_ip "$svc_name" || true)"
+    if [ -n "$ip" ]; then
+      if [ -n "${EVDIR:-}" ]; then
+        printf '%s\n' "$ip" >"${EVDIR}/resolve_${svc_name}.txt" 2>/dev/null || true
+        ev_note "resolved ${svc_name} -> ${ip}"
+      fi
+      printf '%s\n' "$ip"
+      return 0
+    fi
+    i=$((i + 1))
+    sleep 0.2
+  done
+  if [ -n "${EVDIR:-}" ]; then
+    ev_note "resolve ${svc_name} failed after ${timeout}s"
+  fi
+  return 1
+}
+
 wait_tcp() {
   host="$1"
   port="$2"
@@ -138,13 +268,29 @@ wait_tcp() {
   echo "[gate] TCP check ${host}:${port}"
   while true; do
     if command -v nc >/dev/null 2>&1; then
-      if nc -z -w1 "$host" "$port" >/dev/null 2>&1; then
+      target="$host"
+      if ! printf '%s' "$host" | grep -Eq '^[0-9.]+$'; then
+        target="$(wait_resolve_ip "$host" 1 2>/dev/null || true)"
+      fi
+      if [ -n "$target" ] && nc -z -w1 "$target" "$port" >/dev/null 2>&1; then
+        if [ -n "${EVDIR:-}" ]; then
+          printf '%s:%s\n' "$target" "$port" >"${EVDIR}/tcp_${host}_${port}.txt" 2>/dev/null || true
+          ev_note "tcp reachable ${host}:${port} via ${target}"
+        fi
         echo "[gate] TCP OK ${host}:${port}"
         return 0
       fi
     else
-      last_out="$(timeout 2s openssl s_client -connect "${host}:${port}" -servername "$host" < /dev/null 2>&1 || true)"
+      target="$host"
+      if ! printf '%s' "$host" | grep -Eq '^[0-9.]+$'; then
+        target="$(wait_resolve_ip "$host" 1 2>/dev/null || true)"
+      fi
+      last_out="$(timeout 2s openssl s_client -connect "${target}:${port}" -servername "$host" < /dev/null 2>&1 || true)"
       if printf '%s' "$last_out" | grep -Fq "CONNECTED"; then
+        if [ -n "${EVDIR:-}" ]; then
+          printf '%s:%s\n' "$target" "$port" >"${EVDIR}/tcp_${host}_${port}.txt" 2>/dev/null || true
+          ev_note "tcp reachable ${host}:${port} via ${target}"
+        fi
         echo "[gate] TCP OK ${host}:${port}"
         return 0
       fi
@@ -266,6 +412,12 @@ resolve_ip_for_host() {
     if [ -z "$ip" ] && command -v docker >/dev/null 2>&1; then
       net_dump="$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k " " $v.IPAddress}}{{end}}' "spiffe-${host}" 2>/dev/null || true)"
       ip="$(printf '%s\n' "$net_dump" | awk 'NF>=2{print $2; exit}')"
+    fi
+    if [ -z "$ip" ] && command -v nslookup >/dev/null 2>&1; then
+      ip="$(nslookup "$host" 127.0.0.11 2>/dev/null | awk '/^Address: /{print $2; exit}')"
+    fi
+    if [ -z "$ip" ] && command -v ping >/dev/null 2>&1; then
+      ip="$(ping -c1 "$host" 2>/dev/null | awk -F'[()]' 'NR==1{print $2; exit}')"
     fi
     if [ -n "$ip" ]; then
       printf '%s\n' "$ip"
@@ -679,7 +831,11 @@ ensure_toolb_envoy_ready() {
   if ! wait_tcp "tool-b-envoy" "8443" 30; then
     return 1
   fi
-  TOOLB_ENVOY_IP="$(resolve_host_ip "tool-b-envoy")"
+  TOOLB_ENVOY_IP="$(wait_resolve_ip "tool-b-envoy" 30 || true)"
+  if [ -z "${TOOLB_ENVOY_IP:-}" ]; then
+    set_reason "failed to resolve tool-b-envoy IP"
+    return 1
+  fi
   return 0
 }
 
@@ -690,7 +846,11 @@ ensure_capiss_envoy_ready() {
   if ! wait_tcp "capability-issuer-envoy" "9443" 30; then
     return 1
   fi
-  CAPISS_ENVOY_IP="$(resolve_host_ip "capability-issuer-envoy")"
+  CAPISS_ENVOY_IP="$(wait_resolve_ip "capability-issuer-envoy" 30 || true)"
+  if [ -z "${CAPISS_ENVOY_IP:-}" ]; then
+    set_reason "failed to resolve capability-issuer-envoy IP"
+    return 1
+  fi
   return 0
 }
 
@@ -703,15 +863,31 @@ mint_with_cert() {
   resolve_arg="$(resolve_arg_for_url "$url" || true)"
   host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\\([^/:]*\\).*#\\1#p')"
   port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\\([0-9]*\\).*#\\1#p')"
-  ip="$(resolve_ip_for_host "$host" || true)"
+  ip=""
+  if [ "$host" = "capability-issuer-envoy" ] && [ -n "${CAPISS_ENVOY_IP:-}" ]; then
+    ip="$CAPISS_ENVOY_IP"
+  elif [ "$host" = "capability-issuer-no-opa-envoy" ] && [ -n "${CAPISS_NO_OPA_ENVOY_IP:-}" ]; then
+    ip="$CAPISS_NO_OPA_ENVOY_IP"
+  else
+    ip="$(resolve_ip_for_host "$host" || true)"
+  fi
   curl_url="$url"
   host_header=""
   if [ -n "$ip" ] && [ -n "$port" ]; then
     curl_url="$(printf '%s' "$url" | sed "s#^\\(https\\?://\\)[^/]*#\\1${ip}:${port}#")"
-    host_header="-H Host: ${host}"
+    host_header="Host: ${host}"
   fi
-  status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
-    $host_header -H "Content-Type: application/json" -d "$CAPISS_MINT_BODY" "$curl_url" || true)"
+  if [ "${DEBUG_RESOLVE:-}" = "1" ]; then
+    printf '[debug] mint_with_cert url=%s host=%s port=%s ip=%s resolve_arg=%s host_header=%s curl_url=%s\n' \
+      "$url" "$host" "$port" "${ip:-}" "$resolve_arg" "$host_header" "$curl_url" >&2
+  fi
+  if [ -n "$host_header" ]; then
+    status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
+      -H "$host_header" -H "Content-Type: application/json" -d "$CAPISS_MINT_BODY" "$curl_url" || true)"
+  else
+    status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
+      -H "Content-Type: application/json" -d "$CAPISS_MINT_BODY" "$curl_url" || true)"
+  fi
   printf '%s' "$status"
 }
 
@@ -725,15 +901,31 @@ mint_with_body() {
   resolve_arg="$(resolve_arg_for_url "$url" || true)"
   host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\\([^/:]*\\).*#\\1#p')"
   port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\\([0-9]*\\).*#\\1#p')"
-  ip="$(resolve_ip_for_host "$host" || true)"
+  ip=""
+  if [ "$host" = "capability-issuer-envoy" ] && [ -n "${CAPISS_ENVOY_IP:-}" ]; then
+    ip="$CAPISS_ENVOY_IP"
+  elif [ "$host" = "capability-issuer-no-opa-envoy" ] && [ -n "${CAPISS_NO_OPA_ENVOY_IP:-}" ]; then
+    ip="$CAPISS_NO_OPA_ENVOY_IP"
+  else
+    ip="$(resolve_ip_for_host "$host" || true)"
+  fi
   curl_url="$url"
   host_header=""
   if [ -n "$ip" ] && [ -n "$port" ]; then
     curl_url="$(printf '%s' "$url" | sed "s#^\\(https\\?://\\)[^/]*#\\1${ip}:${port}#")"
-    host_header="-H Host: ${host}"
+    host_header="Host: ${host}"
   fi
-  status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
-    $host_header -H "Content-Type: application/json" -d "$body" "$curl_url" || true)"
+  if [ "${DEBUG_RESOLVE:-}" = "1" ]; then
+    printf '[debug] mint_with_body url=%s host=%s port=%s ip=%s resolve_arg=%s host_header=%s curl_url=%s\n' \
+      "$url" "$host" "$port" "${ip:-}" "$resolve_arg" "$host_header" "$curl_url" >&2
+  fi
+  if [ -n "$host_header" ]; then
+    status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
+      -H "$host_header" -H "Content-Type: application/json" -d "$body" "$curl_url" || true)"
+  else
+    status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
+      -H "Content-Type: application/json" -d "$body" "$curl_url" || true)"
+  fi
   printf '%s' "$status"
 }
 
@@ -746,19 +938,38 @@ toolb_request() {
   resolve_arg="$(resolve_arg_for_url "$TOOLB_SECRET_URL" || true)"
   host="$(printf '%s' "$TOOLB_SECRET_URL" | sed -n 's#^[a-zA-Z]*://\\([^/:]*\\).*#\\1#p')"
   port="$(printf '%s' "$TOOLB_SECRET_URL" | sed -n 's#^[a-zA-Z]*://[^/:]*:\\([0-9]*\\).*#\\1#p')"
-  ip="$(resolve_ip_for_host "$host" || true)"
+  ip=""
+  if [ "$host" = "tool-b-envoy" ] && [ -n "${TOOLB_ENVOY_IP:-}" ]; then
+    ip="$TOOLB_ENVOY_IP"
+  else
+    ip="$(resolve_ip_for_host "$host" || true)"
+  fi
   curl_url="$TOOLB_SECRET_URL"
   host_header=""
   if [ -n "$ip" ] && [ -n "$port" ]; then
     curl_url="$(printf '%s' "$TOOLB_SECRET_URL" | sed "s#^\\(https\\?://\\)[^/]*#\\1${ip}:${port}#")"
-    host_header="-H Host: ${host}"
+    host_header="Host: ${host}"
+  fi
+  if [ "${DEBUG_RESOLVE:-}" = "1" ]; then
+    printf '[debug] toolb_request url=%s host=%s port=%s ip=%s resolve_arg=%s host_header=%s curl_url=%s\n' \
+      "$TOOLB_SECRET_URL" "$host" "$port" "${ip:-}" "$resolve_arg" "$host_header" "$curl_url" >&2
   fi
   if [ -n "$token" ]; then
-    status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
-      --cacert "$TOOLB_BUNDLE" $host_header -H "Authorization: Bearer ${token}" "$curl_url" || true)"
+    if [ -n "$host_header" ]; then
+      status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
+        --cacert "$TOOLB_BUNDLE" -H "$host_header" -H "Authorization: Bearer ${token}" "$curl_url" || true)"
+    else
+      status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
+        --cacert "$TOOLB_BUNDLE" -H "Authorization: Bearer ${token}" "$curl_url" || true)"
+    fi
   else
-    status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
-      --cacert "$TOOLB_BUNDLE" $host_header "$curl_url" || true)"
+    if [ -n "$host_header" ]; then
+      status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
+        --cacert "$TOOLB_BUNDLE" -H "$host_header" "$curl_url" || true)"
+    else
+      status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
+        --cacert "$TOOLB_BUNDLE" "$curl_url" || true)"
+    fi
   fi
   printf '%s' "$status"
 }
@@ -778,139 +989,152 @@ expect_edge_unreachable() {
 
 # M1-T1
 c1_test() {
-  if [ $PRECHECK_OK -ne 1 ]; then
-    set_reason "$PRECHECK_REASON"
-    return 1
-  fi
+  begin_test_evidence "M1-T1" "missing_join_token"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "spire-server container running" \
+    "docker ps --format '{{.Names}}' | grep -Fxq spiffe-spire-server"
+  premise_guard "spire-agent container running" \
+    "docker ps --format '{{.Names}}' | grep -Fxq spiffe-spire-agent"
+  premise_guard "agent socket present" \
+    "docker exec spiffe-spire-agent test -S /run/spire/agent/private/api.sock"
+  premise_guard "legit attestation present" \
+    "docker exec spiffe-spire-server /opt/spire/bin/spire-server agent list -socketPath /run/spire/server/data/private/api.sock -output json | jq -e '.agents and (.agents|length>0)' >/dev/null"
+  premise_guard "join token present" "test -s /run/spire/shared/join_token"
+  premise_guard "missing token file present" "test -f /run/spire/rogue/missing_token"
   missing_token="$(cat /run/spire/rogue/missing_token 2>/dev/null || true)"
-  run_rogue_attest_should_fail "M1-T1" "$missing_token"
+  exercise_guard "rogue attestation attempt with missing token" \
+    "run_rogue_attest_should_fail \"M1-T1\" \"${missing_token}\""
+  outcome_guard "attestation failed as expected" \
+    "test -s /tmp/rogue_M1-T1.log && grep -Eiq 'attest.*fail|fail.*attest|attestation.*fail' /tmp/rogue_M1-T1.log"
+  return 0
 }
 
 # M1-T2
 c2_test() {
-  if [ $PRECHECK_OK -ne 1 ]; then
-    set_reason "$PRECHECK_REASON"
-    return 1
-  fi
-  echo "not-a-real-token" > /run/spire/rogue/fake_token
-  run_rogue_attest_should_fail "M1-T2" "$(cat /run/spire/rogue/fake_token)"
+  begin_test_evidence "M1-T2" "forged_token"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "spire-server container running" \
+    "docker ps --format '{{.Names}}' | grep -Fxq spiffe-spire-server"
+  premise_guard "spire-agent container running" \
+    "docker ps --format '{{.Names}}' | grep -Fxq spiffe-spire-agent"
+  premise_guard "agent socket present" \
+    "docker exec spiffe-spire-agent test -S /run/spire/agent/private/api.sock"
+  premise_guard "legit attestation present" \
+    "docker exec spiffe-spire-server /opt/spire/bin/spire-server agent list -socketPath /run/spire/server/data/private/api.sock -output json | jq -e '.agents and (.agents|length>0)' >/dev/null"
+  premise_guard "join token present" "test -s /run/spire/shared/join_token"
+  premise_guard "rogue config directory present" "test -d /run/spire/rogue"
+  exercise_guard "rogue attestation attempt with forged token" \
+    "echo 'not-a-real-token' > /run/spire/rogue/fake_token; run_rogue_attest_should_fail \"M1-T2\" \"\$(cat /run/spire/rogue/fake_token)\""
+  outcome_guard "attestation failed as expected" \
+    "test -s /tmp/rogue_M1-T2.log && grep -Eiq 'attest.*fail|fail.*attest|attestation.*fail' /tmp/rogue_M1-T2.log"
+  return 0
 }
 
 # M1-T3
 c3_test() {
-  if [ $PRECHECK_OK -ne 1 ]; then
-    set_reason "$PRECHECK_REASON"
-    return 1
-  fi
-  run_rogue_attest_should_fail "M1-T3" "$(cat /run/spire/shared/join_token)"
+  begin_test_evidence "M1-T3" "replayed_token"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "spire-server container running" \
+    "docker ps --format '{{.Names}}' | grep -Fxq spiffe-spire-server"
+  premise_guard "spire-agent container running" \
+    "docker ps --format '{{.Names}}' | grep -Fxq spiffe-spire-agent"
+  premise_guard "agent socket present" \
+    "docker exec spiffe-spire-agent test -S /run/spire/agent/private/api.sock"
+  premise_guard "legit attestation present" \
+    "docker exec spiffe-spire-server /opt/spire/bin/spire-server agent list -socketPath /run/spire/server/data/private/api.sock -output json | jq -e '.agents and (.agents|length>0)' >/dev/null"
+  premise_guard "join token present" "test -s /run/spire/shared/join_token"
+  exercise_guard "rogue attestation attempt with replayed token" \
+    "run_rogue_attest_should_fail \"M1-T3\" \"\$(cat /run/spire/shared/join_token)\""
+  outcome_guard "attestation failed as expected" \
+    "test -s /tmp/rogue_M1-T3.log && grep -Eiq 'attest.*fail|fail.*attest|attestation.*fail' /tmp/rogue_M1-T3.log"
+  return 0
 }
 
 # M1-T4
 c4_test() {
-  mounts="$(docker inspect -f '{{range .Mounts}}{{.Destination}} {{end}}' spiffe-spire-rogue-agent 2>/dev/null || true)"
-  if text_contains_str "$mounts" "/run/spire/shared"; then
-    set_reason "shared token mount present"
-    return 1
-  fi
-  set +e
-  docker exec spiffe-spire-rogue-agent cat /run/spire/shared/join_token >/tmp/rogue_token_out 2>&1
-  rc=$?
-  set -e
-  if [ $rc -eq 0 ]; then
-    set_reason "join token readable by rogue"
-    return 1
-  fi
+  begin_test_evidence "M1-T4" "join_token_read"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "rogue agent container running" \
+    "docker ps --format '{{.Names}}' | grep -Fxq spiffe-spire-rogue-agent"
+  premise_guard "join token present" "test -s /run/spire/shared/join_token"
+  exercise_guard "attempt join token read" \
+    "set +e; docker exec spiffe-spire-rogue-agent cat /run/spire/shared/join_token >/tmp/rogue_token_out 2>&1; rc=\$?; set -e; echo \$rc > /tmp/rogue_token_rc"
+  outcome_guard "join token not readable and not mounted" \
+    "test -s /tmp/rogue_token_rc && ! docker inspect -f '{{range .Mounts}}{{.Destination}} {{end}}' spiffe-spire-rogue-agent 2>/dev/null | grep -Fq /run/spire/shared && [ \"\$(cat /tmp/rogue_token_rc 2>/dev/null || true)\" != \"0\" ]"
   return 0
 }
 
 # M1-T5
 c5_test() {
-  expected_nodes=$(docker ps -q --filter "label=spiffe.node=true" | wc -l | tr -d ' ')
-  agents_json=$(docker exec spiffe-spire-server /opt/spire/bin/spire-server agent list \
-    -socketPath /run/spire/server/data/private/api.sock -output json 2>/dev/null)
-  actual_nodes=$(echo "$agents_json" | grep -o '"id"' | wc -l | tr -d ' ')
-  if [ "$expected_nodes" -eq 0 ]; then
-    set_reason "no running spiffe.node containers"
-    return 1
-  fi
-  if [ "$actual_nodes" -ne "$expected_nodes" ]; then
-    set_reason "expected ${expected_nodes}, got ${actual_nodes}"
-    return 1
-  fi
+  begin_test_evidence "M1-T5" "node_entries"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "spire-server container running" \
+    "docker ps --format '{{.Names}}' | grep -Fxq spiffe-spire-server"
+  premise_guard "baseline entry list exists" "test -s \"$ENTRY_BEFORE\""
+  exercise_guard "capture agent list" \
+    "docker exec spiffe-spire-server /opt/spire/bin/spire-server agent list -socketPath /run/spire/server/data/private/api.sock -output json > /tmp/m1_t5_agents.json"
+  outcome_guard "agent list matches expected nodes" \
+    "test \"\$(docker ps -q --filter \"label=spiffe.node=true\" | wc -l | tr -d ' ')\" -ne 0 && test \"\$(grep -o '\"id\"' /tmp/m1_t5_agents.json | wc -l | tr -d ' ')\" -eq \"\$(docker ps -q --filter \"label=spiffe.node=true\" | wc -l | tr -d ' ')\""
   return 0
 }
 
 # M2-T1
 T1_test() {
-  if ! ensure_toolb_material; then
-    return 1
+  begin_test_evidence "M2-T1" "missing_client_cert"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "tool-b material present" "ensure_toolb_material"
+  premise_guard "tool-b bundle present" "test -s \"${TOOLB_BUNDLE:-}\""
+  premise_guard "resolve tool-b-envoy" \
+    "toolb_ip=\"\$(wait_resolve_ip tool-b-envoy 30)\" && printf '%s\n' \"\$toolb_ip\" >\"$EVDIR/toolb_envoy_ip.txt\""
+  premise_guard "tool-b-envoy tcp reachable" "wait_tcp \"\$toolb_ip\" 8443 30"
+  ev_note "target tool-b-envoy ${toolb_ip}:8443"
+  if [ -s "${TOOLB_BUNDLE:-}" ]; then
+    cp "$TOOLB_BUNDLE" "$EVDIR/toolb_bundle.pem" 2>/dev/null || true
   fi
-  if ! wait_dns "tool-b-envoy" 30; then
-    return 1
-  fi
-  if ! wait_tcp "tool-b-envoy" "8443" 30; then
-    return 1
-  fi
-  out="/tmp/toolb_material/t1.out"
-  set +e
-  $TIMEOUT_BIN 6s openssl s_client $TLS_CLIENT_ARGS -connect tool-b-envoy:8443 -CAfile "$TOOLB_BUNDLE" \
-    -verify_return_error < /dev/null >"$out" 2>&1
-  rc=$?
-  set -e
-  if [ $rc -eq 0 ]; then
-    set_reason "TLS succeeded without client cert"
-    return 1
-  fi
-  if ! assert_text_matches "$out" '(handshake failure|certificate required|no peer certificate)'; then
-    set_reason "TLS failure did not indicate missing client cert: $(cat "$out")"
-    return 1
-  fi
+  out="${EVDIR}/mtls_trace.txt"
+  exercise_guard "openssl without client cert" \
+    "set +e; $TIMEOUT_BIN 6s openssl s_client $TLS_CLIENT_ARGS -state -msg -tlsextdebug -brief -connect ${toolb_ip}:8443 -servername tool-b-envoy -CAfile \"${TOOLB_BUNDLE:-}\" -verify_return_error < /dev/null >\"$out\" 2>&1; rc=\$?; set -e; echo \$rc >\"$EVDIR/rc.txt\"; test -s \"$out\" && grep -Fq \"CertificateRequest\" \"$out\""
+  outcome_guard "missing client cert rejected" \
+    "rc=\$(cat \"$EVDIR/rc.txt\" 2>/dev/null || echo 0); [ \"\$rc\" -ne 0 ] && ! grep -Eq '(could not resolve|no route to host|connection refused)' \"$out\" && assert_text_matches \"$out\" '(handshake failure|certificate required|no peer certificate)'"
   return 0
 }
 
 # M2-T2
 T2_test() {
-  if ! ensure_toolb_material; then
-    return 1
-  fi
-  if ! wait_dns "tool-b-envoy" 30; then
-    return 1
-  fi
-  if ! wait_tcp "tool-b-envoy" "8443" 30; then
-    return 1
-  fi
+  begin_test_evidence "M2-T2" "invalid_client_cert"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "tool-b material present" "ensure_toolb_material"
+  premise_guard "tool-b bundle present" "test -s \"${TOOLB_BUNDLE:-}\""
+  premise_guard "resolve tool-b-envoy" \
+    "toolb_ip=\"\$(wait_resolve_ip tool-b-envoy 30)\" && printf '%s\n' \"\$toolb_ip\" >\"$EVDIR/toolb_envoy_ip.txt\""
+  premise_guard "tool-b-envoy tcp reachable" "wait_tcp \"\$toolb_ip\" 8443 30"
+  ev_note "target tool-b-envoy ${toolb_ip}:8443"
   tmpdir="/tmp/toolb_material"
   openssl req -x509 -newkey rsa:2048 -nodes -keyout "$tmpdir/bad.key" \
     -out "$tmpdir/bad.pem" -days 1 -subj "/CN=rogue" >/dev/null 2>&1
-  out="/tmp/toolb_material/t2.out"
-  set +e
-  $TIMEOUT_BIN 6s openssl s_client $TLS_CLIENT_ARGS -connect tool-b-envoy:8443 -cert "$tmpdir/bad.pem" \
-    -key "$tmpdir/bad.key" -CAfile "$TOOLB_BUNDLE" -verify_return_error \
-    < /dev/null >"$out" 2>&1
-  rc=$?
-  set -e
-  if [ $rc -eq 0 ]; then
-    set_reason "TLS succeeded with invalid client cert"
-    return 1
+  cp "$tmpdir/bad.key" "$EVDIR/bad.key" 2>/dev/null || true
+  cp "$tmpdir/bad.pem" "$EVDIR/bad.pem" 2>/dev/null || true
+  if [ -s "${TOOLB_BUNDLE:-}" ]; then
+    cp "$TOOLB_BUNDLE" "$EVDIR/toolb_bundle.pem" 2>/dev/null || true
   fi
-  if ! assert_text_matches "$out" '(unknown ca|bad certificate|certificate unknown)'; then
-    set_reason "TLS failure did not indicate invalid client cert: $(cat "$out")"
-    return 1
-  fi
+  out="${EVDIR}/mtls_trace.txt"
+  exercise_guard "openssl with invalid client cert" \
+    "set +e; $TIMEOUT_BIN 6s openssl s_client $TLS_CLIENT_ARGS -state -msg -tlsextdebug -brief -connect ${toolb_ip}:8443 -servername tool-b-envoy -cert \"$tmpdir/bad.pem\" -key \"$tmpdir/bad.key\" -CAfile \"${TOOLB_BUNDLE:-}\" -verify_return_error < /dev/null >\"$out\" 2>&1; rc=\$?; set -e; echo \$rc >\"$EVDIR/rc.txt\"; test -s \"$out\" && grep -Fq \"CertificateRequest\" \"$out\" && grep -Fq \"write client certificate\" \"$out\""
+  outcome_guard "invalid client cert rejected" \
+    "rc=\$(cat \"$EVDIR/rc.txt\" 2>/dev/null || echo 0); [ \"\$rc\" -ne 0 ] && ! grep -Eq '(could not resolve|no route to host|connection refused)' \"$out\" && assert_text_matches \"$out\" '(unknown ca|bad certificate|certificate unknown)'"
   return 0
 }
 
 # M2-T3
 T3_test() {
-  if ! ensure_toolb_material; then
-    return 1
-  fi
-  if ! wait_dns "tool-b-envoy" 30; then
-    return 1
-  fi
-  if ! wait_tcp "tool-b-envoy" "8443" 30; then
-    return 1
-  fi
+  begin_test_evidence "M2-T3" "expired_client_cert"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "tool-b material present" "ensure_toolb_material"
+  premise_guard "tool-b bundle present" "test -s \"${TOOLB_BUNDLE:-}\""
+  premise_guard "resolve tool-b-envoy" \
+    "toolb_ip=\"\$(wait_resolve_ip tool-b-envoy 30)\" && printf '%s\n' \"\$toolb_ip\" >\"$EVDIR/toolb_envoy_ip.txt\""
+  premise_guard "tool-b-envoy tcp reachable" "wait_tcp \"\$toolb_ip\" 8443 30"
+  ev_note "target tool-b-envoy ${toolb_ip}:8443"
   tmpdir="/tmp/toolb_material"
   ca_dir="$tmpdir/ca"
   rm -rf "$ca_dir"
@@ -964,29 +1188,29 @@ EOF
     set_reason "expired cert enddate not in the past: $(cat "$tmpdir/exp_end.txt")"
     return 1
   fi
-  out="/tmp/toolb_material/t3.out"
-  set +e
-  $TIMEOUT_BIN 6s openssl s_client $TLS_CLIENT_ARGS -connect tool-b-envoy:8443 -cert "$tmpdir/exp.pem" \
-    -key "$tmpdir/exp.key" -CAfile "$TOOLB_BUNDLE" -verify_return_error \
-    < /dev/null >"$out" 2>&1
-  rc=$?
-  set -e
-  if [ $rc -eq 0 ]; then
-    set_reason "TLS succeeded with expired client cert"
-    return 1
+  cp "$tmpdir/exp.key" "$EVDIR/exp.key" 2>/dev/null || true
+  cp "$tmpdir/exp.pem" "$EVDIR/exp.pem" 2>/dev/null || true
+  cp "$ca_dir/certs/ca.pem" "$EVDIR/exp_ca.pem" 2>/dev/null || true
+  if [ -s "${TOOLB_BUNDLE:-}" ]; then
+    cp "$TOOLB_BUNDLE" "$EVDIR/toolb_bundle.pem" 2>/dev/null || true
   fi
-  if ! assert_text_matches "$out" '(alert unknown ca|unknown ca|unable to get local issuer certificate|verify error:num=20)'; then
-    set_reason "TLS failure did not indicate unknown CA: $(cat "$out")"
-    return 1
-  fi
+  out="${EVDIR}/mtls_trace.txt"
+  exercise_guard "openssl with expired client cert" \
+    "set +e; $TIMEOUT_BIN 6s openssl s_client $TLS_CLIENT_ARGS -state -msg -tlsextdebug -brief -connect ${toolb_ip}:8443 -servername tool-b-envoy -cert \"$tmpdir/exp.pem\" -key \"$tmpdir/exp.key\" -CAfile \"${TOOLB_BUNDLE:-}\" -verify_return_error < /dev/null >\"$out\" 2>&1; rc=\$?; set -e; echo \$rc >\"$EVDIR/rc.txt\"; test -s \"$out\" && grep -Fq \"CertificateRequest\" \"$out\" && grep -Fq \"write client certificate\" \"$out\""
+  outcome_guard "expired client cert rejected" \
+    "rc=\$(cat \"$EVDIR/rc.txt\" 2>/dev/null || echo 0); [ \"\$rc\" -ne 0 ] && ! grep -Eq '(could not resolve|no route to host|connection refused)' \"$out\" && assert_text_matches \"$out\" '(alert unknown ca|unknown ca|unable to get local issuer certificate|verify error:num=20)'"
   return 0
 }
 
 # M2-T9
 T9_test() {
-  if ! ensure_toolb_material; then
-    return 1
-  fi
+  begin_test_evidence "M2-T9" "expired_short_lived_svid"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "tool-b material present" "ensure_toolb_material"
+  premise_guard "resolve tool-b-envoy" \
+    "toolb_ip=\"\$(wait_resolve_ip tool-b-envoy 30)\" && printf '%s\n' \"\$toolb_ip\" >\"$EVDIR/toolb_envoy_ip.txt\""
+  premise_guard "tool-b-envoy tcp reachable" "wait_tcp \"\$toolb_ip\" 8443 30"
+  ev_note "target tool-b-envoy ${toolb_ip}:8443"
 
   spiffe_id="spiffe://example.org/rogue-socket-shortttl"
   selector="docker:label:com.docker.compose.service:rogue-socket"
@@ -1104,151 +1328,101 @@ T9_test() {
   else
     docker exec spiffe-rogue-socket cat "$short_dir/bundle.0.pem" >"$short_dir/bundle.pem"
   fi
+  cp "$short_dir/svid.0.pem" "$EVDIR/short_svid.pem" 2>/dev/null || true
+  cp "$short_dir/svid.0.key" "$EVDIR/short_svid.key" 2>/dev/null || true
+  cp "$short_dir/bundle.pem" "$EVDIR/short_bundle.pem" 2>/dev/null || true
 
-  out="$short_dir/expired.out"
-  set +e
-  $TIMEOUT_BIN 6s openssl s_client $TLS_CLIENT_ARGS -connect tool-b-envoy:8443 -servername tool-b-envoy \
-    -cert "$short_dir/svid.0.pem" -key "$short_dir/svid.0.key" \
-    -CAfile "$short_dir/bundle.pem" -verify_return_error < /dev/null >"$out" 2>&1
-  rc=$?
-  set -e
+  out="${EVDIR}/mtls_trace.txt"
+  exercise_guard "openssl with expired short-lived SVID" \
+    "set +e; $TIMEOUT_BIN 6s openssl s_client $TLS_CLIENT_ARGS -state -msg -tlsextdebug -brief -connect ${toolb_ip}:8443 -servername tool-b-envoy -cert \"$short_dir/svid.0.pem\" -key \"$short_dir/svid.0.key\" -CAfile \"$short_dir/bundle.pem\" -verify_return_error < /dev/null >\"$out\" 2>&1; rc=\$?; set -e; echo \$rc >\"$EVDIR/rc.txt\"; test -s \"$out\" && grep -Fq \"CertificateRequest\" \"$out\" && grep -Fq \"write client certificate\" \"$out\""
   cleanup_entry
 
-  if [ $rc -eq 0 ]; then
-    set_reason "TLS succeeded with expired short-lived SVID"
-    return 1
-  fi
-  if ! assert_text_matches "$out" '(expired|certificate has expired|verify error:num=10|verify return code: 10)'; then
-    set_reason "TLS failure did not indicate expiry: $(cat "$out")"
-    return 1
-  fi
+  outcome_guard "expired short-lived SVID rejected" \
+    "rc=\$(cat \"$EVDIR/rc.txt\" 2>/dev/null || echo 0); [ \"\$rc\" -ne 0 ] && ! grep -Eq '(could not resolve|no route to host|connection refused)' \"$out\" && assert_text_matches \"$out\" '(expired|certificate has expired|verify error:num=10|verify return code: 10)'"
   return 0
 }
 
 # M2-T4
 T4_test() {
-  if ! ensure_toolb_material; then
-    return 1
+  begin_test_evidence "M2-T4" "wrong_spiffe_id"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "tool-b material present" "ensure_toolb_material"
+  premise_guard "tool-b cert present" "test -s \"${TOOLB_CERT:-}\""
+  premise_guard "tool-b key present" "test -s \"${TOOLB_KEY:-}\""
+  premise_guard "tool-b bundle present" "test -s \"${TOOLB_BUNDLE:-}\""
+  premise_guard "resolve tool-b-envoy" \
+    "toolb_ip=\"\$(wait_resolve_ip tool-b-envoy 30)\" && printf '%s\n' \"\$toolb_ip\" >\"$EVDIR/toolb_envoy_ip.txt\""
+  premise_guard "tool-b-envoy tcp reachable" "wait_tcp \"\$toolb_ip\" 8443 30"
+  ev_note "target tool-b-envoy ${toolb_ip}:8443"
+  if [ -s "${TOOLB_CERT:-}" ]; then
+    cp "$TOOLB_CERT" "$EVDIR/toolb_cert.pem" 2>/dev/null || true
   fi
-  if ! wait_dns "tool-b-envoy" 30; then
-    return 1
+  if [ -s "${TOOLB_KEY:-}" ]; then
+    cp "$TOOLB_KEY" "$EVDIR/toolb_key.pem" 2>/dev/null || true
   fi
-  if ! wait_tcp "tool-b-envoy" "8443" 30; then
-    return 1
+  if [ -s "${TOOLB_BUNDLE:-}" ]; then
+    cp "$TOOLB_BUNDLE" "$EVDIR/toolb_bundle.pem" 2>/dev/null || true
   fi
-  out="/tmp/toolb_material/t4.out"
-  set +e
-  printf "GET /secret HTTP/1.1\r\nHost: tool-b-envoy\r\nConnection: close\r\n\r\n" | \
-    $TIMEOUT_BIN 6s openssl s_client $TLS_CLIENT_ARGS -connect tool-b-envoy:8443 -cert "$TOOLB_CERT" \
-      -key "$TOOLB_KEY" -CAfile "$TOOLB_BUNDLE" -verify_return_error \
-      -showcerts -ign_eof >"$out" 2>&1
-  rc=$?
-  set -e
-  if [ $rc -eq 0 ]; then
-    set_reason "TLS succeeded with wrong SPIFFE ID"
-    return 1
-  fi
-  if ! assert_text_matches "$out" '(alert bad certificate|alert certificate unknown|bad certificate|certificate unknown|handshake failure)'; then
-    set_reason "TLS failure did not indicate SPIFFE ID mismatch: $(cat "$out")"
-    return 1
-  fi
+  out="${EVDIR}/mtls_trace.txt"
+  exercise_guard "openssl with wrong SPIFFE ID" \
+    "set +e; printf \"GET /secret HTTP/1.1\\r\\nHost: tool-b-envoy\\r\\nConnection: close\\r\\n\\r\\n\" | $TIMEOUT_BIN 6s openssl s_client $TLS_CLIENT_ARGS -state -msg -tlsextdebug -brief -connect ${toolb_ip}:8443 -servername tool-b-envoy -cert \"${TOOLB_CERT:-}\" -key \"${TOOLB_KEY:-}\" -CAfile \"${TOOLB_BUNDLE:-}\" -verify_return_error -showcerts -ign_eof >\"$out\" 2>&1; rc=\$?; set -e; echo \$rc >\"$EVDIR/rc.txt\"; test -s \"$out\" && grep -Fq \"CertificateRequest\" \"$out\" && grep -Fq \"write client certificate\" \"$out\""
+  outcome_guard "wrong SPIFFE ID rejected" \
+    "rc=\$(cat \"$EVDIR/rc.txt\" 2>/dev/null || echo 0); [ \"\$rc\" -ne 0 ] && ! grep -Eq '(could not resolve|no route to host|connection refused)' \"$out\" && assert_text_matches \"$out\" '(alert bad certificate|alert certificate unknown|bad certificate|certificate unknown|handshake failure)'"
   return 0
 }
 
 # M2-T5
 T5_test() {
-  if docker exec spiffe-spire-rogue-agent test -S /run/spire/agent/private/api.sock 2>/dev/null; then
-    set_reason "unexpected workload socket present"
-    return 1
-  fi
-  set +e
-  docker exec spiffe-spire-rogue-agent /opt/spire/bin/spire-agent api fetch x509 \
-    -socketPath /run/spire/agent/private/api.sock -write /tmp/rogue_svid \
-    >/tmp/rogue_fetch 2>&1
-  rc=$?
-  set -e
-  if [ $rc -eq 0 ]; then
-    set_reason "fetch unexpectedly succeeded"
-    return 1
-  fi
-  if docker exec spiffe-spire-rogue-agent test -e /tmp/rogue_svid/svid.pem 2>/dev/null; then
-    set_reason "SVID file created"
-    return 1
-  fi
+  begin_test_evidence "M2-T5" "no_workload_socket"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "rogue agent running" "container_running spiffe-spire-rogue-agent"
+  premise_guard "workload socket missing" \
+    "! docker exec spiffe-spire-rogue-agent test -S /run/spire/agent/private/api.sock 2>/dev/null"
+  exercise_guard "attempt fetch without socket" \
+    "set +e; docker exec spiffe-spire-rogue-agent /opt/spire/bin/spire-agent api fetch x509 -socketPath /run/spire/agent/private/api.sock -write /tmp/rogue_svid >/tmp/rogue_fetch 2>&1; rc=\$?; set -e; echo \$rc >\"$EVDIR/rc.txt\"; cat /tmp/rogue_fetch >\"$EVDIR/rogue_fetch.txt\" 2>/dev/null || true"
+  outcome_guard "fetch denied without socket" \
+    "rc=\$(cat \"$EVDIR/rc.txt\" 2>/dev/null || echo 0); [ \"\$rc\" -ne 0 ] && ! docker exec spiffe-spire-rogue-agent test -e /tmp/rogue_svid/svid.pem 2>/dev/null"
   return 0
 }
 
 # M2-T6
 T6_test() {
-  if ! container_running "spiffe-rogue-socket"; then
-    set_reason "rogue-socket container not running"
-    return 1
-  fi
-  if ! docker exec spiffe-rogue-socket test -S /run/spire/agent/private/api.sock 2>/dev/null; then
-    set_reason "workload socket missing"
-    return 1
-  fi
-  set +e
-  docker exec spiffe-rogue-socket /opt/spire/bin/spire-agent api fetch x509 \
-    -socketPath /run/spire/agent/private/api.sock -write /tmp/rogue_socket_svid \
-    >/tmp/rogue_socket_fetch 2>&1
-  rc=$?
-  set -e
-  if [ $rc -eq 0 ]; then
-    set_reason "fetch unexpectedly succeeded"
-    return 1
-  fi
-  if docker exec spiffe-rogue-socket test -e /tmp/rogue_socket_svid/svid.pem 2>/dev/null; then
-    set_reason "SVID file created"
-    return 1
-  fi
+  begin_test_evidence "M2-T6" "socket_no_entry"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "rogue-socket container running" "container_running spiffe-rogue-socket"
+  premise_guard "workload socket present" \
+    "docker exec spiffe-rogue-socket test -S /run/spire/agent/private/api.sock 2>/dev/null"
+  exercise_guard "attempt fetch without entry" \
+    "set +e; docker exec spiffe-rogue-socket /opt/spire/bin/spire-agent api fetch x509 -socketPath /run/spire/agent/private/api.sock -write /tmp/rogue_socket_svid >/tmp/rogue_socket_fetch 2>&1; rc=\$?; set -e; echo \$rc >\"$EVDIR/rc.txt\"; cat /tmp/rogue_socket_fetch >\"$EVDIR/rogue_socket_fetch.txt\" 2>/dev/null || true"
+  outcome_guard "fetch denied without entry" \
+    "rc=\$(cat \"$EVDIR/rc.txt\" 2>/dev/null || echo 0); [ \"\$rc\" -ne 0 ] && ! docker exec spiffe-rogue-socket test -e /tmp/rogue_socket_svid/svid.pem 2>/dev/null"
   return 0
 }
 
 # M2-T7
 T7_test() {
-  mounts="$(docker inspect -f '{{range .Mounts}}{{.Destination}} {{end}}' spiffe-spire-rogue-agent 2>/dev/null || true)"
-  if text_contains_str "$mounts" "/run/spire/svid"; then
-    set_reason "workload SVID mount present"
-    return 1
-  fi
-  if text_contains_str "$mounts" "/run/spire/agent/data"; then
-    set_reason "agent data mount present"
-    return 1
-  fi
-  set +e
-  docker exec spiffe-spire-rogue-agent cat /run/spire/svid/svid.pem >/tmp/rogue_svid_out 2>&1
-  rc_cert=$?
-  docker exec spiffe-spire-rogue-agent cat /run/spire/svid/svid.key >/tmp/rogue_svid_key 2>&1
-  rc_key=$?
-  docker exec spiffe-spire-rogue-agent cat /run/spire/agent/data/svid.0.pem >/tmp/rogue_node_svid 2>&1
-  rc_node_cert=$?
-  docker exec spiffe-spire-rogue-agent cat /run/spire/agent/data/keys.json >/tmp/rogue_node_keys 2>&1
-  rc_node_key=$?
-  set -e
-  if [ $rc_cert -eq 0 ] || [ $rc_key -eq 0 ] || [ $rc_node_cert -eq 0 ] || [ $rc_node_key -eq 0 ]; then
-    set_reason "rogue can read SVID or key material"
-    return 1
-  fi
+  begin_test_evidence "M2-T7" "no_svid_or_keys"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "rogue agent running" "container_running spiffe-spire-rogue-agent"
+  premise_guard "no SVID or agent data mounts" \
+    "mounts=\"\$(docker inspect -f '{{range .Mounts}}{{.Destination}} {{end}}' spiffe-spire-rogue-agent 2>/dev/null || true)\"; ! text_contains_str \"\$mounts\" \"/run/spire/svid\" && ! text_contains_str \"\$mounts\" \"/run/spire/agent/data\""
+  exercise_guard "attempt read of SVID and keys" \
+    "set +e; docker exec spiffe-spire-rogue-agent cat /run/spire/svid/svid.pem >/tmp/rogue_svid_out 2>&1; rc_cert=\$?; docker exec spiffe-spire-rogue-agent cat /run/spire/svid/svid.key >/tmp/rogue_svid_key 2>&1; rc_key=\$?; docker exec spiffe-spire-rogue-agent cat /run/spire/agent/data/svid.0.pem >/tmp/rogue_node_svid 2>&1; rc_node_cert=\$?; docker exec spiffe-spire-rogue-agent cat /run/spire/agent/data/keys.json >/tmp/rogue_node_keys 2>&1; rc_node_key=\$?; set -e; echo \"\$rc_cert \$rc_key \$rc_node_cert \$rc_node_key\" >\"$EVDIR/rcs.txt\"; cat /tmp/rogue_svid_out >\"$EVDIR/rogue_svid_out.txt\" 2>/dev/null || true; cat /tmp/rogue_svid_key >\"$EVDIR/rogue_svid_key.txt\" 2>/dev/null || true; cat /tmp/rogue_node_svid >\"$EVDIR/rogue_node_svid.txt\" 2>/dev/null || true; cat /tmp/rogue_node_keys >\"$EVDIR/rogue_node_keys.txt\" 2>/dev/null || true"
+  outcome_guard "rogue cannot read SVID or keys" \
+    "set -- \$(cat \"$EVDIR/rcs.txt\" 2>/dev/null || echo 0 0 0 0); rc_cert=\$1; rc_key=\$2; rc_node_cert=\$3; rc_node_key=\$4; [ \"\$rc_cert\" -ne 0 ] && [ \"\$rc_key\" -ne 0 ] && [ \"\$rc_node_cert\" -ne 0 ] && [ \"\$rc_node_key\" -ne 0 ]"
   return 0
 }
 
 # M2-T8
 T8_test() {
-  after="/tmp/entries_after.txt"
-  if ! capture_entries "$after"; then
-    set_reason "failed to capture entry list"
-    return 1
-  fi
-  if [ ! -s "$ENTRY_BEFORE" ]; then
-    set_reason "baseline entry list missing"
-    return 1
-  fi
-  if diff -u "$ENTRY_BEFORE" "$after" >/dev/null 2>&1; then
-    return 0
-  fi
-  set_reason "SPIRE entries changed during tests"
-  return 1
+  begin_test_evidence "M2-T8" "no_unintended_entries"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "baseline entry list exists" "test -s \"$ENTRY_BEFORE\""
+  exercise_guard "capture entry list after tests" \
+    "after=\"$EVDIR/entries_after.txt\"; capture_entries \"\$after\""
+  outcome_guard "no unintended SPIRE entries" \
+    "diff -u \"$ENTRY_BEFORE\" \"$EVDIR/entries_after.txt\" >/dev/null 2>&1"
+  return 0
 }
 
 M25_T1_test() {
@@ -1394,6 +1568,11 @@ M3S2_T4_test() {
     return 1
   fi
   if ! wait_tcp "capability-issuer-no-opa-envoy" "9444" 30; then
+    return 1
+  fi
+  CAPISS_NO_OPA_ENVOY_IP="$(wait_resolve_ip "capability-issuer-no-opa-envoy" 30 || true)"
+  if [ -z "${CAPISS_NO_OPA_ENVOY_IP:-}" ]; then
+    set_reason "failed to resolve capability-issuer-no-opa-envoy IP"
     return 1
   fi
   resolve_arg="$(resolve_arg_for_url "https://capability-issuer-no-opa-envoy:9444/health" || true)"

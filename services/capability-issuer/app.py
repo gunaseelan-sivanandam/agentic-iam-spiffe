@@ -43,21 +43,28 @@ def check_opa_allow(input_payload: dict) -> tuple[bool | None, str | None]:
         return None, str(exc)
 
 
-def load_or_create_root_private_key() -> PrivateKey:
+def load_or_create_root_private_key() -> tuple[PrivateKey, bool]:
     # Issuer key material is bootstrapped via configuration/volume, not code.
     os.makedirs(CAPISS_KEY_DIR, exist_ok=True)
     if os.path.exists(CAPISS_KEY_FILE):
         with open(CAPISS_KEY_FILE, "rb") as handle:
             raw = handle.read()
-        return PrivateKey.from_bytes(base64.b64decode(raw), Algorithm.Ed25519)
+        return PrivateKey.from_bytes(base64.b64decode(raw), Algorithm.Ed25519), False
 
     keypair = KeyPair()
     private_key = keypair.private_key
     encoded = base64.b64encode(private_key.to_bytes())
-    fd = os.open(CAPISS_KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "wb") as handle:
-        handle.write(encoded)
-    return private_key
+    created = False
+    try:
+        fd = os.open(CAPISS_KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(encoded)
+        created = True
+    except FileExistsError:
+        with open(CAPISS_KEY_FILE, "rb") as handle:
+            raw = handle.read()
+        private_key = PrivateKey.from_bytes(base64.b64decode(raw), Algorithm.Ed25519)
+    return private_key, created
 
 
 def write_public_key(private_key: PrivateKey) -> None:
@@ -68,8 +75,24 @@ def write_public_key(private_key: PrivateKey) -> None:
         handle.write(encoded)
 
 
-ROOT_PRIVATE_KEY = load_or_create_root_private_key()
-write_public_key(ROOT_PRIVATE_KEY)
+def public_key_needs_update(private_key: PrivateKey) -> bool:
+    if not os.path.exists(CAPISS_PUBLIC_KEY_FILE):
+        return True
+    try:
+        with open(CAPISS_PUBLIC_KEY_FILE, "rb") as handle:
+            raw = handle.read().strip()
+        if not raw:
+            return True
+        keypair = KeyPair.from_private_key(private_key)
+        expected = base64.b64encode(keypair.public_key.to_bytes())
+        return raw != expected
+    except OSError:
+        return True
+
+
+ROOT_PRIVATE_KEY, _ROOT_KEY_CREATED = load_or_create_root_private_key()
+if _ROOT_KEY_CREATED or public_key_needs_update(ROOT_PRIVATE_KEY):
+    write_public_key(ROOT_PRIVATE_KEY)
 
 def validate_mint_payload(payload: dict | None) -> tuple[dict | None, JSONResponse | None]:
     if payload is None:
