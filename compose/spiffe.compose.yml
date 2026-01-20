@@ -77,10 +77,12 @@ services:
       - ../spire/rogue:/run/spire/rogue
       - ../spire/shared:/run/spire/shared:ro
       - ..:/repo
+      - ../artifacts/rogue-tests:/tmp/rogue-tests
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       TEST_LOG_FILE: /repo/test_report.log
     networks:
+      - default
       - toolb_edge_net
       - capiss_edge_net
     profiles:
