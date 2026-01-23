@@ -138,6 +138,12 @@ Run the OPA-gated capability minting tests:
 docker compose --profile tests -f compose/spiffe.compose.yml up --build --abort-on-container-exit rogue-tests
 ```
 
+## Clean stack helper
+To reset the lab without sudo, use:
+```bash
+scripts/clean_stack.sh
+```
+
 ### Note on test-only services
 
 The service `capability-issuer-no-opa-envoy` exists **only for tests**.

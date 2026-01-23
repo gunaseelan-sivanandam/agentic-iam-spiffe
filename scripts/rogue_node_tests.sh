@@ -77,10 +77,33 @@ print_section() {
   printf '\n%s\n' "$title"
 }
 
+should_run_test() {
+  full_id="$1"
+  if [ -z "${TEST_ONLY:-}" ]; then
+    return 0
+  fi
+  for token in $(printf '%s' "$TEST_ONLY" | tr ',' ' '); do
+    if [ "$token" = "$full_id" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 run_test() {
   id="$1"
   name="$2"
   shift 2
+  full_id="${TEST_PREFIX:-}"
+  if [ -n "$full_id" ]; then
+    full_id="${full_id}-${id}"
+  else
+    full_id="$id"
+  fi
+  if ! should_run_test "$full_id"; then
+    return 0
+  fi
+  start_ts="$(date +%s)"
   TOTAL=$((TOTAL + 1))
   FAIL_REASON=""
   GUARD_FAILED=0
@@ -104,6 +127,12 @@ run_test() {
     if [ -n "$FAIL_REASON" ]; then
       printf '  Reason: %s\n' "$FAIL_REASON"
     fi
+  fi
+  end_ts="$(date +%s)"
+  duration=$((end_ts - start_ts))
+  printf '  Duration: %ss\n' "$duration"
+  if [ -n "${EVDIR:-}" ]; then
+    printf 'duration_seconds=%s\n' "$duration" >"${EVDIR}/duration.txt" 2>/dev/null || true
   fi
 }
 
@@ -546,6 +575,56 @@ assert_json_present() {
   return 0
 }
 
+assert_file_eq() {
+  file="$1"
+  expected="$2"
+  actual="$(cat "$file" 2>/dev/null || true)"
+  if [ "$actual" != "$expected" ]; then
+    fail_with_body "expected $file=$expected got $actual" "$file"
+    return 1
+  fi
+  return 0
+}
+
+assert_file_any() {
+  file="$1"
+  shift
+  actual="$(cat "$file" 2>/dev/null || true)"
+  for expected in "$@"; do
+    if [ "$actual" = "$expected" ]; then
+      return 0
+    fi
+  done
+  fail_with_body "expected $file to be one of: $* (got $actual)" "$file"
+  return 1
+}
+
+assert_expires_at_near() {
+  file="$1"
+  out_file="$2"
+  max_delta="$3"
+  token="$(jq -r '.token' "$file" 2>/dev/null || true)"
+  expires_at="$(jq -r '.expires_at' "$file" 2>/dev/null || true)"
+  if [ -z "$token" ] || [ "$token" = "null" ]; then
+    fail_with_body "missing .token" "$file"
+    return 1
+  fi
+  case "$expires_at" in
+    ""|null|*[!0-9]*)
+      fail_with_body "invalid .expires_at" "$file"
+      return 1
+      ;;
+  esac
+  now="$(date +%s)"
+  delta=$((expires_at - now))
+  printf 'now=%s expires_at=%s delta=%s\n' "$now" "$expires_at" "$delta" >"$out_file"
+  if [ "$delta" -le 0 ] || [ "$delta" -gt "$max_delta" ]; then
+    fail_with_body "expires_at delta out of range" "$file"
+    return 1
+  fi
+  return 0
+}
+
 assert_text_contains() {
   file="$1"
   pattern="$2"
@@ -651,8 +730,9 @@ start_temp_rogue_container() {
 }
 
 wait_for_legit_attestation() {
+  max_retries="${SVID_FETCH_RETRIES:-20}"
   i=0
-  while [ $i -lt 60 ]; do
+  while [ $i -lt "$max_retries" ]; do
     out="/tmp/spire_agent_list.json"
     if docker exec spiffe-spire-server /opt/spire/bin/spire-server agent list \
       -socketPath /run/spire/server/data/private/api.sock -output json >"$out" 2>/dev/null; then
@@ -771,7 +851,7 @@ run_rogue_attest_should_fail() {
   ev_copy_if_exists "$log_file" "rogue_${label}.log"
   ev_copy_if_exists "$temp_config" "rogue_${label}.conf"
 
-  if [ $i -ge 60 ]; then
+  if [ $i -ge "$max_retries" ]; then
     ev_note "timed out waiting for attestation outcome (no explicit attestation success/failure observed)"
     set_reason "timed out waiting for attestation outcome (no explicit attestation success/failure observed)"
     return 1
@@ -866,9 +946,13 @@ CAPISS_MINT_BODY='{"aud":"tool-b","act":"read","res":"/secret"}'
 
 ensure_toolb_material() {
   if [ "$TOOLB_READY" -eq 1 ]; then
+    if [ ! -s "${TOOLB_CERT:-}" ] || [ ! -s "${TOOLB_KEY:-}" ] || [ ! -s "${TOOLB_BUNDLE:-}" ]; then
+      TOOLB_READY=0
+    else
     ev_copy_if_exists "${TOOLB_CERT:-}" "toolb_svid.pem"
     ev_copy_if_exists "${TOOLB_BUNDLE:-}" "toolb_bundle.pem"
     return 0
+    fi
   fi
   if [ "$TOOLB_READY" -eq -1 ]; then
     set_reason "$TOOLB_REASON"
@@ -909,8 +993,10 @@ prepare_client_material() {
   fi
 
   err_log="/tmp/${service_name}_svid_fetch.err"
+  max_retries="${SVID_FETCH_RETRIES:-20}"
   i=0
-  while [ $i -lt 60 ]; do
+  while [ $i -lt "$max_retries" ]; do
+    i=$((i + 1))
     if docker run --rm \
       --entrypoint /opt/spire/bin/spire-agent \
       -v "$host_repo/spire/agent":/run/spire/agent:ro \
@@ -921,10 +1007,9 @@ prepare_client_material() {
       >"$err_log" 2>&1; then
       break
     fi
-    i=$((i + 1))
     sleep 1
   done
-  if [ $i -ge 60 ]; then
+  if [ $i -ge "$max_retries" ]; then
     set_reason "failed to fetch SVID for ${service_name}: $(tail -n 2 "$err_log" 2>/dev/null | tr '\n' ' ')"
     return 1
   fi
@@ -1048,6 +1133,16 @@ mint_with_cert() {
   printf '%s' "$status"
 }
 
+mint_with_cert_to_file() {
+  cert="$1"
+  key="$2"
+  url="$3"
+  out="$4"
+  status_file="$5"
+  status="$(mint_with_cert "$cert" "$key" "$url" "$out")"
+  printf '%s' "$status" >"$status_file"
+}
+
 mint_with_body() {
   cert="$1"
   key="$2"
@@ -1076,14 +1171,57 @@ mint_with_body() {
     printf '[debug] mint_with_body url=%s host=%s port=%s ip=%s resolve_arg=%s host_header=%s curl_url=%s\n' \
       "$url" "$host" "$port" "${ip:-}" "$resolve_arg" "$host_header" "$curl_url" >&2
   fi
-  if [ -n "$host_header" ]; then
-    status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
-      -H "$host_header" -H "Content-Type: application/json" -d "$body" "$curl_url" || true)"
+  if [ -n "${CURL_TIMING_OUT:-}" ]; then
+    tmp_out="$(mktemp)"
+    if [ -n "$host_header" ]; then
+      curl -sS -o "$out" --insecure $resolve_arg --cert "$cert" --key "$key" \
+        -H "$host_header" -H "Content-Type: application/json" -d "$body" "$curl_url" \
+        -w "http_code=%{http_code} time_namelookup=%{time_namelookup} time_connect=%{time_connect} time_appconnect=%{time_appconnect} time_starttransfer=%{time_starttransfer} time_total=%{time_total}\n" \
+        >"$tmp_out" || true
+    else
+      curl -sS -o "$out" --insecure $resolve_arg --cert "$cert" --key "$key" \
+        -H "Content-Type: application/json" -d "$body" "$curl_url" \
+        -w "http_code=%{http_code} time_namelookup=%{time_namelookup} time_connect=%{time_connect} time_appconnect=%{time_appconnect} time_starttransfer=%{time_starttransfer} time_total=%{time_total}\n" \
+        >"$tmp_out" || true
+    fi
+    status="$(awk -F'[= ]' 'NR==1{print $2}' "$tmp_out" 2>/dev/null | tail -n 1)"
+    cat "$tmp_out" >"$CURL_TIMING_OUT" 2>/dev/null || true
+    if [ -n "${CURL_TIMING_RAW_OUT:-}" ]; then
+      cat "$tmp_out" >"$CURL_TIMING_RAW_OUT" 2>/dev/null || true
+    fi
+    if [ -z "$status" ] && [ -s "$CURL_TIMING_OUT" ]; then
+      status="$(awk -F'[= ]' 'NR==1{print $2}' "$CURL_TIMING_OUT" 2>/dev/null | tail -n 1)"
+    fi
+    if [ -n "${CURL_STATUS_DEBUG:-}" ]; then
+      {
+        echo "parsed_status=${status}"
+        echo "timing_out_path=${CURL_TIMING_OUT}"
+        echo "sed_path=$(command -v sed 2>/dev/null || echo missing)"
+        echo "awk_out=$(awk -F'[= ]' 'NR==1{print $2}' "$CURL_TIMING_OUT" 2>/dev/null | tail -n 1)"
+      } >"$CURL_STATUS_DEBUG" 2>/dev/null || true
+    fi
+    rm -f "$tmp_out"
   else
-    status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
-      -H "Content-Type: application/json" -d "$body" "$curl_url" || true)"
+    if [ -n "$host_header" ]; then
+      status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
+        -H "$host_header" -H "Content-Type: application/json" -d "$body" "$curl_url" || true)"
+    else
+      status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
+        -H "Content-Type: application/json" -d "$body" "$curl_url" || true)"
+    fi
   fi
   printf '%s' "$status"
+}
+
+mint_with_body_to_file() {
+  cert="$1"
+  key="$2"
+  url="$3"
+  body="$4"
+  out="$5"
+  status_file="$6"
+  status="$(mint_with_body "$cert" "$key" "$url" "$body" "$out")"
+  printf '%s' "$status" >"$status_file"
 }
 
 toolb_request() {
@@ -1111,24 +1249,80 @@ toolb_request() {
     printf '[debug] toolb_request url=%s host=%s port=%s ip=%s resolve_arg=%s host_header=%s curl_url=%s\n' \
       "$TOOLB_SECRET_URL" "$host" "$port" "${ip:-}" "$resolve_arg" "$host_header" "$curl_url" >&2
   fi
-  if [ -n "$token" ]; then
-    if [ -n "$host_header" ]; then
-      status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
-        --cacert "$TOOLB_BUNDLE" -H "$host_header" -H "Authorization: Bearer ${token}" "$curl_url" || true)"
+  if [ -n "${CURL_TIMING_OUT:-}" ]; then
+    tmp_out="$(mktemp)"
+    if [ -n "$token" ]; then
+      if [ -n "$host_header" ]; then
+        curl -sS -o "$out" --insecure $resolve_arg --cert "$cert" --key "$key" \
+          --cacert "$TOOLB_BUNDLE" -H "$host_header" -H "Authorization: Bearer ${token}" "$curl_url" \
+          -w "http_code=%{http_code} time_namelookup=%{time_namelookup} time_connect=%{time_connect} time_appconnect=%{time_appconnect} time_starttransfer=%{time_starttransfer} time_total=%{time_total}\n" \
+          >"$tmp_out" || true
+      else
+        curl -sS -o "$out" --insecure $resolve_arg --cert "$cert" --key "$key" \
+          --cacert "$TOOLB_BUNDLE" -H "Authorization: Bearer ${token}" "$curl_url" \
+          -w "http_code=%{http_code} time_namelookup=%{time_namelookup} time_connect=%{time_connect} time_appconnect=%{time_appconnect} time_starttransfer=%{time_starttransfer} time_total=%{time_total}\n" \
+          >"$tmp_out" || true
+      fi
     else
-      status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
-        --cacert "$TOOLB_BUNDLE" -H "Authorization: Bearer ${token}" "$curl_url" || true)"
+      if [ -n "$host_header" ]; then
+        curl -sS -o "$out" --insecure $resolve_arg --cert "$cert" --key "$key" \
+          --cacert "$TOOLB_BUNDLE" -H "$host_header" "$curl_url" \
+          -w "http_code=%{http_code} time_namelookup=%{time_namelookup} time_connect=%{time_connect} time_appconnect=%{time_appconnect} time_starttransfer=%{time_starttransfer} time_total=%{time_total}\n" \
+          >"$tmp_out" || true
+      else
+        curl -sS -o "$out" --insecure $resolve_arg --cert "$cert" --key "$key" \
+          --cacert "$TOOLB_BUNDLE" "$curl_url" \
+          -w "http_code=%{http_code} time_namelookup=%{time_namelookup} time_connect=%{time_connect} time_appconnect=%{time_appconnect} time_starttransfer=%{time_starttransfer} time_total=%{time_total}\n" \
+          >"$tmp_out" || true
+      fi
     fi
+    status="$(awk -F'[= ]' 'NR==1{print $2}' "$tmp_out" 2>/dev/null | tail -n 1)"
+    cat "$tmp_out" >"$CURL_TIMING_OUT" 2>/dev/null || true
+    if [ -n "${CURL_TIMING_RAW_OUT:-}" ]; then
+      cat "$tmp_out" >"$CURL_TIMING_RAW_OUT" 2>/dev/null || true
+    fi
+    if [ -z "$status" ] && [ -s "$CURL_TIMING_OUT" ]; then
+      status="$(awk -F'[= ]' 'NR==1{print $2}' "$CURL_TIMING_OUT" 2>/dev/null | tail -n 1)"
+    fi
+    if [ -n "${CURL_STATUS_DEBUG:-}" ]; then
+      {
+        echo "parsed_status=${status}"
+        echo "timing_out_path=${CURL_TIMING_OUT}"
+        echo "sed_path=$(command -v sed 2>/dev/null || echo missing)"
+        echo "awk_out=$(awk -F'[= ]' 'NR==1{print $2}' "$CURL_TIMING_OUT" 2>/dev/null | tail -n 1)"
+      } >"$CURL_STATUS_DEBUG" 2>/dev/null || true
+    fi
+    rm -f "$tmp_out"
   else
-    if [ -n "$host_header" ]; then
-      status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
-        --cacert "$TOOLB_BUNDLE" -H "$host_header" "$curl_url" || true)"
+    if [ -n "$token" ]; then
+      if [ -n "$host_header" ]; then
+        status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
+          --cacert "$TOOLB_BUNDLE" -H "$host_header" -H "Authorization: Bearer ${token}" "$curl_url" || true)"
+      else
+        status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
+          --cacert "$TOOLB_BUNDLE" -H "Authorization: Bearer ${token}" "$curl_url" || true)"
+      fi
     else
-      status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
-        --cacert "$TOOLB_BUNDLE" "$curl_url" || true)"
+      if [ -n "$host_header" ]; then
+        status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
+          --cacert "$TOOLB_BUNDLE" -H "$host_header" "$curl_url" || true)"
+      else
+        status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
+          --cacert "$TOOLB_BUNDLE" "$curl_url" || true)"
+      fi
     fi
   fi
   printf '%s' "$status"
+}
+
+toolb_request_to_file() {
+  cert="$1"
+  key="$2"
+  token="$3"
+  out="$4"
+  status_file="$5"
+  status="$(toolb_request "$cert" "$key" "$token" "$out")"
+  printf '%s' "$status" >"$status_file"
 }
 
 expect_edge_unreachable() {
@@ -1627,13 +1821,13 @@ M25_T1_test() {
   echo "EVIDENCE_DIR=$EVDIR"
   premise_guard "capture edge container context" \
     "hostname >\"$EVDIR/hostname.txt\" 2>&1; ip route >\"$EVDIR/ip_route.txt\" 2>&1 || true; cat /etc/resolv.conf >\"$EVDIR/resolv.conf\" 2>&1"
-  premise_guard "tool-b resolves in edge context" \
-    "getent hosts tool-b >\"$EVDIR/toolb_hosts.txt\" 2>&1"
+  premise_guard "pin tool-b app IP (toolb_app_net)" \
+    "toolb_ip=\"\$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.NetworkID}} {{.IPAddress}}{{end}}' spiffe-tool-b 2>/dev/null | cut -d' ' -f2 | head -n1)\"; test -n \"\$toolb_ip\"; echo \"\$toolb_ip\" >\"$EVDIR/toolb_ip.txt\""
   out="$EVDIR/toolb_direct.out"
   exercise_guard "attempt direct tool-b app access from edge" \
-    "curl -sS --max-time 2 http://tool-b:8080/health >\"$out\" 2>&1"
+    "set +e; toolb_ip=\"\$(cat \"$EVDIR/toolb_ip.txt\" 2>/dev/null || true)\"; curl -sS --max-time 2 http://\${toolb_ip}:8080/health >\"$out\" 2>&1; rc=\$?; set -e; echo \$rc >\"$EVDIR/rc.txt\""
   outcome_guard "tool-b app not reachable from edge network" \
-    "! grep -Fq 'Could not resolve host' \"$out\" && grep -Eq '(Connection refused|timed out|No route to host)' \"$out\""
+    "grep -Eq '(Connection refused|timed out|No route to host)' \"$out\""
   return 0
 }
 
@@ -1644,7 +1838,7 @@ M25_T2_test() {
     "docker exec spiffe-tool-b sh -lc 'hostname; ip route || true; cat /etc/resolv.conf' >\"$EVDIR/toolb_context.txt\" 2>&1"
   out="$EVDIR/toolb_missing_header.out"
   exercise_guard "call tool-b directly without x-spiffe-id header" \
-    "docker exec spiffe-tool-b python - <<'PY' >\"$out\" 2>&1
+    "docker exec -i spiffe-tool-b python - <<'PY' >\"$out\" 2>&1
 import sys
 import urllib.error
 import urllib.request
@@ -1668,22 +1862,26 @@ M25_T3_test() {
   echo "EVIDENCE_DIR=$EVDIR"
   premise_guard "capture edge container context" \
     "hostname >\"$EVDIR/hostname.txt\" 2>&1; ip route >\"$EVDIR/ip_route.txt\" 2>&1 || true; cat /etc/resolv.conf >\"$EVDIR/resolv.conf\" 2>&1"
-  premise_guard "tool-b-envoy DNS resolves" \
-    "wait_dns \"tool-b-envoy\" 30"
-  premise_guard "tool-b-envoy TCP reachable" \
-    "wait_tcp \"tool-b-envoy\" \"8443\" 30"
+  premise_guard "tool-b-envoy reachable" \
+    "ensure_toolb_envoy_ready; echo \"${TOOLB_ENVOY_IP:-}\" >\"$EVDIR/toolb_envoy_ip.txt\""
   premise_guard "tool-b material available" \
     "ensure_toolb_material"
-  premise_guard "tool-b-envoy server cert not expired" \
-    "cert_out=\"$EVDIR/toolb_envoy_cert.pem\"; $TIMEOUT_BIN 6s openssl s_client -connect tool-b-envoy:8443 -servername tool-b-envoy -showcerts < /dev/null 2>/dev/null | sed -n '/BEGIN CERTIFICATE/,/END CERTIFICATE/p' >\"\$cert_out\"; test -s \"\$cert_out\" && openssl x509 -in \"\$cert_out\" -noout -checkend 1"
-  out="$EVDIR/m25_t3.out"
-  exercise_guard "attempt mTLS with mismatched SPIFFE ID" \
-    "printf \"GET /secret HTTP/1.1\\r\\nHost: tool-b-envoy\\r\\nConnection: close\\r\\n\\r\\n\" | \
-      $TIMEOUT_BIN 6s openssl s_client $TLS_CLIENT_ARGS -connect tool-b-envoy:8443 -cert \"$TOOLB_CERT\" \
-        -key \"$TOOLB_KEY\" -CAfile \"$TOOLB_BUNDLE\" -verify_return_error \
-        -showcerts -ign_eof >\"$out\" 2>&1"
-  outcome_guard "TLS failure indicates SPIFFE ID mismatch" \
-    "! grep -Fq 'Could not resolve host' \"$out\" && grep -Eq '(alert bad certificate|alert certificate unknown|bad certificate|certificate unknown|handshake failure)' \"$out\""
+  premise_guard "capiss material available" \
+    "ensure_capiss_material"
+  premise_guard "capiss-envoy reachable" \
+    "ensure_capiss_envoy_ready; echo \"${CAPISS_ENVOY_IP:-}\" >\"$EVDIR/capiss_envoy_ip.txt\""
+  mint_out="$EVDIR/mint_body.json"
+  exercise_guard "mint capability as agent-a" \
+    "mint_out=\"$mint_out\"; status=\"\$(mint_with_body \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" \"\$CAPISS_MINT_BODY\" \"\$mint_out\")\"; echo \"\$status\" >\"$EVDIR/mint_status.txt\""
+  outcome_guard "mint allowed for agent-a" \
+    "grep -Fxq '200' \"$EVDIR/mint_status.txt\""
+  token="$(json_get '.token' "$mint_out")"
+  echo "$token" >"$EVDIR/token.txt"
+  out="$EVDIR/response.json"
+  exercise_guard "call tool-b via envoy as rogue with agent-a token" \
+    "token=\"$token\"; out=\"$out\"; status=\"\$(toolb_request \"\$CAPISS_ROGUE_CERT\" \"\$CAPISS_ROGUE_KEY\" \"\$token\" \"\$out\")\"; echo \"\$status\" >\"$EVDIR/status.txt\""
+  outcome_guard "tool-b rejects mismatched x-spiffe-id/token sub" \
+    "status=\"\$(cat \"$EVDIR/status.txt\" 2>/dev/null || true)\"; if [ \"\$status\" = \"403\" ]; then reason=\"\$(json_get '.reason' \"$out\")\"; [ \"\$reason\" = \"sub_mismatch\" ]; else false; fi"
   return 0
 }
 
@@ -1697,16 +1895,16 @@ M3S2_T1_test() {
   premise_guard "capiss-envoy TCP reachable" \
     "wait_tcp \"${CAPISS_ENVOY_IP}\" \"9443\" 30"
   exercise_guard "mint via envoy" \
-    "out=\"$EVDIR/mint_body.json\"; status=\"$(mint_with_cert \"$CAPISS_AGENT_CERT\" \"$CAPISS_AGENT_KEY\" \"$CAPISS_MINT_URL\" \"\$out\")\"; echo \"\$status\" >\"$EVDIR/status.txt\""
+    "mint_with_cert_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" \"$EVDIR/mint_body.json\" \"$EVDIR/status.txt\""
   exercise_guard "capture mint headers" \
-    "curl -sS -v --insecure --cert \"$CAPISS_AGENT_CERT\" --key \"$CAPISS_AGENT_KEY\" -H 'Host: capability-issuer-envoy' -H 'Content-Type: application/json' -d \"$CAPISS_MINT_BODY\" https://${CAPISS_ENVOY_IP}:9443/capabilities/mint -o /dev/null 2>\"$EVDIR/mint_headers.txt\""
+    "req=\"$EVDIR/mint_request.json\"; printf '%s' \"\$CAPISS_MINT_BODY\" >\"\$req\"; curl -sS -v --insecure --cert \"$CAPISS_AGENT_CERT\" --key \"$CAPISS_AGENT_KEY\" -H 'Host: capability-issuer-envoy' -H 'Content-Type: application/json' -d \"@\${req}\" https://${CAPISS_ENVOY_IP}:9443/capabilities/mint -o /dev/null 2>\"$EVDIR/mint_headers.txt\""
   outcome_guard "envoy handled mint request" \
     "grep -Ei '(server: envoy|x-envoy)' \"$EVDIR/mint_headers.txt\""
   outcome_guard "mint allowed 200" \
-    "status=\"$(cat \"$EVDIR/status.txt\" 2>/dev/null || true)\"; [ \"\$status\" = \"200\" ]"
+    "assert_file_eq \"$EVDIR/status.txt\" \"200\""
   out="$EVDIR/mint_body.json"
   outcome_guard "token non-empty" \
-    "token=\"$(json_get '.token' \"$out\")\"; [ -n \"\$token\" ] && [ \"\$token\" != \"null\" ]; echo \"\$token\" >\"$EVDIR/token.txt\""
+    "assert_json_present \"$out\" '.token' && jq -r '.token' \"$out\" >\"$EVDIR/token.txt\""
   outcome_guard "mint fields correct" \
     "assert_json_eq \"$out\" '.token_type' 'biscuit' && assert_json_present \"$out\" '.expires_at' && assert_json_eq \"$out\" '.issued_to' 'spiffe://example.org/agent-a' && assert_json_eq \"$out\" '.aud' 'tool-b' && assert_json_eq \"$out\" '.act' 'read' && assert_json_eq \"$out\" '.res' '/secret'"
   return 0
@@ -1722,13 +1920,13 @@ M3S2_T2_test() {
   premise_guard "capiss-envoy TCP reachable" \
     "wait_tcp \"${CAPISS_ENVOY_IP}\" \"9443\" 30"
   exercise_guard "mint via envoy (rogue)" \
-    "out=\"$EVDIR/mint_body.json\"; status=\"$(mint_with_cert \"$CAPISS_ROGUE_CERT\" \"$CAPISS_ROGUE_KEY\" \"$CAPISS_MINT_URL\" \"\$out\")\"; echo \"\$status\" >\"$EVDIR/status.txt\""
+    "mint_with_cert_to_file \"\$CAPISS_ROGUE_CERT\" \"\$CAPISS_ROGUE_KEY\" \"\$CAPISS_MINT_URL\" \"$EVDIR/mint_body.json\" \"$EVDIR/status.txt\""
   exercise_guard "capture mint headers" \
-    "curl -sS -v --insecure --cert \"$CAPISS_ROGUE_CERT\" --key \"$CAPISS_ROGUE_KEY\" -H 'Host: capability-issuer-envoy' -H 'Content-Type: application/json' -d \"$CAPISS_MINT_BODY\" https://${CAPISS_ENVOY_IP}:9443/capabilities/mint -o /dev/null 2>\"$EVDIR/mint_headers.txt\""
+    "req=\"$EVDIR/mint_request.json\"; printf '%s' \"\$CAPISS_MINT_BODY\" >\"\$req\"; curl -sS -v --insecure --cert \"$CAPISS_ROGUE_CERT\" --key \"$CAPISS_ROGUE_KEY\" -H 'Host: capability-issuer-envoy' -H 'Content-Type: application/json' -d \"@\${req}\" https://${CAPISS_ENVOY_IP}:9443/capabilities/mint -o /dev/null 2>\"$EVDIR/mint_headers.txt\""
   outcome_guard "envoy handled mint request" \
     "grep -Ei '(server: envoy|x-envoy)' \"$EVDIR/mint_headers.txt\""
   outcome_guard "mint denied 403" \
-    "status=\"$(cat \"$EVDIR/status.txt\" 2>/dev/null || true)\"; [ \"\$status\" = \"403\" ]"
+    "assert_file_eq \"$EVDIR/status.txt\" \"403\""
   out="$EVDIR/mint_body.json"
   outcome_guard "policy deny body" \
     "assert_json_eq \"$out\" '.error' 'denied' && assert_json_eq \"$out\" '.reason' 'policy'"
@@ -1757,13 +1955,13 @@ M3S2_T4_test() {
   premise_guard "capiss-no-opa-envoy health reachable" \
     "curl -sS --insecure --cert \"$CAPISS_AGENT_CERT\" --key \"$CAPISS_AGENT_KEY\" -H 'Host: capability-issuer-no-opa-envoy' https://${CAPISS_NO_OPA_ENVOY_IP}:9444/health >/dev/null 2>&1"
   exercise_guard "mint via no-opa envoy" \
-    "out=\"$EVDIR/mint_body.json\"; status=\"$(mint_with_cert \"$CAPISS_AGENT_CERT\" \"$CAPISS_AGENT_KEY\" \"$CAPISS_NO_OPA_URL\" \"\$out\")\"; echo \"\$status\" >\"$EVDIR/status.txt\""
+    "mint_with_cert_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_NO_OPA_URL\" \"$EVDIR/mint_body.json\" \"$EVDIR/status.txt\""
   exercise_guard "capture mint headers" \
-    "curl -sS -v --insecure --cert \"$CAPISS_AGENT_CERT\" --key \"$CAPISS_AGENT_KEY\" -H 'Host: capability-issuer-no-opa-envoy' -H 'Content-Type: application/json' -d \"$CAPISS_MINT_BODY\" https://${CAPISS_NO_OPA_ENVOY_IP}:9444/capabilities/mint -o /dev/null 2>\"$EVDIR/mint_headers.txt\""
+    "req=\"$EVDIR/mint_request.json\"; printf '%s' \"\$CAPISS_MINT_BODY\" >\"\$req\"; curl -sS -v --insecure --cert \"$CAPISS_AGENT_CERT\" --key \"$CAPISS_AGENT_KEY\" -H 'Host: capability-issuer-no-opa-envoy' -H 'Content-Type: application/json' -d \"@\${req}\" https://${CAPISS_NO_OPA_ENVOY_IP}:9444/capabilities/mint -o /dev/null 2>\"$EVDIR/mint_headers.txt\""
   outcome_guard "envoy handled mint request" \
     "grep -Ei '(server: envoy|x-envoy)' \"$EVDIR/mint_headers.txt\""
   outcome_guard "mint denied 403/503" \
-    "status=\"$(cat \"$EVDIR/status.txt\" 2>/dev/null || true)\"; [ \"\$status\" = \"403\" ] || [ \"\$status\" = \"503\" ]"
+    "assert_file_any \"$EVDIR/status.txt\" \"403\" \"503\""
   out="$EVDIR/mint_body.json"
   outcome_guard "opa unavailable body" \
     "assert_json_eq \"$out\" '.error' 'denied' && assert_json_eq \"$out\" '.reason' 'opa_unavailable'"
@@ -1790,16 +1988,16 @@ M3S3_T1_test() {
   premise_guard "capiss-envoy TCP reachable" \
     "wait_tcp \"${CAPISS_ENVOY_IP}\" \"9443\" 30"
   exercise_guard "mint via envoy" \
-    "out=\"$EVDIR/mint_body.json\"; status=\"$(mint_with_cert \"$CAPISS_AGENT_CERT\" \"$CAPISS_AGENT_KEY\" \"$CAPISS_MINT_URL\" \"\$out\")\"; echo \"\$status\" >\"$EVDIR/status.txt\""
+    "mint_with_cert_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" \"$EVDIR/mint_body.json\" \"$EVDIR/status.txt\""
   exercise_guard "capture mint headers" \
-    "curl -sS -v --insecure --cert \"$CAPISS_AGENT_CERT\" --key \"$CAPISS_AGENT_KEY\" -H 'Host: capability-issuer-envoy' -H 'Content-Type: application/json' -d \"$CAPISS_MINT_BODY\" https://${CAPISS_ENVOY_IP}:9443/capabilities/mint -o /dev/null 2>\"$EVDIR/mint_headers.txt\""
+    "req=\"$EVDIR/mint_request.json\"; printf '%s' \"\$CAPISS_MINT_BODY\" >\"\$req\"; curl -sS -v --insecure --cert \"$CAPISS_AGENT_CERT\" --key \"$CAPISS_AGENT_KEY\" -H 'Host: capability-issuer-envoy' -H 'Content-Type: application/json' -d \"@\${req}\" https://${CAPISS_ENVOY_IP}:9443/capabilities/mint -o /dev/null 2>\"$EVDIR/mint_headers.txt\""
   outcome_guard "envoy handled mint request" \
     "grep -Ei '(server: envoy|x-envoy)' \"$EVDIR/mint_headers.txt\""
   outcome_guard "mint allowed 200" \
-    "status=\"$(cat \"$EVDIR/status.txt\" 2>/dev/null || true)\"; [ \"\$status\" = \"200\" ]"
+    "assert_file_eq \"$EVDIR/status.txt\" \"200\""
   out="$EVDIR/mint_body.json"
   outcome_guard "token non-empty" \
-    "token=\"$(json_get '.token' \"$out\")\"; [ -n \"\$token\" ] && [ \"\$token\" != \"null\" ]; echo \"\$token\" >\"$EVDIR/token.txt\""
+    "assert_json_present \"$out\" '.token' && jq -r '.token' \"$out\" >\"$EVDIR/token.txt\""
   return 0
 }
 
@@ -1813,16 +2011,16 @@ M3S3_T2_test() {
   premise_guard "capiss-envoy TCP reachable" \
     "wait_tcp \"${CAPISS_ENVOY_IP}\" \"9443\" 30"
   exercise_guard "mint via envoy" \
-    "out=\"$EVDIR/mint_body.json\"; status=\"$(mint_with_cert \"$CAPISS_AGENT_CERT\" \"$CAPISS_AGENT_KEY\" \"$CAPISS_MINT_URL\" \"\$out\")\"; echo \"\$status\" >\"$EVDIR/status.txt\""
+    "mint_with_cert_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" \"$EVDIR/mint_body.json\" \"$EVDIR/status.txt\""
   exercise_guard "capture mint headers" \
-    "curl -sS -v --insecure --cert \"$CAPISS_AGENT_CERT\" --key \"$CAPISS_AGENT_KEY\" -H 'Host: capability-issuer-envoy' -H 'Content-Type: application/json' -d \"$CAPISS_MINT_BODY\" https://${CAPISS_ENVOY_IP}:9443/capabilities/mint -o /dev/null 2>\"$EVDIR/mint_headers.txt\""
+    "req=\"$EVDIR/mint_request.json\"; printf '%s' \"\$CAPISS_MINT_BODY\" >\"\$req\"; curl -sS -v --insecure --cert \"$CAPISS_AGENT_CERT\" --key \"$CAPISS_AGENT_KEY\" -H 'Host: capability-issuer-envoy' -H 'Content-Type: application/json' -d \"@\${req}\" https://${CAPISS_ENVOY_IP}:9443/capabilities/mint -o /dev/null 2>\"$EVDIR/mint_headers.txt\""
   outcome_guard "envoy handled mint request" \
     "grep -Ei '(server: envoy|x-envoy)' \"$EVDIR/mint_headers.txt\""
   outcome_guard "mint allowed 200" \
-    "status=\"$(cat \"$EVDIR/status.txt\" 2>/dev/null || true)\"; [ \"\$status\" = \"200\" ]"
+    "assert_file_eq \"$EVDIR/status.txt\" \"200\""
   out="$EVDIR/mint_body.json"
   outcome_guard "expires_at present and near future" \
-    "expires_at=\"$(json_get '.expires_at' \"$out\")\"; now=\"$(date +%s)\"; token=\"$(json_get '.token' \"$out\")\"; [ -n \"\$token\" ] && [ \"\$token\" != \"null\" ]; echo \"\$token\" >\"$EVDIR/token.txt\"; [ -n \"\$expires_at\" ] && [ \"\$expires_at\" != \"null\" ]; delta=\$((expires_at - now)); echo \"now=\$now expires_at=\$expires_at delta=\$delta\" >\"$EVDIR/time.txt\"; [ \"\$delta\" -gt 0 ] && [ \"\$delta\" -le 120 ]"
+    "assert_expires_at_near \"$out\" \"$EVDIR/time.txt\" 120"
   delta="$(awk '/delta=/{print $3}' "$EVDIR/time.txt" 2>/dev/null | cut -d= -f2)"
   echo "M3.S3 T2 expires_at delta: ${delta}s"
   return 0
@@ -1838,17 +2036,17 @@ M3S3_T3_test() {
   premise_guard "capiss-envoy TCP reachable" \
     "wait_tcp \"${CAPISS_ENVOY_IP}\" \"9443\" 30"
   exercise_guard "mint twice via envoy" \
-    "out1=\"$EVDIR/mint_1.json\"; out2=\"$EVDIR/mint_2.json\"; status1=\"$(mint_with_cert \"$CAPISS_AGENT_CERT\" \"$CAPISS_AGENT_KEY\" \"$CAPISS_MINT_URL\" \"\$out1\")\"; status2=\"$(mint_with_cert \"$CAPISS_AGENT_CERT\" \"$CAPISS_AGENT_KEY\" \"$CAPISS_MINT_URL\" \"\$out2\")\"; echo \"\$status1\" >\"$EVDIR/status1.txt\"; echo \"\$status2\" >\"$EVDIR/status2.txt\""
+    "mint_with_cert_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" \"$EVDIR/mint_1.json\" \"$EVDIR/status1.txt\"; mint_with_cert_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" \"$EVDIR/mint_2.json\" \"$EVDIR/status2.txt\""
   exercise_guard "capture mint headers" \
-    "curl -sS -v --insecure --cert \"$CAPISS_AGENT_CERT\" --key \"$CAPISS_AGENT_KEY\" -H 'Host: capability-issuer-envoy' -H 'Content-Type: application/json' -d \"$CAPISS_MINT_BODY\" https://${CAPISS_ENVOY_IP}:9443/capabilities/mint -o /dev/null 2>\"$EVDIR/mint_headers.txt\""
+    "req=\"$EVDIR/mint_request.json\"; printf '%s' \"\$CAPISS_MINT_BODY\" >\"\$req\"; curl -sS -v --insecure --cert \"$CAPISS_AGENT_CERT\" --key \"$CAPISS_AGENT_KEY\" -H 'Host: capability-issuer-envoy' -H 'Content-Type: application/json' -d \"@\${req}\" https://${CAPISS_ENVOY_IP}:9443/capabilities/mint -o /dev/null 2>\"$EVDIR/mint_headers.txt\""
   outcome_guard "envoy handled mint request" \
     "grep -Ei '(server: envoy|x-envoy)' \"$EVDIR/mint_headers.txt\""
   outcome_guard "mint allowed 200s" \
-    "status1=\"$(cat \"$EVDIR/status1.txt\" 2>/dev/null || true)\"; status2=\"$(cat \"$EVDIR/status2.txt\" 2>/dev/null || true)\"; [ \"\$status1\" = \"200\" ] && [ \"\$status2\" = \"200\" ]"
+    "assert_file_eq \"$EVDIR/status1.txt\" \"200\" && assert_file_eq \"$EVDIR/status2.txt\" \"200\""
   out1="$EVDIR/mint_1.json"
   out2="$EVDIR/mint_2.json"
   outcome_guard "tokens present and different" \
-    "token1=\"$(json_get '.token' \"$out1\")\"; token2=\"$(json_get '.token' \"$out2\")\"; [ -n \"\$token1\" ] && [ \"\$token1\" != \"null\" ] && [ -n \"\$token2\" ] && [ \"\$token2\" != \"null\" ] && [ \"\$token1\" != \"\$token2\" ]; printf '%s\n%s\n' \"\$token1\" \"\$token2\" >\"$EVDIR/token.txt\""
+    "jq -r '.token' \"$out1\" >\"$EVDIR/token1.txt\"; jq -r '.token' \"$out2\" >\"$EVDIR/token2.txt\"; [ -s \"$EVDIR/token1.txt\" ] && [ -s \"$EVDIR/token2.txt\" ] && ! cmp -s \"$EVDIR/token1.txt\" \"$EVDIR/token2.txt\"; cat \"$EVDIR/token1.txt\" \"$EVDIR/token2.txt\" >\"$EVDIR/token.txt\""
   return 0
 }
 
@@ -1862,14 +2060,14 @@ M3S4_T1_test() {
   premise_guard "tool-b-envoy TCP reachable" \
     "wait_tcp \"${TOOLB_ENVOY_IP}\" \"8443\" 30"
   exercise_guard "call tool-b without token" \
-    "out=\"$EVDIR/response.json\"; status=\"$(toolb_request \"$CAPISS_AGENT_CERT\" \"$CAPISS_AGENT_KEY\" \"\" \"\$out\")\"; echo \"\$status\" >\"$EVDIR/status.txt\""
+    "toolb_request_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\" \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
   outcome_guard "no network/DNS errors" \
     "! grep -Eq '(Could not resolve host|Connection refused|No route to host)' \"$EVDIR/response.json\""
   outcome_guard "deny status 401/403" \
-    "status=\"$(cat \"$EVDIR/status.txt\" 2>/dev/null || true)\"; [ \"\$status\" = \"401\" ] || [ \"\$status\" = \"403\" ]"
+    "assert_file_any \"$EVDIR/status.txt\" \"401\" \"403\""
   out="$EVDIR/response.json"
   outcome_guard "reason missing_token" \
-    "reason=\"$(json_get '.reason' \"$out\")\"; [ \"\$reason\" = \"missing_token\" ]"
+    "assert_json_eq \"$out\" '.reason' 'missing_token'"
   return 0
 }
 
@@ -1887,26 +2085,26 @@ M3S4_T2_test() {
   premise_guard "tool-b-envoy TCP reachable" \
     "wait_tcp \"${TOOLB_ENVOY_IP}\" \"8443\" 30"
   exercise_guard "mint via envoy" \
-    "mint_out=\"$EVDIR/mint_body.json\"; status=\"$(mint_with_cert \"$CAPISS_AGENT_CERT\" \"$CAPISS_AGENT_KEY\" \"$CAPISS_MINT_URL\" \"\$mint_out\")\"; echo \"\$status\" >\"$EVDIR/mint_status.txt\""
+    "mint_with_cert_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" \"$EVDIR/mint_body.json\" \"$EVDIR/mint_status.txt\""
   exercise_guard "capture mint headers" \
-    "curl -sS -v --insecure --cert \"$CAPISS_AGENT_CERT\" --key \"$CAPISS_AGENT_KEY\" -H 'Host: capability-issuer-envoy' -H 'Content-Type: application/json' -d \"$CAPISS_MINT_BODY\" https://${CAPISS_ENVOY_IP}:9443/capabilities/mint -o /dev/null 2>\"$EVDIR/mint_headers.txt\""
+    "req=\"$EVDIR/mint_request.json\"; printf '%s' \"\$CAPISS_MINT_BODY\" >\"\$req\"; curl -sS -v --insecure --cert \"$CAPISS_AGENT_CERT\" --key \"$CAPISS_AGENT_KEY\" -H 'Host: capability-issuer-envoy' -H 'Content-Type: application/json' -d \"@\${req}\" https://${CAPISS_ENVOY_IP}:9443/capabilities/mint -o /dev/null 2>\"$EVDIR/mint_headers.txt\""
   outcome_guard "envoy handled mint request" \
     "grep -Ei '(server: envoy|x-envoy)' \"$EVDIR/mint_headers.txt\""
   outcome_guard "mint allowed 200" \
-    "status=\"$(cat \"$EVDIR/mint_status.txt\" 2>/dev/null || true)\"; [ \"\$status\" = \"200\" ]"
+    "assert_file_eq \"$EVDIR/mint_status.txt\" \"200\""
   mint_out="$EVDIR/mint_body.json"
   outcome_guard "mint token present" \
-    "token=\"$(json_get '.token' \"$mint_out\")\"; [ -n \"\$token\" ] && [ \"\$token\" != \"null\" ]; echo \"\$token\" >\"$EVDIR/token.txt\""
+    "assert_json_present \"$mint_out\" '.token' && jq -r '.token' \"$mint_out\" >\"$EVDIR/token.txt\""
   token="$(json_get '.token' "$mint_out")"
   exercise_guard "call tool-b with token" \
-    "out=\"$EVDIR/response.json\"; status=\"$(toolb_request \"$CAPISS_AGENT_CERT\" \"$CAPISS_AGENT_KEY\" \"$token\" \"\$out\")\"; echo \"\$status\" >\"$EVDIR/status.txt\""
+    "toolb_request_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$token\" \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
   outcome_guard "no network/DNS errors" \
     "! grep -Eq '(Could not resolve host|Connection refused|No route to host)' \"$EVDIR/response.json\""
   outcome_guard "allow status 200" \
-    "status=\"$(cat \"$EVDIR/status.txt\" 2>/dev/null || true)\"; [ \"\$status\" = \"200\" ]"
+    "assert_file_eq \"$EVDIR/status.txt\" \"200\""
   out="$EVDIR/response.json"
   outcome_guard "secret value correct" \
-    "secret_value=\"$(json_get '.secret' \"$out\")\"; [ \"\$secret_value\" = \"super sensitive demo secret\" ]"
+    "assert_json_eq \"$out\" '.secret' 'super sensitive demo secret'"
   return 0
 }
 
@@ -1920,11 +2118,11 @@ M3S4_T3_test() {
   premise_guard "tool-b-envoy TCP reachable" \
     "wait_tcp \"${TOOLB_ENVOY_IP}\" \"8443\" 30"
   exercise_guard "rogue call tool-b without token" \
-    "out=\"$EVDIR/response.json\"; status=\"$(toolb_request \"$CAPISS_ROGUE_CERT\" \"$CAPISS_ROGUE_KEY\" \"\" \"\$out\")\"; echo \"\$status\" >\"$EVDIR/status.txt\""
+    "toolb_request_to_file \"\$CAPISS_ROGUE_CERT\" \"\$CAPISS_ROGUE_KEY\" \"\" \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
   outcome_guard "no network/DNS errors" \
     "! grep -Eq '(Could not resolve host|Connection refused|No route to host)' \"$EVDIR/response.json\""
   outcome_guard "deny status 401/403" \
-    "status=\"$(cat \"$EVDIR/status.txt\" 2>/dev/null || true)\"; [ \"\$status\" = \"401\" ] || [ \"\$status\" = \"403\" ]"
+    "assert_file_any \"$EVDIR/status.txt\" \"401\" \"403\""
   return 0
 }
 
@@ -1942,26 +2140,26 @@ M3S4_T4_test() {
   premise_guard "tool-b-envoy TCP reachable" \
     "wait_tcp \"${TOOLB_ENVOY_IP}\" \"8443\" 30"
   exercise_guard "mint via envoy" \
-    "mint_out=\"$EVDIR/mint_body.json\"; status=\"$(mint_with_cert \"$CAPISS_AGENT_CERT\" \"$CAPISS_AGENT_KEY\" \"$CAPISS_MINT_URL\" \"\$mint_out\")\"; echo \"\$status\" >\"$EVDIR/mint_status.txt\""
+    "mint_with_cert_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" \"$EVDIR/mint_body.json\" \"$EVDIR/mint_status.txt\""
   exercise_guard "capture mint headers" \
-    "curl -sS -v --insecure --cert \"$CAPISS_AGENT_CERT\" --key \"$CAPISS_AGENT_KEY\" -H 'Host: capability-issuer-envoy' -H 'Content-Type: application/json' -d \"$CAPISS_MINT_BODY\" https://${CAPISS_ENVOY_IP}:9443/capabilities/mint -o /dev/null 2>\"$EVDIR/mint_headers.txt\""
+    "req=\"$EVDIR/mint_request.json\"; printf '%s' \"\$CAPISS_MINT_BODY\" >\"\$req\"; curl -sS -v --insecure --cert \"$CAPISS_AGENT_CERT\" --key \"$CAPISS_AGENT_KEY\" -H 'Host: capability-issuer-envoy' -H 'Content-Type: application/json' -d \"@\${req}\" https://${CAPISS_ENVOY_IP}:9443/capabilities/mint -o /dev/null 2>\"$EVDIR/mint_headers.txt\""
   outcome_guard "envoy handled mint request" \
     "grep -Ei '(server: envoy|x-envoy)' \"$EVDIR/mint_headers.txt\""
   outcome_guard "mint allowed 200" \
-    "status=\"$(cat \"$EVDIR/mint_status.txt\" 2>/dev/null || true)\"; [ \"\$status\" = \"200\" ]"
+    "assert_file_eq \"$EVDIR/mint_status.txt\" \"200\""
   mint_out="$EVDIR/mint_body.json"
   outcome_guard "mint token present" \
-    "token=\"$(json_get '.token' \"$mint_out\")\"; [ -n \"\$token\" ] && [ \"\$token\" != \"null\" ]; echo \"\$token\" >\"$EVDIR/token.txt\""
+    "assert_json_present \"$mint_out\" '.token' && jq -r '.token' \"$mint_out\" >\"$EVDIR/token.txt\""
   token="$(json_get '.token' "$mint_out")"
   exercise_guard "rogue uses stolen token" \
-    "out=\"$EVDIR/response.json\"; status=\"$(toolb_request \"$CAPISS_ROGUE_CERT\" \"$CAPISS_ROGUE_KEY\" \"$token\" \"\$out\")\"; echo \"\$status\" >\"$EVDIR/status.txt\""
+    "toolb_request_to_file \"\$CAPISS_ROGUE_CERT\" \"\$CAPISS_ROGUE_KEY\" \"\$token\" \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
   outcome_guard "no network/DNS errors" \
     "! grep -Eq '(Could not resolve host|Connection refused|No route to host)' \"$EVDIR/response.json\""
   outcome_guard "deny status 401/403" \
-    "status=\"$(cat \"$EVDIR/status.txt\" 2>/dev/null || true)\"; [ \"\$status\" = \"401\" ] || [ \"\$status\" = \"403\" ]"
+    "assert_file_any \"$EVDIR/status.txt\" \"401\" \"403\""
   out="$EVDIR/response.json"
   outcome_guard "reason sub_mismatch or invalid_token" \
-    "reason=\"$(json_get '.reason' \"$out\")\"; [ \"\$reason\" = \"sub_mismatch\" ] || [ \"\$reason\" = \"invalid_token\" ]"
+    "jq -r '.reason' \"$out\" | grep -Eq '^(sub_mismatch|invalid_token)$'"
   return 0
 }
 
@@ -1979,16 +2177,16 @@ M3S4_T5_test() {
   premise_guard "tool-b-envoy TCP reachable" \
     "wait_tcp \"${TOOLB_ENVOY_IP}\" \"8443\" 30"
   exercise_guard "mint via envoy" \
-    "mint_out=\"$EVDIR/mint_body.json\"; status=\"$(mint_with_cert \"$CAPISS_AGENT_CERT\" \"$CAPISS_AGENT_KEY\" \"$CAPISS_MINT_URL\" \"\$mint_out\")\"; echo \"\$status\" >\"$EVDIR/mint_status.txt\""
+    "mint_with_cert_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" \"$EVDIR/mint_body.json\" \"$EVDIR/mint_status.txt\""
   exercise_guard "capture mint headers" \
-    "curl -sS -v --insecure --cert \"$CAPISS_AGENT_CERT\" --key \"$CAPISS_AGENT_KEY\" -H 'Host: capability-issuer-envoy' -H 'Content-Type: application/json' -d \"$CAPISS_MINT_BODY\" https://${CAPISS_ENVOY_IP}:9443/capabilities/mint -o /dev/null 2>\"$EVDIR/mint_headers.txt\""
+    "req=\"$EVDIR/mint_request.json\"; printf '%s' \"\$CAPISS_MINT_BODY\" >\"\$req\"; curl -sS -v --insecure --cert \"$CAPISS_AGENT_CERT\" --key \"$CAPISS_AGENT_KEY\" -H 'Host: capability-issuer-envoy' -H 'Content-Type: application/json' -d \"@\${req}\" https://${CAPISS_ENVOY_IP}:9443/capabilities/mint -o /dev/null 2>\"$EVDIR/mint_headers.txt\""
   outcome_guard "envoy handled mint request" \
     "grep -Ei '(server: envoy|x-envoy)' \"$EVDIR/mint_headers.txt\""
   outcome_guard "mint allowed 200" \
-    "status=\"$(cat \"$EVDIR/mint_status.txt\" 2>/dev/null || true)\"; [ \"\$status\" = \"200\" ]"
+    "assert_file_eq \"$EVDIR/mint_status.txt\" \"200\""
   mint_out="$EVDIR/mint_body.json"
   outcome_guard "mint token and expires_at present" \
-    "token=\"$(json_get '.token' \"$mint_out\")\"; expires_at=\"$(json_get '.expires_at' \"$mint_out\")\"; [ -n \"\$token\" ] && [ \"\$token\" != \"null\" ] && [ -n \"\$expires_at\" ] && [ \"\$expires_at\" != \"null\" ]; echo \"\$token\" >\"$EVDIR/token.txt\"; now=\"$(date +%s)\"; echo \"now=\$now expires_at=\$expires_at\" >\"$EVDIR/time.txt\""
+    "assert_json_present \"$mint_out\" '.token' && assert_json_present \"$mint_out\" '.expires_at'"
   token="$(json_get '.token' "$mint_out")"
   expires_at="$(json_get '.expires_at' "$mint_out")"
   now="$(date +%s)"
@@ -1997,14 +2195,14 @@ M3S4_T5_test() {
     sleep "$wait_seconds"
   fi
   exercise_guard "call tool-b with expired token" \
-    "out=\"$EVDIR/response.json\"; status=\"$(toolb_request \"$CAPISS_AGENT_CERT\" \"$CAPISS_AGENT_KEY\" \"$token\" \"\$out\")\"; echo \"\$status\" >\"$EVDIR/status.txt\""
+    "toolb_request_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$token\" \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
   outcome_guard "no network/DNS errors" \
     "! grep -Eq '(Could not resolve host|Connection refused|No route to host)' \"$EVDIR/response.json\""
   outcome_guard "deny status 401/403" \
-    "status=\"$(cat \"$EVDIR/status.txt\" 2>/dev/null || true)\"; [ \"\$status\" = \"401\" ] || [ \"\$status\" = \"403\" ]"
+    "assert_file_any \"$EVDIR/status.txt\" \"401\" \"403\""
   out="$EVDIR/response.json"
   outcome_guard "reason expired" \
-    "reason=\"$(json_get '.reason' \"$out\")\"; [ \"\$reason\" = \"expired\" ]"
+    "assert_json_eq \"$out\" '.reason' 'expired'"
   return 0
 }
 
@@ -2018,13 +2216,13 @@ M3S4_T6_test() {
   premise_guard "capiss-envoy TCP reachable" \
     "wait_tcp \"${CAPISS_ENVOY_IP}\" \"9443\" 30"
   exercise_guard "mint with empty body" \
-    "out=\"$EVDIR/mint_body.json\"; status=\"$(mint_with_body \"$CAPISS_AGENT_CERT\" \"$CAPISS_AGENT_KEY\" \"$CAPISS_MINT_URL\" '{}' \"\$out\")\"; echo \"\$status\" >\"$EVDIR/status.txt\""
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" '{}' \"$EVDIR/mint_body.json\" \"$EVDIR/status.txt\""
   exercise_guard "capture mint headers" \
     "curl -sS -v --insecure --cert \"$CAPISS_AGENT_CERT\" --key \"$CAPISS_AGENT_KEY\" -H 'Host: capability-issuer-envoy' -H 'Content-Type: application/json' -d '{}' https://${CAPISS_ENVOY_IP}:9443/capabilities/mint -o /dev/null 2>\"$EVDIR/mint_headers.txt\""
   outcome_guard "envoy handled mint request" \
     "grep -Ei '(server: envoy|x-envoy)' \"$EVDIR/mint_headers.txt\""
   outcome_guard "bad request 400" \
-    "status=\"$(cat \"$EVDIR/status.txt\" 2>/dev/null || true)\"; [ \"\$status\" = \"400\" ]"
+    "assert_file_eq \"$EVDIR/status.txt\" \"400\""
   out="$EVDIR/mint_body.json"
   outcome_guard "bad_request body" \
     "assert_json_eq \"$out\" '.error' 'bad_request' && assert_json_eq \"$out\" '.reason' 'aud'"
@@ -2041,13 +2239,13 @@ M3S4_T7_test() {
   premise_guard "capiss-envoy TCP reachable" \
     "wait_tcp \"${CAPISS_ENVOY_IP}\" \"9443\" 30"
   exercise_guard "mint with unapproved authority" \
-    "out=\"$EVDIR/mint_body.json\"; status=\"$(mint_with_body \"$CAPISS_AGENT_CERT\" \"$CAPISS_AGENT_KEY\" \"$CAPISS_MINT_URL\" '{\"aud\":\"tool-b\",\"act\":\"write\",\"res\":\"/secret\"}' \"\$out\")\"; echo \"\$status\" >\"$EVDIR/status.txt\""
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" '{\"aud\":\"tool-b\",\"act\":\"write\",\"res\":\"/secret\"}' \"$EVDIR/mint_body.json\" \"$EVDIR/status.txt\""
   exercise_guard "capture mint headers" \
     "curl -sS -v --insecure --cert \"$CAPISS_AGENT_CERT\" --key \"$CAPISS_AGENT_KEY\" -H 'Host: capability-issuer-envoy' -H 'Content-Type: application/json' -d '{\"aud\":\"tool-b\",\"act\":\"write\",\"res\":\"/secret\"}' https://${CAPISS_ENVOY_IP}:9443/capabilities/mint -o /dev/null 2>\"$EVDIR/mint_headers.txt\""
   outcome_guard "envoy handled mint request" \
     "grep -Ei '(server: envoy|x-envoy)' \"$EVDIR/mint_headers.txt\""
   outcome_guard "policy denied 403" \
-    "status=\"$(cat \"$EVDIR/status.txt\" 2>/dev/null || true)\"; [ \"\$status\" = \"403\" ]"
+    "assert_file_eq \"$EVDIR/status.txt\" \"403\""
   out="$EVDIR/mint_body.json"
   outcome_guard "policy deny body" \
     "assert_json_eq \"$out\" '.error' 'denied' && assert_json_eq \"$out\" '.reason' 'policy'"
@@ -2056,6 +2254,7 @@ M3S4_T7_test() {
 
 print_section "Milestone 1 - Server and agent connection and successful entry"
 if [ "$RUN_M1" -eq 1 ]; then
+  TEST_PREFIX="M1"
   run_test "T1" "Rogue missing join token rejects attestation" c1_test
   run_test "T2" "Rogue forged join token rejects attestation" c2_test
   run_test "T3" "Rogue replayed join token rejects attestation" c3_test
@@ -2065,6 +2264,7 @@ fi
 
 print_section "Milestone 2 - Workload identities security tests"
 if [ "$RUN_M2" -eq 1 ]; then
+  TEST_PREFIX="M2"
   run_test "T1" "Rogue without SVID cannot access /secret" T1_test
   run_test "T2" "Rogue with invalid client cert is rejected" T2_test
   run_test "T3" "Rogue with expired client cert is rejected" T3_test
@@ -2078,6 +2278,7 @@ fi
 
 print_section "Milestone 2.5 - Envoy ingress boundary"
 if [ "$RUN_M25" -eq 1 ]; then
+  TEST_PREFIX="M2.5"
   run_test "T1" "tool-b app not reachable from edge network" M25_T1_test
   run_test "T2" "tool-b rejects missing x-spiffe-id header" M25_T2_test
   run_test "T3" "tool-b rejects mismatched x-spiffe-id header" M25_T3_test
@@ -2085,6 +2286,7 @@ fi
 
 print_section "M3.S2 — OPA-gated capability minting"
 if [ "$RUN_M3" -eq 1 ]; then
+  TEST_PREFIX="M3.S2"
   run_test "T1" "agent-a can mint (allowed by OPA)" M3S2_T1_test
   run_test "T2" "rogue mint denied by policy" M3S2_T2_test
   run_test "T3" "OPA is not reachable from edge" M3S2_T3_test
@@ -2094,6 +2296,7 @@ fi
 
 print_section "M3.S3 — Biscuit minting"
 if [ "$RUN_M3" -eq 1 ]; then
+  TEST_PREFIX="M3.S3"
   run_test "T1" "mint returns non-empty token" M3S3_T1_test
   run_test "T2" "expires_at is present and in the near future" M3S3_T2_test
   run_test "T3" "two mints produce different tokens" M3S3_T3_test
@@ -2101,6 +2304,7 @@ fi
 
 print_section "M3.S4 — tool-b enforces capability tokens"
 if [ "$RUN_M3" -eq 1 ]; then
+  TEST_PREFIX="M3.S4"
   run_test "T1" "identity-only access to /secret is denied" M3S4_T1_test
   run_test "T2" "agent-a can access /secret with minted capability" M3S4_T2_test
   run_test "T3" "rogue cannot access /secret without token" M3S4_T3_test
