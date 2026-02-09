@@ -44,7 +44,7 @@ This lab is a small, reproducible playground for separating “who is calling”
 ![Component architecture diagram](docs/only_arch.png)
 
 ### Network segmentation and trust boundaries:
-![Network segmentation diagram](docs/architeture_diagram.png)
+![Network segmentation diagram](docs/architecture_diagram.png)
 
 # Milestones
 ## Milestones implemented
