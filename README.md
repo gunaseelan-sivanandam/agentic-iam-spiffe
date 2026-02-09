@@ -3,137 +3,114 @@
 Learning project:
 Agentic IAM using SPIFFE / SPIRE
 
-Goals:
-- Understand workload identity (SPIFFE IDs)
-- mTLS without OAuth tokens
-- Compare against OAuth + mTLS + PoP lab
+## What exists today
+Most production systems already separate authentication and authorization.
+- OAuth/OIDC is widely used to obtain access tokens. Services validate tokens (often JWT) and apply permissions using scopes, claims, or roles.
+- Many teams use policy decision and enforcement patterns, for example OPA as a policy decision point (PDP) and an API gateway/service/proxy (like Envoy) as the policy enforcement point (PEP). This can give consistent enforcement across services.
+- For service-to-service calls, workload identity (including SPIFFE/SPIRE) is increasingly used to authenticate workloads using mTLS and to provide consistent service identity across environments.
 
-## Cleanup (stop all containers and reset data)
+## Where the shortcoming shows up
+This lab is not claiming today’s systems are “wrong.” The friction appears when workflows become dynamic and multi-step, as in tool-based automation and agentic systems.
+- Work gets split across many small components. A single user request can trigger multiple tool calls across multiple services. Keeping permissions minimal across that chain is harder than in a single service call.
+- Authority needs to be delegated and reduced safely. Even if you have strong identity and a PDP/PEP, it is still easy to end up with either broad tokens and ad hoc delegation rules.
 
-Stop all services and remove the join token + data dirs:
+## What this lab addresses
+This lab is a small, reproducible playground for separating “who is calling” from “what they are allowed to do,” and proving it with tests.
+
+### Implemented in this repo (today):
+- Strong workload identity using SPIFFE/SPIRE-issued X.509 SVIDs and mTLS.
+- A clear ingress boundary using Envoy to terminate mTLS and forward verified identity to internal services under network isolation.
+- Explicit authority using capability tokens (Biscuit), minted behind the boundary and enforced at the tool. Authentication alone is not sufficient to perform protected actions.
+- Evidence-based security tests built around a Premise / Exercise / Outcome structure, with artifacts captured so failures can be inspected and false-green tests are less likely.
+
+#### Planned (not implemented yet, goals may evolve):
+- Delegation: allow an agent/workload to pass a smaller subset of its authority to another workload.
+- Attenuation: ensure delegated authority can only shrink, never grow, across a chain.
+- Governance: improve visibility and control of the authority system itself (audit of issuance, policy lifecycle control, emergency issuance cutoffs).
+- Intent to limits: compile high-level “intent” into enforceable, mechanical limits.
+- Intent-constrained issuance: ensure minted authority never exceeds the limits derived from intent.
+
+### Out of scope (explicit non-goals for this lab):
+- Host/node compromise
+- Multi-node production hardening (HA, real KMS/HSM key management, production-grade observability).
+- Cross-trust-domain federation and multi-tenant boundary guarantees.
+- Long-lived token revocation mechanics (this lab favors short TTL and issuance controls).
+- Agent “intent understanding” correctness: We don’t try to judge whether an agent’s intent is “honest” or “reasonable.” Intent is treated as untrusted input, like any other user-provided text. The lab focuses on turning intent into clear, enforceable limits (what actions, which resources, how long), not on deciding whether the intent itself is true.
+
+## Architecture
+
+### Component-level architecture:
+
+![Component architecture diagram](docs/only_arch.png)
+
+### Network segmentation and trust boundaries:
+![Network segmentation diagram](docs/architeture_diagram.png)
+
+# Milestones
+## Milestones implemented
+### Milestone 1 — Trust domain & node identity
+- Establish a single SPIFFE trust domain with SPIRE server and agent, and bootstrap node identity securely.
+- Covers node attestation, join-token handling, and deterministic verification of server-side state.
+
+### Milestone 1.5 — Rogue node resistance
+- Validate that unauthorized or malformed node admissions cannot expand the trust domain.
+- Covers forged tokens, token replay, join-token isolation.
+
+### Milestone 2 — Workload identity & mTLS
+ - Issue SPIFFE IDs to workloads and enforce mutual authentication using short-lived X.509 SVIDs.
+ - Covers workload attestation, mTLS between workloads, and rejection of unauthenticated or misidentified clients.
+
+### Milestone 2.5 — Ingress boundary with Envoy
+ - Introduce Envoy as the sole ingress point that terminates mTLS and propagates verified identity internally.
+ - Covers trusted identity headers, network isolation, and prevention of direct access to application services.
+
+### Milestone 3 — Capability issuance & enforcement
+ - Separate identity from authority by introducing explicit, scoped capability tokens (based on Biscuit tokens).
+ - Covers capability minting behind Envoy, OPA-gated issuance, short TTLs, and enforcement that identity alone is insufficient.
+
+## Planned Milestones
+ - Note: Note on roadmap stability: Milestones 4–8 are exploratory and may change as we validate architectural choices in the lab (for example: offline attenuation vs. issuer-mediated delegation, whether capability–identity binding is modeled as claim-binding or stronger PoP-style mechanisms, etc).
+ 
+### Milestone 4 — Delegation (TBD)
+ - Allow an agent to delegate a subset of its authority to another agent.
+ - Covers chained capabilities, issuer-side enforcement of delegation rules, and bounded delegation depth.
+
+### Milestone 5 — Attenuation (TBD)
+ - Ensure that delegated or derived capabilities can only reduce, never increase, authority.
+ - Covers mechanical constraint narrowing (scope, resources, TTL) and proof that authority strictly monotonically decreases along the chain.
+
+### Milestone 6 — Governance (TBD)
+ - Introduce control and visibility over the authority system itself, not individual tokens.
+ - Covers auditability of issuance, policy lifecycle control, issuer identity restrictions, and emergency issuance cutoffs (not token revocation).
+
+### Milestone 7 — Turn intent into enforceable limits (TBD)
+When an agent says what it wants to do (“intent”), we don’t trust that text as authority. Instead, we convert it into a small set of hard limits the system can actually enforce.
+Covers compiling intent into an authority envelope like: allowed actions, allowed resources, max TTL, max delegation depth—so enforcement is deterministic, not “interpretive”.
+- Note: the idea is to start small and not directly tackle complex multi page prompts
+
+### Milestone 8 — Ensure issued power never exceeds the intent limits (TBD)
+
+Once those intent-based limits exist, the next risk is an agent requesting more power than its intent should allow. This milestone prevents that by enforcing: requested capability is less than or equal to the intent envelope.
+Covers issuer-side checks so every minted capability is a subset of the intent envelope (e.g., can’t ask for broader actions, more resources, or longer TTL than the envelope allows), even if the requester is authenticated.
+
+
+# Test Specification
+- [Test Specification](docs/test_spec_detailed.md)
+- [Test Specification with implementation commands](docs/test_spec.md)
+
+## Common commands
+
+Bring the stack up (build if needed):
 ```bash
-docker compose --profile tests --profile clients -f compose/spiffe.compose.yml down
-sudo rm -rf spire/server/data spire/agent/data
-rm -f spire/shared/join_token
+docker compose -f compose/spiffe.compose.yml up -d --build
 ```
 
-Test report output location:
-```text
-test_report.log
-```
-
-## SPIRE (Milestone 1)
-
-Start SPIRE + tool-b:
+Observe the SPIRE agent log (confirm SVID issuance / workload API activity):
 ```bash
-docker compose -f compose/spiffe.compose.yml up -d spire-server spire-token-init spire-agent tool-b
+docker compose -f compose/spiffe.compose.yml logs -f --tail=200 spire-agent
 ```
 
-Check logs for successful startup:
-```bash
-docker compose -f compose/spiffe.compose.yml logs -f spire-server spire-token-init spire-agent
-```
-You should see the server listening on its API port, the token init container generating a join token (only when missing) and ensuring a node entry, and the agent connecting to `spire-server:8081` without fatal errors.
-
-Server logs only:
-```bash
-docker compose -f compose/spiffe.compose.yml logs -f spire-server
-```
-
-Node (agent) logs only:
-```bash
-docker compose -f compose/spiffe.compose.yml logs -f spire-agent
-```
-
-Check server entries and agents:
-```bash
-docker exec -it spiffe-spire-server /opt/spire/bin/spire-server entry show -socketPath /run/spire/server/data/private/api.sock
-docker exec -it spiffe-spire-server /opt/spire/bin/spire-server agent list -socketPath /run/spire/server/data/private/api.sock
-```
-
-## Milestone 1.5: Rogue node checks
-
-Run the rogue node checks:
-```bash
-docker compose --profile tests -f compose/spiffe.compose.yml up --build --abort-on-container-exit rogue-tests
-```
-Expected behavior: all five checks print PASS and the `rogue-tests` container exits 0.
-
-## Milestone 2: Workload identities (mTLS)
-
-Start SPIRE + tool-b + agent-a:
-```bash
-docker compose -f compose/spiffe.compose.yml up -d spire-server spire-token-init spire-agent tool-b agent-a
-```
-
-What to look for in logs:
-- `tool-b` prints its SPIFFE ID and only accepts `spiffe://example.org/agent-a`
-- `agent-a` prints its SPIFFE ID and verifies `spiffe://example.org/tool-b`
-- `rogue` should fail (no Workload API socket mount)
-
-Check server entries and agents:
-```bash
-docker exec -it spiffe-spire-server /opt/spire/bin/spire-server entry show -socketPath /run/spire/server/data/private/api.sock
-docker exec -it spiffe-spire-server /opt/spire/bin/spire-server agent list -socketPath /run/spire/server/data/private/api.sock
-```
-
-## Milestone 2 security tests (unified suite)
-
-Run the full security test suite (includes Milestone 1 + Milestone 2 checks):
-```bash
-docker compose --profile tests -f compose/spiffe.compose.yml up --build --abort-on-container-exit rogue-tests
-```
-Expected behavior: each test prints an ID, name, and a green PASS; the runner prints totals and exits 0 if all checks pass.
-
-## Milestone 3: Envoy ingress (SPIFFE mTLS boundary)
-
-Start SPIRE + tool-b + Envoy + clients:
-```bash
-docker compose --profile clients -f compose/spiffe.compose.yml up -d spire-server spire-token-init spire-agent tool-b tool-b-envoy agent-a rogue
-```
-
-What to look for:
-- Envoy terminates SPIFFE mTLS and injects `x-spiffe-id`
-- tool-b trusts `x-spiffe-id` only because it is isolated on `toolb_app_net`
-- tool-b does not authenticate clients directly in this milestone
-
-## Milestone 3 Step 1: Capability issuer (Envoy ingress)
-
-Start SPIRE + tool-b + capability issuer + Envoy + clients:
-```bash
-docker compose --profile clients -f compose/spiffe.compose.yml up -d \
-  spire-server spire-token-init spire-agent \
-  tool-b tool-b-envoy \
-  capability-issuer capability-issuer-envoy \
-  agent-a rogue
-```
-
-What to look for:
-- `agent-a` calls `POST /capabilities/mint` via `capability-issuer-envoy` and prints a JSON response
-- `capability-issuer` rejects missing `x-spiffe-id` because it only trusts the header behind `capiss_app_net`
-
-Policy boundary note:
-OPA is deployed as a private, internal policy decision point with no externally
-exposed ports. The capability issuer fails closed if OPA is unavailable. This setup
-reflects common sidecar-style policy integration and is sufficient to demonstrate
-the semantic separation of identity and authority.
-
-## Milestone 3 Step 3: Biscuit minting
-
-The capability issuer now mints real Biscuit tokens on allowed requests, with a
-short, configurable TTL.
-Tests now assert non-empty tokens and verify the expiry is short-lived.
-
-## Milestone 3 Step 4: Capability enforcement at tool-b
-
-tool-b now requires a capability token (Biscuit) in addition to identity.
-Identity-only access is denied; capabilities are explicit, scoped, and short-lived.
-For this lab, error responses include explicit reasons to make failures easy to observe.
-In real-world deployments, those reasons are typically generalized to avoid leaking policy details.
-
-## M3.S2 tests
-
-Run the OPA-gated capability minting tests:
+Run the full test suite:
 ```bash
 docker compose --profile tests -f compose/spiffe.compose.yml up --build --abort-on-container-exit rogue-tests
 ```
@@ -160,3 +137,6 @@ Key points:
 
 This service ensures that capability minting never succeeds without
 an explicit policy decision.
+
+### Note
+- Most code and tests were generated with coding agents and then iteratively hardened. The test suite is designed to avoid false-green security tests (Premise/Exercise/Outcome + evidence artifacts)

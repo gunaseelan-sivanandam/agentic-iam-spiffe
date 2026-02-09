@@ -5,6 +5,7 @@ spire/agent/private
 spire/agent/svid
 spire/rogue/data
 spire/rogue/private
+spire/rogue/fake_token
 tmp_svid/
 capiss_keys/
 test_report.log

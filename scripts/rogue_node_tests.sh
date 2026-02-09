@@ -195,13 +195,13 @@ premise_guard() {
   idx=$((idx + 1))
   guard_out="${EVDIR}/premise_${idx}.txt"
   ev_save_cmd "premise_${idx}" "$cmd"
-  eval "$cmd" >"$guard_out" 2>&1
-  if [ $? -ne 0 ]; then
+  if eval "$cmd" >"$guard_out" 2>&1; then
+    return 0
+  else
     set_reason "PREMISE FAILED: $msg"
     GUARD_FAILED=1
     return 1
   fi
-  return 0
 }
 
 exercise_guard() {
@@ -216,13 +216,13 @@ exercise_guard() {
   idx=$((idx + 1))
   guard_out="${EVDIR}/exercise_${idx}.txt"
   ev_save_cmd "exercise_${idx}" "$cmd"
-  eval "$cmd" >"$guard_out" 2>&1
-  if [ $? -ne 0 ]; then
+  if eval "$cmd" >"$guard_out" 2>&1; then
+    return 0
+  else
     set_reason "EXERCISE FAILED: $msg"
     GUARD_FAILED=1
     return 1
   fi
-  return 0
 }
 
 outcome_guard() {
@@ -237,13 +237,13 @@ outcome_guard() {
   idx=$((idx + 1))
   guard_out="${EVDIR}/outcome_${idx}.txt"
   ev_save_cmd "outcome_${idx}" "$cmd"
-  eval "$cmd" >"$guard_out" 2>&1
-  if [ $? -ne 0 ]; then
+  if eval "$cmd" >"$guard_out" 2>&1; then
+    return 0
+  else
     set_reason "OUTCOME FAILED: $msg"
     GUARD_FAILED=1
     return 1
   fi
-  return 0
 }
 
 json_get() {
@@ -1102,7 +1102,6 @@ mint_with_cert() {
   url="$3"
   out="$4"
   : >"$out"
-  resolve_arg="$(resolve_arg_for_url "$url" || true)"
   host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\\([^/:]*\\).*#\\1#p')"
   port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\\([0-9]*\\).*#\\1#p')"
   ip=""
@@ -1112,6 +1111,10 @@ mint_with_cert() {
     ip="$CAPISS_NO_OPA_ENVOY_IP"
   else
     ip="$(resolve_ip_for_host "$host" || true)"
+  fi
+  resolve_arg=""
+  if [ -z "$ip" ]; then
+    resolve_arg="$(resolve_arg_for_url "$url" || true)"
   fi
   curl_url="$url"
   host_header=""
@@ -1150,7 +1153,6 @@ mint_with_body() {
   body="$4"
   out="$5"
   : >"$out"
-  resolve_arg="$(resolve_arg_for_url "$url" || true)"
   host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\\([^/:]*\\).*#\\1#p')"
   port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\\([0-9]*\\).*#\\1#p')"
   ip=""
@@ -1160,6 +1162,10 @@ mint_with_body() {
     ip="$CAPISS_NO_OPA_ENVOY_IP"
   else
     ip="$(resolve_ip_for_host "$host" || true)"
+  fi
+  resolve_arg=""
+  if [ -z "$ip" ]; then
+    resolve_arg="$(resolve_arg_for_url "$url" || true)"
   fi
   curl_url="$url"
   host_header=""
@@ -1230,7 +1236,6 @@ toolb_request() {
   token="$3"
   out="$4"
   : >"$out"
-  resolve_arg="$(resolve_arg_for_url "$TOOLB_SECRET_URL" || true)"
   host="$(printf '%s' "$TOOLB_SECRET_URL" | sed -n 's#^[a-zA-Z]*://\\([^/:]*\\).*#\\1#p')"
   port="$(printf '%s' "$TOOLB_SECRET_URL" | sed -n 's#^[a-zA-Z]*://[^/:]*:\\([0-9]*\\).*#\\1#p')"
   ip=""
@@ -1238,6 +1243,10 @@ toolb_request() {
     ip="$TOOLB_ENVOY_IP"
   else
     ip="$(resolve_ip_for_host "$host" || true)"
+  fi
+  resolve_arg=""
+  if [ -z "$ip" ]; then
+    resolve_arg="$(resolve_arg_for_url "$TOOLB_SECRET_URL" || true)"
   fi
   curl_url="$TOOLB_SECRET_URL"
   host_header=""
@@ -1654,7 +1663,7 @@ T9_test() {
 
   cleanup_entry() {
     docker exec spiffe-spire-server /opt/spire/bin/spire-server entry delete \
-      -id "$entry_id" -socketPath /run/spire/server/data/private/api.sock >/dev/null 2>&1 || true
+      -entryID "$entry_id" -socketPath /run/spire/server/data/private/api.sock >/dev/null 2>&1 || true
   }
 
   mkdir -p "$short_dir"
@@ -1764,7 +1773,7 @@ T5_test() {
   exercise_guard "attempt fetch without socket" \
     "set +e; docker exec \"${temp_rogue}\" /opt/spire/bin/spire-agent api fetch x509 -socketPath /run/spire/agent/private/api.sock -write /tmp/rogue_svid >/tmp/rogue_fetch 2>&1; rc=\$?; set -e; echo \$rc >\"$EVDIR/rc.txt\"; cat /tmp/rogue_fetch >\"$EVDIR/rogue_fetch.txt\" 2>/dev/null || true"
   outcome_guard "fetch denied without socket" \
-    "rc=\$(cat \"$EVDIR/rc.txt\" 2>/dev/null || echo 0); [ \"\$rc\" -ne 0 ] && ! docker exec \"${temp_rogue}\" test -e /tmp/rogue_svid/svid.pem 2>/dev/null"
+    "rc=\$(cat \"$EVDIR/rc.txt\" 2>/dev/null || echo 0); [ \"\$rc\" -ne 0 ] && ! docker exec \"${temp_rogue}\" test -e /tmp/rogue_svid/svid.pem 2>/dev/null && assert_text_matches \"$EVDIR/rogue_fetch.txt\" '(No such file|no such file|socket|connect|failed|unable|Workload API)'"
   if [ -n "${temp_rogue:-}" ]; then
     docker rm -f "$temp_rogue" >/dev/null 2>&1 || true
   fi
@@ -1775,13 +1784,14 @@ T5_test() {
 T6_test() {
   begin_test_evidence "M2-T6" "socket_no_entry"
   echo "EVIDENCE_DIR=$EVDIR"
-  premise_guard "rogue-socket container running" "container_running spiffe-rogue-socket"
+  premise_guard "rogue socket container running" \
+    "container_running spiffe-rogue-socket"
   premise_guard "workload socket present" \
     "docker exec spiffe-rogue-socket test -S /run/spire/agent/private/api.sock 2>/dev/null"
   exercise_guard "attempt fetch without entry" \
-    "set +e; docker exec spiffe-rogue-socket /opt/spire/bin/spire-agent api fetch x509 -socketPath /run/spire/agent/private/api.sock -write /tmp/rogue_socket_svid >/tmp/rogue_socket_fetch 2>&1; rc=\$?; set -e; echo \$rc >\"$EVDIR/rc.txt\"; cat /tmp/rogue_socket_fetch >\"$EVDIR/rogue_socket_fetch.txt\" 2>/dev/null || true"
+    "set +e; docker exec spiffe-rogue-socket /bin/sh -lc 'printf \"%s\\n\" \"agent {\" \"  trust_domain = \\\"example.org\\\"\" \"  socket_path = \\\"/run/spire/agent/private/api.sock\\\"\" \"}\" > /tmp/rogue_socket_min.conf; SPIRE_AGENT_CONFIG=/tmp/rogue_socket_min.conf /opt/spire/bin/spire-agent api fetch x509 -socketPath /run/spire/agent/private/api.sock -write /tmp/rogue_socket_svid' >/tmp/rogue_socket_fetch 2>&1; rc=\$?; set -e; echo \$rc >\"$EVDIR/rc.txt\"; cat /tmp/rogue_socket_fetch >\"$EVDIR/rogue_socket_fetch.txt\" 2>/dev/null || true"
   outcome_guard "fetch denied without entry" \
-    "rc=\$(cat \"$EVDIR/rc.txt\" 2>/dev/null || echo 0); [ \"\$rc\" -ne 0 ] && ! docker exec spiffe-rogue-socket test -e /tmp/rogue_socket_svid/svid.pem 2>/dev/null"
+    "rc=\$(cat \"$EVDIR/rc.txt\" 2>/dev/null || echo 0); [ \"\$rc\" -ne 0 ] && ! docker exec spiffe-rogue-socket test -e /tmp/rogue_socket_svid/svid.pem 2>/dev/null && assert_text_matches \"$EVDIR/rogue_socket_fetch.txt\" '(No identity issued|no identity|permission denied|unauthorized|not authorized|denied)'"
   return 0
 }
 
@@ -1797,7 +1807,7 @@ T7_test() {
   exercise_guard "attempt read of SVID and keys" \
     "set +e; docker exec \"${temp_rogue}\" cat /run/spire/svid/svid.pem >/tmp/rogue_svid_out 2>&1; rc_cert=\$?; docker exec \"${temp_rogue}\" cat /run/spire/svid/svid.key >/tmp/rogue_svid_key 2>&1; rc_key=\$?; docker exec \"${temp_rogue}\" cat /run/spire/agent/data/svid.0.pem >/tmp/rogue_node_svid 2>&1; rc_node_cert=\$?; docker exec \"${temp_rogue}\" cat /run/spire/agent/data/keys.json >/tmp/rogue_node_keys 2>&1; rc_node_key=\$?; set -e; echo \"\$rc_cert \$rc_key \$rc_node_cert \$rc_node_key\" >\"$EVDIR/rcs.txt\"; cat /tmp/rogue_svid_out >\"$EVDIR/rogue_svid_out.txt\" 2>/dev/null || true; cat /tmp/rogue_node_svid >\"$EVDIR/rogue_node_svid.txt\" 2>/dev/null || true; cat /tmp/rogue_node_keys >\"$EVDIR/rogue_node_keys.txt\" 2>/dev/null || true"
   outcome_guard "rogue cannot read SVID or keys" \
-    "set -- \$(cat \"$EVDIR/rcs.txt\" 2>/dev/null || echo 0 0 0 0); rc_cert=\$1; rc_key=\$2; rc_node_cert=\$3; rc_node_key=\$4; [ \"\$rc_cert\" -ne 0 ] && [ \"\$rc_key\" -ne 0 ] && [ \"\$rc_node_cert\" -ne 0 ] && [ \"\$rc_node_key\" -ne 0 ]"
+    "set -- \$(cat \"$EVDIR/rcs.txt\" 2>/dev/null || echo 0 0 0 0); rc_cert=\$1; rc_key=\$2; rc_node_cert=\$3; rc_node_key=\$4; [ \"\$rc_cert\" -ne 0 ] && [ \"\$rc_key\" -ne 0 ] && [ \"\$rc_node_cert\" -ne 0 ] && [ \"\$rc_node_key\" -ne 0 ] && assert_text_matches \"$EVDIR/rogue_svid_out.txt\" '(No such file|Permission denied|not found)' && assert_text_matches \"$EVDIR/rogue_node_svid.txt\" '(No such file|Permission denied|not found)' && assert_text_matches \"$EVDIR/rogue_node_keys.txt\" '(No such file|Permission denied|not found)'"
   if [ -n "${temp_rogue:-}" ]; then
     docker rm -f "$temp_rogue" >/dev/null 2>&1 || true
   fi
@@ -1936,10 +1946,14 @@ M3S2_T2_test() {
 M3S2_T3_test() {
   begin_test_evidence "M3.S2-T3" "opa_unreachable"
   echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "edge DNS resolves tool-b-envoy" \
+    "printf '%s' tool-b-envoy >\"$EVDIR/premise_edge_dns_target.txt\"; out=\"$EVDIR/premise_edge_dns_out.txt\"; err=\"$EVDIR/premise_edge_dns_err.txt\"; resolve_host_ip tool-b-envoy >\"\$out\" 2>\"\$err\"; rc=\"\$?\"; printf '%s' \"\$rc\" >\"$EVDIR/premise_edge_dns_rc.txt\"; ip=\"\$(cat \"\$out\" 2>/dev/null || true)\"; [ \"\$rc\" -eq 0 ] && [ -n \"\$ip\" ]"
+  premise_guard "edge context ready (tool-b-envoy reachable)" \
+    "ensure_toolb_envoy_ready && tmpdir=\"/tmp/m3s2_premise_agent\"; rm -rf \"\$tmpdir\"; mkdir -p \"\$tmpdir\"; prepare_client_material \"agent-a\" \"\$tmpdir\"; echo \"\${TOOLB_ENVOY_IP:-}\" >\"$EVDIR/toolb_envoy_ip.txt\"; status=\"\$(curl -sS --insecure --cert \"\$CLIENT_CERT\" --key \"\$CLIENT_KEY\" --resolve tool-b-envoy:8443:\${TOOLB_ENVOY_IP} -o \"$EVDIR/premise_toolb_body.txt\" -w '%{http_code}' https://tool-b-envoy:8443/health || true)\"; printf '%s' \"\$status\" >\"$EVDIR/premise_toolb_status.txt\"; [ \"\$status\" = \"200\" ]"
   exercise_guard "attempt OPA from edge" \
-    "out=\"$EVDIR/opa_unreachable.out\"; expect_edge_unreachable \"http://opa:8181/v1/data/capiss/allow\" \"\$out\""
+    "res_rc=0; printf '%s' opa >\"$EVDIR/opa_resolve_target.txt\"; resolve_host_ip opa >\"$EVDIR/opa_resolve.txt\" 2>\"$EVDIR/opa_resolve.err\" || res_rc=\$?; printf '%s' \"\$res_rc\" >\"$EVDIR/opa_resolve_rc.txt\"; rc=0; status=\"\"; status=\"\$(curl -sS --max-time 3 -o \"$EVDIR/opa_body.txt\" -w '%{http_code}' http://opa:8181/v1/data/capiss/allow 2>\"$EVDIR/opa_err.txt\")\" || rc=\$?; printf '%s' \"\$rc\" >\"$EVDIR/opa_rc.txt\"; printf '%s' \"\$status\" >\"$EVDIR/opa_status.txt\""
   outcome_guard "OPA not reachable from edge network" \
-    "test -s \"$EVDIR/opa_unreachable.out\""
+    "rc=\"\$(cat \"$EVDIR/opa_rc.txt\" 2>/dev/null || echo 0)\"; status=\"\$(cat \"$EVDIR/opa_status.txt\" 2>/dev/null || true)\"; premise_status=\"\$(cat \"$EVDIR/premise_toolb_status.txt\" 2>/dev/null || true)\"; res_rc=\"\$(cat \"$EVDIR/opa_resolve_rc.txt\" 2>/dev/null || echo 1)\"; dns_allow=0; if [ \"\$premise_status\" = \"200\" ] && [ \"\$res_rc\" -ne 0 ]; then if assert_text_matches \"$EVDIR/opa_err.txt\" '(Could not resolve host: *opa|name or service not known.*opa|temporary failure in name resolution.*opa|Resolving timed out)'; then dns_allow=1; fi; fi; [ -s \"$EVDIR/opa_err.txt\" ] && [ \"\$status\" != \"200\" ] && [ \"\$rc\" -ne 0 ] && ( assert_text_matches \"$EVDIR/opa_err.txt\" '(Failed to connect|Connection refused|No route to host|Connection timed out|Operation timed out)' || [ \"\$dns_allow\" -eq 1 ] )"
   return 0
 }
 
@@ -1971,10 +1985,14 @@ M3S2_T4_test() {
 M3S2_T5_test() {
   begin_test_evidence "M3.S2-T5" "issuer_app_not_reachable"
   echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "edge DNS resolves tool-b-envoy" \
+    "printf '%s' tool-b-envoy >\"$EVDIR/premise_edge_dns_target.txt\"; out=\"$EVDIR/premise_edge_dns_out.txt\"; err=\"$EVDIR/premise_edge_dns_err.txt\"; resolve_host_ip tool-b-envoy >\"\$out\" 2>\"\$err\"; rc=\"\$?\"; printf '%s' \"\$rc\" >\"$EVDIR/premise_edge_dns_rc.txt\"; ip=\"\$(cat \"\$out\" 2>/dev/null || true)\"; [ \"\$rc\" -eq 0 ] && [ -n \"\$ip\" ]"
+  premise_guard "edge context ready (tool-b-envoy reachable)" \
+    "ensure_toolb_envoy_ready && tmpdir=\"/tmp/m3s2_premise_agent\"; rm -rf \"\$tmpdir\"; mkdir -p \"\$tmpdir\"; prepare_client_material \"agent-a\" \"\$tmpdir\"; echo \"\${TOOLB_ENVOY_IP:-}\" >\"$EVDIR/toolb_envoy_ip.txt\"; status=\"\$(curl -sS --insecure --cert \"\$CLIENT_CERT\" --key \"\$CLIENT_KEY\" --resolve tool-b-envoy:8443:\${TOOLB_ENVOY_IP} -o \"$EVDIR/premise_toolb_body.txt\" -w '%{http_code}' https://tool-b-envoy:8443/health || true)\"; printf '%s' \"\$status\" >\"$EVDIR/premise_toolb_status.txt\"; [ \"\$status\" = \"200\" ]"
   exercise_guard "attempt direct issuer app access from edge" \
-    "out=\"$EVDIR/capiss_app.out\"; expect_edge_unreachable \"http://capability-issuer:8000/health\" \"\$out\""
+    "res_rc=0; printf '%s' capability-issuer >\"$EVDIR/capiss_app_resolve_target.txt\"; resolve_host_ip capability-issuer >\"$EVDIR/capiss_app_resolve.txt\" 2>\"$EVDIR/capiss_app_resolve.err\" || res_rc=\$?; printf '%s' \"\$res_rc\" >\"$EVDIR/capiss_app_resolve_rc.txt\"; rc=0; status=\"\"; status=\"\$(curl -sS --max-time 3 -o \"$EVDIR/capiss_app_body.txt\" -w '%{http_code}' http://capability-issuer:8000/health 2>\"$EVDIR/capiss_app_err.txt\")\" || rc=\$?; printf '%s' \"\$rc\" >\"$EVDIR/capiss_app_rc.txt\"; printf '%s' \"\$status\" >\"$EVDIR/capiss_app_status.txt\""
   outcome_guard "capability-issuer app not reachable from edge network" \
-    "test -s \"$EVDIR/capiss_app.out\""
+    "rc=\"\$(cat \"$EVDIR/capiss_app_rc.txt\" 2>/dev/null || echo 0)\"; status=\"\$(cat \"$EVDIR/capiss_app_status.txt\" 2>/dev/null || true)\"; premise_status=\"\$(cat \"$EVDIR/premise_toolb_status.txt\" 2>/dev/null || true)\"; res_rc=\"\$(cat \"$EVDIR/capiss_app_resolve_rc.txt\" 2>/dev/null || echo 1)\"; dns_allow=0; if [ \"\$premise_status\" = \"200\" ] && [ \"\$res_rc\" -ne 0 ]; then if assert_text_matches \"$EVDIR/capiss_app_err.txt\" '(Could not resolve host: *capability-issuer|name or service not known.*capability-issuer|temporary failure in name resolution.*capability-issuer|Resolving timed out)'; then dns_allow=1; fi; fi; [ -s \"$EVDIR/capiss_app_err.txt\" ] && [ \"\$status\" != \"200\" ] && [ \"\$rc\" -ne 0 ] && ( assert_text_matches \"$EVDIR/capiss_app_err.txt\" '(Failed to connect|Connection refused|No route to host|Connection timed out|Operation timed out)' || [ \"\$dns_allow\" -eq 1 ] )"
   return 0
 }
 

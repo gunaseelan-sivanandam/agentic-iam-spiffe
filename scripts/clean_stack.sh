@@ -60,7 +60,7 @@ container_running() {
 }
 
 compose_running_ids() {
-  docker compose -f "$COMPOSE_FILE" ps -q 2>/dev/null || true
+  docker compose -f "$COMPOSE_FILE" ps -a -q 2>/dev/null || true
 }
 
 echo "Bringing stack down (if running)..."
@@ -70,8 +70,12 @@ fi
 
 running_ids="$(compose_running_ids)"
 if [ -n "$running_ids" ]; then
-  echo "Stack still running; forcing container stop..."
-  docker rm -f $running_ids >/dev/null 2>&1 || WARNINGS+=("failed to force-remove some containers")
+  echo "Stack containers still present; removing stopped/running containers..."
+  docker compose -f "$COMPOSE_FILE" rm -f -s >/dev/null 2>&1 || WARNINGS+=("failed to remove some containers via compose rm")
+  running_ids="$(compose_running_ids)"
+  if [ -n "$running_ids" ]; then
+    docker rm -f $running_ids >/dev/null 2>&1 || WARNINGS+=("failed to force-remove some containers")
+  fi
   docker compose -f "$COMPOSE_FILE" down --remove-orphans >/dev/null 2>&1 || true
 fi
 

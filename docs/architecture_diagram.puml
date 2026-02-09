@@ -1,0 +1,67 @@
+@startuml
+title Agentic IAM with SPIFFE/SPIRE — Architecture & Network Segmentation
+
+skinparam componentStyle rectangle
+skinparam linetype ortho
+skinparam packageStyle rectangle
+
+package "SPIRE Control Plane (default)" {
+  [spire-server] as spire_server
+  [spire-token-init] as spire_token_init
+  [spire-agent] as spire_agent
+}
+
+package "capiss_app_net (internal)" {
+  [capability-issuer] as capiss_app
+  [opa] as opa
+}
+
+package "capiss_edge_net (edge)" {
+  [capability-issuer-envoy] as capiss_envoy
+  [capability-issuer-no-opa-envoy] as capiss_no_opa_envoy
+  [agent-a] as agent_a
+  [rogue] as rogue
+}
+
+package "toolb_app_net (internal)" {
+  [tool-b] as toolb_app
+}
+
+package "toolb_edge_net (edge)" {
+  [tool-b-envoy] as toolb_envoy
+  [agent-a] as agent_a_2
+  [rogue] as rogue_2
+}
+
+' Workload API socket mounts
+spire_agent -[#blue,dashed]-> toolb_app : Workload API
+spire_agent -[#blue,dashed]-> capiss_envoy : Workload API
+spire_agent -[#blue,dashed]-> capiss_no_opa_envoy : Workload API
+spire_agent -[#blue,dashed]-> agent_a : Workload API
+spire_agent -[#blue,dashed]-> rogue : Workload API
+
+' Control plane
+spire_token_init --> spire_server
+spire_agent --> spire_server : Node attestation
+
+' Edge to app segmentation
+capiss_envoy --> capiss_app : HTTP (internal)
+capiss_no_opa_envoy --> capiss_app : HTTP (internal)
+toolb_envoy --> toolb_app : HTTP (internal)
+
+' OPA policy check
+capiss_app --> opa : Policy query (internal)
+
+' Client calls
+agent_a --> capiss_envoy : Mint request (mTLS)
+rogue --> capiss_envoy : Mint request (mTLS)
+agent_a_2 --> toolb_envoy : /secret (mTLS)
+rogue_2 --> toolb_envoy : /secret (mTLS)
+
+' Test-only service
+note right of capiss_no_opa_envoy
+  Test-only:
+  Envoy -> capability-issuer with OPA URL missing
+  Validates fail-closed when OPA unavailable
+end note
+@enduml

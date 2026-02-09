@@ -1,0 +1,59 @@
+@startuml
+title Agentic IAM with SPIFFE/SPIRE — Component Architecture
+
+skinparam componentStyle rectangle
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam LegendBackgroundColor white
+skinparam LegendBorderColor black
+
+package "Control Plane" {
+  [spire-server]
+  [spire-token-init]
+  [spire-agent]
+}
+
+package "Capability Issuer" {
+  [capability-issuer]
+  [capability-issuer-envoy]
+  [opa]
+}
+
+package "Tool-B" {
+  [tool-b]
+  [tool-b-envoy]
+}
+
+package "Clients" {
+  [agent-a]
+  [rogue]
+}
+
+' Control plane interactions
+[spire-token-init] --> [spire-server]
+[spire-agent] --> [spire-server] : SPIFFE mTLS
+
+' Data plane
+[agent-a] -[#green]-> [capability-issuer-envoy]
+[rogue] -[#green]-> [capability-issuer-envoy]
+[capability-issuer-envoy] --> [capability-issuer] : Trusted identity header
+[capability-issuer] --> [opa] : Policy decision
+
+[agent-a] -[#orange]-> [tool-b-envoy]
+[rogue] -[#orange]-> [tool-b-envoy]
+[tool-b-envoy] --> [tool-b] : Trusted identity header
+
+' SPIFFE Workload API
+[spire-agent] -[#blue,dashed]-> [capability-issuer-envoy]
+[spire-agent] -[#blue,dashed]-> [tool-b-envoy]
+[spire-agent] -[#blue,dashed]-> [agent-a]
+[spire-agent] -[#blue,dashed]-> [rogue]
+
+legend right
+  |= Line |= Meaning |
+  | <color:blue><line:blue,dashed>────</line></color> | Workload API |
+  | <color:green><line:green>────</line></color> | Capability request |
+  | <color:orange><line:orange>────</line></color> | Capability-enforced request |
+endlegend
+
+@enduml
