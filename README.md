@@ -3,6 +3,31 @@
 Learning project:
 Agentic IAM using SPIFFE / SPIRE
 
+## Quick Start
+
+Bring the stack up (build if needed):
+```bash
+docker compose -f compose/spiffe.compose.yml up -d --build
+```
+
+Run the full test suite:
+```bash
+docker compose --profile tests -f compose/spiffe.compose.yml up --build --abort-on-container-exit rogue-tests
+```
+
+Test profiling is enabled by default (`TEST_PROFILE=1`) and writes:
+- `artifacts/rogue-tests/guard_timings.tsv`
+- `artifacts/rogue-tests/guard_timings_top25.txt`
+
+Run tests with profiling disabled:
+```bash
+docker compose --profile tests -f compose/spiffe.compose.yml run --rm -e TEST_PROFILE=0 rogue-tests
+```
+
+Detailed test specs:
+- `docs/test_spec_detailed.md`
+- `docs/test_spec.md`
+
 ## What exists today
 Most production systems already separate authentication and authorization.
 - OAuth/OIDC is widely used to obtain access tokens. Services validate tokens (often JWT) and apply permissions using scopes, claims, or roles.
@@ -113,6 +138,15 @@ docker compose -f compose/spiffe.compose.yml logs -f --tail=200 spire-agent
 Run the full test suite:
 ```bash
 docker compose --profile tests -f compose/spiffe.compose.yml up --build --abort-on-container-exit rogue-tests
+```
+
+By default, test profiling is enabled (`TEST_PROFILE=1`). This writes guard timing artifacts to:
+- `artifacts/rogue-tests/guard_timings.tsv`
+- `artifacts/rogue-tests/guard_timings_top25.txt`
+
+Run tests with profiling disabled:
+```bash
+docker compose --profile tests -f compose/spiffe.compose.yml run --rm -e TEST_PROFILE=0 rogue-tests
 ```
 
 ## Clean stack helper
