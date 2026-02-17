@@ -26,6 +26,17 @@ PASSED=0
 FAILED=0
 FAIL_REASON=""
 EVDIR=""
+CURRENT_TEST_ID=""
+
+PROFILE_ENABLED="${TEST_PROFILE:-1}"
+PROFILE_BASE="${ROGUE_TEST_EVIDENCE_DIR:-/tmp/rogue-tests}"
+PROFILE_FILE="${PROFILE_BASE}/guard_timings.tsv"
+PROFILE_SUMMARY_FILE="${PROFILE_BASE}/guard_timings_top25.txt"
+
+if [ "$PROFILE_ENABLED" = "1" ]; then
+  mkdir -p "$PROFILE_BASE"
+  printf 'duration_ms\ttest_id\tguard_type\tstep_index\tstatus\tmessage\n' >"$PROFILE_FILE"
+fi
 
 TIMEOUT_BIN="timeout"
 if ! command -v timeout >/dev/null 2>&1; then
@@ -77,6 +88,39 @@ print_section() {
   printf '\n%s\n' "$title"
 }
 
+epoch_ms() {
+  ms="$(date +%s%3N 2>/dev/null || true)"
+  case "$ms" in
+    ''|*[!0-9]*)
+      s="$(date +%s)"
+      ms=$((s * 1000))
+      ;;
+  esac
+  printf '%s\n' "$ms"
+}
+
+append_guard_timing() {
+  guard_type="$1"
+  idx="$2"
+  status="$3"
+  duration_ms="$4"
+  msg="$5"
+  safe_msg="$(printf '%s' "$msg" | tr '\t\r\n' '   ')"
+  test_id="${CURRENT_TEST_ID:-unknown}"
+  if [ -n "${EVDIR:-}" ]; then
+    ev_timing="${EVDIR}/guard_timings.tsv"
+    if [ ! -f "$ev_timing" ]; then
+      printf 'duration_ms\ttest_id\tguard_type\tstep_index\tstatus\tmessage\n' >"$ev_timing"
+    fi
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+      "$duration_ms" "$test_id" "$guard_type" "$idx" "$status" "$safe_msg" >>"$ev_timing"
+  fi
+  if [ "$PROFILE_ENABLED" = "1" ]; then
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+      "$duration_ms" "$test_id" "$guard_type" "$idx" "$status" "$safe_msg" >>"$PROFILE_FILE"
+  fi
+}
+
 should_run_test() {
   full_id="$1"
   if [ -z "${TEST_ONLY:-}" ]; then
@@ -103,6 +147,7 @@ run_test() {
   if ! should_run_test "$full_id"; then
     return 0
   fi
+  CURRENT_TEST_ID="$full_id"
   start_ts="$(date +%s)"
   TOTAL=$((TOTAL + 1))
   FAIL_REASON=""
@@ -134,6 +179,7 @@ run_test() {
   if [ -n "${EVDIR:-}" ]; then
     printf 'duration_seconds=%s\n' "$duration" >"${EVDIR}/duration.txt" 2>/dev/null || true
   fi
+  CURRENT_TEST_ID=""
 }
 
 set_reason() {
@@ -184,6 +230,7 @@ ev_copy_if_exists() {
 }
 
 premise_guard() {
+  guard_type="premise"
   msg="$1"
   cmd="$2"
   if [ -z "${EVDIR:-}" ]; then
@@ -191,13 +238,18 @@ premise_guard() {
     GUARD_FAILED=1
     return 1
   fi
-  idx="$(ls "${EVDIR}"/premise_*.txt 2>/dev/null | wc -l | tr -d ' ')"
+  idx="$(ls "${EVDIR}"/"${guard_type}"_*.txt 2>/dev/null | wc -l | tr -d ' ')"
   idx=$((idx + 1))
-  guard_out="${EVDIR}/premise_${idx}.txt"
-  ev_save_cmd "premise_${idx}" "$cmd"
+  guard_out="${EVDIR}/${guard_type}_${idx}.txt"
+  ev_save_cmd "${guard_type}_${idx}" "$cmd"
+  start_ms="$(epoch_ms)"
   if eval "$cmd" >"$guard_out" 2>&1; then
+    end_ms="$(epoch_ms)"
+    append_guard_timing "$guard_type" "$idx" "PASS" "$((end_ms - start_ms))" "$msg"
     return 0
   else
+    end_ms="$(epoch_ms)"
+    append_guard_timing "$guard_type" "$idx" "FAIL" "$((end_ms - start_ms))" "$msg"
     set_reason "PREMISE FAILED: $msg"
     GUARD_FAILED=1
     return 1
@@ -205,6 +257,7 @@ premise_guard() {
 }
 
 exercise_guard() {
+  guard_type="exercise"
   msg="$1"
   cmd="$2"
   if [ -z "${EVDIR:-}" ]; then
@@ -212,13 +265,18 @@ exercise_guard() {
     GUARD_FAILED=1
     return 1
   fi
-  idx="$(ls "${EVDIR}"/exercise_*.txt 2>/dev/null | wc -l | tr -d ' ')"
+  idx="$(ls "${EVDIR}"/"${guard_type}"_*.txt 2>/dev/null | wc -l | tr -d ' ')"
   idx=$((idx + 1))
-  guard_out="${EVDIR}/exercise_${idx}.txt"
-  ev_save_cmd "exercise_${idx}" "$cmd"
+  guard_out="${EVDIR}/${guard_type}_${idx}.txt"
+  ev_save_cmd "${guard_type}_${idx}" "$cmd"
+  start_ms="$(epoch_ms)"
   if eval "$cmd" >"$guard_out" 2>&1; then
+    end_ms="$(epoch_ms)"
+    append_guard_timing "$guard_type" "$idx" "PASS" "$((end_ms - start_ms))" "$msg"
     return 0
   else
+    end_ms="$(epoch_ms)"
+    append_guard_timing "$guard_type" "$idx" "FAIL" "$((end_ms - start_ms))" "$msg"
     set_reason "EXERCISE FAILED: $msg"
     GUARD_FAILED=1
     return 1
@@ -226,6 +284,7 @@ exercise_guard() {
 }
 
 outcome_guard() {
+  guard_type="outcome"
   msg="$1"
   cmd="$2"
   if [ -z "${EVDIR:-}" ]; then
@@ -233,13 +292,18 @@ outcome_guard() {
     GUARD_FAILED=1
     return 1
   fi
-  idx="$(ls "${EVDIR}"/outcome_*.txt 2>/dev/null | wc -l | tr -d ' ')"
+  idx="$(ls "${EVDIR}"/"${guard_type}"_*.txt 2>/dev/null | wc -l | tr -d ' ')"
   idx=$((idx + 1))
-  guard_out="${EVDIR}/outcome_${idx}.txt"
-  ev_save_cmd "outcome_${idx}" "$cmd"
+  guard_out="${EVDIR}/${guard_type}_${idx}.txt"
+  ev_save_cmd "${guard_type}_${idx}" "$cmd"
+  start_ms="$(epoch_ms)"
   if eval "$cmd" >"$guard_out" 2>&1; then
+    end_ms="$(epoch_ms)"
+    append_guard_timing "$guard_type" "$idx" "PASS" "$((end_ms - start_ms))" "$msg"
     return 0
   else
+    end_ms="$(epoch_ms)"
+    append_guard_timing "$guard_type" "$idx" "FAIL" "$((end_ms - start_ms))" "$msg"
     set_reason "OUTCOME FAILED: $msg"
     GUARD_FAILED=1
     return 1
@@ -393,8 +457,8 @@ wait_http_ready() {
   timeout="${3:-30}"
   start="$(date +%s)"
   err_file="/tmp/http_ready.err"
-  host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\\([^/:]*\\).*#\\1#p')"
-  port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\\([0-9]*\\).*#\\1#p')"
+  host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\([^/:]*\).*#\1#p')"
+  port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\([0-9]*\).*#\1#p')"
   if [ -z "$port" ]; then
     case "$url" in
       https://*) port="443" ;;
@@ -514,8 +578,8 @@ resolve_ip_for_host() {
 
 resolve_arg_for_url() {
   url="$1"
-  host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\\([^/:]*\\).*#\\1#p')"
-  port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\\([0-9]*\\).*#\\1#p')"
+  host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\([^/:]*\).*#\1#p')"
+  port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\([0-9]*\).*#\1#p')"
   if [ -z "$port" ]; then
     case "$url" in
       https://*) port="443" ;;
@@ -1102,8 +1166,8 @@ mint_with_cert() {
   url="$3"
   out="$4"
   : >"$out"
-  host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\\([^/:]*\\).*#\\1#p')"
-  port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\\([0-9]*\\).*#\\1#p')"
+  host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\([^/:]*\).*#\1#p')"
+  port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\([0-9]*\).*#\1#p')"
   ip=""
   if [ "$host" = "capability-issuer-envoy" ] && [ -n "${CAPISS_ENVOY_IP:-}" ]; then
     ip="$CAPISS_ENVOY_IP"
@@ -1153,8 +1217,8 @@ mint_with_body() {
   body="$4"
   out="$5"
   : >"$out"
-  host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\\([^/:]*\\).*#\\1#p')"
-  port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\\([0-9]*\\).*#\\1#p')"
+  host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\([^/:]*\).*#\1#p')"
+  port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\([0-9]*\).*#\1#p')"
   ip=""
   if [ "$host" = "capability-issuer-envoy" ] && [ -n "${CAPISS_ENVOY_IP:-}" ]; then
     ip="$CAPISS_ENVOY_IP"
@@ -1236,8 +1300,8 @@ toolb_request() {
   token="$3"
   out="$4"
   : >"$out"
-  host="$(printf '%s' "$TOOLB_SECRET_URL" | sed -n 's#^[a-zA-Z]*://\\([^/:]*\\).*#\\1#p')"
-  port="$(printf '%s' "$TOOLB_SECRET_URL" | sed -n 's#^[a-zA-Z]*://[^/:]*:\\([0-9]*\\).*#\\1#p')"
+  host="$(printf '%s' "$TOOLB_SECRET_URL" | sed -n 's#^[a-zA-Z]*://\([^/:]*\).*#\1#p')"
+  port="$(printf '%s' "$TOOLB_SECRET_URL" | sed -n 's#^[a-zA-Z]*://[^/:]*:\([0-9]*\).*#\1#p')"
   ip=""
   if [ "$host" = "tool-b-envoy" ] && [ -n "${TOOLB_ENVOY_IP:-}" ]; then
     ip="$TOOLB_ENVOY_IP"
@@ -2333,6 +2397,12 @@ if [ "$RUN_M3" -eq 1 ]; then
 fi
 
 printf '\nTotal: %d  Passed: %d  Failed: %d\n' "$TOTAL" "$PASSED" "$FAILED"
+if [ "$PROFILE_ENABLED" = "1" ] && [ -s "$PROFILE_FILE" ]; then
+  printf '\nSlowest guard steps (top 25):\n'
+  awk -F '\t' 'NR>1 {printf "%8d ms | %-7s | %-10s | %s\n", $1, $2, $3, $6}' "$PROFILE_FILE" \
+    | sort -nr | head -n 25 | tee "$PROFILE_SUMMARY_FILE"
+  printf '\nTiming artifacts:\n  %s\n  %s\n' "$PROFILE_FILE" "$PROFILE_SUMMARY_FILE"
+fi
 if [ "$FAILED" -ne 0 ]; then
   exit 1
 fi
