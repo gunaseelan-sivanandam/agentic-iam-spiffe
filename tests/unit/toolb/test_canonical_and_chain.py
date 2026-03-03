@@ -1,0 +1,160 @@
+from __future__ import annotations
+
+import pytest
+
+
+class FakeBiscuit:
+    def __init__(self, blocks: list[str]):
+        self._blocks = blocks
+
+    def block_count(self) -> int:
+        return len(self._blocks)
+
+    def block_source(self, idx: int) -> str:
+        return self._blocks[idx]
+
+
+def fact_block(**kwargs) -> str:
+    lines: list[str] = []
+    for key, value in kwargs.items():
+        if isinstance(value, str):
+            lines.append(f'{key}("{value}");')
+        else:
+            lines.append(f"{key}({value});")
+    return "\n".join(lines)
+
+
+def base_root_block(**overrides) -> str:
+    data = {
+        "root_token_id": "root-1",
+        "token_id": "token-root",
+        "subject_spiffe_id": "spiffe://example.org/agent-a",
+        "aud": "tool-b",
+        "act": "read",
+        "res": "tool-b:/search",
+        "exp": 2_000_000_000,
+        "delegation_depth": 0,
+    }
+    data.update(overrides)
+    return fact_block(**data)
+
+
+def delegated_block(**overrides) -> str:
+    data = {
+        "root_token_id": "root-1",
+        "token_id": "token-child",
+        "parent_token_id": "token-root",
+        "delegator_spiffe_id": "spiffe://example.org/agent-a",
+        "subject_spiffe_id": "spiffe://example.org/agent-a",
+        "aud": "tool-b",
+        "act": "read",
+        "res": "tool-b:/search",
+        "exp": 2_000_000_000,
+        "delegation_depth": 1,
+    }
+    data.update(overrides)
+    return fact_block(**data)
+
+
+def _premise_module_loaded(guard, toolb_module):
+    guard.premise("tool-b module loaded", toolb_module is not None)
+
+
+@pytest.mark.boundary
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("/secret", ("read", "/secret")),
+        ("/search", ("read", "tool-b:/search")),
+        ("/read-file/fileA", ("read", "tool-b:/read-file:fileA")),
+        ("/read-file/file A", None),
+        ("/read-file/file/A", None),
+        ("/unknown", None),
+    ],
+)
+def test_canonical_res_for_path_matrix(toolb_module, path: str, expected, guard):
+    _premise_module_loaded(guard, toolb_module)
+    out = guard.exercise("canonicalize request path", lambda: toolb_module.canonical_res_for_path(path))
+    guard.outcome("canonical mapping matches expected", out == expected)
+
+
+@pytest.mark.invariant
+def test_verify_chain_and_claims_valid_root(toolb_module, guard):
+    _premise_module_loaded(guard, toolb_module)
+    claims, err = guard.exercise(
+        "verify root chain",
+        lambda: toolb_module.verify_chain_and_claims(FakeBiscuit([base_root_block()])),
+    )
+    guard.outcome("no chain error", err == "")
+    guard.outcome("claims returned", claims is not None)
+    guard.outcome("effective depth zero", claims is not None and claims.get("effective_depth") == 0)
+
+
+@pytest.mark.invariant
+def test_verify_chain_and_claims_rejects_amplification(toolb_module, guard):
+    _premise_module_loaded(guard, toolb_module)
+    child = guard.exercise("build amplified child", lambda: delegated_block(aud="other-tool"))
+    claims, err = guard.exercise(
+        "verify amplified chain",
+        lambda: toolb_module.verify_chain_and_claims(FakeBiscuit([base_root_block(), child])),
+    )
+    guard.outcome("claims rejected", claims is None)
+    guard.outcome("reason amplified_authority", err == "amplified_authority")
+
+
+@pytest.mark.invariant
+def test_verify_chain_and_claims_rejects_res_change_without_marker(toolb_module, monkeypatch, guard):
+    _premise_module_loaded(guard, toolb_module)
+    child = guard.exercise("build child with changed resource", lambda: delegated_block(res="tool-b:/read-file:fileA"))
+    guard.exercise("mock capiss marker miss", lambda: monkeypatch.setattr(toolb_module, "is_capiss_minted_token", lambda *_: (True, False)))
+    claims, err = guard.exercise(
+        "verify resource-changing chain",
+        lambda: toolb_module.verify_chain_and_claims(FakeBiscuit([base_root_block(), child])),
+    )
+    guard.outcome("claims rejected", claims is None)
+    guard.outcome("reason amplified_authority", err == "amplified_authority")
+
+
+@pytest.mark.invariant
+def test_verify_chain_and_claims_fail_closed_if_marker_store_unavailable(toolb_module, monkeypatch, guard):
+    _premise_module_loaded(guard, toolb_module)
+    child = guard.exercise("build child with changed resource", lambda: delegated_block(res="tool-b:/read-file:fileA"))
+    guard.exercise("mock marker store unavailable", lambda: monkeypatch.setattr(toolb_module, "is_capiss_minted_token", lambda *_: (False, False)))
+    claims, err = guard.exercise(
+        "verify chain with marker store failure",
+        lambda: toolb_module.verify_chain_and_claims(FakeBiscuit([base_root_block(), child])),
+    )
+    guard.outcome("claims rejected", claims is None)
+    guard.outcome("reason store_unavailable", err == "store_unavailable")
+
+
+@pytest.mark.boundary
+def test_verify_chain_and_claims_rejects_invalid_depth_metadata(toolb_module, guard):
+    _premise_module_loaded(guard, toolb_module)
+    child = guard.exercise("build child with invalid depth", lambda: delegated_block(delegation_depth=7))
+    claims, err = guard.exercise(
+        "verify chain with invalid depth metadata",
+        lambda: toolb_module.verify_chain_and_claims(FakeBiscuit([base_root_block(), child])),
+    )
+    guard.outcome("claims rejected", claims is None)
+    guard.outcome("reason invalid_depth_metadata", err == "invalid_depth_metadata")
+
+
+@pytest.mark.boundary
+def test_verify_chain_and_claims_enforces_depth_limit(toolb_module, guard):
+    _premise_module_loaded(guard, toolb_module)
+    guard.exercise("set max depth to 1", lambda: setattr(toolb_module, "M4_MAX_DEPTH", 1))
+    chain = guard.exercise(
+        "build over-depth chain",
+        lambda: [
+            base_root_block(),
+            delegated_block(token_id="token-1", parent_token_id="token-root", delegation_depth=1),
+            delegated_block(token_id="token-2", parent_token_id="token-1", delegation_depth=2),
+        ],
+    )
+    claims, err = guard.exercise(
+        "verify over-depth chain",
+        lambda: toolb_module.verify_chain_and_claims(FakeBiscuit(chain)),
+    )
+    guard.outcome("claims rejected", claims is None)
+    guard.outcome("reason depth_exceeded", err == "depth_exceeded")

@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+biscuit-python
+redis
+cryptography
+pytest
+pytest-cov
+pytest-repeat
+diff-cover
+mutmut

@@ -1,5 +1,5 @@
 @startuml
-title Agentic IAM with SPIFFE/SPIRE — Architecture & Network Segmentation
+title Agentic IAM with SPIFFE/SPIRE — Architecture & Network Segmentation (M4)
 
 skinparam componentStyle rectangle
 skinparam linetype ortho
@@ -14,6 +14,7 @@ package "SPIRE Control Plane (default)" {
 package "capiss_app_net (internal)" {
   [capability-issuer] as capiss_app
   [opa] as opa
+  [redis] as redis_capiss
 }
 
 package "capiss_edge_net (edge)" {
@@ -25,6 +26,7 @@ package "capiss_edge_net (edge)" {
 
 package "toolb_app_net (internal)" {
   [tool-b] as toolb_app
+  [redis] as redis_toolb
 }
 
 package "toolb_edge_net (edge)" {
@@ -52,11 +54,35 @@ toolb_envoy --> toolb_app : HTTP (internal)
 ' OPA policy check
 capiss_app --> opa : Policy query (internal)
 
+' Shared state
+capiss_app -[#brown]-> redis_capiss : root budget init + registry gate
+redis_toolb -[#brown]-> capiss_app : shared root_token_id state
+
+'tool-b enforcement path
+toolb_app -[#brown]-> redis_toolb : spend/rate consume + discovery writes
+note right of toolb_app
+  Per request enforcement at tool-b:
+  - chain integrity verification
+  - derived depth <= N
+  - identity binding (x-spiffe-id)
+  - budget/rate consume (root_token_id)
+  - fail closed on store errors
+end note
+
+' Discovery flow (Option A registry)
+agent_a_2 --> toolb_envoy : GET /search (mTLS + token)
+toolb_app -[#brown]-> redis_toolb : write discovered canonical res
+agent_a --> capiss_envoy : POST /capabilities/resource-mint
+capiss_app -[#brown]-> redis_capiss : registry membership check
+
+' Offline delegation handoff
+agent_a -[#purple,dashed]-> rogue : delegated token handoff (offline)
+
 ' Client calls
-agent_a --> capiss_envoy : Mint request (mTLS)
-rogue --> capiss_envoy : Mint request (mTLS)
-agent_a_2 --> toolb_envoy : /secret (mTLS)
-rogue_2 --> toolb_envoy : /secret (mTLS)
+agent_a --> capiss_envoy : Root mint (mTLS)
+rogue --> capiss_envoy : Root mint (mTLS)
+agent_a_2 --> toolb_envoy : /secret,/search,/read-file/* (mTLS)
+rogue_2 --> toolb_envoy : /secret,/search,/read-file/* (mTLS)
 
 ' Test-only service
 note right of capiss_no_opa_envoy

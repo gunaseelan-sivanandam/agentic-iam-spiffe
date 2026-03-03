@@ -1,5 +1,5 @@
 @startuml
-title Agentic IAM with SPIFFE/SPIRE — Component Architecture
+title Agentic IAM with SPIFFE/SPIRE — Component Architecture (M4)
 
 skinparam componentStyle rectangle
 skinparam linetype ortho
@@ -19,6 +19,10 @@ package "Capability Issuer" {
   [opa]
 }
 
+package "Enforcement State" {
+  [redis]
+}
+
 package "Tool-B" {
   [tool-b]
   [tool-b-envoy]
@@ -34,14 +38,19 @@ package "Clients" {
 [spire-agent] --> [spire-server] : SPIFFE mTLS
 
 ' Data plane
-[agent-a] -[#green]-> [capability-issuer-envoy]
-[rogue] -[#green]-> [capability-issuer-envoy]
+[agent-a] -[#green]-> [capability-issuer-envoy] : root/resource mint
+[rogue] -[#green]-> [capability-issuer-envoy] : root/resource mint
 [capability-issuer-envoy] --> [capability-issuer] : Trusted identity header
 [capability-issuer] --> [opa] : Policy decision
+[capability-issuer] -[#brown]-> [redis] : registry check + root budget init
 
-[agent-a] -[#orange]-> [tool-b-envoy]
-[rogue] -[#orange]-> [tool-b-envoy]
+[agent-a] -[#orange]-> [tool-b-envoy] : capability-enforced request
+[rogue] -[#orange]-> [tool-b-envoy] : capability-enforced request
 [tool-b-envoy] --> [tool-b] : Trusted identity header
+[tool-b] -[#brown]-> [redis] : budget/rate + discovery writes
+
+' Offline delegation (not in capiss hot path)
+[agent-a] -[#purple,dashed]-> [rogue] : offline delegated token handoff
 
 ' SPIFFE Workload API
 [spire-agent] -[#blue,dashed]-> [capability-issuer-envoy]
@@ -52,8 +61,10 @@ package "Clients" {
 legend right
   |= Line |= Meaning |
   | <color:blue><line:blue,dashed>────</line></color> | Workload API |
-  | <color:green><line:green>────</line></color> | Capability request |
-  | <color:orange><line:orange>────</line></color> | Capability-enforced request |
+  | <color:green><line:green>────</line></color> | Mint request |
+  | <color:orange><line:orange>────</line></color> | Protected tool request |
+  | <color:brown><line:brown>────</line></color> | Trusted state access (Redis) |
+  | <color:purple><line:purple,dashed>────</line></color> | Offline delegation handoff |
 endlegend
 
 @enduml

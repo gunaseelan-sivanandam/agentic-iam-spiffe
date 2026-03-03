@@ -10,3 +10,12 @@ tmp_svid/
 capiss_keys/
 test_report.log
 artifacts/
+docs/local_status_capture/
+.pytest_cache/
+.coverage
+coverage.json
+coverage.xml
+htmlcov/
+__pycache__/
+mutants/
+diff-coverage.txt

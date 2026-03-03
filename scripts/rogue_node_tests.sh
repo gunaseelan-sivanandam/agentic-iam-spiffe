@@ -59,18 +59,21 @@ RUN_M1=1
 RUN_M2=1
 RUN_M25=1
 RUN_M3=1
+RUN_M4=1
 
 if [ -n "${TEST_MILESTONES:-}" ]; then
   RUN_M1=0
   RUN_M2=0
   RUN_M25=0
   RUN_M3=0
+  RUN_M4=0
   for token in $(printf '%s' "$TEST_MILESTONES" | tr ',' ' '); do
     case "$token" in
       m1|M1) RUN_M1=1 ;;
       m2|M2) RUN_M2=1 ;;
       m25|M2.5|M2_5) RUN_M25=1 ;;
       m3|M3) RUN_M3=1 ;;
+      m4|M4) RUN_M4=1 ;;
     esac
   done
 fi
@@ -1004,9 +1007,13 @@ CAPISS_AGENT_KEY=""
 CAPISS_ROGUE_CERT=""
 CAPISS_ROGUE_KEY=""
 CAPISS_MINT_URL="https://capability-issuer-envoy:9443/capabilities/mint"
+CAPISS_RESOURCE_MINT_URL="https://capability-issuer-envoy:9443/capabilities/resource-mint"
 CAPISS_NO_OPA_URL="https://capability-issuer-no-opa-envoy:9444/capabilities/mint"
 TOOLB_SECRET_URL="https://tool-b-envoy:8443/secret"
+TOOLB_SEARCH_URL="https://tool-b-envoy:8443/search"
+TOOLB_READ_FILE_URL_PREFIX="https://tool-b-envoy:8443/read-file"
 CAPISS_MINT_BODY='{"aud":"tool-b","act":"read","res":"/secret"}'
+CAPISS_SEARCH_MINT_BODY='{"aud":"tool-b","act":"read","res":"tool-b:/search"}'
 
 ensure_toolb_material() {
   if [ "$TOOLB_READY" -eq 1 ]; then
@@ -1294,14 +1301,69 @@ mint_with_body_to_file() {
   printf '%s' "$status" >"$status_file"
 }
 
+mint_with_body_auth() {
+  cert="$1"
+  key="$2"
+  url="$3"
+  body="$4"
+  bearer="$5"
+  out="$6"
+  : >"$out"
+  host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\([^/:]*\).*#\1#p')"
+  port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\([0-9]*\).*#\1#p')"
+  ip=""
+  if [ "$host" = "capability-issuer-envoy" ] && [ -n "${CAPISS_ENVOY_IP:-}" ]; then
+    ip="$CAPISS_ENVOY_IP"
+  elif [ "$host" = "capability-issuer-no-opa-envoy" ] && [ -n "${CAPISS_NO_OPA_ENVOY_IP:-}" ]; then
+    ip="$CAPISS_NO_OPA_ENVOY_IP"
+  else
+    ip="$(resolve_ip_for_host "$host" || true)"
+  fi
+  resolve_arg=""
+  if [ -z "$ip" ]; then
+    resolve_arg="$(resolve_arg_for_url "$url" || true)"
+  fi
+  curl_url="$url"
+  host_header=""
+  if [ -n "$ip" ] && [ -n "$port" ]; then
+    curl_url="$(printf '%s' "$url" | sed "s#^\\(https\\?://\\)[^/]*#\\1${ip}:${port}#")"
+    host_header="Host: ${host}"
+  fi
+  if [ -n "$host_header" ]; then
+    status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
+      -H "$host_header" -H "Authorization: Bearer ${bearer}" -H "Content-Type: application/json" -d "$body" "$curl_url" || true)"
+  else
+    status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
+      -H "Authorization: Bearer ${bearer}" -H "Content-Type: application/json" -d "$body" "$curl_url" || true)"
+  fi
+  printf '%s' "$status"
+}
+
+mint_with_body_auth_to_file() {
+  cert="$1"
+  key="$2"
+  url="$3"
+  body="$4"
+  bearer="$5"
+  out="$6"
+  status_file="$7"
+  status="$(mint_with_body_auth "$cert" "$key" "$url" "$body" "$bearer" "$out")"
+  printf '%s' "$status" >"$status_file"
+}
+
 toolb_request() {
+  toolb_request_url "$1" "$2" "$3" "$TOOLB_SECRET_URL" "$4"
+}
+
+toolb_request_url() {
   cert="$1"
   key="$2"
   token="$3"
-  out="$4"
+  url="$4"
+  out="$5"
   : >"$out"
-  host="$(printf '%s' "$TOOLB_SECRET_URL" | sed -n 's#^[a-zA-Z]*://\([^/:]*\).*#\1#p')"
-  port="$(printf '%s' "$TOOLB_SECRET_URL" | sed -n 's#^[a-zA-Z]*://[^/:]*:\([0-9]*\).*#\1#p')"
+  host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\([^/:]*\).*#\1#p')"
+  port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\([0-9]*\).*#\1#p')"
   ip=""
   if [ "$host" = "tool-b-envoy" ] && [ -n "${TOOLB_ENVOY_IP:-}" ]; then
     ip="$TOOLB_ENVOY_IP"
@@ -1310,17 +1372,17 @@ toolb_request() {
   fi
   resolve_arg=""
   if [ -z "$ip" ]; then
-    resolve_arg="$(resolve_arg_for_url "$TOOLB_SECRET_URL" || true)"
+    resolve_arg="$(resolve_arg_for_url "$url" || true)"
   fi
-  curl_url="$TOOLB_SECRET_URL"
+  curl_url="$url"
   host_header=""
   if [ -n "$ip" ] && [ -n "$port" ]; then
-    curl_url="$(printf '%s' "$TOOLB_SECRET_URL" | sed "s#^\\(https\\?://\\)[^/]*#\\1${ip}:${port}#")"
+    curl_url="$(printf '%s' "$url" | sed "s#^\\(https\\?://\\)[^/]*#\\1${ip}:${port}#")"
     host_header="Host: ${host}"
   fi
   if [ "${DEBUG_RESOLVE:-}" = "1" ]; then
     printf '[debug] toolb_request url=%s host=%s port=%s ip=%s resolve_arg=%s host_header=%s curl_url=%s\n' \
-      "$TOOLB_SECRET_URL" "$host" "$port" "${ip:-}" "$resolve_arg" "$host_header" "$curl_url" >&2
+      "$url" "$host" "$port" "${ip:-}" "$resolve_arg" "$host_header" "$curl_url" >&2
   fi
   if [ -n "${CURL_TIMING_OUT:-}" ]; then
     tmp_out="$(mktemp)"
@@ -2334,6 +2396,135 @@ M3S4_T7_test() {
   return 0
 }
 
+M4_T1_test() {
+  begin_test_evidence "M4-T1" "root_mint_contains_chain_metadata"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "capiss material available" "ensure_capiss_material"
+  premise_guard "capiss-envoy resolves" \
+    "capiss_ip=\"$(wait_resolve_ip capability-issuer-envoy 30)\"; test -n \"\$capiss_ip\"; echo \"\$capiss_ip\" >\"$EVDIR/capiss_envoy_ip.txt\"; CAPISS_ENVOY_IP=\"\$capiss_ip\""
+  premise_guard "capiss-envoy TCP reachable" \
+    "wait_tcp \"${CAPISS_ENVOY_IP}\" \"9443\" 30"
+  exercise_guard "mint root token for discovery" \
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" \"\$CAPISS_SEARCH_MINT_BODY\" \"$EVDIR/mint_body.json\" \"$EVDIR/status.txt\""
+  outcome_guard "mint allowed 200" \
+    "assert_file_eq \"$EVDIR/status.txt\" \"200\""
+  out="$EVDIR/mint_body.json"
+  outcome_guard "metadata fields present" \
+    "assert_json_present \"$out\" '.token' && assert_json_present \"$out\" '.root_token_id' && assert_json_present \"$out\" '.token_id' && assert_json_eq \"$out\" '.delegation_depth' '0' && jq -e '.parent_token_id == null' \"$out\" >/dev/null"
+  outcome_guard "canonical search resource" \
+    "assert_json_eq \"$out\" '.res' 'tool-b:/search'"
+  return 0
+}
+
+M4_T2_test() {
+  begin_test_evidence "M4-T2" "search_writes_discovery_registry"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "tool-b and capiss material available" \
+    "ensure_toolb_material && ensure_capiss_material"
+  premise_guard "capiss-envoy resolves" \
+    "capiss_ip=\"$(wait_resolve_ip capability-issuer-envoy 30)\"; test -n \"\$capiss_ip\"; CAPISS_ENVOY_IP=\"\$capiss_ip\""
+  premise_guard "capiss-envoy TCP reachable" "wait_tcp \"${CAPISS_ENVOY_IP}\" \"9443\" 30"
+  premise_guard "tool-b-envoy resolves" \
+    "toolb_ip=\"$(wait_resolve_ip tool-b-envoy 30)\"; test -n \"\$toolb_ip\"; TOOLB_ENVOY_IP=\"\$toolb_ip\""
+  premise_guard "tool-b-envoy TCP reachable" "wait_tcp \"${TOOLB_ENVOY_IP}\" \"8443\" 30"
+  premise_guard "redis container running" "docker ps --format '{{.Names}}' | grep -Fxq spiffe-redis"
+  exercise_guard "mint root search token" \
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" \"\$CAPISS_SEARCH_MINT_BODY\" \"$EVDIR/root_mint.json\" \"$EVDIR/root_status.txt\""
+  outcome_guard "root mint allowed 200" \
+    "assert_file_eq \"$EVDIR/root_status.txt\" \"200\""
+  root_token_id="$(json_get '.root_token_id' "$EVDIR/root_mint.json")"
+  token="$(json_get '.token' "$EVDIR/root_mint.json")"
+  exercise_guard "call tool-b search with token" \
+    "toolb_request_url \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$token\" \"\$TOOLB_SEARCH_URL\" \"$EVDIR/search_response.json\" >\"$EVDIR/search_status.txt\""
+  outcome_guard "search allowed 200" \
+    "assert_file_eq \"$EVDIR/search_status.txt\" \"200\""
+  out="$EVDIR/search_response.json"
+  outcome_guard "search returns canonical resources" \
+    "jq -e '.resources | index(\"tool-b:/read-file:fileA\") != null' \"$out\" >/dev/null"
+  outcome_guard "registry contains discovered fileA" \
+    "test \"$(docker exec spiffe-redis redis-cli SISMEMBER m4:registry:${root_token_id} tool-b:/read-file:fileA | tr -d '\\r')\" = \"1\""
+  return 0
+}
+
+M4_T3_test() {
+  begin_test_evidence "M4-T3" "resource_mint_requires_registry_proof"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "capiss material available" "ensure_capiss_material"
+  premise_guard "capiss-envoy resolves" \
+    "capiss_ip=\"$(wait_resolve_ip capability-issuer-envoy 30)\"; test -n \"\$capiss_ip\"; CAPISS_ENVOY_IP=\"\$capiss_ip\""
+  premise_guard "capiss-envoy TCP reachable" "wait_tcp \"${CAPISS_ENVOY_IP}\" \"9443\" 30"
+  exercise_guard "mint root /secret token" \
+    "mint_with_cert_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" \"$EVDIR/root_mint.json\" \"$EVDIR/root_status.txt\""
+  outcome_guard "root mint allowed 200" "assert_file_eq \"$EVDIR/root_status.txt\" \"200\""
+  root_token="$(json_get '.token' "$EVDIR/root_mint.json")"
+  exercise_guard "resource mint without discovery proof" \
+    "mint_with_body_auth_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_RESOURCE_MINT_URL\" '{\"aud\":\"tool-b\",\"act\":\"read\",\"res\":\"tool-b:/read-file:fileA\"}' \"\$root_token\" \"$EVDIR/resource_mint.json\" \"$EVDIR/resource_status.txt\""
+  outcome_guard "resource mint denied 403" "assert_file_eq \"$EVDIR/resource_status.txt\" \"403\""
+  out="$EVDIR/resource_mint.json"
+  outcome_guard "registry miss reason" "assert_json_eq \"$out\" '.reason' 'registry_miss'"
+  return 0
+}
+
+M4_T4_test() {
+  begin_test_evidence "M4-T4" "resource_mint_after_discovery"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "tool-b and capiss material available" \
+    "ensure_toolb_material && ensure_capiss_material"
+  premise_guard "capiss-envoy resolves" \
+    "capiss_ip=\"$(wait_resolve_ip capability-issuer-envoy 30)\"; test -n \"\$capiss_ip\"; CAPISS_ENVOY_IP=\"\$capiss_ip\""
+  premise_guard "capiss-envoy TCP reachable" "wait_tcp \"${CAPISS_ENVOY_IP}\" \"9443\" 30"
+  premise_guard "tool-b-envoy resolves" \
+    "toolb_ip=\"$(wait_resolve_ip tool-b-envoy 30)\"; test -n \"\$toolb_ip\"; TOOLB_ENVOY_IP=\"\$toolb_ip\""
+  premise_guard "tool-b-envoy TCP reachable" "wait_tcp \"${TOOLB_ENVOY_IP}\" \"8443\" 30"
+  exercise_guard "mint root search token" \
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" \"\$CAPISS_SEARCH_MINT_BODY\" \"$EVDIR/root_mint.json\" \"$EVDIR/root_status.txt\""
+  outcome_guard "root mint allowed 200" "assert_file_eq \"$EVDIR/root_status.txt\" \"200\""
+  root_token="$(json_get '.token' "$EVDIR/root_mint.json")"
+  root_id="$(json_get '.root_token_id' "$EVDIR/root_mint.json")"
+  exercise_guard "discover files via search" \
+    "toolb_request_url \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$root_token\" \"\$TOOLB_SEARCH_URL\" \"$EVDIR/search_response.json\" >\"$EVDIR/search_status.txt\""
+  outcome_guard "search allowed 200" "assert_file_eq \"$EVDIR/search_status.txt\" \"200\""
+  exercise_guard "resource mint for read-file:fileA" \
+    "mint_with_body_auth_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_RESOURCE_MINT_URL\" '{\"aud\":\"tool-b\",\"act\":\"read\",\"res\":\"tool-b:/read-file:fileA\"}' \"\$root_token\" \"$EVDIR/resource_mint.json\" \"$EVDIR/resource_status.txt\""
+  outcome_guard "resource mint allowed 200" "assert_file_eq \"$EVDIR/resource_status.txt\" \"200\""
+  out="$EVDIR/resource_mint.json"
+  outcome_guard "root token id preserved" "assert_json_eq \"$out\" '.root_token_id' \"$root_id\""
+  resource_token="$(json_get '.token' "$EVDIR/resource_mint.json")"
+  exercise_guard "read file using resource token" \
+    "toolb_request_url \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$resource_token\" \"\$TOOLB_READ_FILE_URL_PREFIX/fileA\" \"$EVDIR/read_response.json\" >\"$EVDIR/read_status.txt\""
+  outcome_guard "read allowed 200" "assert_file_eq \"$EVDIR/read_status.txt\" \"200\""
+  out="$EVDIR/read_response.json"
+  outcome_guard "returned file payload" "assert_json_eq \"$out\" '.id' 'fileA'"
+  return 0
+}
+
+M4_T5_test() {
+  begin_test_evidence "M4-T5" "budget_enforced_per_root_token"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "tool-b and capiss material available" \
+    "ensure_toolb_material && ensure_capiss_material"
+  premise_guard "capiss-envoy resolves" \
+    "capiss_ip=\"$(wait_resolve_ip capability-issuer-envoy 30)\"; test -n \"\$capiss_ip\"; CAPISS_ENVOY_IP=\"\$capiss_ip\""
+  premise_guard "capiss-envoy TCP reachable" "wait_tcp \"${CAPISS_ENVOY_IP}\" \"9443\" 30"
+  premise_guard "tool-b-envoy resolves" \
+    "toolb_ip=\"$(wait_resolve_ip tool-b-envoy 30)\"; test -n \"\$toolb_ip\"; TOOLB_ENVOY_IP=\"\$toolb_ip\""
+  premise_guard "tool-b-envoy TCP reachable" "wait_tcp \"${TOOLB_ENVOY_IP}\" \"8443\" 30"
+  exercise_guard "mint root /secret token" \
+    "mint_with_cert_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" \"$EVDIR/root_mint.json\" \"$EVDIR/root_status.txt\""
+  outcome_guard "root mint allowed 200" "assert_file_eq \"$EVDIR/root_status.txt\" \"200\""
+  token="$(json_get '.token' "$EVDIR/root_mint.json")"
+  exercise_guard "consume budget with repeated /secret calls" \
+    "i=1; : >\"$EVDIR/statuses.txt\"; while [ \$i -le 11 ]; do toolb_request_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$token\" \"$EVDIR/resp_\${i}.json\" \"$EVDIR/st_\${i}.txt\"; cat \"$EVDIR/st_\${i}.txt\" >>\"$EVDIR/statuses.txt\"; echo >>\"$EVDIR/statuses.txt\"; i=\$((i+1)); done"
+  outcome_guard "first ten requests allowed" \
+    "i=1; while [ \$i -le 10 ]; do assert_file_eq \"$EVDIR/st_\${i}.txt\" \"200\" || exit 1; i=\$((i+1)); done"
+  outcome_guard "eleventh request denied" \
+    "assert_file_any \"$EVDIR/st_11.txt\" \"401\" \"403\""
+  out="$EVDIR/resp_11.json"
+  outcome_guard "denied for budget" \
+    "assert_json_eq \"$out\" '.reason' 'budget_exceeded'"
+  return 0
+}
+
 print_section "Milestone 1 - Server and agent connection and successful entry"
 if [ "$RUN_M1" -eq 1 ]; then
   TEST_PREFIX="M1"
@@ -2394,6 +2585,16 @@ if [ "$RUN_M3" -eq 1 ]; then
   run_test "T5" "expired token is rejected" M3S4_T5_test
   run_test "T6" "mint rejects missing parameters" M3S4_T6_test
   run_test "T7" "mint denies unapproved authority request" M3S4_T7_test
+fi
+
+print_section "Milestone 4 — offline delegation and governance truth"
+if [ "$RUN_M4" -eq 1 ]; then
+  TEST_PREFIX="M4"
+  run_test "T1" "root mint includes chain metadata" M4_T1_test
+  run_test "T2" "search writes discovery registry entries" M4_T2_test
+  run_test "T3" "resource mint requires registry proof" M4_T3_test
+  run_test "T4" "resource mint after discovery allows read-file" M4_T4_test
+  run_test "T5" "budget is enforced per root token" M4_T5_test
 fi
 
 printf '\nTotal: %d  Passed: %d  Failed: %d\n' "$TOTAL" "$PASSED" "$FAILED"

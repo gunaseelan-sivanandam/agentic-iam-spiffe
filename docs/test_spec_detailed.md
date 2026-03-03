@@ -1498,3 +1498,253 @@ Outcome guards
 - $EVDIR/mint_body.json  
 - $EVDIR/mint_headers.txt  
 - $EVDIR/status.txt
+
+## Milestone 4 - Delegation chain and registry/budget enforcement
+
+### T1 — “root mint includes chain metadata”
+(derived directly from scripts/rogue_node_tests.sh)
+
+### What it tests
+
+That minting a root discovery token returns the expected chain metadata fields and canonical discovery resource.
+
+### Step‑by‑step (as implemented)
+
+Premise guards
+
+1. capiss material available  
+   - Ensures capability issuer client material is present.
+2. capiss-envoy resolves  
+   - Resolves `capability-issuer-envoy` and writes its IP to `capiss_envoy_ip.txt`.
+3. capiss-envoy TCP reachable  
+   - Verifies the envoy port is reachable.
+
+Exercise guards
+
+1. mint root token for discovery  
+   - Sends a mint request using the canonical search body.  
+   - Writes response JSON to `mint_body.json` and status to `status.txt`.
+
+Outcome guards
+
+1. mint allowed 200  
+   - Requires HTTP status 200.
+2. metadata fields present  
+   - Confirms token metadata is present, including `token`, `root_token_id`, `token_id`, `delegation_depth == 0`, and `parent_token_id == null`.
+3. canonical search resource  
+   - Confirms `res == tool-b:/search`.
+
+### Evidence produced
+
+- $EVDIR/capiss_envoy_ip.txt  
+- $EVDIR/mint_body.json  
+- $EVDIR/status.txt
+
+### T2 — “search writes discovery registry entries”
+(derived directly from scripts/rogue_node_tests.sh)
+
+### What it tests
+
+That a root search token can call tool-b search, and discovery results are recorded in the registry for that root token.
+
+### Step‑by‑step (as implemented)
+
+Premise guards
+
+1. tool-b and capiss material available  
+   - Ensures client material for tool-b and capability issuer is prepared.
+2. capiss-envoy resolves  
+   - Resolves `capability-issuer-envoy`.
+3. capiss-envoy TCP reachable  
+   - Verifies the capability issuer envoy port is reachable.
+4. tool-b-envoy resolves  
+   - Resolves `tool-b-envoy`.
+5. tool-b-envoy TCP reachable  
+   - Verifies the tool-b envoy port is reachable.
+6. redis container running  
+   - Confirms the redis container used for discovery registry state is running.
+
+Exercise guards
+
+1. mint root search token  
+   - Mints a root discovery token.  
+   - Writes mint response JSON to `root_mint.json` and status to `root_status.txt`.
+2. call tool-b search with token  
+   - Calls tool-b search endpoint with the root token.  
+   - Writes response JSON to `search_response.json` and status to `search_status.txt`.
+
+Outcome guards
+
+1. root mint allowed 200  
+   - Requires HTTP status 200 for root mint.
+2. search allowed 200  
+   - Requires HTTP status 200 for search call.
+3. search returns canonical resources  
+   - Confirms search includes `tool-b:/read-file:fileA`.
+4. registry contains discovered fileA  
+   - Confirms redis registry set for the root token contains `tool-b:/read-file:fileA`.
+
+### Evidence produced
+
+- $EVDIR/root_mint.json  
+- $EVDIR/root_status.txt  
+- $EVDIR/search_response.json  
+- $EVDIR/search_status.txt
+
+### T3 — “resource mint requires registry proof”
+(derived directly from scripts/rogue_node_tests.sh)
+
+### What it tests
+
+That resource minting is denied when discovery registry proof is missing.
+
+### Step‑by‑step (as implemented)
+
+Premise guards
+
+1. capiss material available  
+   - Ensures capability issuer client material is present.
+2. capiss-envoy resolves  
+   - Resolves `capability-issuer-envoy`.
+3. capiss-envoy TCP reachable  
+   - Verifies the envoy port is reachable.
+
+Exercise guards
+
+1. mint root /secret token  
+   - Mints a root token for `/secret`.  
+   - Writes response JSON to `root_mint.json` and status to `root_status.txt`.
+2. resource mint without discovery proof  
+   - Attempts resource mint for `tool-b:/read-file:fileA` using the root token, without prior discovery registration.  
+   - Writes response JSON to `resource_mint.json` and status to `resource_status.txt`.
+
+Outcome guards
+
+1. root mint allowed 200  
+   - Requires HTTP status 200 for root mint.
+2. resource mint denied 403  
+   - Requires HTTP status 403 for resource mint.
+3. registry miss reason  
+   - Confirms response `reason == registry_miss`.
+
+### Evidence produced
+
+- $EVDIR/root_mint.json  
+- $EVDIR/root_status.txt  
+- $EVDIR/resource_mint.json  
+- $EVDIR/resource_status.txt
+
+### T4 — “resource mint after discovery allows read-file”
+(derived directly from scripts/rogue_node_tests.sh)
+
+### What it tests
+
+That after discovery is registered, a resource token can be minted and used to read a file.
+
+### Step‑by‑step (as implemented)
+
+Premise guards
+
+1. tool-b and capiss material available  
+   - Ensures client material for tool-b and capability issuer is prepared.
+2. capiss-envoy resolves  
+   - Resolves `capability-issuer-envoy`.
+3. capiss-envoy TCP reachable  
+   - Verifies the capability issuer envoy port is reachable.
+4. tool-b-envoy resolves  
+   - Resolves `tool-b-envoy`.
+5. tool-b-envoy TCP reachable  
+   - Verifies the tool-b envoy port is reachable.
+
+Exercise guards
+
+1. mint root search token  
+   - Mints a root discovery token.  
+   - Writes response JSON to `root_mint.json` and status to `root_status.txt`.
+2. discover files via search  
+   - Calls tool-b search using the root token.  
+   - Writes response JSON to `search_response.json` and status to `search_status.txt`.
+3. resource mint for read-file:fileA  
+   - Mints a resource token scoped to `tool-b:/read-file:fileA`.  
+   - Writes response JSON to `resource_mint.json` and status to `resource_status.txt`.
+4. read file using resource token  
+   - Calls read-file endpoint with the resource token.  
+   - Writes response JSON to `read_response.json` and status to `read_status.txt`.
+
+Outcome guards
+
+1. root mint allowed 200  
+   - Requires HTTP status 200 for root mint.
+2. search allowed 200  
+   - Requires HTTP status 200 for search.
+3. resource mint allowed 200  
+   - Requires HTTP status 200 for resource mint.
+4. root token id preserved  
+   - Confirms minted resource token is linked to the original root token id.
+5. read allowed 200  
+   - Requires HTTP status 200 for read-file.
+6. returned file payload  
+   - Confirms returned payload identifies `fileA`.
+
+### Evidence produced
+
+- $EVDIR/root_mint.json  
+- $EVDIR/root_status.txt  
+- $EVDIR/search_response.json  
+- $EVDIR/search_status.txt  
+- $EVDIR/resource_mint.json  
+- $EVDIR/resource_status.txt  
+- $EVDIR/read_response.json  
+- $EVDIR/read_status.txt
+
+### T5 — “budget is enforced per root token”
+(derived directly from scripts/rogue_node_tests.sh)
+
+### What it tests
+
+That budget limits are enforced per root token: initial requests are allowed and the over-budget request is denied.
+
+### Step‑by‑step (as implemented)
+
+Premise guards
+
+1. tool-b and capiss material available  
+   - Ensures client material for tool-b and capability issuer is prepared.
+2. capiss-envoy resolves  
+   - Resolves `capability-issuer-envoy`.
+3. capiss-envoy TCP reachable  
+   - Verifies the capability issuer envoy port is reachable.
+4. tool-b-envoy resolves  
+   - Resolves `tool-b-envoy`.
+5. tool-b-envoy TCP reachable  
+   - Verifies the tool-b envoy port is reachable.
+
+Exercise guards
+
+1. mint root /secret token  
+   - Mints a root token for `/secret`.  
+   - Writes response JSON to `root_mint.json` and status to `root_status.txt`.
+2. consume budget with repeated /secret calls  
+   - Sends 11 calls to `/secret` using the same root token.  
+   - Writes per-call responses (`resp_*.json`), per-call status files (`st_*.txt`), and combined status log `statuses.txt`.
+
+Outcome guards
+
+1. root mint allowed 200  
+   - Requires HTTP status 200 for root mint.
+2. first ten requests allowed  
+   - Requires status 200 for calls 1 through 10.
+3. eleventh request denied  
+   - Requires status 401 or 403 for call 11.
+4. denied for budget  
+   - Confirms call 11 response reason is `budget_exceeded`.
+
+### Evidence produced
+
+- $EVDIR/root_mint.json  
+- $EVDIR/root_status.txt  
+- $EVDIR/statuses.txt  
+- $EVDIR/resp_11.json  
+- $EVDIR/st_11.txt  
+- $EVDIR/resp_*.json  
+- $EVDIR/st_*.txt

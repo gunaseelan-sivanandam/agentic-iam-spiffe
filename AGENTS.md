@@ -10,6 +10,7 @@ Use these commands first before inventing alternatives.
 - Stack cleanup helper: `scripts/clean_stack.sh`
 - Test report output: `test_report.log`
 - Evidence artifacts on host: `artifacts/rogue-tests/`
+- Unit-test agent guide: `tests/unit/AGENTS.md`
 
 ## Environment assumptions
 - Docker Engine + Docker Compose v2 available.
@@ -114,3 +115,9 @@ After a test run, validate that evidence directories were produced and contain g
 - `capability-issuer-no-opa-envoy` is test-only (`tests` profile). Do not use it for non-test flows.
 - Prefer `scripts/clean_stack.sh` over ad-hoc manual cleanup.
 - Keep evidence under `artifacts/rogue-tests/`; do not redirect unless you intentionally set `ROGUE_TEST_EVIDENCE_DIR`.
+
+## Unit-test guardrails (summary)
+- For unit-test implementation details and commands, use `tests/unit/AGENTS.md`.
+- Unit tests under `tests/unit/**` must follow Premise/Exercise/Outcome guard style and pass:
+  - `make unit-guard-check`
+  - `make unit-trust`

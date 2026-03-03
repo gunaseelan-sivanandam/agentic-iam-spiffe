@@ -95,9 +95,16 @@ services:
       spiffe.workload: "tool-b"
     environment:
       CAPISS_PUBLIC_KEY_PATH: /var/lib/capiss/keys/root_public_key.b64
+      REDIS_URL: redis://redis:6379/0
+      M4_MAX_DEPTH: "3"
+      M4_RATE_LIMIT: "20"
+      M4_RATE_WINDOW_SECONDS: "10"
+      M4_REQUEST_COST: "1"
     volumes:
       - ../capiss_keys:/var/lib/capiss/keys:ro
       - ../spire/agent:/run/spire/agent:ro
+    depends_on:
+      - redis
     networks:
       - toolb_app_net
 
@@ -124,10 +131,15 @@ services:
       spiffe.workload: "capability-issuer"
     environment:
       CAPISS_KEY_DIR: /var/lib/capiss/keys
+      REDIS_URL: redis://redis:6379/0
+      M4_MAX_DEPTH: "3"
+      M4_DEFAULT_BUDGET: "10"
+      M4_ROOT_TTL_SECONDS: "60"
     networks:
       - capiss_app_net
     depends_on:
       - opa
+      - redis
     volumes:
       - ../capiss_keys:/var/lib/capiss/keys
 
@@ -155,6 +167,10 @@ services:
     environment:
       OPA_URL: http://opa-missing:8181/v1/data/capiss/allow
       CAPISS_KEY_DIR: /var/lib/capiss/keys
+      REDIS_URL: redis://redis:6379/0
+      M4_MAX_DEPTH: "3"
+      M4_DEFAULT_BUDGET: "10"
+      M4_ROOT_TTL_SECONDS: "60"
     networks:
       - capiss_app_net
     profiles:
@@ -188,6 +204,14 @@ services:
     networks:
       - capiss_app_net
 
+  redis:
+    image: redis:7-alpine
+    container_name: spiffe-redis
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    networks:
+      - capiss_app_net
+      - toolb_app_net
+
   agent-a:
     build: ../agents/agent-a
     container_name: spiffe-agent-a
@@ -202,6 +226,7 @@ services:
     command: ["/app/client.sh"]
     volumes:
       - ../spire/agent:/run/spire/agent:ro
+      - ../capiss_keys:/var/lib/capiss/keys:ro
     networks:
       - toolb_edge_net
       - capiss_edge_net
@@ -221,6 +246,7 @@ services:
     command: ["/app/rogue.sh"]
     volumes:
       - ../spire/agent:/run/spire/agent:ro
+      - ../capiss_keys:/var/lib/capiss/keys:ro
     networks:
       - toolb_edge_net
       - capiss_edge_net

@@ -46,12 +46,13 @@ This lab is a small, reproducible playground for separating “who is calling”
 - Strong workload identity using SPIFFE/SPIRE-issued X.509 SVIDs and mTLS.
 - A clear ingress boundary using Envoy to terminate mTLS and forward verified identity to internal services under network isolation.
 - Explicit authority using capability tokens (Biscuit), minted behind the boundary and enforced at the tool. Authentication alone is not sufficient to perform protected actions.
+- M4 governance truth slice for tool-b: chain metadata, derived depth checks (`N=3`), spend/rate enforcement in Redis per `root_token_id`, discovery-registry-gated resource minting, and fail-closed enforcement on trusted-store errors.
 - Evidence-based security tests built around a Premise / Exercise / Outcome structure, with artifacts captured so failures can be inspected and false-green tests are less likely.
 
 #### Planned (not implemented yet, goals may evolve):
-- Delegation: allow an agent/workload to pass a smaller subset of its authority to another workload.
-- Attenuation: ensure delegated authority can only shrink, never grow, across a chain.
-- Governance: improve visibility and control of the authority system itself (audit of issuance, policy lifecycle control, emergency issuance cutoffs).
+- Delegation hardening beyond the M4 slice (for example broader multi-tool flows and stronger trust assumptions).
+- Attenuation model expansion beyond single-value authority slices.
+- Governance expansion (cross-tool analytics, policy lifecycle controls, richer operational safeguards).
 - Intent to limits: compile high-level “intent” into enforceable, mechanical limits.
 - Intent-constrained issuance: ensure minted authority never exceeds the limits derived from intent.
 
@@ -93,13 +94,16 @@ This lab is a small, reproducible playground for separating “who is calling”
  - Separate identity from authority by introducing explicit, scoped capability tokens (based on Biscuit tokens).
  - Covers capability minting behind Envoy, OPA-gated issuance, short TTLs, and enforcement that identity alone is insufficient.
 
-## Planned Milestones
- - Note: Note on roadmap stability: Milestones 4–8 are exploratory and may change as we validate architectural choices in the lab (for example: offline attenuation vs. issuer-mediated delegation, whether capability–identity binding is modeled as claim-binding or stronger PoP-style mechanisms, etc).
- 
-### Milestone 4 — Delegation (TBD)
- - Allow an agent to delegate a subset of its authority to another agent.
- - Covers chained capabilities, issuer-side enforcement of delegation rules, and bounded delegation depth.
+### Milestone 4 — Checkpointed delegation and governance truth (tool-b slice)
+ - Adds mandatory chain metadata (`root_token_id`, `token_id`, `parent_token_id`, `delegator_spiffe_id`, `subject_spiffe_id`, `delegation_depth`) on M4 tokens.
+ - Enforces chain integrity and derived depth (`effective_depth = chain_length - 1`) at tool enforcement with `N=3`.
+ - Enforces per-request budget and rate keyed by `root_token_id` via Redis (trusted shared state).
+ - Adds discovery registry flow (`GET /search`) and registry-gated resource minting (`POST /capabilities/resource-mint`).
+ - Keeps capiss out of protected request hot path (capiss mints; tool enforces request-time checks).
 
+## Planned Milestones
+ - Note: Milestones 5–8 are exploratory and may evolve as architectural choices are validated.
+ 
 ### Milestone 5 — Attenuation (TBD)
  - Ensure that delegated or derived capabilities can only reduce, never increase, authority.
  - Covers mechanical constraint narrowing (scope, resources, TTL) and proof that authority strictly monotonically decreases along the chain.
@@ -140,6 +144,21 @@ Run the full test suite:
 docker compose --profile tests -f compose/spiffe.compose.yml up --build --abort-on-container-exit rogue-tests
 ```
 
+M4 root mint example (`agent-a` mTLS identity):
+```bash
+curl -sS --insecure \
+  --cert tmp_svid/agent-a_out/svid.0.pem --key tmp_svid/agent-a_out/svid.0.key \
+  -H 'Content-Type: application/json' \
+  -d '{"aud":"tool-b","act":"read","res":"tool-b:/search"}' \
+  https://localhost:9443/capabilities/root-mint
+```
+
+M4 discovery + resource flow (high level):
+1. Mint root token for `tool-b:/search`.
+2. Call `GET /search` on tool-b with that token.
+3. Mint a resource token with `POST /capabilities/resource-mint` for discovered `tool-b:/read-file:<id>`.
+4. Call `GET /read-file/<id>` on tool-b with that resource token.
+
 By default, test profiling is enabled (`TEST_PROFILE=1`). This writes guard timing artifacts to:
 - `artifacts/rogue-tests/guard_timings.tsv`
 - `artifacts/rogue-tests/guard_timings_top25.txt`
@@ -148,6 +167,83 @@ Run tests with profiling disabled:
 ```bash
 docker compose --profile tests -f compose/spiffe.compose.yml run --rm -e TEST_PROFILE=0 rogue-tests
 ```
+
+## Unit Trust Gates (M4)
+
+Install test dependencies:
+```bash
+pip install -r requirements-dev.txt
+```
+
+Run unit tests:
+```bash
+make unit
+```
+
+Run explicit Premise/Exercise/Outcome guard enforcement for unit tests:
+```bash
+make unit-guard-check
+```
+
+Run security invariants only:
+```bash
+make unit-invariants
+```
+
+Run boundary tests only:
+```bash
+make unit-boundary
+```
+
+Run trust gate suite (coverage + invariants + flake check):
+```bash
+make unit-trust
+```
+
+Run strict negative controls (must-fail reason-code checks):
+```bash
+make unit-negative-controls
+```
+
+Run low-mock hybrid critical tests:
+```bash
+make unit-hybrid-critical
+```
+
+Run PR diff coverage gate against a base branch:
+```bash
+make unit-diff-cov BASE_REF=origin/main
+```
+
+Run mutation gate (longer-running):
+```bash
+make unit-mutation
+```
+
+Validate requirement-to-test mapping:
+```bash
+make traceability-check
+```
+
+Coverage gates:
+- Total line coverage must be `>= 85%`
+- Critical module branch coverage must be `>= 75%` for:
+  - `services/capability-issuer/app.py`
+  - `services/tool-b/server.py`
+- PR changed-line coverage for critical modules must be `>= 90%`.
+- Mutation score must be `>= 70%`.
+
+Unit-test traceability specification:
+- `docs/unit_test_spec.md`
+
+Unit-test guard contract:
+- Every test under `tests/unit/**` must use the `guard` fixture and execute at least one `premise`, one `exercise`, and one `outcome` phase.
+- Guard evidence is emitted into pytest/JUnit user properties:
+  - `guard_premise_count`
+  - `guard_exercise_count`
+  - `guard_outcome_count`
+  - `guard_complete`
+  - `guard_trace_json`
 
 ## Clean stack helper
 To reset the lab without sudo, use:
