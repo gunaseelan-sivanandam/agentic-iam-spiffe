@@ -8,3 +8,4 @@ pytest-cov
 pytest-repeat
 diff-cover
 mutmut
+PyYAML

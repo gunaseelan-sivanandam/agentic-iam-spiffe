@@ -1,0 +1,135 @@
+version: 1
+design:
+  - id: DD-M1-NODE-ATTESTATION-HARNESS
+    title: Evidence-driven node admission and bootstrap verification flows
+    source_architecture:
+      - ARCH-001
+      - ARCH-007
+    implementation:
+      - scripts/rogue_node_tests.sh
+      - docs/test_spec.md
+      - docs/test_spec_detailed.md
+
+  - id: DD-M2-WORKLOAD-IDENTITY-HARNESS
+    title: Workload identity, secret isolation, and mTLS verification flows
+    source_architecture:
+      - ARCH-002
+      - ARCH-003
+      - ARCH-007
+    implementation:
+      - scripts/rogue_node_tests.sh
+      - docs/test_spec.md
+      - docs/test_spec_detailed.md
+
+  - id: DD-M25-BOUNDARY-HARNESS
+    title: Boundary isolation and trusted-header verification flows
+    source_architecture:
+      - ARCH-003
+      - ARCH-007
+    implementation:
+      - scripts/rogue_node_tests.sh
+      - docs/test_spec.md
+      - docs/test_spec_detailed.md
+
+  - id: DD-M3-MINT-HARNESS
+    title: OPA-gated capability minting verification flows
+    source_architecture:
+      - ARCH-003
+      - ARCH-004
+      - ARCH-007
+    implementation:
+      - scripts/rogue_node_tests.sh
+      - docs/test_spec.md
+      - docs/test_spec_detailed.md
+
+  - id: DD-M3-ENFORCEMENT-HARNESS
+    title: Request-time capability enforcement verification flows
+    source_architecture:
+      - ARCH-003
+      - ARCH-005
+      - ARCH-007
+    implementation:
+      - scripts/rogue_node_tests.sh
+      - docs/test_spec.md
+      - docs/test_spec_detailed.md
+
+  - id: DD-M4-GOVERNANCE-HARNESS
+    title: Delegation, registry, and budget enforcement verification flows
+    source_architecture:
+      - ARCH-004
+      - ARCH-005
+      - ARCH-006
+      - ARCH-007
+    implementation:
+      - scripts/rogue_node_tests.sh
+      - docs/test_spec.md
+      - docs/test_spec_detailed.md
+
+  - id: DD-E2E-EVIDENCE-PROFILING
+    title: Guard timing profiles and evidence artifact capture
+    source_architecture:
+      - ARCH-007
+      - ARCH-019
+    implementation:
+      - scripts/rogue_node_tests.sh
+      - AGENTS.md
+
+  - id: DD-CAPISS-ROOT-MINT
+    title: Root token mint endpoint with canonical resource and chain metadata
+    source_architecture:
+      - ARCH-004
+      - ARCH-012
+    implementation:
+      - services/capability-issuer/app.py
+      - services/opa/policy.rego
+
+  - id: DD-CAPISS-RESOURCE-MINT
+    title: Resource mint endpoint with attenuation, depth checks, and registry gating
+    source_architecture:
+      - ARCH-004
+      - ARCH-006
+      - ARCH-012
+      - ARCH-016
+    implementation:
+      - services/capability-issuer/app.py
+      - services/opa/policy.rego
+
+  - id: DD-CAPISS-CHAIN-VALIDATION
+    title: Token chain extraction and integrity checks in capability issuance
+    source_architecture:
+      - ARCH-004
+      - ARCH-012
+    implementation:
+      - services/capability-issuer/app.py
+
+  - id: DD-TOOLB-CHAIN-VERIFY
+    title: Tool-b chain verification and identity-binding guard path
+    source_architecture:
+      - ARCH-005
+      - ARCH-015
+    implementation:
+      - services/tool-b/server.py
+
+  - id: DD-TOOLB-BUDGET-RATE
+    title: Tool-b per-request budget and rate consumption keyed by root token
+    source_architecture:
+      - ARCH-005
+      - ARCH-006
+      - ARCH-015
+      - ARCH-016
+    implementation:
+      - services/tool-b/server.py
+      - compose/spiffe.compose.yml
+
+  - id: DD-TOOLB-DISCOVERY-REGISTRY
+    title: Tool-b discovery writes and capability-issuer registry-consumption flow
+    source_architecture:
+      - ARCH-004
+      - ARCH-005
+      - ARCH-006
+      - ARCH-012
+      - ARCH-015
+      - ARCH-016
+    implementation:
+      - services/tool-b/server.py
+      - services/capability-issuer/app.py

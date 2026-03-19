@@ -12,7 +12,7 @@ MIN_MUTATION_SCORE ?= 70
 BASE_REF ?= origin/main
 MUTATION_MAX_CHILDREN ?= 2
 
-.PHONY: unit unit-guard-check unit-invariants unit-boundary unit-negative-controls unit-hybrid-critical unit-flake unit-cov unit-diff-cov traceability-check unit-mutation unit-trust
+.PHONY: unit unit-guard-check unit-invariants unit-boundary unit-negative-controls unit-hybrid-critical unit-flake unit-cov unit-diff-cov traceability-check unit-mutation unit-trust qa-trace qa-evidence qa-quality
 
 unit:
 	$(PYTEST) $(TEST_DIR)
@@ -65,3 +65,20 @@ unit-mutation:
 	  --min-score $(MIN_MUTATION_SCORE)
 
 unit-trust: unit-guard-check unit-cov traceability-check unit-invariants unit-negative-controls unit-hybrid-critical unit-flake
+
+qa-trace:
+	$(PYTHON) scripts/validate_traceability.py \
+	  --requirements-doc docs/requirements.md \
+	  --architecture-doc docs/architecture.md \
+	  --design trace/design.yaml \
+	  --tests trace/tests.yaml \
+	  --report-json artifacts/quality/traceability_report.json
+
+qa-evidence:
+	$(PYTHON) scripts/validate_e2e_evidence.py \
+	  --tests trace/tests.yaml \
+	  --evidence-dir artifacts/rogue-tests \
+	  --test-report test_report.log \
+	  --report-json artifacts/quality/evidence_report.json
+
+qa-quality: qa-trace traceability-check unit-guard-check

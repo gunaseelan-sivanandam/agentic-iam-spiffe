@@ -245,6 +245,39 @@ Unit-test guard contract:
   - `guard_complete`
   - `guard_trace_json`
 
+## Traceability and Quality Model (M1 to Implemented M4)
+
+Cross-layer traceability sources:
+- `docs/requirements.md` (only authored requirement source)
+- `docs/architecture.md` (only authored architecture source, including `Satisfies: REQ-*`)
+- `trace/design.yaml` (detailed design/code links to architecture only)
+- `trace/tests.yaml` (unit/E2E test links to design + E2E evidence prefixes)
+
+Validation commands:
+```bash
+make qa-trace
+```
+- Validates requirement -> architecture -> design -> test linkage.
+- Uses strict layered mapping only (`REQ -> ARCH -> DD -> TEST`) and derives requirement coverage transitively.
+- Writes machine-readable report: `artifacts/quality/traceability_report.json`.
+
+```bash
+make qa-evidence
+```
+- Validates E2E evidence directories under `artifacts/rogue-tests/` for every active suite in `trace/tests.yaml`.
+- Enforces premise/exercise/outcome artifact presence and checks `test_report.log` for failures.
+- Reports warnings for accepted alternate-success paths via `warning_reason_*.txt`.
+- Fails if any passing test still leaves `fail_reason.txt`.
+- Writes report: `artifacts/quality/evidence_report.json`.
+
+```bash
+make qa-quality
+```
+- Runs combined local quality baseline:
+  - `qa-trace`
+  - `traceability-check` (M4 requirement-to-unit-test matrix consistency)
+  - `unit-guard-check` (Premise/Exercise/Outcome guard enforcement for unit tests)
+
 ## Clean stack helper
 To reset the lab without sudo, use:
 ```bash

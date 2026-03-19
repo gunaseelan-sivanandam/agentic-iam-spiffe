@@ -9,8 +9,8 @@ import sys
 from pathlib import Path
 
 
-REQ_RE = re.compile(r"^###\s+(M4-[A-Z0-9]+)\s+—")
-ROW_RE = re.compile(r"^\|\s*(M4-[A-Z0-9]+)\s*\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|\s*")
+REQ_RE = re.compile(r"^###\s+(REQ-)?(M4-[A-Z0-9]+)\s+—")
+ROW_RE = re.compile(r"^\|\s*(REQ-)?(M4-[A-Z0-9]+)\s*\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|\s*")
 VALID_STATUS = {"Covered", "Partial", "Gap"}
 
 
@@ -33,7 +33,7 @@ def main() -> int:
     for line in req_path.read_text(encoding="utf-8").splitlines():
         m = REQ_RE.match(line.strip())
         if m:
-            req_ids.append(m.group(1))
+            req_ids.append(m.group(2))
     req_set = set(req_ids)
 
     seen: dict[str, tuple[str, str]] = {}
@@ -46,9 +46,9 @@ def main() -> int:
         m = ROW_RE.match(raw.strip())
         if not m:
             continue
-        req_id = m.group(1).strip()
-        tests = m.group(3).strip()
-        status = m.group(4).strip()
+        req_id = m.group(2).strip()
+        tests = m.group(4).strip()
+        status = m.group(5).strip()
 
         if req_id in seen:
             duplicates.append(req_id)

@@ -27,6 +27,10 @@ FAILED=0
 FAIL_REASON=""
 EVDIR=""
 CURRENT_TEST_ID=""
+WARNING_TOTAL=0
+WARNINGS_FILE="/tmp/rogue_test_warnings.tsv"
+
+: > "$WARNINGS_FILE"
 
 PROFILE_ENABLED="${TEST_PROFILE:-1}"
 PROFILE_BASE="${ROGUE_TEST_EVIDENCE_DIR:-/tmp/rogue-tests}"
@@ -166,9 +170,16 @@ run_test() {
       FAIL_REASON="Guard failed"
     fi
   fi
+  test_warnings_file="/tmp/rogue_test_current_warnings.txt"
+  grep -F "${CURRENT_TEST_ID}	" "$WARNINGS_FILE" >"$test_warnings_file" 2>/dev/null || true
+  warning_count="$(wc -l <"$test_warnings_file" | tr -d ' ')"
   if [ "$rc" -eq 0 ]; then
     PASSED=$((PASSED + 1))
     print_result "$id" "$name" "PASS" "$GREEN"
+    if [ "$warning_count" -gt 0 ]; then
+      printf '  Warnings: %s\n' "$warning_count"
+      sed 's/^[^\t]*\t/  Warning: /' "$test_warnings_file"
+    fi
   else
     FAILED=$((FAILED + 1))
     print_result "$id" "$name" "FAIL" "$RED"
@@ -182,6 +193,7 @@ run_test() {
   if [ -n "${EVDIR:-}" ]; then
     printf 'duration_seconds=%s\n' "$duration" >"${EVDIR}/duration.txt" 2>/dev/null || true
   fi
+  rm -f "$test_warnings_file"
   CURRENT_TEST_ID=""
 }
 
@@ -230,6 +242,24 @@ ev_copy_if_exists() {
     dest_name="$(basename "$src")"
   fi
   cp "$src" "${EVDIR}/${dest_name}" 2>/dev/null || true
+}
+
+text_matches() {
+  file="$1"
+  regex="$2"
+  grep -Eq "$regex" "$file"
+}
+
+add_warning() {
+  msg="$1"
+  WARNING_TOTAL=$((WARNING_TOTAL + 1))
+  printf '%s\t%s\n' "${CURRENT_TEST_ID:-unknown}" "$msg" >>"$WARNINGS_FILE"
+  if [ -n "${EVDIR:-}" ]; then
+    idx="$(ls "${EVDIR}"/warning_reason_*.txt 2>/dev/null | wc -l | tr -d ' ')"
+    idx=$((idx + 1))
+    printf '%s\n' "$msg" >"${EVDIR}/warning_reason_${idx}.txt" 2>/dev/null || true
+    printf '[%s] WARNING: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$msg" >>"${EVDIR}/notes.txt" 2>/dev/null || true
+  fi
 }
 
 premise_guard() {
@@ -2079,7 +2109,7 @@ M3S2_T3_test() {
   exercise_guard "attempt OPA from edge" \
     "res_rc=0; printf '%s' opa >\"$EVDIR/opa_resolve_target.txt\"; resolve_host_ip opa >\"$EVDIR/opa_resolve.txt\" 2>\"$EVDIR/opa_resolve.err\" || res_rc=\$?; printf '%s' \"\$res_rc\" >\"$EVDIR/opa_resolve_rc.txt\"; rc=0; status=\"\"; status=\"\$(curl -sS --max-time 3 -o \"$EVDIR/opa_body.txt\" -w '%{http_code}' http://opa:8181/v1/data/capiss/allow 2>\"$EVDIR/opa_err.txt\")\" || rc=\$?; printf '%s' \"\$rc\" >\"$EVDIR/opa_rc.txt\"; printf '%s' \"\$status\" >\"$EVDIR/opa_status.txt\""
   outcome_guard "OPA not reachable from edge network" \
-    "rc=\"\$(cat \"$EVDIR/opa_rc.txt\" 2>/dev/null || echo 0)\"; status=\"\$(cat \"$EVDIR/opa_status.txt\" 2>/dev/null || true)\"; premise_status=\"\$(cat \"$EVDIR/premise_toolb_status.txt\" 2>/dev/null || true)\"; res_rc=\"\$(cat \"$EVDIR/opa_resolve_rc.txt\" 2>/dev/null || echo 1)\"; dns_allow=0; if [ \"\$premise_status\" = \"200\" ] && [ \"\$res_rc\" -ne 0 ]; then if assert_text_matches \"$EVDIR/opa_err.txt\" '(Could not resolve host: *opa|name or service not known.*opa|temporary failure in name resolution.*opa|Resolving timed out)'; then dns_allow=1; fi; fi; [ -s \"$EVDIR/opa_err.txt\" ] && [ \"\$status\" != \"200\" ] && [ \"\$rc\" -ne 0 ] && ( assert_text_matches \"$EVDIR/opa_err.txt\" '(Failed to connect|Connection refused|No route to host|Connection timed out|Operation timed out)' || [ \"\$dns_allow\" -eq 1 ] )"
+    "rc=\"\$(cat \"$EVDIR/opa_rc.txt\" 2>/dev/null || echo 0)\"; status=\"\$(cat \"$EVDIR/opa_status.txt\" 2>/dev/null || true)\"; premise_status=\"\$(cat \"$EVDIR/premise_toolb_status.txt\" 2>/dev/null || true)\"; res_rc=\"\$(cat \"$EVDIR/opa_resolve_rc.txt\" 2>/dev/null || echo 1)\"; dns_allow=0; if [ \"\$premise_status\" = \"200\" ] && [ \"\$res_rc\" -ne 0 ] && text_matches \"$EVDIR/opa_err.txt\" '(Could not resolve host: *opa|name or service not known.*opa|temporary failure in name resolution.*opa|Resolving timed out)'; then dns_allow=1; fi; [ -s \"$EVDIR/opa_err.txt\" ] && [ \"\$status\" != \"200\" ] && [ \"\$rc\" -ne 0 ] && if text_matches \"$EVDIR/opa_err.txt\" '(Failed to connect|Connection refused|No route to host|Connection timed out|Operation timed out)'; then true; elif [ \"\$dns_allow\" -eq 1 ]; then if text_matches \"$EVDIR/opa_err.txt\" 'Resolving timed out'; then add_warning 'accepted alternate isolation mode: DNS resolution timeout while reaching opa from edge'; else add_warning 'accepted alternate isolation mode: DNS isolation while reaching opa from edge'; fi; else fail_with_body 'expected edge-isolation error pattern (connect denied or DNS isolation)' \"$EVDIR/opa_err.txt\"; fi"
   return 0
 }
 
@@ -2118,7 +2148,7 @@ M3S2_T5_test() {
   exercise_guard "attempt direct issuer app access from edge" \
     "res_rc=0; printf '%s' capability-issuer >\"$EVDIR/capiss_app_resolve_target.txt\"; resolve_host_ip capability-issuer >\"$EVDIR/capiss_app_resolve.txt\" 2>\"$EVDIR/capiss_app_resolve.err\" || res_rc=\$?; printf '%s' \"\$res_rc\" >\"$EVDIR/capiss_app_resolve_rc.txt\"; rc=0; status=\"\"; status=\"\$(curl -sS --max-time 3 -o \"$EVDIR/capiss_app_body.txt\" -w '%{http_code}' http://capability-issuer:8000/health 2>\"$EVDIR/capiss_app_err.txt\")\" || rc=\$?; printf '%s' \"\$rc\" >\"$EVDIR/capiss_app_rc.txt\"; printf '%s' \"\$status\" >\"$EVDIR/capiss_app_status.txt\""
   outcome_guard "capability-issuer app not reachable from edge network" \
-    "rc=\"\$(cat \"$EVDIR/capiss_app_rc.txt\" 2>/dev/null || echo 0)\"; status=\"\$(cat \"$EVDIR/capiss_app_status.txt\" 2>/dev/null || true)\"; premise_status=\"\$(cat \"$EVDIR/premise_toolb_status.txt\" 2>/dev/null || true)\"; res_rc=\"\$(cat \"$EVDIR/capiss_app_resolve_rc.txt\" 2>/dev/null || echo 1)\"; dns_allow=0; if [ \"\$premise_status\" = \"200\" ] && [ \"\$res_rc\" -ne 0 ]; then if assert_text_matches \"$EVDIR/capiss_app_err.txt\" '(Could not resolve host: *capability-issuer|name or service not known.*capability-issuer|temporary failure in name resolution.*capability-issuer|Resolving timed out)'; then dns_allow=1; fi; fi; [ -s \"$EVDIR/capiss_app_err.txt\" ] && [ \"\$status\" != \"200\" ] && [ \"\$rc\" -ne 0 ] && ( assert_text_matches \"$EVDIR/capiss_app_err.txt\" '(Failed to connect|Connection refused|No route to host|Connection timed out|Operation timed out)' || [ \"\$dns_allow\" -eq 1 ] )"
+    "rc=\"\$(cat \"$EVDIR/capiss_app_rc.txt\" 2>/dev/null || echo 0)\"; status=\"\$(cat \"$EVDIR/capiss_app_status.txt\" 2>/dev/null || true)\"; premise_status=\"\$(cat \"$EVDIR/premise_toolb_status.txt\" 2>/dev/null || true)\"; res_rc=\"\$(cat \"$EVDIR/capiss_app_resolve_rc.txt\" 2>/dev/null || echo 1)\"; dns_allow=0; if [ \"\$premise_status\" = \"200\" ] && [ \"\$res_rc\" -ne 0 ] && text_matches \"$EVDIR/capiss_app_err.txt\" '(Could not resolve host: *capability-issuer|name or service not known.*capability-issuer|temporary failure in name resolution.*capability-issuer|Resolving timed out)'; then dns_allow=1; fi; [ -s \"$EVDIR/capiss_app_err.txt\" ] && [ \"\$status\" != \"200\" ] && [ \"\$rc\" -ne 0 ] && if text_matches \"$EVDIR/capiss_app_err.txt\" '(Failed to connect|Connection refused|No route to host|Connection timed out|Operation timed out)'; then true; elif [ \"\$dns_allow\" -eq 1 ]; then if text_matches \"$EVDIR/capiss_app_err.txt\" 'Resolving timed out'; then add_warning 'accepted alternate isolation mode: DNS resolution timeout while reaching capability-issuer from edge'; else add_warning 'accepted alternate isolation mode: DNS isolation while reaching capability-issuer from edge'; fi; else fail_with_body 'expected edge-isolation error pattern (connect denied or DNS isolation)' \"$EVDIR/capiss_app_err.txt\"; fi"
   return 0
 }
 
@@ -2598,6 +2628,11 @@ if [ "$RUN_M4" -eq 1 ]; then
 fi
 
 printf '\nTotal: %d  Passed: %d  Failed: %d\n' "$TOTAL" "$PASSED" "$FAILED"
+if [ -s "$WARNINGS_FILE" ]; then
+  printf 'Warnings: %d\n' "$WARNING_TOTAL"
+  printf '\nWarnings summary:\n'
+  sed 's/\t/ | /' "$WARNINGS_FILE"
+fi
 if [ "$PROFILE_ENABLED" = "1" ] && [ -s "$PROFILE_FILE" ]; then
   printf '\nSlowest guard steps (top 25):\n'
   awk -F '\t' 'NR>1 {printf "%8d ms | %-7s | %-10s | %s\n", $1, $2, $3, $6}' "$PROFILE_FILE" \

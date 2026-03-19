@@ -1,0 +1,285 @@
+version: 1
+tests:
+  - id: E2E-M1-SUITE
+    type: e2e_suite
+    source_design:
+      - DD-M1-NODE-ATTESTATION-HARNESS
+    location:
+      file: scripts/rogue_node_tests.sh
+      selector: 'TEST_PREFIX="M1"'
+    evidence_prefixes:
+      - M1-T1
+      - M1-T2
+      - M1-T3
+      - M1-T4
+      - M1-T5
+    status: active
+
+  - id: E2E-M2-SUITE
+    type: e2e_suite
+    source_design:
+      - DD-M2-WORKLOAD-IDENTITY-HARNESS
+    location:
+      file: scripts/rogue_node_tests.sh
+      selector: 'TEST_PREFIX="M2"'
+    evidence_prefixes:
+      - M2-T1
+      - M2-T2
+      - M2-T3
+      - M2-T4
+      - M2-T5
+      - M2-T6
+      - M2-T7
+      - M2-T8
+      - M2-T9
+    status: active
+
+  - id: E2E-M25-SUITE
+    type: e2e_suite
+    source_design:
+      - DD-M25-BOUNDARY-HARNESS
+    location:
+      file: scripts/rogue_node_tests.sh
+      selector: 'TEST_PREFIX="M2.5"'
+    evidence_prefixes:
+      - M2.5-T1
+      - M2.5-T2
+      - M2.5-T3
+    status: active
+
+  - id: E2E-M3-S2-SUITE
+    type: e2e_suite
+    source_design:
+      - DD-M3-MINT-HARNESS
+    location:
+      file: scripts/rogue_node_tests.sh
+      selector: 'TEST_PREFIX="M3.S2"'
+    evidence_prefixes:
+      - M3.S2-T1
+      - M3.S2-T2
+      - M3.S2-T3
+      - M3.S2-T4
+      - M3.S2-T5
+    status: active
+
+  - id: E2E-M3-S3-SUITE
+    type: e2e_suite
+    source_design:
+      - DD-M3-MINT-HARNESS
+    location:
+      file: scripts/rogue_node_tests.sh
+      selector: 'TEST_PREFIX="M3.S3"'
+    evidence_prefixes:
+      - M3.S3-T1
+      - M3.S3-T2
+      - M3.S3-T3
+    status: active
+
+  - id: E2E-M3-S4-SUITE
+    type: e2e_suite
+    source_design:
+      - DD-M3-ENFORCEMENT-HARNESS
+    location:
+      file: scripts/rogue_node_tests.sh
+      selector: 'TEST_PREFIX="M3.S4"'
+    evidence_prefixes:
+      - M3.S4-T1
+      - M3.S4-T2
+      - M3.S4-T3
+      - M3.S4-T4
+      - M3.S4-T5
+      - M3.S4-T6
+      - M3.S4-T7
+    status: active
+
+  - id: E2E-M4-SUITE
+    type: e2e_suite
+    source_design:
+      - DD-M4-GOVERNANCE-HARNESS
+      - DD-E2E-EVIDENCE-PROFILING
+    location:
+      file: scripts/rogue_node_tests.sh
+      selector: 'TEST_PREFIX="M4"'
+    evidence_prefixes:
+      - M4-T1
+      - M4-T2
+      - M4-T3
+      - M4-T4
+      - M4-T5
+    status: active
+
+  - id: UT-M4-D1-NON-AMPLIFICATION
+    type: unit_case
+    source_design: [DD-CAPISS-RESOURCE-MINT, DD-CAPISS-CHAIN-VALIDATION]
+    location:
+      file: tests/unit/capiss/test_chain_and_policy.py
+      selector: test_verify_and_extract_chain_rejects_amplified_authority
+    status: active
+
+  - id: UT-M4-D2-CANONICAL-ONLY
+    type: unit_case
+    source_design: [DD-CAPISS-ROOT-MINT]
+    location:
+      file: tests/unit/capiss/test_canonicalize_resource.py
+      selector: test_canonicalize_resource_rejects_wildcards
+    status: active
+
+  - id: UT-M4-D3-MANDATORY-METADATA
+    type: unit_case
+    source_design: [DD-CAPISS-ROOT-MINT, DD-CAPISS-RESOURCE-MINT]
+    location:
+      file: tests/unit/capiss/test_chain_and_policy.py
+      selector: test_verify_and_extract_chain_missing_metadata
+    status: active
+
+  - id: UT-M4-D4-CHAIN-SCOPED-DEPTH
+    type: unit_case
+    source_design: [DD-CAPISS-ROOT-MINT]
+    location:
+      file: tests/unit/toolb/test_hybrid_critical.py
+      selector: test_verify_biscuit_hybrid_delegated_chain_depth
+    status: active
+
+  - id: UT-M4-CH1-CHAIN-INTEGRITY
+    type: unit_case
+    source_design: [DD-CAPISS-CHAIN-VALIDATION, DD-TOOLB-CHAIN-VERIFY]
+    location:
+      file: tests/unit/toolb/test_canonical_and_chain.py
+      selector: test_verify_chain_and_claims_rejects_res_change_without_marker
+    status: active
+
+  - id: UT-M4-DL1-DEPTH-DERIVED
+    type: unit_case
+    source_design: [DD-CAPISS-CHAIN-VALIDATION, DD-TOOLB-CHAIN-VERIFY]
+    location:
+      file: tests/unit/toolb/test_canonical_and_chain.py
+      selector: test_verify_chain_and_claims_rejects_invalid_depth_metadata
+    status: active
+
+  - id: UT-M4-DL2-DEPTH-LIMIT
+    type: unit_case
+    source_design: [DD-CAPISS-RESOURCE-MINT, DD-TOOLB-CHAIN-VERIFY]
+    location:
+      file: tests/unit/toolb/test_canonical_and_chain.py
+      selector: test_verify_chain_and_claims_enforces_depth_limit
+    status: active
+
+  - id: UT-M4-DL3-NO-RENEWAL
+    type: unit_case
+    source_design: [DD-CAPISS-RESOURCE-MINT]
+    location:
+      file: tests/unit/capiss/test_endpoints.py
+      selector: test_resource_mint_enforces_depth_limit
+    status: active
+
+  - id: UT-M4-B1-AGENT-NO-DECREMENT
+    type: unit_case
+    source_design: [DD-TOOLB-BUDGET-RATE, DD-CAPISS-RESOURCE-MINT]
+    location:
+      file: tests/unit/toolb/test_budget_and_verify_biscuit.py
+      selector: test_verify_biscuit_budget_reason_mapping
+    status: active
+
+  - id: UT-M4-B2-PER-REQUEST-SPEND
+    type: unit_case
+    source_design: [DD-TOOLB-BUDGET-RATE]
+    location:
+      file: tests/unit/toolb/test_budget_and_verify_biscuit.py
+      selector: test_consume_budget_and_rate_ok
+    status: active
+
+  - id: UT-M4-B3-ROOT-TOKEN-KEYING
+    type: unit_case
+    source_design: [DD-CAPISS-ROOT-MINT, DD-TOOLB-BUDGET-RATE, DD-TOOLB-DISCOVERY-REGISTRY]
+    location:
+      file: tests/unit/capiss/test_hybrid_critical.py
+      selector: test_resource_mint_hybrid_new_resource_with_registry
+    status: active
+
+  - id: UT-M4-B4-ATOMIC-DECREMENT
+    type: unit_case
+    source_design: [DD-TOOLB-BUDGET-RATE]
+    location:
+      file: tests/unit/toolb/test_negative_controls.py
+      selector: test_verify_biscuit_budget_exceeded_exact_reason
+    status: active
+
+  - id: UT-M4-B5-TTL-BOUNDED
+    type: unit_case
+    source_design: [DD-TOOLB-BUDGET-RATE]
+    location:
+      file: tests/unit/toolb/test_utils.py
+      selector: test_is_capiss_minted_token_hit_with_ttl_adjust
+    status: active
+
+  - id: UT-M4-P1-REGISTRY-PROOF
+    type: unit_case
+    source_design: [DD-CAPISS-RESOURCE-MINT, DD-TOOLB-DISCOVERY-REGISTRY]
+    location:
+      file: tests/unit/capiss/test_endpoints.py
+      selector: test_resource_mint_requires_registry_hit_for_new_resource
+    status: active
+
+  - id: UT-M4-P2-ROOT-SCOPED-DISCOVERY
+    type: unit_case
+    source_design: [DD-CAPISS-RESOURCE-MINT, DD-TOOLB-DISCOVERY-REGISTRY]
+    location:
+      file: tests/unit/capiss/test_hybrid_critical.py
+      selector: test_resource_mint_hybrid_new_resource_with_registry
+    status: active
+
+  - id: UT-M4-P3-TRUSTED-PRODUCER-PATH
+    type: unit_case
+    source_design: [DD-TOOLB-DISCOVERY-REGISTRY]
+    location:
+      file: tests/unit/toolb/test_handler_paths.py
+      selector: test_do_get_search_success
+    status: active
+
+  - id: UT-M4-P4-REGISTRY-TTL-BOUND
+    type: unit_case
+    source_design: [DD-TOOLB-DISCOVERY-REGISTRY]
+    location:
+      file: tests/unit/toolb/test_utils.py
+      selector: test_record_discovery_success
+    status: active
+
+  - id: UT-M4-E1-FAIL-CLOSED
+    type: unit_case
+    source_design: [DD-CAPISS-RESOURCE-MINT, DD-TOOLB-CHAIN-VERIFY, DD-TOOLB-BUDGET-RATE]
+    location:
+      file: tests/unit/capiss/test_chain_and_policy.py
+      selector: test_run_policy_or_fail_fail_closed_when_opa_unavailable
+    status: active
+
+  - id: UT-M4-E3-CAPISS-NOT-HOT-PATH
+    type: unit_case
+    source_design: [DD-TOOLB-CHAIN-VERIFY]
+    location:
+      file: tests/unit/toolb/test_hybrid_critical.py
+      selector: test_verify_biscuit_hybrid_root_secret_token
+    status: active
+
+  - id: UT-M4-E4-IDENTITY-BINDING
+    type: unit_case
+    source_design: [DD-CAPISS-ROOT-MINT, DD-CAPISS-RESOURCE-MINT, DD-TOOLB-CHAIN-VERIFY]
+    location:
+      file: tests/unit/toolb/test_negative_controls.py
+      selector: test_verify_biscuit_subject_mismatch_exact_reason
+    status: active
+
+  - id: UT-M4-O1-AUDIT-DENY-SHAPE
+    type: unit_case
+    source_design: [DD-TOOLB-CHAIN-VERIFY, DD-E2E-EVIDENCE-PROFILING]
+    location:
+      file: tests/unit/toolb/test_handler_paths.py
+      selector: test_deny_writes_standard_payload
+    status: active
+
+  - id: UT-M4-O2-MINT-DECISION-PATH
+    type: unit_case
+    source_design: [DD-CAPISS-ROOT-MINT, DD-E2E-EVIDENCE-PROFILING]
+    location:
+      file: tests/unit/capiss/test_endpoints.py
+      selector: test_root_mint_fail_closed_when_budget_store_unavailable
+    status: active

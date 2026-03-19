@@ -97,6 +97,14 @@ After a test run, validate that evidence directories were produced and contain g
     echo "No failed tests recorded in test_report.log"
   fi
   ```
+- Check for accepted alternate-success warnings recorded by harness:
+  ```bash
+  find artifacts/rogue-tests -name 'warning_reason_*.txt' -print -exec cat {} \;
+  ```
+- Evidence semantics:
+  - `fail_reason.txt` means a terminal guard failure for that test.
+  - `warning_reason_*.txt` means the test passed through an accepted alternate-success path and the condition should be reviewed.
+  - `test_report.log` now prints a `Warnings:` count and `Warnings summary:` section when such cases occur.
 
 ## macOS with Rancher Desktop notes
 - Ensure Docker CLI points to Rancher Desktop context before running tests:
@@ -121,3 +129,21 @@ After a test run, validate that evidence directories were produced and contain g
 - Unit tests under `tests/unit/**` must follow Premise/Exercise/Outcome guard style and pass:
   - `make unit-guard-check`
   - `make unit-trust`
+
+## Traceability and quality commands
+- Validate cross-layer traceability (`requirements -> architecture -> design -> tests`):
+  ```bash
+  make qa-trace
+  ```
+  - Uses `docs/requirements.md` as the authored requirement source and `docs/architecture.md` as the authored architecture source.
+  - Uses strict layered mapping (no direct requirement links in `trace/design.yaml` or `trace/tests.yaml`).
+- Validate E2E evidence completeness (post test-run):
+  ```bash
+  make qa-evidence
+  ```
+  - Reports explicit warnings for accepted alternate-success paths.
+  - Fails if any passing test still leaves `fail_reason.txt`.
+- Run local quality baseline:
+  ```bash
+  make qa-quality
+  ```
