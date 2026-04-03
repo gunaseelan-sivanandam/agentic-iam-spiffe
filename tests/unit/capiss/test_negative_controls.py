@@ -32,6 +32,11 @@ def _premise_module_loaded(guard, capiss_module):
     guard.premise("capiss module loaded", capiss_module is not None)
 
 
+# UT: UT-031
+# Test Description: Verifies root mint missing aud has exact reason.
+# Precondition: Module fixtures are loaded and any scenario-specific stubs or inputs are prepared in the exercise phase.
+# Expected Output: The SUT rejects or fails closed exactly as asserted by the outcome guards for this scenario.
+# Covers DD: DD-104, DD-115
 @pytest.mark.negative_control
 def test_root_mint_missing_aud_has_exact_reason(capiss_module, guard):
     _premise_module_loaded(guard, capiss_module)
@@ -48,6 +53,11 @@ def test_root_mint_missing_aud_has_exact_reason(capiss_module, guard):
     guard.outcome("reason is aud", body.get("reason") == "aud")
 
 
+# UT: UT-032
+# Test Description: Verifies that resource mint requires registry proof exact reason.
+# Precondition: Module fixtures are loaded and any scenario-specific stubs or inputs are prepared in the exercise phase.
+# Expected Output: The SUT exhibits the behavior asserted by the outcome guards for this scenario.
+# Covers DD: DD-105, DD-122
 @pytest.mark.negative_control
 def test_resource_mint_requires_registry_proof_exact_reason(capiss_module, monkeypatch, guard):
     _premise_module_loaded(guard, capiss_module)
@@ -73,6 +83,11 @@ def test_resource_mint_requires_registry_proof_exact_reason(capiss_module, monke
     guard.outcome("reason is registry_miss", body.get("reason") == "registry_miss")
 
 
+# UT: UT-033
+# Test Description: Verifies resource mint depth exceeded exact reason.
+# Precondition: Module fixtures are loaded and any scenario-specific stubs or inputs are prepared in the exercise phase.
+# Expected Output: The SUT rejects or fails closed exactly as asserted by the outcome guards for this scenario.
+# Covers DD: DD-105, DD-102
 @pytest.mark.negative_control
 def test_resource_mint_depth_exceeded_exact_reason(capiss_module, monkeypatch, guard):
     _premise_module_loaded(guard, capiss_module)
@@ -101,6 +116,11 @@ def test_resource_mint_depth_exceeded_exact_reason(capiss_module, monkeypatch, g
     guard.outcome("reason is depth_exceeded", body.get("reason") == "depth_exceeded")
 
 
+# UT: UT-034
+# Test Description: Verifies resource mint amplification exact reason.
+# Precondition: Module fixtures are loaded and any scenario-specific stubs or inputs are prepared in the exercise phase.
+# Expected Output: The SUT exhibits the behavior asserted by the outcome guards for this scenario.
+# Covers DD: DD-105, DD-102
 @pytest.mark.negative_control
 def test_resource_mint_amplification_exact_reason(capiss_module, monkeypatch, guard):
     _premise_module_loaded(guard, capiss_module)

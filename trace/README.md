@@ -1,17 +1,21 @@
 # Traceability Model
 
-This folder defines the bidirectional traceability source of truth.
+This folder defines the test-side authored trace inputs.
 
 ## Files
-- `design.yaml`: detailed design slices mapped to authored architecture IDs plus code paths.
-- `tests.yaml`: unit/E2E test mappings to design IDs (and evidence prefixes for E2E suites).
+- `tests.yaml`: E2E and future integration test metadata plus evidence prefixes for E2E suites.
 
 Strict model:
-- `docs/requirements.md -> docs/architecture.md -> trace/design.yaml -> trace/tests.yaml`
+- `docs/requirements.md -> docs/architecture.md -> source-embedded DD tags -> trace/tests.yaml`
 - `docs/requirements.md` is the only authored requirement source.
 - `docs/architecture.md` is the only authored architecture source.
-- `trace/design.yaml` and `trace/tests.yaml` do not carry direct requirement IDs.
-- Requirement-to-test coverage is derived transitively by the validator.
+- Detailed design is authored directly in service implementation-source comments under `services/**` as unique `DD-*` blocks.
+- Unit-test traceability is authored directly in `tests/unit/**` as unique `UT-*` blocks.
+- `trace/tests.yaml` is typed by non-unit test layer:
+  - `e2e_suite/e2e_case -> source_requirements`
+  - `integration_case -> source_architecture`
+- Structural correctness is enforced.
+- Coverage gaps are reported explicitly and are not auto-filled.
 
 ## Validation
 Run from repo root:
@@ -22,6 +26,7 @@ make qa-trace
 
 Output:
 - `artifacts/quality/traceability_report.json`
+- `artifacts/quality/design_index.json`
 
 ## Evidence check
 After running E2E tests, validate expected guard artifacts:

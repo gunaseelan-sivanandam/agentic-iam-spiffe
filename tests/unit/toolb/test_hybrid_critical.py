@@ -11,6 +11,11 @@ def _premise_modules_loaded(guard, toolb_module, capiss_module):
     guard.premise("capiss module loaded", capiss_module is not None)
 
 
+# UT: UT-070
+# Test Description: Verifies verify biscuit hybrid root secret token.
+# Precondition: Module fixtures are loaded and hybrid-path test inputs are prepared before the SUT is exercised.
+# Expected Output: The SUT exhibits the behavior asserted by the outcome guards for this scenario.
+# Covers DD: DD-202, DD-203
 @pytest.mark.hybrid_critical
 def test_verify_biscuit_hybrid_root_secret_token(toolb_module, capiss_module, monkeypatch, guard):
     _premise_modules_loaded(guard, toolb_module, capiss_module)
@@ -38,6 +43,11 @@ def test_verify_biscuit_hybrid_root_secret_token(toolb_module, capiss_module, mo
     guard.outcome("budget remaining attached", claims is not None and claims.get("budget_remaining") == 8)
 
 
+# UT: UT-071
+# Test Description: Verifies verify biscuit hybrid delegated chain depth.
+# Precondition: Module fixtures are loaded and hybrid-path test inputs are prepared before the SUT is exercised.
+# Expected Output: The SUT exhibits the behavior asserted by the outcome guards for this scenario.
+# Covers DD: DD-202, DD-201
 @pytest.mark.hybrid_critical
 def test_verify_biscuit_hybrid_delegated_chain_depth(toolb_module, capiss_module, monkeypatch, guard):
     _premise_modules_loaded(guard, toolb_module, capiss_module)

@@ -98,10 +98,16 @@ return 1
 """
 
 
+# DD: DD-209
+# Implements: ARCH-015
+# Title: iso_utc_now tool-b audit timestamp helper
 def iso_utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# DD: DD-210
+# Implements: ARCH-015
+# Title: log_event tool-b structured audit logger
 def log_event(event_type: str, **fields: object) -> None:
     payload = {
         "event_type": event_type,
@@ -111,6 +117,9 @@ def log_event(event_type: str, **fields: object) -> None:
     print(json.dumps(payload, separators=(",", ":"), sort_keys=True), flush=True)
 
 
+# DD: DD-211
+# Implements: ARCH-006, ARCH-015, ARCH-016
+# Title: get_redis tool-b shared state client
 def get_redis() -> redis.Redis:
     global _redis_client
     if _redis_client is None:
@@ -123,6 +132,9 @@ def get_redis() -> redis.Redis:
     return _redis_client
 
 
+# DD: DD-212
+# Implements: ARCH-015
+# Title: spiffe_id_from_cert_path tool-b client identity extraction
 def spiffe_id_from_cert_path(path: str) -> str | None:
     with open(path, "rb") as handle:
         cert = x509.load_pem_x509_certificate(handle.read())
@@ -138,6 +150,9 @@ def spiffe_id_from_cert_path(path: str) -> str | None:
 _CAPISS_PUBLIC_KEY: PublicKey | None = None
 
 
+# DD: DD-213
+# Implements: ARCH-015
+# Title: load_capiss_public_key tool-b issuer key loader
 def load_capiss_public_key() -> PublicKey | None:
     global _CAPISS_PUBLIC_KEY
     if _CAPISS_PUBLIC_KEY is not None:
@@ -153,6 +168,9 @@ def load_capiss_public_key() -> PublicKey | None:
     return _CAPISS_PUBLIC_KEY
 
 
+# DD: DD-214
+# Implements: ARCH-015
+# Title: parse_fact_arg tool-b biscuit fact parser
 def parse_fact_arg(raw: str) -> str | int:
     value = raw.strip()
     if len(value) >= 2 and value[0] == '"' and value[-1] == '"':
@@ -163,6 +181,9 @@ def parse_fact_arg(raw: str) -> str | int:
     return value
 
 
+# DD: DD-215
+# Implements: ARCH-015
+# Title: parse_block_source tool-b biscuit block parser
 def parse_block_source(src: str) -> dict[str, str | int]:
     claims: dict[str, str | int] = {}
     for line in src.splitlines():
@@ -181,6 +202,9 @@ def parse_block_source(src: str) -> dict[str, str | int]:
     return claims
 
 
+# DD: DD-216
+# Implements: ARCH-015
+# Title: canonical_res_for_path tool-b route to resource mapper
 def canonical_res_for_path(path: str) -> tuple[str, str] | None:
     if path == "/secret":
         return "read", "/secret"
@@ -194,6 +218,9 @@ def canonical_res_for_path(path: str) -> tuple[str, str] | None:
     return None
 
 
+# DD: DD-201
+# Implements: ARCH-005, ARCH-015
+# Title: verify_chain_and_claims tool-b chain and claim verifier
 def verify_chain_and_claims(biscuit: Biscuit) -> tuple[dict[str, str | int] | None, str]:
     count = biscuit.block_count()
     if count <= 0:
@@ -267,6 +294,9 @@ def verify_chain_and_claims(biscuit: Biscuit) -> tuple[dict[str, str | int] | No
     return final, ""
 
 
+# DD: DD-203
+# Implements: ARCH-005, ARCH-006, ARCH-015, ARCH-016
+# Title: consume_budget_and_rate tool-b shared-state budget enforcement
 def consume_budget_and_rate(root_token_id: str, exp: int) -> tuple[bool, str, int]:
     budget_key = f"m4:budget:{root_token_id}"
     rate_key = f"m4:rate:{root_token_id}"
@@ -295,6 +325,9 @@ def consume_budget_and_rate(root_token_id: str, exp: int) -> tuple[bool, str, in
     return allowed, reason, remaining
 
 
+# DD: DD-205
+# Implements: ARCH-005, ARCH-015, ARCH-016
+# Title: is_capiss_minted_token tool-b delegated resource marker check
 def is_capiss_minted_token(token_id: str, exp: int) -> tuple[bool, bool]:
     marker_key = f"m4:capiss_minted:{token_id}"
     ttl = max(1, exp - int(time.time()))
@@ -311,6 +344,9 @@ def is_capiss_minted_token(token_id: str, exp: int) -> tuple[bool, bool]:
         return False, False
 
 
+# DD: DD-204
+# Implements: ARCH-005, ARCH-006, ARCH-015, ARCH-016
+# Title: record_discovery tool-b registry publication path
 def record_discovery(
     root_token_id: str,
     subject_spiffe_id: str,
@@ -334,6 +370,9 @@ def record_discovery(
         return False
 
 
+# DD: DD-202
+# Implements: ARCH-005, ARCH-015
+# Title: verify_biscuit tool-b request authorization verifier
 def verify_biscuit(token_value: str, spiffe_id: str, required_act: str, required_res: str):
     public_key = load_capiss_public_key()
     if public_key is None:
@@ -382,9 +421,15 @@ def verify_biscuit(token_value: str, spiffe_id: str, required_act: str, required
 class ToolBHandler(BaseHTTPRequestHandler):
     server_version = "tool-b"
 
+    # DD: DD-217
+    # Implements: ARCH-015
+    # Title: ToolBHandler.log_message tool-b access log adapter
     def log_message(self, fmt, *args):
         return
 
+    # DD: DD-218
+    # Implements: ARCH-015
+    # Title: ToolBHandler._send_json tool-b JSON response helper
     def _send_json(self, status_code, payload):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status_code)
@@ -393,6 +438,9 @@ class ToolBHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    # DD: DD-207
+    # Implements: ARCH-005, ARCH-015
+    # Title: ToolBHandler._deny standardized tool-b deny payload path
     def _deny(self, status: int, reason: str, spiffe_id: str | None, claims: dict | None = None):
         root_token_id = None
         token_id = None
@@ -429,6 +477,9 @@ class ToolBHandler(BaseHTTPRequestHandler):
         )
         self._send_json(status, {"error": "denied", "reason": reason})
 
+    # DD: DD-206
+    # Implements: ARCH-005, ARCH-015
+    # Title: ToolBHandler._authorize tool-b request authorization handler
     def _authorize(self, required_act: str, required_res: str):
         spiffe_id = self.headers.get(SPIFFE_HEADER)
         if not spiffe_id:
@@ -468,6 +519,9 @@ class ToolBHandler(BaseHTTPRequestHandler):
         )
         return claims
 
+    # DD: DD-208
+    # Implements: ARCH-005, ARCH-015
+    # Title: ToolBHandler.do_GET tool-b request dispatch handler
     def do_GET(self):
         if self.path == "/health":
             self._send_json(200, {"status": "ok"})
@@ -509,6 +563,9 @@ class ToolBHandler(BaseHTTPRequestHandler):
         self._send_json(404, {"detail": "not found"})
 
 
+# DD: DD-219
+# Implements: ARCH-015
+# Title: main tool-b HTTP server bootstrap
 def main():
     spiffe_id = spiffe_id_from_cert_path(SVID_CERT)
     print(f"tool-b SPIFFE ID: {spiffe_id}")

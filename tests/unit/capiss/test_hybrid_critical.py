@@ -73,6 +73,11 @@ def _premise_module_loaded(guard, capiss_module):
     guard.premise("capiss module loaded", capiss_module is not None)
 
 
+# UT: UT-029
+# Test Description: Verifies root mint hybrid with real token logic.
+# Precondition: Module fixtures are loaded and hybrid-path test inputs are prepared before the SUT is exercised.
+# Expected Output: The SUT exhibits the behavior asserted by the outcome guards for this scenario.
+# Covers DD: DD-104, DD-123
 @pytest.mark.hybrid_critical
 def test_root_mint_hybrid_with_real_token_logic(capiss_module, monkeypatch, guard):
     _premise_module_loaded(guard, capiss_module)
@@ -93,6 +98,11 @@ def test_root_mint_hybrid_with_real_token_logic(capiss_module, monkeypatch, guar
     guard.outcome("depth is zero", out.get("delegation_depth") == 0)
 
 
+# UT: UT-030
+# Test Description: Verifies resource mint hybrid new resource with registry.
+# Precondition: Module fixtures are loaded and hybrid-path test inputs are prepared before the SUT is exercised.
+# Expected Output: The SUT exhibits the behavior asserted by the outcome guards for this scenario.
+# Covers DD: DD-105, DD-122, DD-124
 @pytest.mark.hybrid_critical
 def test_resource_mint_hybrid_new_resource_with_registry(capiss_module, monkeypatch, guard):
     _premise_module_loaded(guard, capiss_module)

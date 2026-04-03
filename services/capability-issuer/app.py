@@ -29,6 +29,9 @@ app = FastAPI()
 
 
 @app.get("/health")
+# DD: DD-107
+# Implements: ARCH-012
+# Title: health capability issuer health endpoint
 def health():
     return {"status": "ok"}
 
@@ -48,10 +51,16 @@ CAPISS_PUBLIC_KEY_FILE = os.path.join(CAPISS_KEY_DIR, "root_public_key.b64")
 FACT_RE = re.compile(r"^([a-zA-Z_][a-zA-Z0-9_]*)\((.*)\)$")
 
 
+# DD: DD-108
+# Implements: ARCH-012
+# Title: iso_utc_now capability issuer audit timestamp helper
 def iso_utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# DD: DD-109
+# Implements: ARCH-012
+# Title: log_event capability issuer structured audit logger
 def log_event(event_type: str, **fields: object) -> None:
     payload = {
         "event_type": event_type,
@@ -61,6 +70,9 @@ def log_event(event_type: str, **fields: object) -> None:
     print(json.dumps(payload, separators=(",", ":"), sort_keys=True), flush=True)
 
 
+# DD: DD-110
+# Implements: ARCH-012, ARCH-013
+# Title: check_opa_allow capability issuer OPA decision client
 def check_opa_allow(input_payload: dict) -> tuple[bool | None, str | None]:
     data = json.dumps({"input": input_payload}).encode("utf-8")
     req = request.Request(
@@ -77,6 +89,9 @@ def check_opa_allow(input_payload: dict) -> tuple[bool | None, str | None]:
         return None, str(exc)
 
 
+# DD: DD-111
+# Implements: ARCH-012
+# Title: load_or_create_root_private_key capability issuer signing key bootstrap
 def load_or_create_root_private_key() -> tuple[PrivateKey, bool]:
     os.makedirs(CAPISS_KEY_DIR, exist_ok=True)
     if os.path.exists(CAPISS_KEY_FILE):
@@ -100,6 +115,9 @@ def load_or_create_root_private_key() -> tuple[PrivateKey, bool]:
     return private_key, created
 
 
+# DD: DD-112
+# Implements: ARCH-012
+# Title: write_public_key capability issuer public key export
 def write_public_key(private_key: PrivateKey) -> None:
     keypair = KeyPair.from_private_key(private_key)
     encoded = base64.b64encode(keypair.public_key.to_bytes())
@@ -108,6 +126,9 @@ def write_public_key(private_key: PrivateKey) -> None:
         handle.write(encoded)
 
 
+# DD: DD-113
+# Implements: ARCH-012
+# Title: public_key_needs_update capability issuer public key drift check
 def public_key_needs_update(private_key: PrivateKey) -> bool:
     if not os.path.exists(CAPISS_PUBLIC_KEY_FILE):
         return True
@@ -131,6 +152,9 @@ if _ROOT_KEY_CREATED or public_key_needs_update(ROOT_PRIVATE_KEY):
 _redis_client: redis.Redis | None = None
 
 
+# DD: DD-114
+# Implements: ARCH-006, ARCH-012, ARCH-016
+# Title: get_redis capability issuer shared state client
 def get_redis() -> redis.Redis:
     global _redis_client
     if _redis_client is None:
@@ -143,6 +167,9 @@ def get_redis() -> redis.Redis:
     return _redis_client
 
 
+# DD: DD-115
+# Implements: ARCH-004, ARCH-012
+# Title: validate_mint_payload capability issuer mint request validator
 def validate_mint_payload(payload: dict | None) -> tuple[dict | None, JSONResponse | None]:
     if payload is None:
         return None, JSONResponse(
@@ -175,6 +202,9 @@ def validate_mint_payload(payload: dict | None) -> tuple[dict | None, JSONRespon
     return cleaned, None
 
 
+# DD: DD-101
+# Implements: ARCH-004, ARCH-012
+# Title: canonicalize_resource capability issuer resource canonicalization guard
 def canonicalize_resource(aud: str, res: str) -> str | None:
     if aud != "tool-b":
         return None
@@ -209,6 +239,9 @@ def canonicalize_resource(aud: str, res: str) -> str | None:
     return None
 
 
+# DD: DD-116
+# Implements: ARCH-012
+# Title: parse_fact_arg capability issuer biscuit fact parser
 def parse_fact_arg(raw: str) -> str | int:
     value = raw.strip()
     if len(value) >= 2 and value[0] == '"' and value[-1] == '"':
@@ -219,6 +252,9 @@ def parse_fact_arg(raw: str) -> str | int:
     return value
 
 
+# DD: DD-117
+# Implements: ARCH-012
+# Title: parse_block_source capability issuer biscuit block parser
 def parse_block_source(src: str) -> dict[str, str | int]:
     claims: dict[str, str | int] = {}
     for line in src.splitlines():
@@ -237,6 +273,9 @@ def parse_block_source(src: str) -> dict[str, str | int]:
     return claims
 
 
+# DD: DD-118
+# Implements: ARCH-012
+# Title: extract_chain_claims capability issuer chain claim extractor
 def extract_chain_claims(biscuit: Biscuit) -> list[dict[str, str | int]]:
     count = biscuit.block_count()
     chain: list[dict[str, str | int]] = []
@@ -248,6 +287,9 @@ def extract_chain_claims(biscuit: Biscuit) -> list[dict[str, str | int]]:
     return chain
 
 
+# DD: DD-102
+# Implements: ARCH-004, ARCH-012
+# Title: verify_and_extract_chain capability issuance chain verification
 def verify_and_extract_chain(biscuit: Biscuit) -> tuple[dict[str, str | int] | None, str | None]:
     chain = extract_chain_claims(biscuit)
     if not chain:
@@ -304,6 +346,9 @@ def verify_and_extract_chain(biscuit: Biscuit) -> tuple[dict[str, str | int] | N
     return final, None
 
 
+# DD: DD-119
+# Implements: ARCH-012
+# Title: parse_token capability issuer biscuit decode helper
 def parse_token(token_value: str) -> tuple[Biscuit | None, dict[str, str | int] | None, str | None]:
     try:
         biscuit = Biscuit.from_base64(token_value, ROOT_PUBLIC_KEY)
@@ -316,6 +361,9 @@ def parse_token(token_value: str) -> tuple[Biscuit | None, dict[str, str | int] 
     return biscuit, claims, None
 
 
+# DD: DD-120
+# Implements: ARCH-006, ARCH-012, ARCH-016
+# Title: ensure_root_budget capability issuer root budget initializer
 def ensure_root_budget(root_token_id: str, root_exp: int, initial_res: str) -> tuple[bool, str]:
     ttl = max(1, root_exp - int(time.time()))
     budget_key = f"m4:budget:{root_token_id}"
@@ -332,6 +380,9 @@ def ensure_root_budget(root_token_id: str, root_exp: int, initial_res: str) -> t
         return False, str(exc)
 
 
+# DD: DD-121
+# Implements: ARCH-006, ARCH-012, ARCH-016
+# Title: mark_capiss_minted_token capability issuer delegated token marker
 def mark_capiss_minted_token(token_id: str, exp: int) -> tuple[bool, str]:
     ttl = max(1, exp - int(time.time()))
     mint_key = f"m4:capiss_minted:{token_id}"
@@ -343,6 +394,9 @@ def mark_capiss_minted_token(token_id: str, exp: int) -> tuple[bool, str]:
         return False, str(exc)
 
 
+# DD: DD-122
+# Implements: ARCH-006, ARCH-012, ARCH-016
+# Title: registry_has_resource capability issuer discovery registry lookup
 def registry_has_resource(root_token_id: str, res: str) -> tuple[bool, bool, str]:
     registry_key = f"m4:registry:{root_token_id}"
     try:
@@ -354,6 +408,9 @@ def registry_has_resource(root_token_id: str, res: str) -> tuple[bool, bool, str
         return False, False, str(exc)
 
 
+# DD: DD-123
+# Implements: ARCH-004, ARCH-012
+# Title: mint_root_biscuit capability issuer root biscuit mint helper
 def mint_root_biscuit(sub: str, aud: str, act: str, res: str) -> tuple[str, int, str, str]:
     expires_at = int(time.time()) + M4_ROOT_TTL_SECONDS
     root_token_id = str(uuid.uuid4())
@@ -375,6 +432,9 @@ def mint_root_biscuit(sub: str, aud: str, act: str, res: str) -> tuple[str, int,
     return token_value, expires_at, root_token_id, token_id
 
 
+# DD: DD-124
+# Implements: ARCH-004, ARCH-012
+# Title: append_resource_token capability issuer delegated biscuit append helper
 def append_resource_token(
     parent: Biscuit,
     parent_claims: dict[str, str | int],
@@ -405,6 +465,9 @@ def append_resource_token(
     return delegated.to_base64(), expires_at, token_id
 
 
+# DD: DD-125
+# Implements: ARCH-004, ARCH-012, ARCH-013
+# Title: decision_input capability issuer policy input assembler
 def decision_input(
     decision_type: str,
     subject: str,
@@ -429,6 +492,9 @@ def decision_input(
     return payload
 
 
+# DD: DD-103
+# Implements: ARCH-004, ARCH-012, ARCH-013
+# Title: run_policy_or_fail capability issuer policy decision boundary
 def run_policy_or_fail(policy_input: dict[str, object]) -> tuple[bool, JSONResponse | None]:
     allowed, err = check_opa_allow(policy_input)
     if allowed is None:
@@ -460,6 +526,9 @@ def run_policy_or_fail(policy_input: dict[str, object]) -> tuple[bool, JSONRespo
 
 
 @app.post("/capabilities/root-mint")
+# DD: DD-104
+# Implements: ARCH-004, ARCH-012
+# Title: root_mint capability issuer root token endpoint
 def root_mint(
     payload: dict | None = None,
     x_spiffe_id: str | None = Header(default=None, alias="x-spiffe-id"),
@@ -576,6 +645,9 @@ def root_mint(
 
 
 @app.post("/capabilities/resource-mint")
+# DD: DD-105
+# Implements: ARCH-004, ARCH-006, ARCH-012
+# Title: resource_mint capability issuer delegated resource endpoint
 def resource_mint(
     payload: dict | None = None,
     x_spiffe_id: str | None = Header(default=None, alias="x-spiffe-id"),
@@ -730,6 +802,9 @@ def resource_mint(
 
 # Backward-compatible path used by existing tests. In M4 this maps to root mint.
 @app.post("/capabilities/mint")
+# DD: DD-106
+# Implements: ARCH-004, ARCH-011, ARCH-012
+# Title: mint capability issuer compatibility dispatch endpoint
 def mint(
     payload: dict | None = None,
     x_spiffe_id: str | None = Header(default=None, alias="x-spiffe-id"),

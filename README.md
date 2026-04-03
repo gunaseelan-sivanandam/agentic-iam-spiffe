@@ -250,16 +250,26 @@ Unit-test guard contract:
 Cross-layer traceability sources:
 - `docs/requirements.md` (only authored requirement source)
 - `docs/architecture.md` (only authored architecture source, including `Satisfies: REQ-*`)
-- `trace/design.yaml` (detailed design/code links to architecture only)
-- `trace/tests.yaml` (unit/E2E test links to design + E2E evidence prefixes)
+- source-embedded `DD-*` trace blocks on service implementation functions under `services/**`
+- source-embedded `UT-*` trace blocks on unit test functions under `tests/unit/**`
+- `trace/tests.yaml` (E2E and future integration metadata plus E2E evidence prefixes)
 
 Validation commands:
 ```bash
 make qa-trace
 ```
-- Validates requirement -> architecture -> design -> test linkage.
-- Uses strict layered mapping only (`REQ -> ARCH -> DD -> TEST`) and derives requirement coverage transitively.
+- Validates structural trace integrity for:
+  - `REQ -> ARCH`
+  - `ARCH -> DD`
+  - `DD -> UT`
+  - `REQ -> E2E`
+  - future `ARCH -> IT`
+- Uses source-embedded `DD-*` tags on service implementation functions in `services/**`.
+- Uses source-embedded `UT-*` blocks on unit test functions in `tests/unit/**`.
+- Uses `trace/tests.yaml` for E2E and future integration trace metadata only.
+- Reports coverage gaps explicitly instead of inventing links to make the graph look complete.
 - Writes machine-readable report: `artifacts/quality/traceability_report.json`.
+- Writes source-derived design index: `artifacts/quality/design_index.json`.
 
 ```bash
 make qa-evidence

@@ -70,7 +70,6 @@ qa-trace:
 	$(PYTHON) scripts/validate_traceability.py \
 	  --requirements-doc docs/requirements.md \
 	  --architecture-doc docs/architecture.md \
-	  --design trace/design.yaml \
 	  --tests trace/tests.yaml \
 	  --report-json artifacts/quality/traceability_report.json
 

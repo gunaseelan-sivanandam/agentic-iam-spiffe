@@ -136,7 +136,18 @@ After a test run, validate that evidence directories were produced and contain g
   make qa-trace
   ```
   - Uses `docs/requirements.md` as the authored requirement source and `docs/architecture.md` as the authored architecture source.
-  - Uses strict layered mapping (no direct requirement links in `trace/design.yaml` or `trace/tests.yaml`).
+  - Uses layer-correct mapping only:
+    - `REQ -> ARCH`
+    - `ARCH -> DD`
+    - `DD -> UT`
+    - `REQ -> E2E`
+    - future `ARCH -> IT`
+  - Uses source-embedded `DD-*` tags on service implementation functions under `services/**`.
+  - Uses source-embedded `UT-*` blocks on unit test functions under `tests/unit/**`.
+  - `trace/tests.yaml` remains the authored non-unit test map:
+    - `e2e_suite/e2e_case -> source_requirements`
+    - `integration_case -> source_architecture`
+  - Structural failures are blocking. Coverage gaps are reported but are not forced closed.
 - Validate E2E evidence completeness (post test-run):
   ```bash
   make qa-evidence

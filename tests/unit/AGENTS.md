@@ -13,6 +13,12 @@ Use it when creating or updating tests under `tests/unit/**`.
 
 ## Required test style (hard rule)
 - Every unit test must use the `guard` fixture from `tests/unit/conftest.py`.
+- Every unit test function under `tests/unit/**` must carry a traceability block immediately above the test:
+  - `UT: UT-###`
+  - `Test Description: ...`
+  - `Precondition: ...`
+  - `Expected Output: ...`
+  - `Covers DD: DD-..., ...`
 - Every unit test must execute explicit guard phases:
   - at least one `guard.premise(...)`
   - at least one `guard.exercise(...)`
@@ -93,3 +99,4 @@ Run from repo root.
 - Unit trust spec: `docs/unit_test_spec.md`
 - Requirements source: `docs/requirements.md`
 - Guard fixture and enforcement: `tests/unit/conftest.py`
+- Unit traceability is authored in the unit test source, not in `trace/tests.yaml`.

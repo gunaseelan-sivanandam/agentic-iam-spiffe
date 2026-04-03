@@ -72,12 +72,22 @@ def _premise_module_loaded(guard, toolb_module):
         ("/unknown", None),
     ],
 )
+# UT: UT-051
+# Test Description: Verifies canonical res for path across the parameterized matrix covered by this test.
+# Precondition: Module fixtures are loaded and the parameterized case input is available for the current test iteration.
+# Expected Output: Each parameterized case produces the expected result asserted by the outcome guards.
+# Covers DD: DD-216
 def test_canonical_res_for_path_matrix(toolb_module, path: str, expected, guard):
     _premise_module_loaded(guard, toolb_module)
     out = guard.exercise("canonicalize request path", lambda: toolb_module.canonical_res_for_path(path))
     guard.outcome("canonical mapping matches expected", out == expected)
 
 
+# UT: UT-052
+# Test Description: Verifies that verify chain and claims valid root.
+# Precondition: Module fixtures are loaded and any scenario-specific stubs or inputs are prepared in the exercise phase.
+# Expected Output: The SUT returns the successful values and side effects asserted by the outcome guards for this scenario.
+# Covers DD: DD-201
 @pytest.mark.invariant
 def test_verify_chain_and_claims_valid_root(toolb_module, guard):
     _premise_module_loaded(guard, toolb_module)
@@ -90,6 +100,11 @@ def test_verify_chain_and_claims_valid_root(toolb_module, guard):
     guard.outcome("effective depth zero", claims is not None and claims.get("effective_depth") == 0)
 
 
+# UT: UT-053
+# Test Description: Verifies that verify chain and claims rejects amplification.
+# Precondition: Module fixtures are loaded and any scenario-specific stubs or inputs are prepared in the exercise phase.
+# Expected Output: The SUT rejects or fails closed exactly as asserted by the outcome guards for this scenario.
+# Covers DD: DD-201
 @pytest.mark.invariant
 def test_verify_chain_and_claims_rejects_amplification(toolb_module, guard):
     _premise_module_loaded(guard, toolb_module)
@@ -102,6 +117,11 @@ def test_verify_chain_and_claims_rejects_amplification(toolb_module, guard):
     guard.outcome("reason amplified_authority", err == "amplified_authority")
 
 
+# UT: UT-054
+# Test Description: Verifies that verify chain and claims rejects res change without marker.
+# Precondition: Module fixtures are loaded and any scenario-specific stubs or inputs are prepared in the exercise phase.
+# Expected Output: The SUT rejects or fails closed exactly as asserted by the outcome guards for this scenario.
+# Covers DD: DD-201, DD-205
 @pytest.mark.invariant
 def test_verify_chain_and_claims_rejects_res_change_without_marker(toolb_module, monkeypatch, guard):
     _premise_module_loaded(guard, toolb_module)
@@ -115,6 +135,11 @@ def test_verify_chain_and_claims_rejects_res_change_without_marker(toolb_module,
     guard.outcome("reason amplified_authority", err == "amplified_authority")
 
 
+# UT: UT-055
+# Test Description: Verifies verify chain and claims fail closed if marker store unavailable.
+# Precondition: Module fixtures are loaded and any scenario-specific stubs or inputs are prepared in the exercise phase.
+# Expected Output: The SUT rejects or fails closed exactly as asserted by the outcome guards for this scenario.
+# Covers DD: DD-201, DD-205
 @pytest.mark.invariant
 def test_verify_chain_and_claims_fail_closed_if_marker_store_unavailable(toolb_module, monkeypatch, guard):
     _premise_module_loaded(guard, toolb_module)
@@ -128,6 +153,11 @@ def test_verify_chain_and_claims_fail_closed_if_marker_store_unavailable(toolb_m
     guard.outcome("reason store_unavailable", err == "store_unavailable")
 
 
+# UT: UT-056
+# Test Description: Verifies that verify chain and claims rejects invalid depth metadata.
+# Precondition: Module fixtures are loaded and any scenario-specific stubs or inputs are prepared in the exercise phase.
+# Expected Output: The SUT rejects or fails closed exactly as asserted by the outcome guards for this scenario.
+# Covers DD: DD-201
 @pytest.mark.boundary
 def test_verify_chain_and_claims_rejects_invalid_depth_metadata(toolb_module, guard):
     _premise_module_loaded(guard, toolb_module)
@@ -140,6 +170,11 @@ def test_verify_chain_and_claims_rejects_invalid_depth_metadata(toolb_module, gu
     guard.outcome("reason invalid_depth_metadata", err == "invalid_depth_metadata")
 
 
+# UT: UT-057
+# Test Description: Verifies that verify chain and claims enforces depth limit.
+# Precondition: Module fixtures are loaded and any scenario-specific stubs or inputs are prepared in the exercise phase.
+# Expected Output: The SUT exhibits the behavior asserted by the outcome guards for this scenario.
+# Covers DD: DD-201
 @pytest.mark.boundary
 def test_verify_chain_and_claims_enforces_depth_limit(toolb_module, guard):
     _premise_module_loaded(guard, toolb_module)

@@ -22,6 +22,11 @@ def signed_secret_token(capiss_module):
     return token, exp, capiss_module
 
 
+# UT: UT-072
+# Test Description: Verifies verify biscuit subject mismatch exact reason.
+# Precondition: Module fixtures are loaded and any scenario-specific stubs or inputs are prepared in the exercise phase.
+# Expected Output: The SUT rejects or fails closed exactly as asserted by the outcome guards for this scenario.
+# Covers DD: DD-202
 @pytest.mark.negative_control
 def test_verify_biscuit_subject_mismatch_exact_reason(toolb_module, signed_secret_token, monkeypatch, guard):
     _premise_modules_loaded(guard, toolb_module, signed_secret_token)
@@ -41,6 +46,11 @@ def test_verify_biscuit_subject_mismatch_exact_reason(toolb_module, signed_secre
     guard.outcome("reason sub_mismatch", reason == "sub_mismatch")
 
 
+# UT: UT-073
+# Test Description: Verifies verify biscuit expired exact reason.
+# Precondition: Module fixtures are loaded and any scenario-specific stubs or inputs are prepared in the exercise phase.
+# Expected Output: The SUT exhibits the behavior asserted by the outcome guards for this scenario.
+# Covers DD: DD-202
 @pytest.mark.negative_control
 def test_verify_biscuit_expired_exact_reason(toolb_module, signed_secret_token, monkeypatch, guard):
     _premise_modules_loaded(guard, toolb_module, signed_secret_token)
@@ -53,6 +63,11 @@ def test_verify_biscuit_expired_exact_reason(toolb_module, signed_secret_token, 
     guard.outcome("reason expired", reason == "expired")
 
 
+# UT: UT-074
+# Test Description: Verifies verify biscuit resource mismatch exact reason.
+# Precondition: Module fixtures are loaded and any scenario-specific stubs or inputs are prepared in the exercise phase.
+# Expected Output: The SUT rejects or fails closed exactly as asserted by the outcome guards for this scenario.
+# Covers DD: DD-202
 @pytest.mark.negative_control
 def test_verify_biscuit_resource_mismatch_exact_reason(toolb_module, signed_secret_token, monkeypatch, guard):
     _premise_modules_loaded(guard, toolb_module, signed_secret_token)
@@ -72,6 +87,11 @@ def test_verify_biscuit_resource_mismatch_exact_reason(toolb_module, signed_secr
     guard.outcome("reason insufficient_authority", reason == "insufficient_authority")
 
 
+# UT: UT-075
+# Test Description: Verifies verify biscuit budget exceeded exact reason.
+# Precondition: Module fixtures are loaded and any scenario-specific stubs or inputs are prepared in the exercise phase.
+# Expected Output: The SUT rejects or fails closed exactly as asserted by the outcome guards for this scenario.
+# Covers DD: DD-202, DD-203
 @pytest.mark.negative_control
 def test_verify_biscuit_budget_exceeded_exact_reason(toolb_module, signed_secret_token, monkeypatch, guard):
     _premise_modules_loaded(guard, toolb_module, signed_secret_token)
@@ -83,6 +103,11 @@ def test_verify_biscuit_budget_exceeded_exact_reason(toolb_module, signed_secret
     guard.outcome("reason budget_exceeded", reason == "budget_exceeded")
 
 
+# UT: UT-076
+# Test Description: Verifies verify biscuit rate limited exact reason.
+# Precondition: Module fixtures are loaded and any scenario-specific stubs or inputs are prepared in the exercise phase.
+# Expected Output: The SUT exhibits the behavior asserted by the outcome guards for this scenario.
+# Covers DD: DD-202, DD-203
 @pytest.mark.negative_control
 def test_verify_biscuit_rate_limited_exact_reason(toolb_module, signed_secret_token, monkeypatch, guard):
     _premise_modules_loaded(guard, toolb_module, signed_secret_token)

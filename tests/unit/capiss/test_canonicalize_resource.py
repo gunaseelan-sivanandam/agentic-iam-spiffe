@@ -25,6 +25,11 @@ def _premise_module_loaded(guard, capiss_module):
         ("tool-b", "search", None),
     ],
 )
+# UT: UT-001
+# Test Description: Verifies canonicalize resource across the parameterized matrix covered by this test.
+# Precondition: Module fixtures are loaded and the parameterized case input is available for the current test iteration.
+# Expected Output: Each parameterized case produces the expected result asserted by the outcome guards.
+# Covers DD: DD-101
 def test_canonicalize_resource_matrix(capiss_module, guard, aud: str, res: str, expected: str | None):
     _premise_module_loaded(guard, capiss_module)
     out = guard.exercise(
@@ -34,6 +39,11 @@ def test_canonicalize_resource_matrix(capiss_module, guard, aud: str, res: str, 
     guard.outcome("canonical result matches expected", out == expected)
 
 
+# UT: UT-002
+# Test Description: Verifies that canonicalize resource rejects wildcards.
+# Precondition: Module fixtures are loaded and any scenario-specific stubs or inputs are prepared in the exercise phase.
+# Expected Output: The SUT rejects or fails closed exactly as asserted by the outcome guards for this scenario.
+# Covers DD: DD-101
 @pytest.mark.invariant
 def test_canonicalize_resource_rejects_wildcards(capiss_module, guard):
     _premise_module_loaded(guard, capiss_module)
