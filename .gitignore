@@ -19,3 +19,4 @@ htmlcov/
 __pycache__/
 mutants/
 diff-coverage.txt
+.codex/
