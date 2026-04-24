@@ -60,6 +60,15 @@ class FakeRedis:
             value = args[1]
             bucket = self.store.get(key, set())
             return 1 if value in bucket else 0
+        if "mint_rate_exceeded" in script:
+            key = args[0]
+            allowed = int(args[1])
+            current = int(self.store.get(key, "0"))
+            if current >= allowed:
+                return [0, "mint_rate_exceeded", current]
+            current += 1
+            self.store[key] = str(current)
+            return [1, "ok", current]
         return 0
 
     def add_registry_item(self, root_token_id: str, resource: str):

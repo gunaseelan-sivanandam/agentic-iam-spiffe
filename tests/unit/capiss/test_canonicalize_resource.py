@@ -14,7 +14,7 @@ def _premise_module_loaded(guard, capiss_module):
         ("tool-b", "tool-b:/search", "tool-b:/search"),
         ("tool-b", "/search", "tool-b:/search"),
         ("tool-b", "tool-b:/secret", "tool-b:/secret"),
-        ("tool-b", "/secret", "/secret"),
+        ("tool-b", "/secret", "tool-b:/secret"),
         ("tool-b", "tool-b:/read-file:fileA", "tool-b:/read-file:fileA"),
         ("tool-b", "tool-b:/read-file:file A", None),
         ("tool-b", "tool-b:/read-file:file/A", None),

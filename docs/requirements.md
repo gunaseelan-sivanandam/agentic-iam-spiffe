@@ -293,11 +293,11 @@ The project shall treat topology shortcuts, duplicate authorization paths, permi
 TTL is acceptable in this milestone; explicit revocation is not required.
 
 **Core decisions baked into M4 (reduced scope):**
-- **Offline delegation** is allowed (attenuation-only) and enforced at PEP/tool.
+- **Checkpointed delegation in reduced scope:** request-time token-chain verification is enforced at PEP/tool, but resource-changing delegation is not pure offline delegation. New resource-scoped child tokens MUST be minted by `capiss` after policy, registry, and governance checks.
 - **No wildcard resources** in delegated permissions: always scoped to **canonical resources**.
 - **Depth limit:** token chains may delegate up to **N = 3** hops; **no extensions/renewals** in M4 reduced scope.
 - **Budget + request rate:** enforced **per request** and consumed **per `root_token_id`** (global across tools), using a trusted store (e.g., Redis). Agents never decrement.
-- **New resource mint rate:** enforced at `capiss` when minting new resource-scoped tokens.
+- **New resource mint rate:** enforced at `capiss` for new-resource mints, at **1 mint per 20 seconds of root-token lifetime** with a minimum allowance of **1**.
 - **Discovery-time expansion:** Option A registry now; later evolve to signed receipts while keeping `capiss` central.
 - **Fail closed** on any enforcement/store error.
 - **Full logging** from trusted components for every relevant step.
@@ -311,6 +311,7 @@ TTL is acceptable in this milestone; explicit revocation is not required.
 - **Spend/rate store**: Trusted shared state used by PEPs/tools to enforce spend budgets and request rate (e.g., Redis).
 - **Discovery Registry**: Trusted registry keyed by `root_token_id` recording discovered canonical resources (Option A).
 - **Token chain**: Lineage of tokens linked by `parent_token_id` back to a `root_token_id`.
+- **Checkpointed delegation**: In the current M4 reduced scope, resource-changing child tokens are minted by `capiss` under policy and discovery-governed checks. The resulting token chain is then verified locally by PEP/tool at request time.
 - **Hop / depth**: One delegation edge increments `delegation_depth` by 1. Depth is a property of a *token chain*, not an agent.
 - **Root token**: The chain anchor minted by `capiss`, **one per request** (M4 default), with **TTL = 60 seconds**.
 - **Canonical resource**: A deterministic, non-ambiguous identifier for the protected object/endpoint within a tool/service.
@@ -319,11 +320,12 @@ TTL is acceptable in this milestone; explicit revocation is not required.
 
 ## A. Delegation mechanics and chain correctness
 
-### REQ-M4-D1 — Delegation must not increase authority (permissive: subject change allowed)
+### REQ-M4-D1 — Delegation must not increase authority (reduced scope: same-subject only)
 A delegated token MUST NOT increase authority relative to its parent.
 
-Allowed changes:
-- `subject_spiffe_id` may change (delegating to a different identity). **This is permitted even if** `aud/act/res/exp` remain unchanged.
+Current reduced-scope M4 behavior:
+- `subject_spiffe_id` MUST remain equal to the parent token subject.
+- `subject_spiffe_id` MUST remain equal to the authenticated mint caller at `capiss`.
 - `delegation_depth` MUST increment by 1.
 
 Authority constraints:
@@ -332,7 +334,11 @@ Authority constraints:
 - `res` may only narrow (remove resources) or remain equal.
 - `exp` MUST NOT exceed parent expiry (may shorten or remain equal).
 
-In short: **subject transfer is allowed; privilege amplification is not.**
+In short: **same-subject attenuation is allowed; privilege amplification is not.**
+
+Deferred broader scope:
+- Cross-subject delegation (`subject_spiffe_id` changing from parent to child) is NOT part of the current reduced-scope M4 implementation.
+- Broader subject-transfer delegation is deferred for future design and implementation and MUST NOT be claimed by the current system behavior.
 
 ### REQ-M4-D2 — Canonical resources only (no wildcards)
 Delegation MUST reference **canonical resources** only.
@@ -400,6 +406,14 @@ Spend budget MUST expire no later than the root token expiry.
 ### REQ-M4-B6 — No budget renewal in M4 reduced scope
 There is **no** mechanism to replenish/increase spend budget within the same `root_token_id` in this milestone. A new root token/request context is required.
 
+### REQ-M4-B7 — New-resource mint rate is enforced at `capiss`
+`capiss` MUST enforce a mint-rate allowance for delegated mints that request a canonical `res` different from the parent token resource.
+- The allowance MUST be keyed by `root_token_id`.
+- The allowance MUST be `max(1, floor(root_token_lifetime_seconds / 20))`.
+- Same-resource child remints MUST NOT consume this allowance.
+- If the allowance is exhausted, minting MUST deterministically deny with a machine-readable reason.
+- If the trusted store for this decision is unavailable or malformed, minting MUST fail closed.
+
 ---
 
 ## D. Proof-of-derivation for discovery-time expansion (Option A: registry)
@@ -433,10 +447,13 @@ All PEPs/tools MUST use the same enforcement contract (shared library/service) f
 - depth + extension check
 - spend budget check
 
+In the current reduced-scope implementation, this shared enforcement contract MUST be a single authoritative implementation of chain validation, effective-depth derivation, and attenuation checks reused by both mint-time and request-time validation paths. Service-local policy calls, store lookups, and HTTP response shaping MAY remain outside that shared contract.
+
 ### REQ-M4-E3 — capiss is not in the hot path for every protected request
 `capiss` MUST NOT be required for every protected request.
 - `capiss` is used to mint root tokens and resource-scoped tokens (on-demand path), and to log those mint decisions.
 - Per-request enforcement (depth limit, spend budget, request-rate checks, identity binding) is performed at PEP/tool using the shared enforcement contract and the spend/rate store.
+- The current reduced-scope implementation therefore supports offline verification at use time, but not pure offline creation of new resource-scoped delegated tokens.
 
 ### REQ-M4-E4 — Identity binding is mandatory
 A request MUST be denied unless the presented token’s `subject_spiffe_id` matches the authenticated caller identity asserted by the PEP (e.g., via SPIFFE mTLS and a trusted identity header).
@@ -460,14 +477,17 @@ For every protected request, the enforcement layer MUST emit an audit event cont
 - structured reason code
 
 ### REQ-M4-O2 — capiss logs every mint decision with provenance
-For every mint request (root token mint or resource token mint), `capiss` MUST log:
+For every mint request (root token mint or resource token mint), `capiss` MUST emit exactly one final mint-decision audit event containing:
 - allow/deny
-- `policy_id` and/or `policy_hash`
+- `policy_id` and `policy_hash`
 - structured `reason_code`
-- `root_token_id`
-- `subject_spiffe_id`
-- requested `aud`, `act`, `res`
-- `registry_hit` yes/no (when minting a new resource scoped by the Discovery Registry)
+- `subject_spiffe_id` when known from the request
+- requested `aud`, `act`, `res` when truthfully known from the request
+- `root_token_id` when a root token context exists for that decision
+- `token_id` when a token was successfully created before a later fail-closed step
+- `parent_token_id` and `delegation_depth` for delegated/resource mint decisions when those values are available
+- `registry_hit` yes/no for resource mint decisions governed by the Discovery Registry
+- `error` for fail-closed/store-transport cases when implementation detail is available
 
 ### REQ-M4-O3 — Chain reconstruction is always possible
 From audit events + DA logs, it MUST be possible to reconstruct:

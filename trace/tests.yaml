@@ -82,7 +82,20 @@ tests:
   status: active
 - id: E2E-M4-SUITE
   type: e2e_suite
-  source_requirements: []
+  source_requirements:
+  - REQ-M4-D3
+  - REQ-M4-CH1
+  - REQ-M4-DL1
+  - REQ-M4-DL2
+  - REQ-M4-B2
+  - REQ-M4-B3
+  - REQ-M4-B4
+  - REQ-M4-B7
+  - REQ-M4-P1
+  - REQ-M4-P2
+  - REQ-M4-O1
+  - REQ-M4-O3
+  - REQ-M4-O4
   location:
     file: scripts/rogue_node_tests.sh
     selector: TEST_PREFIX="M4"
@@ -92,4 +105,9 @@ tests:
   - M4-T3
   - M4-T4
   - M4-T5
+  - M4-T6
+  - M4-T7
+  - M4-T8
+  - M4-T9
+  - M4-T10
   status: active

@@ -17,7 +17,7 @@ def signed_secret_token(capiss_module):
         SPIFFE_ID,
         "tool-b",
         "read",
-        "/secret",
+        "tool-b:/secret",
     )
     return token, exp, capiss_module
 
@@ -39,7 +39,7 @@ def test_verify_biscuit_subject_mismatch_exact_reason(toolb_module, signed_secre
             token,
             "spiffe://example.org/rogue",
             "read",
-            "/secret",
+            "tool-b:/secret",
         ),
     )
     guard.outcome("allowed false", allowed is False)
@@ -58,7 +58,7 @@ def test_verify_biscuit_expired_exact_reason(toolb_module, signed_secret_token, 
     guard.exercise("mock public key loader", lambda: monkeypatch.setattr(toolb_module, "load_capiss_public_key", lambda: capiss_module.ROOT_PUBLIC_KEY))
     guard.exercise("mock budget success", lambda: monkeypatch.setattr(toolb_module, "consume_budget_and_rate", lambda *_: (True, "ok", 9)))
     guard.exercise("advance clock past expiry", lambda: monkeypatch.setattr(toolb_module.time, "time", lambda: exp + 1))
-    allowed, reason, _ = guard.exercise("verify expired token", lambda: toolb_module.verify_biscuit(token, SPIFFE_ID, "read", "/secret"))
+    allowed, reason, _ = guard.exercise("verify expired token", lambda: toolb_module.verify_biscuit(token, SPIFFE_ID, "read", "tool-b:/secret"))
     guard.outcome("allowed false", allowed is False)
     guard.outcome("reason expired", reason == "expired")
 
@@ -98,7 +98,7 @@ def test_verify_biscuit_budget_exceeded_exact_reason(toolb_module, signed_secret
     token, _, capiss_module = signed_secret_token
     guard.exercise("mock public key loader", lambda: monkeypatch.setattr(toolb_module, "load_capiss_public_key", lambda: capiss_module.ROOT_PUBLIC_KEY))
     guard.exercise("mock budget deny missing_budget", lambda: monkeypatch.setattr(toolb_module, "consume_budget_and_rate", lambda *_: (False, "missing_budget", -1)))
-    allowed, reason, _ = guard.exercise("verify token over budget", lambda: toolb_module.verify_biscuit(token, SPIFFE_ID, "read", "/secret"))
+    allowed, reason, _ = guard.exercise("verify token over budget", lambda: toolb_module.verify_biscuit(token, SPIFFE_ID, "read", "tool-b:/secret"))
     guard.outcome("allowed false", allowed is False)
     guard.outcome("reason budget_exceeded", reason == "budget_exceeded")
 
@@ -114,6 +114,6 @@ def test_verify_biscuit_rate_limited_exact_reason(toolb_module, signed_secret_to
     token, _, capiss_module = signed_secret_token
     guard.exercise("mock public key loader", lambda: monkeypatch.setattr(toolb_module, "load_capiss_public_key", lambda: capiss_module.ROOT_PUBLIC_KEY))
     guard.exercise("mock rate limit deny", lambda: monkeypatch.setattr(toolb_module, "consume_budget_and_rate", lambda *_: (False, "rate_limited", 2)))
-    allowed, reason, _ = guard.exercise("verify rate-limited token", lambda: toolb_module.verify_biscuit(token, SPIFFE_ID, "read", "/secret"))
+    allowed, reason, _ = guard.exercise("verify rate-limited token", lambda: toolb_module.verify_biscuit(token, SPIFFE_ID, "read", "tool-b:/secret"))
     guard.outcome("allowed false", allowed is False)
     guard.outcome("reason rate_limited", reason == "rate_limited")

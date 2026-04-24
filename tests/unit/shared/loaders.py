@@ -6,6 +6,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+SERVICES_ROOT = Path(REPO_ROOT, "services")
 
 
 def _stable_module_name(path: Path, module_prefix: str) -> str:
@@ -19,6 +20,8 @@ def load_module_from_path(path: Path, module_prefix: str):
     module_name = _stable_module_name(path, module_prefix)
     if module_name in sys.modules:
         del sys.modules[module_name]
+    if str(SERVICES_ROOT) not in sys.path:
+        sys.path.insert(0, str(SERVICES_ROOT))
     spec = importlib.util.spec_from_file_location(module_name, path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"failed to load module spec for {path}")

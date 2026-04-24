@@ -830,7 +830,7 @@ Outcome guards
 5. issued_to is agent-a  
    - Confirms `issued_to == spiffe://example.org/agent-a`.
 6. aud/act/res correct  
-   - Confirms `aud == tool-b`, `act == read`, `res == /secret`.
+   - Confirms `aud == tool-b`, `act == read`, `res == tool-b:/secret`.
 
 ### Evidence produced
 
@@ -1611,8 +1611,8 @@ Premise guards
 
 Exercise guards
 
-1. mint root /secret token  
-   - Mints a root token for `/secret`.  
+1. mint root token for canonical secret resource  
+   - Mints a root token for `tool-b:/secret`.  
    - Writes response JSON to `root_mint.json` and status to `root_status.txt`.
 2. resource mint without discovery proof  
    - Attempts resource mint for `tool-b:/read-file:fileA` using the root token, without prior discovery registration.  
@@ -1721,10 +1721,10 @@ Premise guards
 
 Exercise guards
 
-1. mint root /secret token  
-   - Mints a root token for `/secret`.  
+1. mint root token for canonical secret resource  
+   - Mints a root token for `tool-b:/secret`.  
    - Writes response JSON to `root_mint.json` and status to `root_status.txt`.
-2. consume budget with repeated /secret calls  
+2. consume budget with repeated `/secret` calls  
    - Sends 11 calls to `/secret` using the same root token.  
    - Writes per-call responses (`resp_*.json`), per-call status files (`st_*.txt`), and combined status log `statuses.txt`.
 
@@ -1748,3 +1748,335 @@ Outcome guards
 - $EVDIR/st_11.txt  
 - $EVDIR/resp_*.json  
 - $EVDIR/st_*.txt
+
+### T6 — “tampered token is denied”
+(derived directly from scripts/rogue_node_tests.sh)
+
+### What it tests
+
+That a minted token with tampered bytes is rejected by tool-b rather than being accepted as a valid capability.
+
+### Step‑by‑step (as implemented)
+
+Premise guards
+
+1. tool-b and capiss material available  
+   - Ensures client material for tool-b and capability issuer is prepared.
+2. capiss-envoy resolves  
+   - Resolves `capability-issuer-envoy`.
+3. capiss-envoy TCP reachable  
+   - Verifies the capability issuer envoy port is reachable.
+4. tool-b-envoy resolves  
+   - Resolves `tool-b-envoy`.
+5. tool-b-envoy TCP reachable  
+   - Verifies the tool-b envoy port is reachable.
+
+Exercise guards
+
+1. mint root token for canonical secret resource  
+   - Mints a root token for `tool-b:/secret`.  
+   - Writes response JSON to `root_mint.json` and status to `root_status.txt`.
+2. tamper minted token bytes  
+   - Rewrites the final byte of the minted token and writes the altered token into `tampered_token.txt`.
+3. call tool-b `/secret` with tampered token  
+   - Sends the tampered token to tool-b and writes response JSON to `tampered_response.json` and status to `tampered_status.txt`.
+
+Outcome guards
+
+1. root mint allowed 200  
+   - Requires HTTP status 200 for the original root mint.
+2. tampered token denied  
+   - Requires status 401 or 403 for the tampered-token request.
+3. invalid token reason  
+   - Confirms the denial reason is `invalid_token`.
+
+### Evidence produced
+
+- $EVDIR/root_mint.json  
+- $EVDIR/root_status.txt  
+- $EVDIR/tampered_token.txt  
+- $EVDIR/tampered_response.json  
+- $EVDIR/tampered_status.txt
+
+### T7 — “depth limit is enforced on repeated delegation”
+(derived directly from scripts/rogue_node_tests.sh)
+
+### What it tests
+
+That repeated delegated resource minting is allowed up to the configured depth and then denied once the next mint would exceed the M4 depth ceiling.
+
+### Step‑by‑step (as implemented)
+
+Premise guards
+
+1. tool-b and capiss material available  
+   - Ensures client material for tool-b and capability issuer is prepared.
+2. capiss-envoy resolves  
+   - Resolves `capability-issuer-envoy`.
+3. capiss-envoy TCP reachable  
+   - Verifies the capability issuer envoy port is reachable.
+4. tool-b-envoy resolves  
+   - Resolves `tool-b-envoy`.
+5. tool-b-envoy TCP reachable  
+   - Verifies the tool-b envoy port is reachable.
+
+Exercise guards
+
+1. mint root search token  
+   - Mints a root discovery token.  
+   - Writes response JSON to `root_mint.json` and status to `root_status.txt`.
+2. discover files via search  
+   - Calls tool-b search using the root token and writes `search_response.json` and `search_status.txt`.
+3. mint delegated token depth 1  
+   - Mints the first resource token for `tool-b:/read-file:fileA` and writes `depth1_mint.json` and `depth1_status.txt`.
+4. mint delegated token depth 2  
+   - Repeats resource mint using the previous delegated token and writes `depth2_mint.json` and `depth2_status.txt`.
+5. mint delegated token depth 3  
+   - Repeats resource mint using the previous delegated token and writes `depth3_mint.json` and `depth3_status.txt`.
+6. attempt delegated token depth 4  
+   - Attempts one more delegated mint using the depth-3 token and writes `depth4_mint.json` and `depth4_status.txt`.
+
+Outcome guards
+
+1. root mint allowed 200  
+   - Requires HTTP status 200 for root mint.
+2. search allowed 200  
+   - Requires HTTP status 200 for search.
+3. depth 1 mint allowed 200  
+   - Requires HTTP status 200 for the first delegated token.
+4. depth 2 mint allowed 200  
+   - Requires HTTP status 200 for the second delegated token.
+5. depth 3 mint allowed 200  
+   - Requires HTTP status 200 for the third delegated token.
+6. depth 4 mint denied 403  
+   - Requires HTTP status 403 when one more delegated mint would exceed the configured ceiling.
+7. depth exceeded reason  
+   - Confirms the denial reason is `depth_exceeded`.
+
+### Evidence produced
+
+- $EVDIR/root_mint.json  
+- $EVDIR/root_status.txt  
+- $EVDIR/search_response.json  
+- $EVDIR/search_status.txt  
+- $EVDIR/depth1_mint.json  
+- $EVDIR/depth1_status.txt  
+- $EVDIR/depth2_mint.json  
+- $EVDIR/depth2_status.txt  
+- $EVDIR/depth3_mint.json  
+- $EVDIR/depth3_status.txt  
+- $EVDIR/depth4_mint.json  
+- $EVDIR/depth4_status.txt  
+
+### T8 — “new-resource mint rate is enforced at capiss”
+(derived directly from scripts/rogue_node_tests.sh)
+
+### What it tests
+
+That `capiss` allows only the formula-derived number of new-resource mints under one root token context and denies the next new-resource mint attempt once the allowance is exhausted.
+
+### Step‑by‑step (as implemented)
+
+Premise guards
+
+1. tool-b and capiss material available  
+   - Ensures client material for tool-b and capability issuer is prepared.
+2. capiss-envoy resolves  
+   - Resolves `capability-issuer-envoy`.
+3. capiss-envoy TCP reachable  
+   - Verifies the capability issuer envoy port is reachable.
+4. tool-b-envoy resolves  
+   - Resolves `tool-b-envoy`.
+5. tool-b-envoy TCP reachable  
+   - Verifies the tool-b envoy port is reachable.
+
+Exercise guards
+
+1. mint root search token  
+   - Mints a root discovery token and writes `root_mint.json` and `root_status.txt`.
+2. discover files via search  
+   - Calls tool-b search using the root token and writes `search_response.json` and `search_status.txt`.
+3. mint new resource fileA  
+   - Requests `tool-b:/read-file:fileA` using the root token and writes `fileA_mint.json` and `fileA_status.txt`.
+4. mint new resource fileB  
+   - Requests `tool-b:/read-file:fileB` using the same root token and writes `fileB_mint.json` and `fileB_status.txt`.
+5. mint new resource fileC  
+   - Requests `tool-b:/read-file:fileC` using the same root token and writes `fileC_mint.json` and `fileC_status.txt`.
+6. attempt fourth new-resource mint under same root  
+   - Attempts another new-resource mint for `tool-b:/read-file:fileA` using the same root token and writes `fileA_again_mint.json` and `fileA_again_status.txt`.
+
+Outcome guards
+
+1. root mint allowed 200  
+   - Requires HTTP status 200 for root mint.
+2. search allowed 200  
+   - Requires HTTP status 200 for search.
+3. first three new-resource mints allowed 200  
+   - Requires HTTP status 200 for fileA, fileB, and fileC new-resource mints.
+4. fourth new-resource mint denied 403  
+   - Requires HTTP status 403 once the formula-derived allowance is exhausted.
+5. mint-rate exceeded reason  
+   - Confirms the denial reason is `mint_rate_exceeded`.
+
+### Evidence produced
+
+- $EVDIR/root_mint.json  
+- $EVDIR/root_status.txt  
+- $EVDIR/search_response.json  
+- $EVDIR/search_status.txt  
+- $EVDIR/fileA_mint.json  
+- $EVDIR/fileA_status.txt  
+- $EVDIR/fileB_mint.json  
+- $EVDIR/fileB_status.txt  
+- $EVDIR/fileC_mint.json  
+- $EVDIR/fileC_status.txt  
+- $EVDIR/fileA_again_mint.json  
+- $EVDIR/fileA_again_status.txt  
+
+### T9 — “allow flow emits correlatable audit events”
+(derived directly from scripts/rogue_node_tests.sh)
+
+### What it tests
+
+That one successful reduced-scope M4 `/search -> /read-file:fileA` flow leaves enough correlated audit evidence in `capability-issuer` and `tool-b` container logs to reconstruct the mint, discovery, and enforcement path by `root_token_id`, `token_id`, and `parent_token_id`.
+
+### Step-by-step (as implemented)
+
+Premise guards
+
+1. tool-b and capiss material available  
+   - Ensures client material for tool-b and capability issuer is prepared.
+2. capiss-envoy resolves  
+   - Resolves `capability-issuer-envoy`.
+3. capiss-envoy TCP reachable  
+   - Verifies the capability issuer envoy port is reachable.
+4. tool-b-envoy resolves  
+   - Resolves `tool-b-envoy`.
+5. tool-b-envoy TCP reachable  
+   - Verifies the tool-b envoy port is reachable.
+
+Exercise guards
+
+1. record log capture start time  
+   - Records a UTC timestamp to `log_since.txt` for later container-log capture.
+2. mint root search token  
+   - Mints a root discovery token and writes `root_mint.json` and `root_status.txt`.
+3. discover files via search  
+   - Calls tool-b search using the root token and writes `search_response.json` and `search_status.txt`.
+4. resource mint for read-file:fileA  
+   - Requests a delegated token for `tool-b:/read-file:fileA` and writes `resource_mint.json` and `resource_status.txt`.
+5. read file using resource token  
+   - Calls the file-read endpoint with the delegated token and writes `read_response.json` and `read_status.txt`.
+6. capture capiss and tool-b logs since flow start  
+   - Captures container logs since `log_since.txt` into `capiss_container.log` and `toolb_container.log`.
+   - Filters event lines into `capiss_events.jsonl` and `toolb_events.jsonl`.
+
+Outcome guards
+
+1. root mint allowed 200  
+   - Requires HTTP status 200 for root mint.
+2. search allowed 200  
+   - Requires HTTP status 200 for search.
+3. resource mint allowed 200  
+   - Requires HTTP status 200 for delegated mint.
+4. read allowed 200  
+   - Requires HTTP status 200 for file read.
+5. capiss root mint event correlated  
+   - Confirms a `capiss_mint_decision` allow event exists for the root mint with the expected `root_token_id`, `token_id`, canonical `res`, and `subject_spiffe_id`.
+6. capiss delegated mint event correlated  
+   - Confirms a `capiss_mint_decision` allow event exists for the delegated mint with matching `root_token_id`, `token_id`, `parent_token_id`, canonical `res`, and `delegator_spiffe_id`.
+7. discovery registry write correlated  
+   - Confirms a `discovery_registry_write` event exists for the same `root_token_id`, `subject_spiffe_id`, and canonical discovery endpoint `tool-b:/search`.
+8. tool-b allow event correlated  
+   - Confirms a `toolb_enforcement_decision` allow event exists for `/read-file/fileA` with matching `root_token_id`, `token_id`, `parent_token_id`, canonical `res`, `subject_spiffe_id`, and `delegator_spiffe_id`.
+
+### Evidence produced
+
+- $EVDIR/log_since.txt  
+- $EVDIR/root_mint.json  
+- $EVDIR/root_status.txt  
+- $EVDIR/search_response.json  
+- $EVDIR/search_status.txt  
+- $EVDIR/resource_mint.json  
+- $EVDIR/resource_status.txt  
+- $EVDIR/read_response.json  
+- $EVDIR/read_status.txt  
+- $EVDIR/capiss_container.log  
+- $EVDIR/capiss_events.jsonl  
+- $EVDIR/toolb_container.log  
+- $EVDIR/toolb_events.jsonl  
+
+### T10 — “deny flow emits correlatable mint audit event”
+(derived directly from scripts/rogue_node_tests.sh)
+
+### What it tests
+
+That one denied reduced-scope M4 new-resource mint flow leaves a correlated `capiss_mint_decision` deny event in issuer logs with the exact deny reason and the identifiers needed to explain the failed mint under the root token context.
+
+### Step-by-step (as implemented)
+
+Premise guards
+
+1. tool-b and capiss material available  
+   - Ensures client material for tool-b and capability issuer is prepared.
+2. capiss-envoy resolves  
+   - Resolves `capability-issuer-envoy`.
+3. capiss-envoy TCP reachable  
+   - Verifies the capability issuer envoy port is reachable.
+4. tool-b-envoy resolves  
+   - Resolves `tool-b-envoy`.
+5. tool-b-envoy TCP reachable  
+   - Verifies the tool-b envoy port is reachable.
+
+Exercise guards
+
+1. record log capture start time  
+   - Records a UTC timestamp to `log_since.txt` for later container-log capture.
+2. mint root search token  
+   - Mints a root discovery token and writes `root_mint.json` and `root_status.txt`.
+3. discover files via search  
+   - Calls tool-b search using the root token and writes `search_response.json` and `search_status.txt`.
+4. mint new resource fileA  
+   - Requests `tool-b:/read-file:fileA` and writes `fileA_mint.json` and `fileA_status.txt`.
+5. mint new resource fileB  
+   - Requests `tool-b:/read-file:fileB` and writes `fileB_mint.json` and `fileB_status.txt`.
+6. mint new resource fileC  
+   - Requests `tool-b:/read-file:fileC` and writes `fileC_mint.json` and `fileC_status.txt`.
+7. attempt fourth new-resource mint under same root  
+   - Attempts another new-resource mint for `tool-b:/read-file:fileA` and writes `fileA_again_mint.json` and `fileA_again_status.txt`.
+8. capture capiss logs since flow start  
+   - Captures issuer logs since `log_since.txt` into `capiss_container.log`.
+   - Filters event lines into `capiss_events.jsonl`.
+
+Outcome guards
+
+1. root mint allowed 200  
+   - Requires HTTP status 200 for root mint.
+2. search allowed 200  
+   - Requires HTTP status 200 for search.
+3. first three new-resource mints allowed 200  
+   - Requires HTTP status 200 for fileA, fileB, and fileC new-resource mints.
+4. fourth new-resource mint denied 403  
+   - Requires HTTP status 403 for the over-limit mint attempt.
+5. mint-rate exceeded reason  
+   - Confirms the denial reason is `mint_rate_exceeded`.
+6. capiss mint-rate deny event correlated  
+   - Confirms a `capiss_mint_decision` deny event exists with `reason_code=mint_rate_exceeded`, matching `root_token_id`, matching parent root-token `token_id`, canonical denied resource, `registry_hit=true`, and `delegator_spiffe_id`.
+
+### Evidence produced
+
+- $EVDIR/log_since.txt  
+- $EVDIR/root_mint.json  
+- $EVDIR/root_status.txt  
+- $EVDIR/search_response.json  
+- $EVDIR/search_status.txt  
+- $EVDIR/fileA_mint.json  
+- $EVDIR/fileA_status.txt  
+- $EVDIR/fileB_mint.json  
+- $EVDIR/fileB_status.txt  
+- $EVDIR/fileC_mint.json  
+- $EVDIR/fileC_status.txt  
+- $EVDIR/fileA_again_mint.json  
+- $EVDIR/fileA_again_status.txt  
+- $EVDIR/capiss_container.log  
+- $EVDIR/capiss_events.jsonl  

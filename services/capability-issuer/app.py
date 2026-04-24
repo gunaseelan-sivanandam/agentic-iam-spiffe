@@ -11,6 +11,7 @@ from urllib.error import URLError
 import redis
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse
+from shared.enforcement_contract import verify_chain_contract
 
 from biscuit_auth import (
     Algorithm,
@@ -49,6 +50,30 @@ CAPISS_KEY_FILE = os.path.join(CAPISS_KEY_DIR, "root_key.b64")
 CAPISS_PUBLIC_KEY_FILE = os.path.join(CAPISS_KEY_DIR, "root_public_key.b64")
 
 FACT_RE = re.compile(r"^([a-zA-Z_][a-zA-Z0-9_]*)\((.*)\)$")
+
+CONSUME_MINT_RATE_LUA = """
+local mint_rate_key = KEYS[1]
+local allowed = tonumber(ARGV[1])
+local ttl = tonumber(ARGV[2])
+
+if allowed == nil or ttl == nil then
+  return {0, 'invalid_arguments', -1}
+end
+
+local current = tonumber(redis.call('GET', mint_rate_key) or '0')
+if current == nil then
+  return {0, 'invalid_counter', -1}
+end
+
+if current >= allowed then
+  redis.call('EXPIRE', mint_rate_key, ttl)
+  return {0, 'mint_rate_exceeded', current}
+end
+
+local new_count = redis.call('INCR', mint_rate_key)
+redis.call('EXPIRE', mint_rate_key, ttl)
+return {1, 'ok', new_count}
+"""
 
 
 # DD: DD-108
@@ -209,10 +234,6 @@ def canonicalize_resource(aud: str, res: str) -> str | None:
     if aud != "tool-b":
         return None
 
-    # Keep /secret compatibility for existing tests.
-    if res == "/secret":
-        return "/secret"
-
     if res.startswith("tool-b:/"):
         canonical = res
     elif res.startswith("/"):
@@ -288,62 +309,27 @@ def extract_chain_claims(biscuit: Biscuit) -> list[dict[str, str | int]]:
 
 
 # DD: DD-102
-# Implements: ARCH-004, ARCH-012
-# Title: verify_and_extract_chain capability issuance chain verification
+# Implements: ARCH-004, ARCH-012, ARCH-020
+# Title: verify_and_extract_chain capability issuance shared chain contract adapter
 def verify_and_extract_chain(biscuit: Biscuit) -> tuple[dict[str, str | int] | None, str | None]:
-    chain = extract_chain_claims(biscuit)
-    if not chain:
-        return None, "invalid_chain"
+    def _allow_capiss_resource_transition(
+        _previous: dict[str, str | int],
+        current: dict[str, str | int],
+    ) -> tuple[bool, str | None]:
+        marker_key = f'm4:capiss_minted:{current["token_id"]}'
+        try:
+            marker = get_redis().get(marker_key)
+        except redis.RedisError:
+            return False, "store_unavailable"
+        if marker not in (b"1", "1"):
+            return False, "amplified_authority"
+        return True, None
 
-    required = ("root_token_id", "token_id", "subject_spiffe_id", "aud", "act", "res", "exp")
-    first = chain[0]
-    for key in required:
-        if key not in first:
-            return None, "missing_chain_metadata"
-
-    root_token_id = str(first["root_token_id"])
-    prev_token_id = str(first["token_id"])
-    prev_aud = str(first["aud"])
-    prev_act = str(first["act"])
-    prev_res = str(first["res"])
-    prev_exp = int(first["exp"])
-
-    for idx in range(1, len(chain)):
-        block = chain[idx]
-        for key in required:
-            if key not in block:
-                return None, "missing_chain_metadata"
-        if str(block["root_token_id"]) != root_token_id:
-            return None, "invalid_chain"
-        if str(block.get("parent_token_id", "")) != prev_token_id:
-            return None, "invalid_chain"
-        if not block.get("delegator_spiffe_id"):
-            return None, "invalid_chain"
-
-        aud = str(block["aud"])
-        act = str(block["act"])
-        res = str(block["res"])
-        exp = int(block["exp"])
-
-        if aud != prev_aud or act != prev_act or res != prev_res:
-            return None, "amplified_authority"
-        if exp > prev_exp:
-            return None, "amplified_authority"
-
-        prev_token_id = str(block["token_id"])
-        prev_aud = aud
-        prev_act = act
-        prev_res = res
-        prev_exp = exp
-
-    final = dict(chain[-1])
-    effective_depth = len(chain) - 1
-    final["effective_depth"] = effective_depth
-    if int(final.get("delegation_depth", effective_depth)) != effective_depth:
-        return None, "invalid_depth_metadata"
-    if effective_depth > M4_MAX_DEPTH:
-        return None, "depth_exceeded"
-    return final, None
+    return verify_chain_contract(
+        biscuit,
+        max_depth=M4_MAX_DEPTH,
+        allow_resource_transition=_allow_capiss_resource_transition,
+    )
 
 
 # DD: DD-119
@@ -364,16 +350,13 @@ def parse_token(token_value: str) -> tuple[Biscuit | None, dict[str, str | int] 
 # DD: DD-120
 # Implements: ARCH-006, ARCH-012, ARCH-016
 # Title: ensure_root_budget capability issuer root budget initializer
-def ensure_root_budget(root_token_id: str, root_exp: int, initial_res: str) -> tuple[bool, str]:
+def ensure_root_budget(root_token_id: str, root_exp: int) -> tuple[bool, str]:
     ttl = max(1, root_exp - int(time.time()))
     budget_key = f"m4:budget:{root_token_id}"
-    registry_key = f"m4:registry:{root_token_id}"
     try:
         client = get_redis()
         pipe = client.pipeline(transaction=True)
         pipe.set(budget_key, M4_DEFAULT_BUDGET, ex=ttl)
-        pipe.sadd(registry_key, initial_res)
-        pipe.expire(registry_key, ttl)
         pipe.execute()
         return True, ""
     except redis.RedisError as exc:
@@ -406,6 +389,40 @@ def registry_has_resource(root_token_id: str, res: str) -> tuple[bool, bool, str
         return True, bool(int(result)), ""
     except redis.RedisError as exc:
         return False, False, str(exc)
+
+
+# DD: DD-221
+# Implements: ARCH-004, ARCH-006, ARCH-012, ARCH-016
+# Title: consume_mint_rate capability issuer new-resource mint-rate enforcer
+def consume_mint_rate(root_token_id: str, root_exp: int, root_token_lifetime_seconds: int) -> tuple[bool, str]:
+    allowed = max(1, root_token_lifetime_seconds // 20)
+    ttl = max(1, root_exp - int(time.time()))
+    mint_rate_key = f"m4:mint_rate:{root_token_id}"
+    try:
+        client = get_redis()
+        result = client.eval(CONSUME_MINT_RATE_LUA, 1, mint_rate_key, str(allowed), str(ttl))
+    except redis.RedisError:
+        return False, "store_unavailable"
+
+    if not isinstance(result, (list, tuple)) or len(result) < 2:
+        return False, "store_unavailable"
+
+    try:
+        allowed_flag = int(result[0])
+    except (TypeError, ValueError):
+        return False, "store_unavailable"
+
+    reason_value = result[1]
+    if isinstance(reason_value, bytes):
+        reason = reason_value.decode("utf-8", errors="replace")
+    else:
+        reason = str(reason_value)
+
+    if allowed_flag == 1 and reason == "ok":
+        return True, ""
+    if allowed_flag == 0 and reason == "mint_rate_exceeded":
+        return False, "mint_rate_exceeded"
+    return False, "store_unavailable"
 
 
 # DD: DD-123
@@ -492,6 +509,51 @@ def decision_input(
     return payload
 
 
+# DD: DD-222
+# Implements: ARCH-004, ARCH-012
+# Title: log_mint_decision capability issuer final mint-decision audit helper
+def log_mint_decision(
+    *,
+    result: str,
+    reason_code: str,
+    decision_type: str,
+    subject_spiffe_id: str | None = None,
+    delegator_spiffe_id: str | None = None,
+    payload: dict | None = None,
+    aud: str | None = None,
+    act: str | None = None,
+    res: str | None = None,
+    root_token_id: str | None = None,
+    token_id: str | None = None,
+    parent_token_id: str | None = None,
+    delegation_depth: int | None = None,
+    registry_hit: bool | None = None,
+    error: str | None = None,
+) -> None:
+    payload_aud = payload.get("aud") if isinstance(payload, dict) else None
+    payload_act = payload.get("act") if isinstance(payload, dict) else None
+    payload_res = payload.get("res") if isinstance(payload, dict) else None
+    fields = {
+        "result": result,
+        "reason_code": reason_code,
+        "decision_type": decision_type,
+        "subject_spiffe_id": subject_spiffe_id,
+        "delegator_spiffe_id": delegator_spiffe_id,
+        "aud": aud if aud is not None else payload_aud if isinstance(payload_aud, str) and payload_aud.strip() else None,
+        "act": act if act is not None else payload_act if isinstance(payload_act, str) and payload_act.strip() else None,
+        "res": res if res is not None else payload_res if isinstance(payload_res, str) and payload_res.strip() else None,
+        "root_token_id": root_token_id,
+        "token_id": token_id,
+        "parent_token_id": parent_token_id,
+        "delegation_depth": delegation_depth,
+        "registry_hit": registry_hit,
+        "error": error if error else None,
+        "policy_id": "capiss.allow.v2",
+        "policy_hash": "sha256:capiss-policy-v2",
+    }
+    log_event("capiss_mint_decision", **{key: value for key, value in fields.items() if value is not None})
+
+
 # DD: DD-103
 # Implements: ARCH-004, ARCH-012, ARCH-013
 # Title: run_policy_or_fail capability issuer policy decision boundary
@@ -534,16 +596,45 @@ def root_mint(
     x_spiffe_id: str | None = Header(default=None, alias="x-spiffe-id"),
 ):
     if not x_spiffe_id:
+        log_mint_decision(
+            result="deny",
+            reason_code="missing_spiffe_id",
+            decision_type="root_mint",
+            payload=payload,
+        )
         raise HTTPException(status_code=401, detail="missing x-spiffe-id")
     if not x_spiffe_id.startswith("spiffe://"):
+        log_mint_decision(
+            result="deny",
+            reason_code="invalid_spiffe_id",
+            decision_type="root_mint",
+            payload=payload,
+        )
         raise HTTPException(status_code=400, detail="invalid x-spiffe-id")
 
     cleaned, error_response = validate_mint_payload(payload)
     if error_response is not None:
+        reason_code = json.loads(error_response.body.decode("utf-8"))["reason"]
+        log_mint_decision(
+            result="deny",
+            reason_code=reason_code,
+            decision_type="root_mint",
+            subject_spiffe_id=x_spiffe_id,
+            payload=payload,
+        )
         return error_response
 
     canonical_res = canonicalize_resource(cleaned["aud"], cleaned["res"])
     if canonical_res is None:
+        log_mint_decision(
+            result="deny",
+            reason_code="res",
+            decision_type="root_mint",
+            subject_spiffe_id=x_spiffe_id,
+            aud=cleaned["aud"],
+            act=cleaned["act"],
+            res=cleaned["res"],
+        )
         return JSONResponse(
             status_code=400,
             content={"error": "bad_request", "reason": "res"},
@@ -558,6 +649,16 @@ def root_mint(
     )
     ok, fail_response = run_policy_or_fail(policy_input)
     if not ok:
+        reason_code = json.loads(fail_response.body.decode("utf-8"))["reason"]
+        log_mint_decision(
+            result="deny",
+            reason_code=reason_code,
+            decision_type="root_mint",
+            subject_spiffe_id=x_spiffe_id,
+            aud=cleaned["aud"],
+            act=cleaned["act"],
+            res=canonical_res,
+        )
         return fail_response
 
     token_value, expires_at, root_token_id, token_id = mint_root_biscuit(
@@ -567,10 +668,9 @@ def root_mint(
         canonical_res,
     )
 
-    ready, redis_err = ensure_root_budget(root_token_id, expires_at, canonical_res)
+    ready, redis_err = ensure_root_budget(root_token_id, expires_at)
     if not ready:
-        log_event(
-            "capiss_mint_decision",
+        log_mint_decision(
             result="deny",
             reason_code="store_unavailable",
             decision_type="root_mint",
@@ -581,8 +681,6 @@ def root_mint(
             act=cleaned["act"],
             res=canonical_res,
             error=redis_err,
-            policy_id="capiss.allow.v2",
-            policy_hash="sha256:capiss-policy-v2",
         )
         return JSONResponse(
             status_code=503,
@@ -591,8 +689,7 @@ def root_mint(
 
     marked, mark_err = mark_capiss_minted_token(token_id, expires_at)
     if not marked:
-        log_event(
-            "capiss_mint_decision",
+        log_mint_decision(
             result="deny",
             reason_code="store_unavailable",
             decision_type="root_mint",
@@ -603,16 +700,13 @@ def root_mint(
             act=cleaned["act"],
             res=canonical_res,
             error=mark_err,
-            policy_id="capiss.allow.v2",
-            policy_hash="sha256:capiss-policy-v2",
         )
         return JSONResponse(
             status_code=503,
             content={"error": "denied", "reason": "store_unavailable"},
         )
 
-    log_event(
-        "capiss_mint_decision",
+    log_mint_decision(
         result="allow",
         reason_code="ok",
         decision_type="root_mint",
@@ -624,9 +718,6 @@ def root_mint(
         aud=cleaned["aud"],
         act=cleaned["act"],
         res=canonical_res,
-        registry_hit=True,
-        policy_id="capiss.allow.v2",
-        policy_hash="sha256:capiss-policy-v2",
     )
 
     return {
@@ -654,38 +745,126 @@ def resource_mint(
     authorization: str | None = Header(default=None, alias="authorization"),
 ):
     if not x_spiffe_id:
+        log_mint_decision(
+            result="deny",
+            reason_code="missing_spiffe_id",
+            decision_type="resource_mint",
+            payload=payload,
+        )
         raise HTTPException(status_code=401, detail="missing x-spiffe-id")
     if not x_spiffe_id.startswith("spiffe://"):
+        log_mint_decision(
+            result="deny",
+            reason_code="invalid_spiffe_id",
+            decision_type="resource_mint",
+            payload=payload,
+        )
         raise HTTPException(status_code=400, detail="invalid x-spiffe-id")
+
+    def _log_resource_mint_decision(**fields):
+        log_mint_decision(
+            decision_type="resource_mint",
+            delegator_spiffe_id=x_spiffe_id,
+            **fields,
+        )
+
     if not authorization or not authorization.startswith("Bearer "):
+        _log_resource_mint_decision(
+            result="deny",
+            reason_code="missing_token",
+            subject_spiffe_id=x_spiffe_id,
+            payload=payload,
+        )
         return JSONResponse(status_code=401, content={"error": "denied", "reason": "missing_token"})
 
     parent_token = authorization.split(" ", 1)[1].strip()
     if not parent_token:
+        _log_resource_mint_decision(
+            result="deny",
+            reason_code="missing_token",
+            subject_spiffe_id=x_spiffe_id,
+            payload=payload,
+        )
         return JSONResponse(status_code=401, content={"error": "denied", "reason": "missing_token"})
 
     parent_biscuit, parent_claims, token_err = parse_token(parent_token)
     if token_err is not None or parent_claims is None or parent_biscuit is None:
+        _log_resource_mint_decision(
+            result="deny",
+            reason_code="invalid_token",
+            subject_spiffe_id=x_spiffe_id,
+            payload=payload,
+        )
         return JSONResponse(status_code=401, content={"error": "denied", "reason": "invalid_token"})
 
     if str(parent_claims["subject_spiffe_id"]) != x_spiffe_id:
+        _log_resource_mint_decision(
+            result="deny",
+            reason_code="sub_mismatch",
+            subject_spiffe_id=x_spiffe_id,
+            payload=payload,
+            root_token_id=str(parent_claims["root_token_id"]),
+            parent_token_id=str(parent_claims["token_id"]),
+            delegation_depth=int(parent_claims["effective_depth"]),
+        )
         return JSONResponse(status_code=403, content={"error": "denied", "reason": "sub_mismatch"})
 
     if int(parent_claims["effective_depth"]) >= M4_MAX_DEPTH:
+        _log_resource_mint_decision(
+            result="deny",
+            reason_code="depth_exceeded",
+            subject_spiffe_id=x_spiffe_id,
+            payload=payload,
+            root_token_id=str(parent_claims["root_token_id"]),
+            parent_token_id=str(parent_claims["token_id"]),
+            delegation_depth=int(parent_claims["effective_depth"]),
+        )
         return JSONResponse(status_code=403, content={"error": "denied", "reason": "depth_exceeded"})
 
     cleaned, error_response = validate_mint_payload(payload)
     if error_response is not None:
+        reason_code = json.loads(error_response.body.decode("utf-8"))["reason"]
+        _log_resource_mint_decision(
+            result="deny",
+            reason_code=reason_code,
+            subject_spiffe_id=x_spiffe_id,
+            payload=payload,
+            root_token_id=str(parent_claims["root_token_id"]),
+            parent_token_id=str(parent_claims["token_id"]),
+            delegation_depth=int(parent_claims["effective_depth"]),
+        )
         return error_response
 
     canonical_res = canonicalize_resource(cleaned["aud"], cleaned["res"])
     if canonical_res is None:
+        _log_resource_mint_decision(
+            result="deny",
+            reason_code="res",
+            subject_spiffe_id=x_spiffe_id,
+            aud=cleaned["aud"],
+            act=cleaned["act"],
+            res=cleaned["res"],
+            root_token_id=str(parent_claims["root_token_id"]),
+            parent_token_id=str(parent_claims["token_id"]),
+            delegation_depth=int(parent_claims["effective_depth"]),
+        )
         return JSONResponse(
             status_code=400,
             content={"error": "bad_request", "reason": "res"},
         )
 
     if str(parent_claims["aud"]) != cleaned["aud"] or str(parent_claims["act"]) != cleaned["act"]:
+        _log_resource_mint_decision(
+            result="deny",
+            reason_code="amplified_authority",
+            subject_spiffe_id=x_spiffe_id,
+            aud=cleaned["aud"],
+            act=cleaned["act"],
+            res=canonical_res,
+            root_token_id=str(parent_claims["root_token_id"]),
+            parent_token_id=str(parent_claims["token_id"]),
+            delegation_depth=int(parent_claims["effective_depth"]),
+        )
         return JSONResponse(status_code=403, content={"error": "denied", "reason": "amplified_authority"})
 
     # Single-value attenuation contract in M4 slice: resource cannot be broadened.
@@ -693,30 +872,80 @@ def resource_mint(
     if canonical_res != parent_res:
         store_ok, registry_hit, store_err = registry_has_resource(str(parent_claims["root_token_id"]), canonical_res)
         if not store_ok:
+            _log_resource_mint_decision(
+                result="deny",
+                reason_code="store_unavailable",
+                subject_spiffe_id=x_spiffe_id,
+                aud=cleaned["aud"],
+                act=cleaned["act"],
+                res=canonical_res,
+                root_token_id=str(parent_claims["root_token_id"]),
+                parent_token_id=str(parent_claims["token_id"]),
+                delegation_depth=int(parent_claims["effective_depth"]),
+                error=store_err,
+            )
             return JSONResponse(
                 status_code=503,
                 content={"error": "denied", "reason": "store_unavailable"},
             )
         if not registry_hit:
-            log_event(
-                "capiss_mint_decision",
+            _log_resource_mint_decision(
                 result="deny",
                 reason_code="registry_miss",
-                decision_type="resource_mint",
                 subject_spiffe_id=x_spiffe_id,
                 root_token_id=str(parent_claims["root_token_id"]),
                 parent_token_id=str(parent_claims["token_id"]),
+                delegation_depth=int(parent_claims["effective_depth"]),
                 aud=cleaned["aud"],
                 act=cleaned["act"],
                 res=canonical_res,
                 registry_hit=False,
                 error=store_err,
-                policy_id="capiss.allow.v2",
-                policy_hash="sha256:capiss-policy-v2",
             )
             return JSONResponse(
                 status_code=403,
                 content={"error": "denied", "reason": "registry_miss"},
+            )
+
+        mint_rate_ok, mint_rate_err = consume_mint_rate(
+            str(parent_claims["root_token_id"]),
+            int(parent_claims["exp"]),
+            M4_ROOT_TTL_SECONDS,
+        )
+        if not mint_rate_ok:
+            if mint_rate_err == "mint_rate_exceeded":
+                _log_resource_mint_decision(
+                    result="deny",
+                    reason_code="mint_rate_exceeded",
+                    subject_spiffe_id=x_spiffe_id,
+                    aud=cleaned["aud"],
+                    act=cleaned["act"],
+                    res=canonical_res,
+                    root_token_id=str(parent_claims["root_token_id"]),
+                    parent_token_id=str(parent_claims["token_id"]),
+                    delegation_depth=int(parent_claims["effective_depth"]),
+                    registry_hit=registry_hit,
+                )
+                return JSONResponse(
+                    status_code=403,
+                    content={"error": "denied", "reason": "mint_rate_exceeded"},
+                )
+            _log_resource_mint_decision(
+                result="deny",
+                reason_code="store_unavailable",
+                subject_spiffe_id=x_spiffe_id,
+                aud=cleaned["aud"],
+                act=cleaned["act"],
+                res=canonical_res,
+                root_token_id=str(parent_claims["root_token_id"]),
+                parent_token_id=str(parent_claims["token_id"]),
+                delegation_depth=int(parent_claims["effective_depth"]),
+                registry_hit=registry_hit,
+                error=mint_rate_err,
+            )
+            return JSONResponse(
+                status_code=503,
+                content={"error": "denied", "reason": "store_unavailable"},
             )
     else:
         registry_hit = True
@@ -732,6 +961,19 @@ def resource_mint(
     )
     ok, fail_response = run_policy_or_fail(policy_input)
     if not ok:
+        reason_code = json.loads(fail_response.body.decode("utf-8"))["reason"]
+        _log_resource_mint_decision(
+            result="deny",
+            reason_code=reason_code,
+            subject_spiffe_id=x_spiffe_id,
+            aud=cleaned["aud"],
+            act=cleaned["act"],
+            res=canonical_res,
+            root_token_id=str(parent_claims["root_token_id"]),
+            parent_token_id=str(parent_claims["token_id"]),
+            delegation_depth=int(parent_claims["effective_depth"]),
+            registry_hit=registry_hit,
+        )
         return fail_response
 
     token_value, expires_at, token_id = append_resource_token(
@@ -745,11 +987,9 @@ def resource_mint(
 
     marked, mark_err = mark_capiss_minted_token(token_id, expires_at)
     if not marked:
-        log_event(
-            "capiss_mint_decision",
+        _log_resource_mint_decision(
             result="deny",
             reason_code="store_unavailable",
-            decision_type="resource_mint",
             subject_spiffe_id=x_spiffe_id,
             root_token_id=str(parent_claims["root_token_id"]),
             token_id=token_id,
@@ -759,19 +999,15 @@ def resource_mint(
             res=canonical_res,
             registry_hit=registry_hit,
             error=mark_err,
-            policy_id="capiss.allow.v2",
-            policy_hash="sha256:capiss-policy-v2",
         )
         return JSONResponse(
             status_code=503,
             content={"error": "denied", "reason": "store_unavailable"},
         )
 
-    log_event(
-        "capiss_mint_decision",
+    _log_resource_mint_decision(
         result="allow",
         reason_code="ok",
-        decision_type="resource_mint",
         subject_spiffe_id=x_spiffe_id,
         root_token_id=str(parent_claims["root_token_id"]),
         token_id=token_id,
@@ -781,8 +1017,6 @@ def resource_mint(
         act=cleaned["act"],
         res=canonical_res,
         registry_hit=registry_hit,
-        policy_id="capiss.allow.v2",
-        policy_hash="sha256:capiss-policy-v2",
     )
 
     return {

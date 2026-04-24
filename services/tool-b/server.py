@@ -17,6 +17,7 @@ from biscuit_auth import (
     BiscuitValidationError,
     PublicKey,
 )
+from shared.enforcement_contract import verify_chain_contract
 
 SVID_CERT = os.getenv("SPIFFE_SVID_CERT", "/run/spire/svid/svid.pem")
 SPIFFE_HEADER = "x-spiffe-id"
@@ -207,7 +208,7 @@ def parse_block_source(src: str) -> dict[str, str | int]:
 # Title: canonical_res_for_path tool-b route to resource mapper
 def canonical_res_for_path(path: str) -> tuple[str, str] | None:
     if path == "/secret":
-        return "read", "/secret"
+        return "read", "tool-b:/secret"
     if path == "/search":
         return "read", "tool-b:/search"
     if path.startswith("/read-file/"):
@@ -219,79 +220,28 @@ def canonical_res_for_path(path: str) -> tuple[str, str] | None:
 
 
 # DD: DD-201
-# Implements: ARCH-005, ARCH-015
-# Title: verify_chain_and_claims tool-b chain and claim verifier
+# Implements: ARCH-005, ARCH-015, ARCH-020
+# Title: verify_chain_and_claims tool-b shared chain contract adapter
 def verify_chain_and_claims(biscuit: Biscuit) -> tuple[dict[str, str | int] | None, str]:
-    count = biscuit.block_count()
-    if count <= 0:
-        return None, "invalid_chain"
+    def _allow_capiss_resource_transition(
+        _previous: dict[str, str | int],
+        current: dict[str, str | int],
+    ) -> tuple[bool, str | None]:
+        store_ok, marker_hit = is_capiss_minted_token(str(current["token_id"]), int(current["exp"]))
+        if not store_ok:
+            return False, "store_unavailable"
+        if not marker_hit:
+            return False, "amplified_authority"
+        return True, None
 
-    chain: list[dict[str, str | int]] = []
-    for idx in range(count):
-        block = parse_block_source(biscuit.block_source(idx))
-        if "delegation_depth" not in block:
-            block["delegation_depth"] = idx
-        chain.append(block)
-
-    required = ("root_token_id", "token_id", "subject_spiffe_id", "aud", "act", "res", "exp")
-    first = chain[0]
-    for key in required:
-        if key not in first:
-            return None, "missing_chain_metadata"
-
-    root_token_id = str(first["root_token_id"])
-    prev_token_id = str(first["token_id"])
-    prev_aud = str(first["aud"])
-    prev_act = str(first["act"])
-    prev_res = str(first["res"])
-    prev_exp = int(first["exp"])
-
-    for idx in range(1, len(chain)):
-        block = chain[idx]
-        for key in required:
-            if key not in block:
-                return None, "missing_chain_metadata"
-        if str(block["root_token_id"]) != root_token_id:
-            return None, "invalid_chain"
-        if str(block.get("parent_token_id", "")) != prev_token_id:
-            return None, "invalid_chain"
-        if not block.get("delegator_spiffe_id"):
-            return None, "invalid_chain"
-
-        aud = str(block["aud"])
-        act = str(block["act"])
-        res = str(block["res"])
-        exp = int(block["exp"])
-
-        # M4 minimal attenuation in this slice:
-        # - aud/act must remain equal
-        # - res changes are only valid for capiss-minted checkpoint tokens
-        if aud != prev_aud or act != prev_act:
-            return None, "amplified_authority"
-        if res != prev_res:
-            store_ok, marker_hit = is_capiss_minted_token(str(block["token_id"]), exp)
-            if not store_ok:
-                return None, "store_unavailable"
-            if not marker_hit:
-                return None, "amplified_authority"
-        if exp > prev_exp:
-            return None, "amplified_authority"
-
-        prev_token_id = str(block["token_id"])
-        prev_aud = aud
-        prev_act = act
-        prev_res = res
-        prev_exp = exp
-
-    final = dict(chain[-1])
-    effective_depth = len(chain) - 1
-    final["effective_depth"] = effective_depth
-    if int(final.get("delegation_depth", effective_depth)) != effective_depth:
-        return None, "invalid_depth_metadata"
-    if effective_depth > M4_MAX_DEPTH:
-        return None, "depth_exceeded"
-
-    return final, ""
+    claims, err = verify_chain_contract(
+        biscuit,
+        max_depth=M4_MAX_DEPTH,
+        allow_resource_transition=_allow_capiss_resource_transition,
+    )
+    if claims is None:
+        return None, err or "invalid_chain"
+    return claims, ""
 
 
 # DD: DD-203
@@ -401,7 +351,7 @@ def verify_biscuit(token_value: str, spiffe_id: str, required_act: str, required
         return False, "insufficient_authority", claims
     if act != required_act:
         return False, "insufficient_authority", claims
-    if res not in {required_res, "tool-b:/secret" if required_res == "/secret" else required_res}:
+    if res != required_res:
         return False, "insufficient_authority", claims
     if exp <= now:
         return False, "expired", claims
@@ -416,6 +366,35 @@ def verify_biscuit(token_value: str, spiffe_id: str, required_act: str, required
         return False, "store_unavailable", claims
 
     return True, "", claims
+
+
+def _enforcement_event_fields(
+    *,
+    subject_spiffe_id: str | None,
+    claims: dict | None,
+    path: str,
+) -> dict[str, object]:
+    fields: dict[str, object] = {
+        "subject_spiffe_id": subject_spiffe_id,
+        "path": path,
+    }
+    if not claims:
+        return {key: value for key, value in fields.items() if value is not None}
+
+    fields.update(
+        {
+            "root_token_id": claims.get("root_token_id"),
+            "token_id": claims.get("token_id"),
+            "parent_token_id": claims.get("parent_token_id"),
+            "delegation_depth": claims.get("effective_depth"),
+            "delegator_spiffe_id": claims.get("delegator_spiffe_id"),
+            "aud": claims.get("aud"),
+            "act": claims.get("act"),
+            "res": claims.get("res"),
+            "budget_remaining": claims.get("budget_remaining"),
+        }
+    )
+    return {key: value for key, value in fields.items() if value is not None}
 
 
 class ToolBHandler(BaseHTTPRequestHandler):
@@ -442,38 +421,15 @@ class ToolBHandler(BaseHTTPRequestHandler):
     # Implements: ARCH-005, ARCH-015
     # Title: ToolBHandler._deny standardized tool-b deny payload path
     def _deny(self, status: int, reason: str, spiffe_id: str | None, claims: dict | None = None):
-        root_token_id = None
-        token_id = None
-        parent_token_id = None
-        depth = None
-        aud = None
-        act = None
-        res = None
-        remaining = None
-        if claims:
-            root_token_id = claims.get("root_token_id")
-            token_id = claims.get("token_id")
-            parent_token_id = claims.get("parent_token_id")
-            depth = claims.get("effective_depth")
-            aud = claims.get("aud")
-            act = claims.get("act")
-            res = claims.get("res")
-            remaining = claims.get("budget_remaining")
-
         log_event(
             "toolb_enforcement_decision",
             result="deny",
             reason_code=reason,
-            caller_subject_spiffe_id=spiffe_id,
-            root_token_id=root_token_id,
-            token_id=token_id,
-            parent_token_id=parent_token_id,
-            delegation_depth=depth,
-            aud=aud,
-            act=act,
-            res=res,
-            budget_remaining=remaining,
-            path=self.path,
+            **_enforcement_event_fields(
+                subject_spiffe_id=spiffe_id,
+                claims=claims,
+                path=self.path,
+            ),
         )
         self._send_json(status, {"error": "denied", "reason": reason})
 
@@ -506,16 +462,11 @@ class ToolBHandler(BaseHTTPRequestHandler):
             "toolb_enforcement_decision",
             result="allow",
             reason_code="ok",
-            caller_subject_spiffe_id=spiffe_id,
-            root_token_id=claims.get("root_token_id"),
-            token_id=claims.get("token_id"),
-            parent_token_id=claims.get("parent_token_id"),
-            delegation_depth=claims.get("effective_depth"),
-            aud=claims.get("aud"),
-            act=claims.get("act"),
-            res=claims.get("res"),
-            budget_remaining=claims.get("budget_remaining"),
-            path=self.path,
+            **_enforcement_event_fields(
+                subject_spiffe_id=spiffe_id,
+                claims=claims,
+                path=self.path,
+            ),
         )
         return claims
 

@@ -64,7 +64,7 @@ def _premise_module_loaded(guard, toolb_module):
 @pytest.mark.parametrize(
     ("path", "expected"),
     [
-        ("/secret", ("read", "/secret")),
+        ("/secret", ("read", "tool-b:/secret")),
         ("/search", ("read", "tool-b:/search")),
         ("/read-file/fileA", ("read", "tool-b:/read-file:fileA")),
         ("/read-file/file A", None),
@@ -193,3 +193,27 @@ def test_verify_chain_and_claims_enforces_depth_limit(toolb_module, guard):
     )
     guard.outcome("claims rejected", claims is None)
     guard.outcome("reason depth_exceeded", err == "depth_exceeded")
+
+
+# UT: UT-126
+# Test Description: Verifies that the tool-b chain verifier delegates to the shared enforcement contract and preserves its deny reason.
+# Precondition: Module fixtures are loaded and the shared contract symbol is stubbed to deny the presented chain.
+# Expected Output: The SUT returns no claims and preserves the exact deny reason from the shared contract.
+# Covers DD: DD-201
+@pytest.mark.invariant
+def test_verify_chain_and_claims_uses_shared_contract(toolb_module, monkeypatch, guard):
+    _premise_module_loaded(guard, toolb_module)
+    guard.exercise(
+        "mock shared contract deny",
+        lambda: monkeypatch.setattr(
+            toolb_module,
+            "verify_chain_contract",
+            lambda *_args, **_kwargs: (None, "invalid_chain"),
+        ),
+    )
+    claims, err = guard.exercise(
+        "verify chain through tool-b adapter",
+        lambda: toolb_module.verify_chain_and_claims(FakeBiscuit([base_root_block()])),
+    )
+    guard.outcome("claims rejected", claims is None)
+    guard.outcome("shared deny reason preserved", err == "invalid_chain")

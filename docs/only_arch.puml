@@ -42,7 +42,7 @@ package "Clients" {
 [rogue] -[#green]-> [capability-issuer-envoy] : root/resource mint
 [capability-issuer-envoy] --> [capability-issuer] : Trusted identity header
 [capability-issuer] --> [opa] : Policy decision
-[capability-issuer] -[#brown]-> [redis] : registry check + root budget init
+[capability-issuer] -[#brown]-> [redis] : root budget init + registry read + mint marker
 
 [agent-a] -[#orange]-> [tool-b-envoy] : capability-enforced request
 [rogue] -[#orange]-> [tool-b-envoy] : capability-enforced request

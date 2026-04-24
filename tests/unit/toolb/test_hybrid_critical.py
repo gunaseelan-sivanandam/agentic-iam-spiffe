@@ -25,7 +25,7 @@ def test_verify_biscuit_hybrid_root_secret_token(toolb_module, capiss_module, mo
             SPIFFE_ID,
             "tool-b",
             "read",
-            "/secret",
+            "tool-b:/secret",
         ),
     )
 
@@ -34,7 +34,7 @@ def test_verify_biscuit_hybrid_root_secret_token(toolb_module, capiss_module, mo
 
     allowed, reason, claims = guard.exercise(
         "verify root secret token",
-        lambda: toolb_module.verify_biscuit(token, SPIFFE_ID, "read", "/secret"),
+        lambda: toolb_module.verify_biscuit(token, SPIFFE_ID, "read", "tool-b:/secret"),
     )
     guard.outcome("allowed true", allowed is True)
     guard.outcome("empty reason", reason == "")

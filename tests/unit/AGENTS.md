@@ -4,6 +4,11 @@
 This file is the unit-test operating guide for coding agents.
 Use it when creating or updating tests under `tests/unit/**`.
 
+Important:
+- Unit tests are internal engineering controls.
+- They are not the primary black-box proof source for requirement satisfaction.
+- Use unit tests to lock DD contracts and regressions after the slice plan and runtime proof model have already been authored.
+
 ## Scope
 - Applies only to unit tests in:
   - `tests/unit/capiss/`
@@ -96,7 +101,8 @@ Run from repo root.
 - Guard integrity: zero unit tests missing Premise/Exercise/Outcome phases
 
 ## Primary references
-- Unit trust spec: `docs/unit_test_spec.md`
+- Internal unit support matrix: `docs/unit_test_spec.md`
 - Requirements source: `docs/requirements.md`
 - Guard fixture and enforcement: `tests/unit/conftest.py`
 - Unit traceability is authored in the unit test source, not in `trace/tests.yaml`.
+- Slice planning and review bundles: `docs/slices/`

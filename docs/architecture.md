@@ -67,16 +67,16 @@ It connects edge clients to `tool-b-envoy` and `capability-issuer-envoy`, then f
 ## ARCH-004 Capability Issuance and Policy Decision
 
 Type: Logical
-Satisfies: REQ-G-R1, REQ-G-R2, REQ-G-R3, REQ-M3-R3, REQ-M3-R4, REQ-M3-R5, REQ-M3-R6, REQ-M3-R7, REQ-M3-R10, REQ-M3-R11, REQ-M3-R12, REQ-M3-R13, REQ-M3-R14, REQ-M3-R15, REQ-M3-R25, REQ-M4-D1, REQ-M4-D2, REQ-M4-D3, REQ-M4-D4, REQ-M4-P1, REQ-M4-E3, REQ-M4-O2, REQ-X-R6
+Satisfies: REQ-G-R1, REQ-G-R2, REQ-G-R3, REQ-M3-R3, REQ-M3-R4, REQ-M3-R5, REQ-M3-R6, REQ-M3-R7, REQ-M3-R10, REQ-M3-R11, REQ-M3-R12, REQ-M3-R13, REQ-M3-R14, REQ-M3-R15, REQ-M3-R25, REQ-M4-D1, REQ-M4-D2, REQ-M4-D3, REQ-M4-D4, REQ-M4-B7, REQ-M4-P1, REQ-M4-E3, REQ-M4-O2, REQ-X-R6
 
 Overview:
 This subsystem mints explicit authority artifacts after policy evaluation. It keeps identity and authority separate, treats requested authority as untrusted input, and turns allowed authority into signed capability tokens with enforceable fields.
 
 Trust/Responsibility:
-Its responsibility is to gate minting on policy, enforce required authority fields at issuance time, and ensure root or delegated tokens are minted centrally rather than inferred by clients. It is also where new-resource minting is checked against discovery-derived proof in the current M4 slice.
+Its responsibility is to gate minting on policy, enforce required authority fields at issuance time, and ensure root or delegated tokens are minted centrally rather than inferred by clients. It is also where new-resource minting is checked against discovery-derived proof in the current M4 slice. For M4 canonical-resource enforcement, mint-time authority is expected to use canonical `tool-b:/...` resources only.
 
 Interactions:
-It connects the capability issuer, the policy decision point, and the ingress boundary that supplies verified caller identity. It also interacts with shared state when root budget initialization and registry-gated resource minting are needed.
+It connects the capability issuer, the policy decision point, and the ingress boundary that supplies verified caller identity. It also interacts with shared state when root budget initialization, formula-based new-resource mint-rate enforcement, and registry-gated resource minting are needed.
 
 ## ARCH-005 Request-Time Capability Enforcement
 
@@ -87,7 +87,7 @@ Overview:
 This subsystem is the request-time enforcement path. It verifies tokens at the moment of use and denies access unless the caller identity, token authenticity, token claims, and current enforcement context all line up.
 
 Trust/Responsibility:
-Its responsibility is to make capability use a real authorization check rather than a token-presence check. It enforces authenticity, expiry, subject binding, audience, action, resource, and the current M4 chain and depth rules.
+Its responsibility is to make capability use a real authorization check rather than a token-presence check. It enforces authenticity, expiry, subject binding, audience, action, resource, and the current M4 chain and depth rules. For M4 canonical-resource enforcement, request-time checks are expected to evaluate against the same canonical `tool-b:/...` resource form used at mint-time.
 
 Interactions:
 It connects the Envoy boundary for verified caller identity, the tool implementation that performs request-time checks, and the shared state consulted during M4 governance enforcement.
@@ -95,16 +95,19 @@ It connects the Envoy boundary for verified caller identity, the tool implementa
 ## ARCH-006 Shared Governance State and Discovery Registry
 
 Type: Logical
-Satisfies: REQ-G-R2, REQ-G-R3, REQ-M4-B1, REQ-M4-B2, REQ-M4-B3, REQ-M4-B4, REQ-M4-B5, REQ-M4-B6, REQ-M4-P1, REQ-M4-P2, REQ-M4-P3, REQ-M4-P4, REQ-M4-P5, REQ-M4-E1, REQ-M4-E3, REQ-M4-O1, REQ-M4-O3, REQ-M4-O4
+Satisfies: REQ-G-R2, REQ-G-R3, REQ-M4-B1, REQ-M4-B2, REQ-M4-B3, REQ-M4-B4, REQ-M4-B5, REQ-M4-B6, REQ-M4-B7, REQ-M4-P1, REQ-M4-P2, REQ-M4-P3, REQ-M4-P4, REQ-M4-P5, REQ-M4-E1, REQ-M4-E3, REQ-M4-O1, REQ-M4-O3, REQ-M4-O4
 
 Overview:
-This subsystem provides the trusted shared state used by the current M4 implementation. It holds the budget and rate state keyed by `root_token_id` and the discovery registry used to gate minting of new resource-scoped capabilities.
+This subsystem provides the trusted shared state used by the current M4 implementation. It holds the budget and rate state keyed by `root_token_id`, the mint-rate state used to bound new-resource mint fan-out, and the discovery registry used to gate minting of new resource-scoped capabilities.
 
 Trust/Responsibility:
 Its responsibility is to keep governance truth out of untrusted agents and inside trusted services plus shared state. It is central to fail-closed request spending, discovery-time expansion, and later audit or drift analysis.
 
 Interactions:
-It is used by capability issuance for root-budget initialization and registry membership checks, and by tool-b for per-request spend/rate consumption and discovery writes.
+It is used by capability issuance for root-budget initialization, mint-rate consumption, and registry membership checks, and by tool-b for per-request spend/rate consumption and discovery writes.
+
+Authoritative State:
+The current M4 slice depends on four Redis-backed authoritative state families. `m4:registry:<root_token_id>` is written by tool-b during discovery and read by capability-issuer to decide whether a new resource-scoped mint is allowed; capability-issuer no longer seeds this set during root mint. `m4:budget:<root_token_id>` and the related request-rate keys are initialized or consumed by trusted services and are used only for request-time governance enforcement. `m4:mint_rate:<root_token_id>` is written and consumed by capability-issuer to enforce the formula-based new-resource mint allowance per root-token context. `m4:capiss_minted:<token_id>` is written by capability-issuer when it mints a delegated or resource-scoped token and is later read by capability-issuer and tool-b as issuer-provenance state for the current resource-transition delegation rule.
 
 ## ARCH-007 Evidence and Security Verification Harness
 
@@ -179,16 +182,16 @@ It accepts external mint requests, forwards them to the capability issuer servic
 ## ARCH-012 capability-issuer
 
 Type: Component
-Satisfies: REQ-M3-R3, REQ-M3-R4, REQ-M3-R5, REQ-M3-R6, REQ-M3-R7, REQ-M3-R10, REQ-M3-R11, REQ-M3-R12, REQ-M3-R13, REQ-M3-R14, REQ-M3-R15, REQ-M3-R25, REQ-M4-D1, REQ-M4-D2, REQ-M4-D3, REQ-M4-D4, REQ-M4-P1, REQ-M4-E3, REQ-M4-O2
+Satisfies: REQ-M3-R3, REQ-M3-R4, REQ-M3-R5, REQ-M3-R6, REQ-M3-R7, REQ-M3-R10, REQ-M3-R11, REQ-M3-R12, REQ-M3-R13, REQ-M3-R14, REQ-M3-R15, REQ-M3-R25, REQ-M4-D1, REQ-M4-D2, REQ-M4-D3, REQ-M4-D4, REQ-M4-B7, REQ-M4-P1, REQ-M4-E3, REQ-M4-O2
 
 Overview:
-The capability issuer is the central authority that mints root and resource-scoped capability tokens. It translates allowed policy outcomes into explicit signed authority artifacts.
+The capability issuer is the central authority that mints root and resource-scoped capability tokens. It translates allowed policy outcomes into explicit signed authority artifacts and enforces the current M4 new-resource mint-rate rule.
 
 Trust/Responsibility:
-It owns mint-time validation, required token fields, delegated token metadata, and current M4 registry-gated resource minting. It is also the current source for mint-decision logging.
+It owns mint-time validation, required token fields, delegated token metadata, current M4 registry-gated resource minting, and current M4 new-resource mint-rate enforcement. It is also the current source for mint-decision logging and must emit one final mint-decision event for every mint exit path. In the canonical-resource cleanup slice it is responsible for rejecting non-canonical mint requests instead of silently preserving compatibility aliases.
 
 Interactions:
-It receives verified identity from Envoy, queries OPA for mint policy, reads and writes shared state where needed, and returns signed tokens to callers.
+It receives verified identity from Envoy, queries OPA for mint policy, reads and writes shared state where needed, enforces the new-resource mint-rate against Redis-backed state, emits structured JSON mint-decision events to stdout for container-log capture, and returns signed tokens to callers.
 
 ## ARCH-013 OPA
 
@@ -199,7 +202,7 @@ Overview:
 OPA provides the current policy decision point for capability minting. It turns requested authority plus verified caller identity into an explicit allow or deny result.
 
 Trust/Responsibility:
-Its responsibility is to provide policy-gated decisions and to fail closed when policy is unavailable or invalid. It prevents minting from degrading into a local allow shortcut.
+Its responsibility is to provide policy-gated decisions and to fail closed when policy is unavailable or invalid. It prevents minting from degrading into a local allow shortcut. For M4 canonical-resource enforcement, policy inputs are expected to use canonical `tool-b:/...` resource strings only.
 
 Interactions:
 It is called by the capability issuer over the internal app network and is deliberately isolated from edge callers.
@@ -227,7 +230,7 @@ Overview:
 tool-b is the current protected resource server and the main request-time enforcement point. It applies endpoint authorization, verifies capability tokens, and performs the current M4 governance checks during protected requests.
 
 Trust/Responsibility:
-It is responsible for enforcing that identity alone is not enough, that tokens are valid for the caller and requested action, and that the M4 chain, budget, and discovery behaviors are checked during actual use.
+It is responsible for enforcing that identity alone is not enough, that tokens are valid for the caller and requested action, and that the M4 chain, budget, and discovery behaviors are checked during actual use. In the canonical-resource cleanup slice it is responsible for mapping request paths to canonical `tool-b:/...` resource identifiers before authorization.
 
 Interactions:
 It receives verified caller identity from tool-b-envoy, consults Redis during M4 enforcement, and writes discovery records for the current registry-based flow.
@@ -235,16 +238,52 @@ It receives verified caller identity from tool-b-envoy, consults Redis during M4
 ## ARCH-016 Redis
 
 Type: Component
-Satisfies: REQ-M4-B2, REQ-M4-B3, REQ-M4-B4, REQ-M4-B5, REQ-M4-B6, REQ-M4-P2, REQ-M4-P3, REQ-M4-P4, REQ-M4-O3, REQ-M4-O4
+Satisfies: REQ-M4-B2, REQ-M4-B3, REQ-M4-B4, REQ-M4-B5, REQ-M4-B6, REQ-M4-B7, REQ-M4-P2, REQ-M4-P3, REQ-M4-P4, REQ-M4-O3, REQ-M4-O4
 
 Overview:
-Redis is the trusted shared state used by the current M4 slice. It stores request budget and rate information as well as the discovery registry that binds new resources to a root token context.
+Redis is the trusted shared state used by the current M4 slice. It stores request budget and rate information, the new-resource mint-rate state used by capability-issuer, and the discovery registry that binds new resources to a root token context.
 
 Trust/Responsibility:
 Its responsibility is to provide shared authoritative state for governance checks that cannot be delegated to agents. It is also the failure point that drives fail-closed behavior when trusted state becomes unavailable.
 
 Interactions:
-It is accessed by capability-issuer and tool-b over the internal networks for budget initialization, request consumption, and registry lookups or writes.
+It is accessed by capability-issuer and tool-b over the internal networks for budget initialization, mint-rate consumption, request consumption, and registry lookups or writes.
+
+Authoritative State:
+This component currently stores:
+- `m4:registry:<root_token_id>`:
+  - writer: tool-b
+  - readers: capability-issuer
+  - purpose: discovery-backed proof that a newly requested resource was previously discovered under the same root token context
+  - note: root mint no longer seeds this set with the root token's starting resource
+- `m4:budget:<root_token_id>` and associated request-rate keys:
+  - writer/reader: tool-b, with root-budget initialization from capability-issuer
+  - purpose: per-root-token governance truth for request spending and rate limiting
+- `m4:mint_rate:<root_token_id>`:
+  - writer/reader: capability-issuer
+  - purpose: per-root-token consumed count for the new-resource mint-rate rule `max(1, floor(root_token_lifetime_seconds / 20))`
+  - note: the key TTL is bounded to the remaining root-token lifetime
+- `m4:capiss_minted:<token_id>`:
+  - writer: capability-issuer
+  - readers: capability-issuer, tool-b
+  - purpose: issuer-provenance marker for delegated or resource-scoped child tokens in the current M4 implementation
+
+## ARCH-020 Shared Enforcement Contract
+
+Type: Component
+Satisfies: REQ-M4-D1, REQ-M4-D3, REQ-M4-D4, REQ-M4-CH1, REQ-M4-DL1, REQ-M4-DL2, REQ-M4-E2
+
+Overview:
+This component is the in-process shared enforcement module imported by both capability-issuer and tool-b. It is not a network service. It centralizes the current M4 token-chain contract so both services evaluate the same chain structure, derived depth, and attenuation semantics.
+
+Trust/Responsibility:
+Its responsibility is to eliminate semantic drift between mint-time and request-time chain validation. It owns required chain metadata checks, parent-link continuity, derived depth calculation, and the shared non-amplification rules used by both services.
+
+Interactions:
+It is loaded directly into the capability-issuer and tool-b Python processes at startup. Service-local policy evaluation, Redis lookups, identity binding, signature verification, and HTTP response handling remain outside this component.
+
+Authoritative State Boundary:
+This component does not own shared mutable state itself. It consumes token-chain contents directly and accepts service-local callbacks when a chain decision depends on authoritative state outside the token. In the current M4 slice, the main external-state dependency is the Redis-backed `m4:capiss_minted:<token_id>` issuer-provenance marker used to allow the `/search` to `tool-b:/read-file:*` resource transition only when the child token was minted through the trusted capability-issuer path.
 
 ## ARCH-017 capability-issuer-no-opa-envoy
 

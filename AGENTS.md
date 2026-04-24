@@ -4,6 +4,18 @@
 This file gives coding agents and contributors the minimum, correct operational context for this repo.
 Use these commands first before inventing alternatives.
 
+## Operating model (black-box first)
+- Treat the system as a black box first:
+  - authored intent in `docs/requirements.md`
+  - authored runtime/system model in `docs/architecture.md`
+  - runtime-visible proof in `trace/tests.yaml` plus evidence artifacts
+- Internal implementation artifacts such as `DD-*`, `UT-*`, source helpers, or local test doubles are engineering controls, not the primary proof model for system behavior.
+- If a security-relevant behavior depends on hidden state, that behavior must be authored before implementation in:
+  - architecture state inventory
+  - slice ADR/DDR
+  - implementation contract
+- Do not introduce or retain runtime-significant behavior that exists only in code.
+
 ## Project map
 - Compose file: `compose/spiffe.compose.yml`
 - Main test harness: `scripts/rogue_node_tests.sh`
@@ -11,6 +23,32 @@ Use these commands first before inventing alternatives.
 - Test report output: `test_report.log`
 - Evidence artifacts on host: `artifacts/rogue-tests/`
 - Unit-test agent guide: `tests/unit/AGENTS.md`
+- Slice workflow and templates: `docs/slices/`
+
+## Slice workflow (required for security-relevant work)
+Use the 4-phase flow for milestone and security-relevant changes.
+
+1. `Phase 1: plan and review`
+   - create a per-slice bundle under `docs/slices/<slice-id>/`
+   - update requirements and architecture deltas
+   - record ADR/DDR decisions
+   - write the implementation and retirement contracts
+2. `Phase 2: tests from the approved bundle`
+   - add UT/E2E only from the reviewed slice contract
+   - if tests require a new assumption, stop and update the slice docs first
+3. `Phase 3: implementation and retirement`
+   - implement only approved behavior
+   - remove dead code, stale compatibility paths, and obsolete artifacts called out in the retirement contract
+4. `Phase 4: independent verification`
+   - run trace, quality, E2E, and evidence checks
+   - record the result in `docs/local_status_capture/implementation_status.md`
+
+Mandatory authoring in every slice bundle:
+- authoritative state inventory
+- ADR for architecture/runtime trust choices
+- DDR for design/implementation-shape choices
+- implementation contract
+- retirement contract
 
 ## Environment assumptions
 - Docker Engine + Docker Compose v2 available.
@@ -147,6 +185,7 @@ After a test run, validate that evidence directories were produced and contain g
   - `trace/tests.yaml` remains the authored non-unit test map:
     - `e2e_suite/e2e_case -> source_requirements`
     - `integration_case -> source_architecture`
+  - For black-box trust, requirement satisfaction should be argued primarily through authored runtime mappings and evidence, not through unit-level implementation summaries.
   - Structural failures are blocking. Coverage gaps are reported but are not forced closed.
 - Validate E2E evidence completeness (post test-run):
   ```bash

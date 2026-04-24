@@ -210,6 +210,48 @@ def test_registry_has_resource_store_paths(capiss_module, monkeypatch, guard):
     guard.outcome("down error surfaced", err is not None and "down" in err)
 
 
+# UT: UT-128
+# Test Description: Verifies that ensure_root_budget initializes only the root budget key and does not seed the discovery registry.
+# Precondition: Module fixtures are loaded and the Redis pipeline dependency is replaced with a recording fake.
+# Expected Output: The SUT writes exactly the budget key with a TTL and executes the pipeline without any registry writes.
+# Covers DD: DD-120
+@pytest.mark.invariant
+def test_ensure_root_budget_writes_only_budget_key(capiss_module, monkeypatch, guard):
+    _premise_module_loaded(guard, capiss_module)
+    seen: list[tuple] = []
+
+    class RecordingPipeline:
+        def set(self, key, value, ex):
+            seen.append(("set", key, value, ex))
+            return self
+
+        def execute(self):
+            seen.append(("execute",))
+            return [True]
+
+    class RecordingClient:
+        def pipeline(self, transaction=True):
+            seen.append(("pipeline", transaction))
+            return RecordingPipeline()
+
+    now = int(time.time())
+    guard.exercise("mock recording redis client", lambda: monkeypatch.setattr(capiss_module, "get_redis", lambda: RecordingClient()))
+    ok, err = guard.exercise("initialize root budget", lambda: capiss_module.ensure_root_budget("root-1", now + 15))
+    guard.outcome("budget init succeeds", ok is True)
+    guard.outcome("empty error on success", err == "")
+    guard.outcome(
+        "only budget write issued",
+        len(seen) == 3
+        and seen[0] == ("pipeline", True)
+        and seen[1][0] == "set"
+        and seen[1][1] == "m4:budget:root-1"
+        and seen[1][2] == capiss_module.M4_DEFAULT_BUDGET
+        and isinstance(seen[1][3], int)
+        and seen[1][3] >= 1
+        and seen[2] == ("execute",),
+    )
+
+
 # UT: UT-108
 # Test Description: Verifies that the capability issuer health endpoint returns the exact ok payload.
 # Precondition: Module fixtures are loaded and no additional setup is required.
@@ -491,3 +533,130 @@ def test_extract_chain_claims_defaults_depth_when_missing(capiss_module, guard):
     biscuit = guard.exercise("load biscuit from token", lambda: capiss_module.Biscuit.from_base64(token, capiss_module.ROOT_PUBLIC_KEY))
     chain = guard.exercise("extract chain claims", lambda: capiss_module.extract_chain_claims(biscuit))
     guard.outcome("default delegation depth is zero", chain[0].get("delegation_depth") == 0)
+
+
+# UT: UT-129
+# Test Description: Verifies that capiss consumes mint-rate allowance until the formula-derived limit is reached and then denies.
+# Precondition: The Redis dependency is replaced with a deterministic fake that returns three allows followed by one deny for the same root context.
+# Expected Output: The SUT returns allow for the first three consumes under a 60-second lifetime and then returns the exact deny reason `mint_rate_exceeded`.
+# Covers DD: DD-221
+@pytest.mark.boundary
+def test_consume_mint_rate_allows_until_formula_limit_then_denies(capiss_module, monkeypatch, guard):
+    _premise_module_loaded(guard, capiss_module)
+
+    class SequenceClient:
+        def __init__(self):
+            self.calls = 0
+
+        def eval(self, *args):
+            self.calls += 1
+            if self.calls <= 3:
+                return [1, "ok", self.calls]
+            return [0, "mint_rate_exceeded", 3]
+
+    client = SequenceClient()
+    guard.exercise("mock sequence redis client", lambda: monkeypatch.setattr(capiss_module, "get_redis", lambda: client))
+    guard.exercise("freeze current time", lambda: monkeypatch.setattr(capiss_module.time, "time", lambda: 1_000))
+
+    outcomes = [
+        guard.exercise(
+            f"consume mint rate call {idx}",
+            lambda: capiss_module.consume_mint_rate("root-1", 1_060, 60),
+        )
+        for idx in range(1, 5)
+    ]
+
+    guard.outcome("first consume allowed", outcomes[0] == (True, ""))
+    guard.outcome("second consume allowed", outcomes[1] == (True, ""))
+    guard.outcome("third consume allowed", outcomes[2] == (True, ""))
+    guard.outcome("fourth consume denied exactly", outcomes[3] == (False, "mint_rate_exceeded"))
+
+
+# UT: UT-130
+# Test Description: Verifies that capiss passes the exact Redis key, formula-derived allowance, and remaining root TTL to the mint-rate helper.
+# Precondition: The Redis dependency is replaced with a recording fake and current time is frozen.
+# Expected Output: The SUT calls Redis with key `m4:mint_rate:<root_token_id>`, an allowance of `3` for a 60-second root lifetime, and a TTL equal to the remaining root lifetime.
+# Covers DD: DD-221
+@pytest.mark.invariant
+def test_consume_mint_rate_uses_exact_key_allowance_and_ttl(capiss_module, monkeypatch, guard):
+    _premise_module_loaded(guard, capiss_module)
+    call_args = []
+
+    class RecordingClient:
+        def eval(self, *args):
+            call_args.append(args)
+            return [1, "ok", 1]
+
+    guard.exercise("mock recording redis client", lambda: monkeypatch.setattr(capiss_module, "get_redis", lambda: RecordingClient()))
+    guard.exercise("freeze current time", lambda: monkeypatch.setattr(capiss_module.time, "time", lambda: 1_000))
+    ok, err = guard.exercise("consume mint rate", lambda: capiss_module.consume_mint_rate("root-7", 1_017, 60))
+    guard.outcome("consume succeeds", ok is True)
+    guard.outcome("empty error on success", err == "")
+    guard.outcome("redis called once", len(call_args) == 1)
+    guard.outcome("script uses one key", call_args[0][1] == 1)
+    guard.outcome("mint-rate key exact", call_args[0][2] == "m4:mint_rate:root-7")
+    guard.outcome("allowance exact", call_args[0][3] == "3")
+    guard.outcome("ttl exact", call_args[0][4] == "17")
+
+
+# UT: UT-131
+# Test Description: Verifies that the mint-rate allowance formula scales with root-token lifetime and floors to one.
+# Precondition: The Redis dependency is replaced with a recording fake and current time is frozen.
+# Expected Output: The SUT passes allowance `2` for 40 seconds, `1` for 20 seconds, and still `1` for lifetimes below 20 seconds.
+# Covers DD: DD-221
+@pytest.mark.boundary
+def test_consume_mint_rate_formula_scales_and_floors_to_one(capiss_module, monkeypatch, guard):
+    _premise_module_loaded(guard, capiss_module)
+    allowances = []
+
+    class RecordingClient:
+        def eval(self, *args):
+            allowances.append(args[3])
+            return [1, "ok", 1]
+
+    guard.exercise("mock recording redis client", lambda: monkeypatch.setattr(capiss_module, "get_redis", lambda: RecordingClient()))
+    guard.exercise("freeze current time", lambda: monkeypatch.setattr(capiss_module.time, "time", lambda: 1_000))
+    guard.exercise("consume mint rate for 40 second root lifetime", lambda: capiss_module.consume_mint_rate("root-40", 1_030, 40))
+    guard.exercise("consume mint rate for 20 second root lifetime", lambda: capiss_module.consume_mint_rate("root-20", 1_020, 20))
+    guard.exercise("consume mint rate for 19 second root lifetime", lambda: capiss_module.consume_mint_rate("root-19", 1_019, 19))
+    guard.outcome("40 second lifetime yields allowance two", allowances[0] == "2")
+    guard.outcome("20 second lifetime yields allowance one", allowances[1] == "1")
+    guard.outcome("sub-20 lifetime still yields allowance one", allowances[2] == "1")
+
+
+# UT: UT-132
+# Test Description: Verifies that capiss fails closed when the mint-rate store returns a malformed reply.
+# Precondition: The Redis dependency is replaced with a fake that returns a malformed Lua reply shape.
+# Expected Output: The SUT returns the exact fail-closed reason `store_unavailable`.
+# Covers DD: DD-221
+@pytest.mark.invariant
+def test_consume_mint_rate_fails_closed_on_malformed_store_reply(capiss_module, monkeypatch, guard):
+    _premise_module_loaded(guard, capiss_module)
+
+    class MalformedClient:
+        def eval(self, *args):
+            return ["ok"]
+
+    guard.exercise("mock malformed redis client", lambda: monkeypatch.setattr(capiss_module, "get_redis", lambda: MalformedClient()))
+    ok, err = guard.exercise("consume mint rate with malformed reply", lambda: capiss_module.consume_mint_rate("root-1", int(time.time()) + 10, 60))
+    guard.outcome("consume denied", ok is False)
+    guard.outcome("reason store_unavailable", err == "store_unavailable")
+
+
+# UT: UT-133
+# Test Description: Verifies that capiss fails closed when the mint-rate store raises a Redis error.
+# Precondition: The Redis dependency is replaced with a fake that raises `redis.RedisError`.
+# Expected Output: The SUT returns the exact fail-closed reason `store_unavailable`.
+# Covers DD: DD-221
+@pytest.mark.invariant
+def test_consume_mint_rate_fails_closed_on_store_error(capiss_module, monkeypatch, guard):
+    _premise_module_loaded(guard, capiss_module)
+
+    class BrokenClient:
+        def eval(self, *args):
+            raise redis.RedisError("down")
+
+    guard.exercise("mock broken redis client", lambda: monkeypatch.setattr(capiss_module, "get_redis", lambda: BrokenClient()))
+    ok, err = guard.exercise("consume mint rate with store error", lambda: capiss_module.consume_mint_rate("root-1", int(time.time()) + 10, 60))
+    guard.outcome("consume denied", ok is False)
+    guard.outcome("reason store_unavailable", err == "store_unavailable")

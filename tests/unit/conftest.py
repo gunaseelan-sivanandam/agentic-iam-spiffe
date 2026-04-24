@@ -13,6 +13,7 @@ from tests.unit.shared.loaders import REPO_ROOT, load_module_from_path
 
 CAPISS_APP_PATH = Path(REPO_ROOT, "services", "capability-issuer", "app.py")
 TOOLB_SERVER_PATH = Path(REPO_ROOT, "services", "tool-b", "server.py")
+SHARED_ENFORCEMENT_PATH = Path(REPO_ROOT, "services", "shared", "enforcement_contract.py")
 
 
 @dataclass
@@ -205,3 +206,8 @@ def toolb_module(monkeypatch):
     monkeypatch.setenv("M4_REQUEST_COST", "1")
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
     return load_module_from_path(TOOLB_SERVER_PATH, "toolb_server_test")
+
+
+@pytest.fixture()
+def shared_enforcement_module():
+    return load_module_from_path(SHARED_ENFORCEMENT_PATH, "shared_enforcement_test")

@@ -55,7 +55,7 @@ toolb_envoy --> toolb_app : HTTP (internal)
 capiss_app --> opa : Policy query (internal)
 
 ' Shared state
-capiss_app -[#brown]-> redis_capiss : root budget init + registry gate
+capiss_app -[#brown]-> redis_capiss : root budget init + registry read + mint marker
 redis_toolb -[#brown]-> capiss_app : shared root_token_id state
 
 'tool-b enforcement path

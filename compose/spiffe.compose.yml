@@ -89,7 +89,9 @@ services:
       - tests
 
   tool-b:
-    build: ../services/tool-b
+    build:
+      context: ..
+      dockerfile: services/tool-b/Dockerfile
     container_name: spiffe-tool-b
     labels:
       spiffe.workload: "tool-b"
@@ -125,7 +127,9 @@ services:
       - toolb_app_net
 
   capability-issuer:
-    build: ../services/capability-issuer
+    build:
+      context: ..
+      dockerfile: services/capability-issuer/Dockerfile
     container_name: spiffe-capability-issuer
     labels:
       spiffe.workload: "capability-issuer"
@@ -160,7 +164,9 @@ services:
       - capiss_app_net
 
   capability-issuer-no-opa:
-    build: ../services/capability-issuer
+    build:
+      context: ..
+      dockerfile: services/capability-issuer/Dockerfile
     container_name: spiffe-capability-issuer-no-opa
     labels:
       spiffe.workload: "capability-issuer-no-opa"

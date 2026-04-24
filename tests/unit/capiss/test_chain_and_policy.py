@@ -176,6 +176,65 @@ def test_verify_and_extract_chain_enforces_depth_limit(capiss_module, guard):
     guard.outcome("depth exceeded reason", err == "depth_exceeded")
 
 
+# UT: UT-125
+# Test Description: Verifies that the capiss chain verifier delegates to the shared enforcement contract and preserves its deny reason.
+# Precondition: Module fixtures are loaded and the shared contract symbol is stubbed to deny the presented chain.
+# Expected Output: The SUT returns no claims and preserves the exact deny reason from the shared contract.
+# Covers DD: DD-102
+@pytest.mark.invariant
+def test_verify_and_extract_chain_uses_shared_contract(capiss_module, monkeypatch, guard):
+    _premise_module_loaded(guard, capiss_module)
+    guard.exercise(
+        "mock shared contract deny",
+        lambda: monkeypatch.setattr(
+            capiss_module,
+            "verify_chain_contract",
+            lambda *_args, **_kwargs: (None, "invalid_chain"),
+        ),
+    )
+    claims, err = guard.exercise(
+        "verify chain through capiss adapter",
+        lambda: capiss_module.verify_and_extract_chain(FakeBiscuit([base_root_block()])),
+    )
+    guard.outcome("claims rejected", claims is None)
+    guard.outcome("shared deny reason preserved", err == "invalid_chain")
+
+
+# UT: UT-127
+# Test Description: Verifies that the capiss chain verifier accepts a capiss-minted delegated resource transition when the delegation marker exists.
+# Precondition: Module fixtures are loaded and Redis lookup for the delegated child token returns the capiss-minted marker.
+# Expected Output: The SUT returns normalized claims for the delegated child instead of rejecting the resource transition as amplified authority.
+# Covers DD: DD-102
+@pytest.mark.invariant
+def test_verify_and_extract_chain_allows_capiss_marked_resource_transition(capiss_module, monkeypatch, guard):
+    _premise_module_loaded(guard, capiss_module)
+    marker_keys: list[str] = []
+
+    class FakeRedis:
+        def get(self, key: str):
+            marker_keys.append(key)
+            return b"1"
+
+    child = guard.exercise(
+        "create delegated child with discovered file resource",
+        lambda: delegated_block(
+            token_id="token-child",
+            parent_token_id="token-root",
+            res="tool-b:/read-file:fileA",
+        ),
+    )
+    guard.exercise("mock redis marker lookup", lambda: monkeypatch.setattr(capiss_module, "get_redis", lambda: FakeRedis()))
+    claims, err = guard.exercise(
+        "verify capiss-marked resource transition chain",
+        lambda: capiss_module.verify_and_extract_chain(FakeBiscuit([base_root_block(), child])),
+    )
+    guard.outcome("no chain error", err is None)
+    guard.outcome("claims returned", claims is not None)
+    guard.outcome("delegated resource preserved", claims is not None and claims["res"] == "tool-b:/read-file:fileA")
+    guard.outcome("delegated depth one", claims is not None and claims["effective_depth"] == 1)
+    guard.outcome("marker checked for child token", marker_keys == ["m4:capiss_minted:token-child"])
+
+
 # UT: UT-009
 # Test Description: Verifies that run policy or fail allows when opa allows.
 # Precondition: Module fixtures are loaded and any scenario-specific stubs or inputs are prepared in the exercise phase.
@@ -514,7 +573,6 @@ def test_ensure_root_budget_fails_closed_on_store_error(capiss_module, monkeypat
         lambda: capiss_module.ensure_root_budget(
             "root-1",
             int(time.time()) + 30,
-            "tool-b:/search",
         ),
     )
     guard.outcome("budget check fails", ok is False)

@@ -27,6 +27,38 @@ def make_handler(toolb_module, path: str = "/", headers: dict | None = None):
     return HarnessHandler(path, headers)
 
 
+def make_real_handler(toolb_module, path: str = "/", headers: dict | None = None):
+    class RealHarnessHandler(toolb_module.ToolBHandler):
+        def __init__(self, init_path: str, init_headers: dict | None = None):
+            self.path = init_path
+            self.headers = init_headers or {}
+            self.status_codes: list[int] = []
+            self.sent_headers: list[tuple[str, str]] = []
+            self.ended = False
+            self.wfile = io.BytesIO()
+
+        def send_response(self, status_code: int, message: str | None = None):
+            self.status_codes.append(status_code)
+
+        def send_header(self, keyword: str, value: str):
+            self.sent_headers.append((keyword, value))
+
+        def end_headers(self):
+            self.ended = True
+
+    return RealHarnessHandler(path, headers)
+
+
+def capture_log_events(monkeypatch, toolb_module):
+    events = []
+
+    def fake_log_event(event_type: str, **fields):
+        events.append({"event_type": event_type, **fields})
+
+    monkeypatch.setattr(toolb_module, "log_event", fake_log_event)
+    return events
+
+
 def _premise_module_loaded(guard, toolb_module):
     guard.premise("tool-b module loaded", toolb_module is not None)
 
@@ -40,7 +72,7 @@ def _premise_module_loaded(guard, toolb_module):
 def test_authorize_rejects_missing_spiffe_header(toolb_module, guard):
     _premise_module_loaded(guard, toolb_module)
     handler = guard.exercise("create handler with no headers", lambda: make_handler(toolb_module, path="/secret", headers={}))
-    claims = guard.exercise("authorize request", lambda: toolb_module.ToolBHandler._authorize(handler, "read", "/secret"))
+    claims = guard.exercise("authorize request", lambda: toolb_module.ToolBHandler._authorize(handler, "read", "tool-b:/secret"))
     guard.outcome("claims are none", claims is None)
     guard.outcome("deny status 401", handler.denies[0][0] == 401)
     guard.outcome("deny spiffe id none", handler.denies[0][2] is None)
@@ -63,7 +95,7 @@ def test_authorize_rejects_missing_token(toolb_module, guard):
             headers={toolb_module.SPIFFE_HEADER: SPIFFE_ID},
         ),
     )
-    claims = guard.exercise("authorize request", lambda: toolb_module.ToolBHandler._authorize(handler, "read", "/secret"))
+    claims = guard.exercise("authorize request", lambda: toolb_module.ToolBHandler._authorize(handler, "read", "tool-b:/secret"))
     guard.outcome("claims are none", claims is None)
     guard.outcome("deny status 401", handler.denies[0][0] == 401)
     guard.outcome("deny spiffe id preserved", handler.denies[0][2] == SPIFFE_ID)
@@ -86,7 +118,7 @@ def test_authorize_rejects_blank_bearer_token(toolb_module, guard):
             headers={toolb_module.SPIFFE_HEADER: SPIFFE_ID, "Authorization": "Bearer   "},
         ),
     )
-    out = guard.exercise("authorize request", lambda: toolb_module.ToolBHandler._authorize(handler, "read", "/secret"))
+    out = guard.exercise("authorize request", lambda: toolb_module.ToolBHandler._authorize(handler, "read", "tool-b:/secret"))
     guard.outcome("claims none", out is None)
     guard.outcome("deny status 401", handler.denies[0][0] == 401)
     guard.outcome("deny reason missing_token", handler.denies[0][1] == "missing_token")
@@ -120,7 +152,7 @@ def test_authorize_allows_valid_token(toolb_module, monkeypatch, guard):
         "budget_remaining": 8,
     }
     guard.exercise("mock verify_biscuit allow", lambda: monkeypatch.setattr(toolb_module, "verify_biscuit", lambda *_: (True, "", claims)))
-    out = guard.exercise("authorize request", lambda: toolb_module.ToolBHandler._authorize(handler, "read", "/secret"))
+    out = guard.exercise("authorize request", lambda: toolb_module.ToolBHandler._authorize(handler, "read", "tool-b:/secret"))
     guard.outcome("claims returned", out is claims)
 
 
@@ -141,7 +173,7 @@ def test_authorize_denies_when_token_invalid(toolb_module, monkeypatch, guard):
         ),
     )
     guard.exercise("mock verify_biscuit deny", lambda: monkeypatch.setattr(toolb_module, "verify_biscuit", lambda *_: (False, "invalid_token", None)))
-    claims = guard.exercise("authorize request", lambda: toolb_module.ToolBHandler._authorize(handler, "read", "/secret"))
+    claims = guard.exercise("authorize request", lambda: toolb_module.ToolBHandler._authorize(handler, "read", "tool-b:/secret"))
     guard.outcome("claims are none", claims is None)
     guard.outcome("deny status 401", handler.denies[0][0] == 401)
     guard.outcome("deny reason invalid_token", handler.denies[0][1] == "invalid_token")
@@ -168,7 +200,7 @@ def test_authorize_denies_with_403_for_authority_failure(toolb_module, monkeypat
         "mock verify_biscuit authority deny",
         lambda: monkeypatch.setattr(toolb_module, "verify_biscuit", lambda *_: (False, "sub_mismatch", claims)),
     )
-    out = guard.exercise("authorize request", lambda: toolb_module.ToolBHandler._authorize(handler, "read", "/secret"))
+    out = guard.exercise("authorize request", lambda: toolb_module.ToolBHandler._authorize(handler, "read", "tool-b:/secret"))
     guard.outcome("claims are none", out is None)
     guard.outcome("deny status 403", handler.denies[0][0] == 403)
     guard.outcome("deny reason sub_mismatch", handler.denies[0][1] == "sub_mismatch")
@@ -194,7 +226,7 @@ def test_authorize_denies_with_401_for_issuer_key_unavailable(toolb_module, monk
         "mock verify_biscuit issuer key unavailable",
         lambda: monkeypatch.setattr(toolb_module, "verify_biscuit", lambda *_: (False, "issuer_key_unavailable", None)),
     )
-    out = guard.exercise("authorize request", lambda: toolb_module.ToolBHandler._authorize(handler, "read", "/secret"))
+    out = guard.exercise("authorize request", lambda: toolb_module.ToolBHandler._authorize(handler, "read", "tool-b:/secret"))
     guard.outcome("claims are none", out is None)
     guard.outcome("deny status 401", handler.denies[0][0] == 401)
     guard.outcome("deny reason issuer_key_unavailable", handler.denies[0][1] == "issuer_key_unavailable")
@@ -221,7 +253,7 @@ def test_authorize_denies_with_403_for_budget_exceeded(toolb_module, monkeypatch
         "mock verify_biscuit budget exceeded",
         lambda: monkeypatch.setattr(toolb_module, "verify_biscuit", lambda *_: (False, "budget_exceeded", claims)),
     )
-    out = guard.exercise("authorize request", lambda: toolb_module.ToolBHandler._authorize(handler, "read", "/secret"))
+    out = guard.exercise("authorize request", lambda: toolb_module.ToolBHandler._authorize(handler, "read", "tool-b:/secret"))
     guard.outcome("claims are none", out is None)
     guard.outcome("deny status 403", handler.denies[0][0] == 403)
     guard.outcome("deny reason budget_exceeded", handler.denies[0][1] == "budget_exceeded")
@@ -248,6 +280,55 @@ def test_deny_writes_standard_payload(toolb_module, guard):
     guard.exercise("call deny", lambda: toolb_module.ToolBHandler._deny(handler, 403, "budget_exceeded", SPIFFE_ID, claims))
     guard.outcome("status 403 written", handler.sent[0][0] == 403)
     guard.outcome("reason budget_exceeded", handler.sent[0][1].get("reason") == "budget_exceeded")
+
+
+# UT: UT-142
+# Test Description: Verifies that the final tool-b deny audit event uses the requirement-aligned subject field and includes delegator provenance when present.
+# Precondition: A real handler is prepared, claims include full delegated-token provenance, and audit emission is captured through the module-local log helper.
+# Expected Output: The SUT emits one exact `toolb_enforcement_decision` deny event with `subject_spiffe_id`, includes `delegator_spiffe_id`, omits the obsolete caller field by exact equality, and writes the standard deny body.
+# Covers DD: DD-207
+@pytest.mark.invariant
+def test_deny_logs_exact_final_enforcement_event_schema(toolb_module, monkeypatch, guard):
+    _premise_module_loaded(guard, toolb_module)
+    events = guard.exercise("capture log events", lambda: capture_log_events(monkeypatch, toolb_module))
+    handler = guard.exercise("create real handler", lambda: make_real_handler(toolb_module, path="/read-file/fileA"))
+    claims = {
+        "root_token_id": "root-1",
+        "token_id": "token-child",
+        "parent_token_id": "token-root",
+        "effective_depth": 1,
+        "delegator_spiffe_id": "spiffe://example.org/delegator",
+        "aud": "tool-b",
+        "act": "read",
+        "res": "tool-b:/read-file:fileA",
+        "budget_remaining": 5,
+    }
+    guard.exercise("call real deny path", lambda: toolb_module.ToolBHandler._deny(handler, 403, "budget_exceeded", SPIFFE_ID, claims))
+    body = guard.exercise("decode written body", lambda: json.loads(handler.wfile.getvalue().decode("utf-8")))
+    guard.outcome("response status recorded", handler.status_codes == [403])
+    guard.outcome("deny body exact", body == {"error": "denied", "reason": "budget_exceeded"})
+    guard.outcome(
+        "final deny event schema exact",
+        events
+        == [
+            {
+                "event_type": "toolb_enforcement_decision",
+                "result": "deny",
+                "reason_code": "budget_exceeded",
+                "subject_spiffe_id": SPIFFE_ID,
+                "root_token_id": "root-1",
+                "token_id": "token-child",
+                "parent_token_id": "token-root",
+                "delegation_depth": 1,
+                "delegator_spiffe_id": "spiffe://example.org/delegator",
+                "aud": "tool-b",
+                "act": "read",
+                "res": "tool-b:/read-file:fileA",
+                "budget_remaining": 5,
+                "path": "/read-file/fileA",
+            }
+        ],
+    )
 
 
 # UT: UT-063
@@ -391,6 +472,62 @@ def test_do_get_read_file_success(toolb_module, guard):
     guard.exercise("invoke do_GET", lambda: toolb_module.ToolBHandler.do_GET(handler))
     guard.outcome("status 200", handler.sent[0][0] == 200)
     guard.outcome("file id fileA", handler.sent[0][1].get("id") == "fileA")
+
+
+# UT: UT-143
+# Test Description: Verifies that the final tool-b allow audit event uses the requirement-aligned subject field and includes delegator provenance when present.
+# Precondition: A real handler is prepared, biscuit verification is stubbed to allow with delegated-token provenance claims, and audit emission is captured through the module-local log helper.
+# Expected Output: The SUT returns the claims unchanged and emits one exact `toolb_enforcement_decision` allow event with `subject_spiffe_id` and `delegator_spiffe_id`.
+# Covers DD: DD-206
+@pytest.mark.invariant
+def test_authorize_logs_exact_final_allow_event_schema(toolb_module, monkeypatch, guard):
+    _premise_module_loaded(guard, toolb_module)
+    events = guard.exercise("capture log events", lambda: capture_log_events(monkeypatch, toolb_module))
+    handler = guard.exercise(
+        "create real handler with auth header",
+        lambda: make_real_handler(
+            toolb_module,
+            path="/read-file/fileA",
+            headers={toolb_module.SPIFFE_HEADER: SPIFFE_ID, "Authorization": "Bearer token"},
+        ),
+    )
+    claims = {
+        "root_token_id": "root-1",
+        "token_id": "token-child",
+        "parent_token_id": "token-root",
+        "subject_spiffe_id": SPIFFE_ID,
+        "effective_depth": 1,
+        "delegator_spiffe_id": "spiffe://example.org/delegator",
+        "aud": "tool-b",
+        "act": "read",
+        "res": "tool-b:/read-file:fileA",
+        "budget_remaining": 4,
+    }
+    guard.exercise("mock verify biscuit allow", lambda: monkeypatch.setattr(toolb_module, "verify_biscuit", lambda *_: (True, "", claims)))
+    out = guard.exercise("authorize request", lambda: toolb_module.ToolBHandler._authorize(handler, "read", "tool-b:/read-file:fileA"))
+    guard.outcome("claims returned unchanged", out is claims)
+    guard.outcome(
+        "final allow event schema exact",
+        events
+        == [
+            {
+                "event_type": "toolb_enforcement_decision",
+                "result": "allow",
+                "reason_code": "ok",
+                "subject_spiffe_id": SPIFFE_ID,
+                "root_token_id": "root-1",
+                "token_id": "token-child",
+                "parent_token_id": "token-root",
+                "delegation_depth": 1,
+                "delegator_spiffe_id": "spiffe://example.org/delegator",
+                "aud": "tool-b",
+                "act": "read",
+                "res": "tool-b:/read-file:fileA",
+                "budget_remaining": 4,
+                "path": "/read-file/fileA",
+            }
+        ],
+    )
 
 
 # UT: UT-115

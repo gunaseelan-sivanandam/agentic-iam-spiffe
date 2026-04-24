@@ -27,6 +27,21 @@ docker compose --profile tests -f compose/spiffe.compose.yml run --rm -e TEST_PR
 Detailed test specs:
 - `docs/test_spec_detailed.md`
 - `docs/test_spec.md`
+- `docs/slices/README.md`
+
+## How to reason about the repo
+- Treat the system as a black box first.
+- Primary authored sources of truth:
+  - `docs/requirements.md`
+  - `docs/architecture.md`
+  - `trace/tests.yaml`
+  - runtime evidence under `artifacts/rogue-tests/`
+- Internal implementation artifacts such as `DD-*`, `UT-*`, source helpers, and local test doubles are engineering controls for design and regression. They are not the primary proof source for externally visible behavior.
+- Security-relevant hidden state or governance logic must be authored before implementation through:
+  - architecture state inventory
+  - slice ADR/DDR
+  - implementation contract
+- Slice review bundles live under `docs/slices/`.
 
 ## What exists today
 Most production systems already separate authentication and authorization.
@@ -46,7 +61,7 @@ This lab is a small, reproducible playground for separating “who is calling”
 - Strong workload identity using SPIFFE/SPIRE-issued X.509 SVIDs and mTLS.
 - A clear ingress boundary using Envoy to terminate mTLS and forward verified identity to internal services under network isolation.
 - Explicit authority using capability tokens (Biscuit), minted behind the boundary and enforced at the tool. Authentication alone is not sufficient to perform protected actions.
-- M4 governance truth slice for tool-b: chain metadata, derived depth checks (`N=3`), spend/rate enforcement in Redis per `root_token_id`, discovery-registry-gated resource minting, and fail-closed enforcement on trusted-store errors.
+- M4 governance truth slice for tool-b: shared chain/depth enforcement contract used by both `capiss` and `tool-b`, chain metadata, derived depth checks (`N=3`), spend/rate enforcement in Redis per `root_token_id`, discovery-registry-gated resource minting, and fail-closed enforcement on trusted-store errors.
 - Evidence-based security tests built around a Premise / Exercise / Outcome structure, with artifacts captured so failures can be inspected and false-green tests are less likely.
 
 #### Planned (not implemented yet, goals may evolve):

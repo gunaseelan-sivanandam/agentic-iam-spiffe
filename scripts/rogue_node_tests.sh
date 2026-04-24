@@ -1042,7 +1042,7 @@ CAPISS_NO_OPA_URL="https://capability-issuer-no-opa-envoy:9444/capabilities/mint
 TOOLB_SECRET_URL="https://tool-b-envoy:8443/secret"
 TOOLB_SEARCH_URL="https://tool-b-envoy:8443/search"
 TOOLB_READ_FILE_URL_PREFIX="https://tool-b-envoy:8443/read-file"
-CAPISS_MINT_BODY='{"aud":"tool-b","act":"read","res":"/secret"}'
+CAPISS_MINT_BODY='{"aud":"tool-b","act":"read","res":"tool-b:/secret"}'
 CAPISS_SEARCH_MINT_BODY='{"aud":"tool-b","act":"read","res":"tool-b:/search"}'
 
 ensure_toolb_material() {
@@ -2072,7 +2072,7 @@ M3S2_T1_test() {
   outcome_guard "token non-empty" \
     "assert_json_present \"$out\" '.token' && jq -r '.token' \"$out\" >\"$EVDIR/token.txt\""
   outcome_guard "mint fields correct" \
-    "assert_json_eq \"$out\" '.token_type' 'biscuit' && assert_json_present \"$out\" '.expires_at' && assert_json_eq \"$out\" '.issued_to' 'spiffe://example.org/agent-a' && assert_json_eq \"$out\" '.aud' 'tool-b' && assert_json_eq \"$out\" '.act' 'read' && assert_json_eq \"$out\" '.res' '/secret'"
+    "assert_json_eq \"$out\" '.token_type' 'biscuit' && assert_json_present \"$out\" '.expires_at' && assert_json_eq \"$out\" '.issued_to' 'spiffe://example.org/agent-a' && assert_json_eq \"$out\" '.aud' 'tool-b' && assert_json_eq \"$out\" '.act' 'read' && assert_json_eq \"$out\" '.res' 'tool-b:/secret'"
   return 0
 }
 
@@ -2413,9 +2413,9 @@ M3S4_T7_test() {
   premise_guard "capiss-envoy TCP reachable" \
     "wait_tcp \"${CAPISS_ENVOY_IP}\" \"9443\" 30"
   exercise_guard "mint with unapproved authority" \
-    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" '{\"aud\":\"tool-b\",\"act\":\"write\",\"res\":\"/secret\"}' \"$EVDIR/mint_body.json\" \"$EVDIR/status.txt\""
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" '{\"aud\":\"tool-b\",\"act\":\"write\",\"res\":\"tool-b:/secret\"}' \"$EVDIR/mint_body.json\" \"$EVDIR/status.txt\""
   exercise_guard "capture mint headers" \
-    "curl -sS -v --insecure --cert \"$CAPISS_AGENT_CERT\" --key \"$CAPISS_AGENT_KEY\" -H 'Host: capability-issuer-envoy' -H 'Content-Type: application/json' -d '{\"aud\":\"tool-b\",\"act\":\"write\",\"res\":\"/secret\"}' https://${CAPISS_ENVOY_IP}:9443/capabilities/mint -o /dev/null 2>\"$EVDIR/mint_headers.txt\""
+    "curl -sS -v --insecure --cert \"$CAPISS_AGENT_CERT\" --key \"$CAPISS_AGENT_KEY\" -H 'Host: capability-issuer-envoy' -H 'Content-Type: application/json' -d '{\"aud\":\"tool-b\",\"act\":\"write\",\"res\":\"tool-b:/secret\"}' https://${CAPISS_ENVOY_IP}:9443/capabilities/mint -o /dev/null 2>\"$EVDIR/mint_headers.txt\""
   outcome_guard "envoy handled mint request" \
     "grep -Ei '(server: envoy|x-envoy)' \"$EVDIR/mint_headers.txt\""
   outcome_guard "policy denied 403" \
@@ -2555,6 +2555,194 @@ M4_T5_test() {
   return 0
 }
 
+M4_T6_test() {
+  begin_test_evidence "M4-T6" "tampered_token_denied"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "tool-b and capiss material available" \
+    "ensure_toolb_material && ensure_capiss_material"
+  premise_guard "capiss-envoy resolves" \
+    "capiss_ip=\"$(wait_resolve_ip capability-issuer-envoy 30)\"; test -n \"\$capiss_ip\"; CAPISS_ENVOY_IP=\"\$capiss_ip\""
+  premise_guard "capiss-envoy TCP reachable" "wait_tcp \"${CAPISS_ENVOY_IP}\" \"9443\" 30"
+  premise_guard "tool-b-envoy resolves" \
+    "toolb_ip=\"$(wait_resolve_ip tool-b-envoy 30)\"; test -n \"\$toolb_ip\"; TOOLB_ENVOY_IP=\"\$toolb_ip\""
+  premise_guard "tool-b-envoy TCP reachable" "wait_tcp \"${TOOLB_ENVOY_IP}\" \"8443\" 30"
+  exercise_guard "mint root /secret token" \
+    "mint_with_cert_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" \"$EVDIR/root_mint.json\" \"$EVDIR/root_status.txt\""
+  outcome_guard "root mint allowed 200" "assert_file_eq \"$EVDIR/root_status.txt\" \"200\""
+  exercise_guard "tamper minted token bytes" \
+    "token=\"\$(json_get '.token' \"$EVDIR/root_mint.json\")\"; prefix=\"\${token%?}\"; last=\"\${token#\"\$prefix\"}\"; repl='A'; [ \"\$last\" = 'A' ] && repl='B'; printf '%s' \"\${prefix}\${repl}\" >\"$EVDIR/tampered_token.txt\""
+  exercise_guard "call tool-b /secret with tampered token" \
+    "tampered_token=\"\$(cat \"$EVDIR/tampered_token.txt\")\"; toolb_request_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$tampered_token\" \"$EVDIR/tampered_response.json\" \"$EVDIR/tampered_status.txt\""
+  outcome_guard "tampered token denied" \
+    "assert_file_any \"$EVDIR/tampered_status.txt\" \"401\" \"403\""
+  out="$EVDIR/tampered_response.json"
+  outcome_guard "invalid token reason" \
+    "assert_json_eq \"$out\" '.reason' 'invalid_token'"
+  return 0
+}
+
+M4_T7_test() {
+  begin_test_evidence "M4-T7" "depth_limit_enforced_on_repeated_delegation"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "tool-b and capiss material available" \
+    "ensure_toolb_material && ensure_capiss_material"
+  premise_guard "capiss-envoy resolves" \
+    "capiss_ip=\"$(wait_resolve_ip capability-issuer-envoy 30)\"; test -n \"\$capiss_ip\"; CAPISS_ENVOY_IP=\"\$capiss_ip\""
+  premise_guard "capiss-envoy TCP reachable" "wait_tcp \"${CAPISS_ENVOY_IP}\" \"9443\" 30"
+  premise_guard "tool-b-envoy resolves" \
+    "toolb_ip=\"$(wait_resolve_ip tool-b-envoy 30)\"; test -n \"\$toolb_ip\"; TOOLB_ENVOY_IP=\"\$toolb_ip\""
+  premise_guard "tool-b-envoy TCP reachable" "wait_tcp \"${TOOLB_ENVOY_IP}\" \"8443\" 30"
+  exercise_guard "mint root search token" \
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" \"\$CAPISS_SEARCH_MINT_BODY\" \"$EVDIR/root_mint.json\" \"$EVDIR/root_status.txt\""
+  outcome_guard "root mint allowed 200" "assert_file_eq \"$EVDIR/root_status.txt\" \"200\""
+  root_token="$(json_get '.token' "$EVDIR/root_mint.json")"
+  exercise_guard "discover files via search" \
+    "toolb_request_url \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$root_token\" \"\$TOOLB_SEARCH_URL\" \"$EVDIR/search_response.json\" >\"$EVDIR/search_status.txt\""
+  outcome_guard "search allowed 200" "assert_file_eq \"$EVDIR/search_status.txt\" \"200\""
+  exercise_guard "mint delegated token depth 1" \
+    "mint_with_body_auth_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_RESOURCE_MINT_URL\" '{\"aud\":\"tool-b\",\"act\":\"read\",\"res\":\"tool-b:/read-file:fileA\"}' \"\$root_token\" \"$EVDIR/depth1_mint.json\" \"$EVDIR/depth1_status.txt\""
+  outcome_guard "depth 1 mint allowed 200" "assert_file_eq \"$EVDIR/depth1_status.txt\" \"200\""
+  token_1="$(json_get '.token' "$EVDIR/depth1_mint.json")"
+  exercise_guard "mint delegated token depth 2" \
+    "mint_with_body_auth_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_RESOURCE_MINT_URL\" '{\"aud\":\"tool-b\",\"act\":\"read\",\"res\":\"tool-b:/read-file:fileA\"}' \"\$token_1\" \"$EVDIR/depth2_mint.json\" \"$EVDIR/depth2_status.txt\""
+  outcome_guard "depth 2 mint allowed 200" "assert_file_eq \"$EVDIR/depth2_status.txt\" \"200\""
+  token_2="$(json_get '.token' "$EVDIR/depth2_mint.json")"
+  exercise_guard "mint delegated token depth 3" \
+    "mint_with_body_auth_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_RESOURCE_MINT_URL\" '{\"aud\":\"tool-b\",\"act\":\"read\",\"res\":\"tool-b:/read-file:fileA\"}' \"\$token_2\" \"$EVDIR/depth3_mint.json\" \"$EVDIR/depth3_status.txt\""
+  outcome_guard "depth 3 mint allowed 200" "assert_file_eq \"$EVDIR/depth3_status.txt\" \"200\""
+  token_3="$(json_get '.token' "$EVDIR/depth3_mint.json")"
+  exercise_guard "attempt delegated token depth 4" \
+    "mint_with_body_auth_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_RESOURCE_MINT_URL\" '{\"aud\":\"tool-b\",\"act\":\"read\",\"res\":\"tool-b:/read-file:fileA\"}' \"\$token_3\" \"$EVDIR/depth4_mint.json\" \"$EVDIR/depth4_status.txt\""
+  outcome_guard "depth 4 mint denied 403" "assert_file_eq \"$EVDIR/depth4_status.txt\" \"403\""
+  out="$EVDIR/depth4_mint.json"
+  outcome_guard "depth exceeded reason" \
+    "assert_json_eq \"$out\" '.reason' 'depth_exceeded'"
+  return 0
+}
+
+M4_T8_test() {
+  begin_test_evidence "M4-T8" "new_resource_mint_rate_enforced"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "tool-b and capiss material available" \
+    "ensure_toolb_material && ensure_capiss_material"
+  premise_guard "capiss-envoy resolves" \
+    "capiss_ip=\"$(wait_resolve_ip capability-issuer-envoy 30)\"; test -n \"\$capiss_ip\"; CAPISS_ENVOY_IP=\"\$capiss_ip\""
+  premise_guard "capiss-envoy TCP reachable" "wait_tcp \"${CAPISS_ENVOY_IP}\" \"9443\" 30"
+  premise_guard "tool-b-envoy resolves" \
+    "toolb_ip=\"$(wait_resolve_ip tool-b-envoy 30)\"; test -n \"\$toolb_ip\"; TOOLB_ENVOY_IP=\"\$toolb_ip\""
+  premise_guard "tool-b-envoy TCP reachable" "wait_tcp \"${TOOLB_ENVOY_IP}\" \"8443\" 30"
+  exercise_guard "mint root search token" \
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" \"\$CAPISS_SEARCH_MINT_BODY\" \"$EVDIR/root_mint.json\" \"$EVDIR/root_status.txt\""
+  outcome_guard "root mint allowed 200" "assert_file_eq \"$EVDIR/root_status.txt\" \"200\""
+  root_token="$(json_get '.token' "$EVDIR/root_mint.json")"
+  exercise_guard "discover files via search" \
+    "toolb_request_url \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$root_token\" \"\$TOOLB_SEARCH_URL\" \"$EVDIR/search_response.json\" >\"$EVDIR/search_status.txt\""
+  outcome_guard "search allowed 200" "assert_file_eq \"$EVDIR/search_status.txt\" \"200\""
+  exercise_guard "mint new resource fileA" \
+    "mint_with_body_auth_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_RESOURCE_MINT_URL\" '{\"aud\":\"tool-b\",\"act\":\"read\",\"res\":\"tool-b:/read-file:fileA\"}' \"\$root_token\" \"$EVDIR/fileA_mint.json\" \"$EVDIR/fileA_status.txt\""
+  exercise_guard "mint new resource fileB" \
+    "mint_with_body_auth_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_RESOURCE_MINT_URL\" '{\"aud\":\"tool-b\",\"act\":\"read\",\"res\":\"tool-b:/read-file:fileB\"}' \"\$root_token\" \"$EVDIR/fileB_mint.json\" \"$EVDIR/fileB_status.txt\""
+  exercise_guard "mint new resource fileC" \
+    "mint_with_body_auth_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_RESOURCE_MINT_URL\" '{\"aud\":\"tool-b\",\"act\":\"read\",\"res\":\"tool-b:/read-file:fileC\"}' \"\$root_token\" \"$EVDIR/fileC_mint.json\" \"$EVDIR/fileC_status.txt\""
+  outcome_guard "first three new-resource mints allowed" \
+    "assert_file_eq \"$EVDIR/fileA_status.txt\" \"200\" && assert_file_eq \"$EVDIR/fileB_status.txt\" \"200\" && assert_file_eq \"$EVDIR/fileC_status.txt\" \"200\""
+  exercise_guard "attempt fourth new-resource mint under same root" \
+    "mint_with_body_auth_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_RESOURCE_MINT_URL\" '{\"aud\":\"tool-b\",\"act\":\"read\",\"res\":\"tool-b:/read-file:fileA\"}' \"\$root_token\" \"$EVDIR/fileA_again_mint.json\" \"$EVDIR/fileA_again_status.txt\""
+  outcome_guard "fourth new-resource mint denied 403" \
+    "assert_file_eq \"$EVDIR/fileA_again_status.txt\" \"403\""
+  out="$EVDIR/fileA_again_mint.json"
+  outcome_guard "mint-rate exceeded reason" \
+    "assert_json_eq \"$out\" '.reason' 'mint_rate_exceeded'"
+  return 0
+}
+
+M4_T9_test() {
+  begin_test_evidence "M4-T9" "allow_flow_emits_correlatable_audit_events"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "tool-b and capiss material available" \
+    "ensure_toolb_material && ensure_capiss_material"
+  premise_guard "capiss-envoy resolves" \
+    "capiss_ip=\"$(wait_resolve_ip capability-issuer-envoy 30)\"; test -n \"\$capiss_ip\"; CAPISS_ENVOY_IP=\"\$capiss_ip\""
+  premise_guard "capiss-envoy TCP reachable" "wait_tcp \"${CAPISS_ENVOY_IP}\" \"9443\" 30"
+  premise_guard "tool-b-envoy resolves" \
+    "toolb_ip=\"$(wait_resolve_ip tool-b-envoy 30)\"; test -n \"\$toolb_ip\"; TOOLB_ENVOY_IP=\"\$toolb_ip\""
+  premise_guard "tool-b-envoy TCP reachable" "wait_tcp \"${TOOLB_ENVOY_IP}\" \"8443\" 30"
+  exercise_guard "record log capture start time" \
+    "date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
+  exercise_guard "mint root search token" \
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" \"\$CAPISS_SEARCH_MINT_BODY\" \"$EVDIR/root_mint.json\" \"$EVDIR/root_status.txt\""
+  outcome_guard "root mint allowed 200" "assert_file_eq \"$EVDIR/root_status.txt\" \"200\""
+  root_token="$(json_get '.token' "$EVDIR/root_mint.json")"
+  root_id="$(json_get '.root_token_id' "$EVDIR/root_mint.json")"
+  root_claim_token_id="$(json_get '.token_id' "$EVDIR/root_mint.json")"
+  exercise_guard "discover files via search" \
+    "toolb_request_url \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$root_token\" \"\$TOOLB_SEARCH_URL\" \"$EVDIR/search_response.json\" >\"$EVDIR/search_status.txt\""
+  outcome_guard "search allowed 200" "assert_file_eq \"$EVDIR/search_status.txt\" \"200\""
+  exercise_guard "resource mint for read-file:fileA" \
+    "mint_with_body_auth_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_RESOURCE_MINT_URL\" '{\"aud\":\"tool-b\",\"act\":\"read\",\"res\":\"tool-b:/read-file:fileA\"}' \"\$root_token\" \"$EVDIR/resource_mint.json\" \"$EVDIR/resource_status.txt\""
+  outcome_guard "resource mint allowed 200" "assert_file_eq \"$EVDIR/resource_status.txt\" \"200\""
+  resource_token="$(json_get '.token' "$EVDIR/resource_mint.json")"
+  child_token_id="$(json_get '.token_id' "$EVDIR/resource_mint.json")"
+  parent_token_id="$(json_get '.parent_token_id' "$EVDIR/resource_mint.json")"
+  exercise_guard "read file using resource token" \
+    "toolb_request_url \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$resource_token\" \"\$TOOLB_READ_FILE_URL_PREFIX/fileA\" \"$EVDIR/read_response.json\" >\"$EVDIR/read_status.txt\""
+  outcome_guard "read allowed 200" "assert_file_eq \"$EVDIR/read_status.txt\" \"200\""
+  exercise_guard "capture capiss and tool-b logs since flow start" \
+    "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; docker logs --since \"\$since\" spiffe-capability-issuer >\"$EVDIR/capiss_container.log\" 2>&1; docker logs --since \"\$since\" spiffe-tool-b >\"$EVDIR/toolb_container.log\" 2>&1; grep -F '\"event_type\"' \"$EVDIR/capiss_container.log\" >\"$EVDIR/capiss_events.jsonl\" || :; grep -F '\"event_type\"' \"$EVDIR/toolb_container.log\" >\"$EVDIR/toolb_events.jsonl\" || :"
+  outcome_guard "capiss root mint event correlated" \
+    "jq -e --arg root \"\$root_id\" --arg token \"\$root_claim_token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"root_mint\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .res==\"tool-b:/search\")' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
+  outcome_guard "capiss delegated mint event correlated" \
+    "jq -e --arg root \"\$root_id\" --arg token \"\$child_token_id\" --arg parent \"\$parent_token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"resource_mint\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .delegator_spiffe_id==\"spiffe://example.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .parent_token_id==\$parent and .res==\"tool-b:/read-file:fileA\")' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
+  outcome_guard "discovery registry write correlated" \
+    "jq -e --arg root \"\$root_id\" 'select(.event_type==\"discovery_registry_write\" and .root_token_id==\$root and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .discovery_endpoint==\"tool-b:/search\" and (.res_count >= 1))' \"$EVDIR/toolb_events.jsonl\" >/dev/null"
+  outcome_guard "tool-b allow event correlated" \
+    "jq -e --arg root \"\$root_id\" --arg token \"\$child_token_id\" --arg parent \"\$parent_token_id\" 'select(.event_type==\"toolb_enforcement_decision\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .delegator_spiffe_id==\"spiffe://example.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .parent_token_id==\$parent and .res==\"tool-b:/read-file:fileA\" and .path==\"/read-file/fileA\")' \"$EVDIR/toolb_events.jsonl\" >/dev/null"
+  return 0
+}
+
+M4_T10_test() {
+  begin_test_evidence "M4-T10" "deny_flow_emits_correlatable_mint_audit_event"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "tool-b and capiss material available" \
+    "ensure_toolb_material && ensure_capiss_material"
+  premise_guard "capiss-envoy resolves" \
+    "capiss_ip=\"$(wait_resolve_ip capability-issuer-envoy 30)\"; test -n \"\$capiss_ip\"; CAPISS_ENVOY_IP=\"\$capiss_ip\""
+  premise_guard "capiss-envoy TCP reachable" "wait_tcp \"${CAPISS_ENVOY_IP}\" \"9443\" 30"
+  premise_guard "tool-b-envoy resolves" \
+    "toolb_ip=\"$(wait_resolve_ip tool-b-envoy 30)\"; test -n \"\$toolb_ip\"; TOOLB_ENVOY_IP=\"\$toolb_ip\""
+  premise_guard "tool-b-envoy TCP reachable" "wait_tcp \"${TOOLB_ENVOY_IP}\" \"8443\" 30"
+  exercise_guard "record log capture start time" \
+    "date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
+  exercise_guard "mint root search token" \
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" \"\$CAPISS_SEARCH_MINT_BODY\" \"$EVDIR/root_mint.json\" \"$EVDIR/root_status.txt\""
+  outcome_guard "root mint allowed 200" "assert_file_eq \"$EVDIR/root_status.txt\" \"200\""
+  root_token="$(json_get '.token' "$EVDIR/root_mint.json")"
+  root_id="$(json_get '.root_token_id' "$EVDIR/root_mint.json")"
+  root_claim_token_id="$(json_get '.token_id' "$EVDIR/root_mint.json")"
+  exercise_guard "discover files via search" \
+    "toolb_request_url \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$root_token\" \"\$TOOLB_SEARCH_URL\" \"$EVDIR/search_response.json\" >\"$EVDIR/search_status.txt\""
+  outcome_guard "search allowed 200" "assert_file_eq \"$EVDIR/search_status.txt\" \"200\""
+  exercise_guard "mint new resource fileA" \
+    "mint_with_body_auth_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_RESOURCE_MINT_URL\" '{\"aud\":\"tool-b\",\"act\":\"read\",\"res\":\"tool-b:/read-file:fileA\"}' \"\$root_token\" \"$EVDIR/fileA_mint.json\" \"$EVDIR/fileA_status.txt\""
+  exercise_guard "mint new resource fileB" \
+    "mint_with_body_auth_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_RESOURCE_MINT_URL\" '{\"aud\":\"tool-b\",\"act\":\"read\",\"res\":\"tool-b:/read-file:fileB\"}' \"\$root_token\" \"$EVDIR/fileB_mint.json\" \"$EVDIR/fileB_status.txt\""
+  exercise_guard "mint new resource fileC" \
+    "mint_with_body_auth_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_RESOURCE_MINT_URL\" '{\"aud\":\"tool-b\",\"act\":\"read\",\"res\":\"tool-b:/read-file:fileC\"}' \"\$root_token\" \"$EVDIR/fileC_mint.json\" \"$EVDIR/fileC_status.txt\""
+  outcome_guard "first three new-resource mints allowed" \
+    "assert_file_eq \"$EVDIR/fileA_status.txt\" \"200\" && assert_file_eq \"$EVDIR/fileB_status.txt\" \"200\" && assert_file_eq \"$EVDIR/fileC_status.txt\" \"200\""
+  exercise_guard "attempt fourth new-resource mint under same root" \
+    "mint_with_body_auth_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_RESOURCE_MINT_URL\" '{\"aud\":\"tool-b\",\"act\":\"read\",\"res\":\"tool-b:/read-file:fileA\"}' \"\$root_token\" \"$EVDIR/fileA_again_mint.json\" \"$EVDIR/fileA_again_status.txt\""
+  outcome_guard "fourth new-resource mint denied 403" \
+    "assert_file_eq \"$EVDIR/fileA_again_status.txt\" \"403\""
+  outcome_guard "mint-rate exceeded reason" \
+    "assert_json_eq \"$EVDIR/fileA_again_mint.json\" '.reason' 'mint_rate_exceeded'"
+  exercise_guard "capture capiss logs since flow start" \
+    "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; docker logs --since \"\$since\" spiffe-capability-issuer >\"$EVDIR/capiss_container.log\" 2>&1; grep -F '\"event_type\"' \"$EVDIR/capiss_container.log\" >\"$EVDIR/capiss_events.jsonl\" || :"
+  outcome_guard "capiss mint-rate deny event correlated" \
+    "jq -e --arg root \"\$root_id\" --arg parent \"\$root_claim_token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"resource_mint\" and .result==\"deny\" and .reason_code==\"mint_rate_exceeded\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .delegator_spiffe_id==\"spiffe://example.org/agent-a\" and .root_token_id==\$root and .parent_token_id==\$parent and .res==\"tool-b:/read-file:fileA\" and .registry_hit==true)' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
+  return 0
+}
+
 print_section "Milestone 1 - Server and agent connection and successful entry"
 if [ "$RUN_M1" -eq 1 ]; then
   TEST_PREFIX="M1"
@@ -2625,6 +2813,11 @@ if [ "$RUN_M4" -eq 1 ]; then
   run_test "T3" "resource mint requires registry proof" M4_T3_test
   run_test "T4" "resource mint after discovery allows read-file" M4_T4_test
   run_test "T5" "budget is enforced per root token" M4_T5_test
+  run_test "T6" "tampered token is denied" M4_T6_test
+  run_test "T7" "depth limit is enforced on repeated delegation" M4_T7_test
+  run_test "T8" "new-resource mint rate is enforced at capiss" M4_T8_test
+  run_test "T9" "allow flow emits correlatable audit events" M4_T9_test
+  run_test "T10" "deny flow emits correlatable mint audit event" M4_T10_test
 fi
 
 printf '\nTotal: %d  Passed: %d  Failed: %d\n' "$TOTAL" "$PASSED" "$FAILED"
