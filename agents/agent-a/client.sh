@@ -1,10 +1,10 @@
 #!/bin/sh
-# Placeholder for Agent A client script (implementation to be added later).
 set -e
 
 SPIRE_SOCKET="${SPIRE_AGENT_SOCKET:-/run/spire/agent/private/api.sock}"
 SVID_DIR="${SPIRE_SVID_DIR:-/run/spire/svid}"
 SERVER_EXPECTED_SPIFFE_ID="${TOOL_B_SPIFFE_ID:-spiffe://example.org/tool-b-envoy}"
+CAPISS_EXPECTED_SPIFFE_ID="${CAPABILITY_ISSUER_SPIFFE_ID:-spiffe://example.org/capability-issuer-envoy}"
 
 if [ -z "$TOOL_B_URL" ]; then
   echo "ERROR: TOOL_B_URL is not set"
@@ -41,146 +41,144 @@ fi
 CLIENT_SPIFFE_ID="$(openssl x509 -in "$SVID_DIR/svid.pem" -noout -ext subjectAltName | sed -n 's/.*URI:\(spiffe:[^,]*\).*/\1/p' | head -n 1)"
 echo "agent-a SPIFFE ID: $CLIENT_SPIFFE_ID"
 
-echo "Waiting for tool-b-envoy to startup..."
-ready=0
-for i in $(seq 1 40); do
-  if curl -sS --fail --insecure --cert "$SVID_DIR/svid.pem" --key "$SVID_DIR/svid.key" "$TOOL_B_URL/health" >/dev/null 2>&1; then
-    ready=1
-    break
+verified_https_request() {
+  url="$1"
+  expected_spiffe_id="$2"
+  method="$3"
+  body="$4"
+
+  host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\([^/:]*\).*#\1#p')"
+  port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\([0-9]*\).*#\1#p')"
+  path="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/]*\(/.*\)$#\1#p')"
+  if [ -z "$port" ]; then
+    port="443"
   fi
-  sleep 0.2
-done
+  if [ -z "$path" ]; then
+    path="/"
+  fi
 
-if [ "$ready" -ne 1 ]; then
-  echo "ERROR: tool-b-envoy not reachable at $TOOL_B_URL after 40 attempts"
-  exit 1
-fi
-
-echo "Calling: $TOOL_B_URL/health"
-if ! curl -sS --fail --insecure --cert "$SVID_DIR/svid.pem" --key "$SVID_DIR/svid.key" "$TOOL_B_URL/health"; then
-  echo "ERROR: curl failed for $TOOL_B_URL/health"
-  exit 1
-fi
-echo ""
-
-request_secret_via_openssl() {
   tmpdir="$(mktemp -d)"
-  fifo="$tmpdir/in"
-  out="$tmpdir/out"
-  : >"$out"
-  mkfifo "$fifo"
-  exec 3<>"$fifo"
+  req_file="$tmpdir/request.txt"
+  body_file="$tmpdir/body.txt"
+  http_file="$tmpdir/http.txt"
+  diag_file="$tmpdir/diag.txt"
+  cert_file="$tmpdir/server.pem"
 
-  stdbuf -oL -eL openssl s_client \
-    -connect tool-b-envoy:8443 \
+  if [ "$method" = "POST" ]; then
+    printf '%s' "$body" >"$body_file"
+    body_len="$(wc -c <"$body_file" | tr -d ' ')"
+  else
+    : >"$body_file"
+    body_len="0"
+  fi
+
+  {
+    printf '%s %s HTTP/1.1\r\n' "$method" "$path"
+    printf 'Host: %s\r\n' "$host"
+    printf 'Connection: close\r\n'
+    if [ "$method" = "POST" ]; then
+      printf 'Content-Type: application/json\r\n'
+      printf 'Content-Length: %s\r\n' "$body_len"
+    fi
+    printf '\r\n'
+    if [ "$method" = "POST" ]; then
+      cat "$body_file"
+    fi
+  } >"$req_file"
+
+  set +e
+  timeout 15s openssl s_client \
+    -connect "${host}:${port}" \
+    -servername "$host" \
     -cert "$SVID_DIR/svid.pem" \
     -key "$SVID_DIR/svid.key" \
     -CAfile "$SVID_DIR/bundle.pem" \
     -verify_return_error \
     -showcerts \
     -ign_eof \
-    <"$fifo" >"$out" 2>&1 &
-  pid="$!"
+    <"$req_file" >"$http_file" 2>"$diag_file"
+  rc=$?
+  set -e
 
-  i=0
-  while [ $i -lt 50 ]; do
-    if grep -q "BEGIN CERTIFICATE" "$out"; then
-      break
-    fi
-    i=$((i + 1))
-    sleep 0.1
-  done
-  if ! grep -q "BEGIN CERTIFICATE" "$out"; then
-    echo "ERROR: did not receive server certificate" >&2
-    kill "$pid" 2>/dev/null || true
+  actual_spiffe_id=""
+  if awk 'BEGIN{p=0} /BEGIN CERTIFICATE/{p=1} p{print} /END CERTIFICATE/{exit}' "$diag_file" >"$cert_file" 2>/dev/null && [ -s "$cert_file" ]; then
+    actual_spiffe_id="$(openssl x509 -in "$cert_file" -noout -ext subjectAltName 2>/dev/null | sed -n 's/.*URI:\(spiffe:[^,]*\).*/\1/p' | head -n 1)"
+  fi
+
+  verify_result="fail"
+  if [ "$rc" -eq 0 ] &&
+    grep -Eq 'Verification: OK|Verify return code: 0 \(ok\)' "$diag_file" &&
+    [ "$actual_spiffe_id" = "$expected_spiffe_id" ]; then
+    verify_result="ok"
+  fi
+
+  echo "$host SPIFFE ID: $actual_spiffe_id"
+  echo "$host verification result: $verify_result"
+
+  if [ "$verify_result" != "ok" ]; then
     rm -rf "$tmpdir"
+    echo "ERROR: verified request failed for $host" >&2
     exit 1
   fi
 
-  awk 'BEGIN{p=0} /BEGIN CERTIFICATE/{p=1} p{print} /END CERTIFICATE/{exit}' "$out" >"$tmpdir/server.pem"
-  SERVER_SPIFFE_ID="$(openssl x509 -in "$tmpdir/server.pem" -noout -ext subjectAltName | sed -n 's/.*URI:\(spiffe:[^,]*\).*/\1/p' | head -n 1)"
-  echo "tool-b-envoy SPIFFE ID: $SERVER_SPIFFE_ID"
-
-  i=0
-  verified="unknown"
-  while [ $i -lt 50 ]; do
-    if grep -q "Verification: OK" "$out"; then
-      verified="ok"
-      break
-    fi
-    if grep -q "Verify return code:" "$out"; then
-      if grep -q "Verify return code: 0 (ok)" "$out"; then
-        verified="ok"
-      else
-        verified="fail"
-      fi
-      break
-    fi
-    i=$((i + 1))
-    sleep 0.1
-  done
-
-  echo "tool-b-envoy verification result: $verified"
-  if [ "$verified" != "ok" ]; then
-    kill "$pid" 2>/dev/null || true
-    rm -rf "$tmpdir"
-    echo "ERROR: tool-b-envoy certificate verification failed" >&2
-    exit 1
-  fi
-
-  if [ "$SERVER_SPIFFE_ID" != "$SERVER_EXPECTED_SPIFFE_ID" ]; then
-    kill "$pid" 2>/dev/null || true
-    rm -rf "$tmpdir"
-    echo "ERROR: tool-b-envoy SPIFFE ID mismatch (got: $SERVER_SPIFFE_ID)" >&2
-    exit 1
-  fi
-  echo "tool-b-envoy SPIFFE ID match: yes"
-  printf 'GET /secret HTTP/1.1\r\nHost: tool-b-envoy\r\nConnection: close\r\n\r\n' >&3
-
-  wait "$pid" || true
-
-  status="$(tr -d '\r' <"$out" | grep -m1 '^HTTP/' | awk '{print $2}')"
-  body="$(tr -d '\r' <"$out" | grep -m1 -o '{.*}')"
-
-  if [ "$status" != "200" ]; then
-    rm -rf "$tmpdir"
-    echo "ERROR: tool-b-envoy /secret returned status $status" >&2
-    exit 1
-  fi
-  echo "$body"
-
-  exec 3>&-
-  rm -rf "$tmpdir"
+  VERIFIED_HTTP_STATUS="$(tr -d '\r' <"$http_file" | awk '/^HTTP\//{print $2; exit}')"
+  tr -d '\r' <"$http_file" | awk '
+    BEGIN {http=0; body=0}
+    /^HTTP\// {http=1; next}
+    http && body==0 && /^$/ {body=1; next}
+    http && body==1 {print}
+  ' >"$tmpdir/response_body.txt"
+  VERIFIED_HTTP_BODY_FILE="$tmpdir/response_body.txt"
 }
 
-echo "Calling: $TOOL_B_URL/secret"
-request_secret_via_openssl
-echo ""
-
-if [ -n "${CAPABILITY_ISSUER_URL:-}" ]; then
-  echo "Waiting for capability-issuer-envoy to startup..."
+wait_for_verified_health() {
+  url="$1"
+  expected_spiffe_id="$2"
   ready=0
   for i in $(seq 1 40); do
-    if curl -sS --fail --insecure --cert "$SVID_DIR/svid.pem" --key "$SVID_DIR/svid.key" \
-      "$CAPABILITY_ISSUER_URL/health" >/dev/null 2>&1; then
+    if verified_https_request "$url/health" "$expected_spiffe_id" GET "" >/dev/null 2>&1 && [ "$VERIFIED_HTTP_STATUS" = "200" ]; then
       ready=1
       break
     fi
     sleep 0.2
   done
-
   if [ "$ready" -ne 1 ]; then
-    echo "ERROR: capability-issuer-envoy not reachable at $CAPABILITY_ISSUER_URL after 40 attempts"
+    echo "ERROR: verified health check failed for $url after 40 attempts" >&2
     exit 1
   fi
+}
+
+echo "Waiting for tool-b-envoy to startup..."
+wait_for_verified_health "$TOOL_B_URL" "$SERVER_EXPECTED_SPIFFE_ID"
+
+echo "Calling: $TOOL_B_URL/health"
+verified_https_request "$TOOL_B_URL/health" "$SERVER_EXPECTED_SPIFFE_ID" GET ""
+if [ "$VERIFIED_HTTP_STATUS" != "200" ]; then
+  echo "ERROR: tool-b-envoy /health returned status $VERIFIED_HTTP_STATUS" >&2
+  exit 1
+fi
+cat "$VERIFIED_HTTP_BODY_FILE"
+echo ""
+
+echo "Calling: $TOOL_B_URL/secret"
+verified_https_request "$TOOL_B_URL/secret" "$SERVER_EXPECTED_SPIFFE_ID" GET ""
+if [ "$VERIFIED_HTTP_STATUS" != "200" ]; then
+  echo "ERROR: tool-b-envoy /secret returned status $VERIFIED_HTTP_STATUS" >&2
+  exit 1
+fi
+cat "$VERIFIED_HTTP_BODY_FILE"
+echo ""
+
+if [ -n "${CAPABILITY_ISSUER_URL:-}" ]; then
+  echo "Waiting for capability-issuer-envoy to startup..."
+  wait_for_verified_health "$CAPABILITY_ISSUER_URL" "$CAPISS_EXPECTED_SPIFFE_ID"
 
   echo "Calling: $CAPABILITY_ISSUER_URL/capabilities/mint"
-  if ! curl -sS --fail --insecure --cert "$SVID_DIR/svid.pem" --key "$SVID_DIR/svid.key" \
-    -H "Content-Type: application/json" \
-    -d '{"aud":"tool-b","act":"read","res":"/secret"}' \
-    "$CAPABILITY_ISSUER_URL/capabilities/mint"; then
-    echo "ERROR: capability-issuer mint failed"
+  verified_https_request "$CAPABILITY_ISSUER_URL/capabilities/mint" "$CAPISS_EXPECTED_SPIFFE_ID" POST '{"aud":"tool-b","act":"read","res":"tool-b:/secret"}'
+  if [ "$VERIFIED_HTTP_STATUS" != "200" ]; then
+    echo "ERROR: capability-issuer mint returned status $VERIFIED_HTTP_STATUS" >&2
     exit 1
   fi
+  cat "$VERIFIED_HTTP_BODY_FILE"
   echo ""
 fi

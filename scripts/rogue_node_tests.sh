@@ -581,54 +581,6 @@ resolve_host_ip() {
   return 1
 }
 
-resolve_ip_for_host() {
-  host="$1"
-  i=0
-  while [ $i -lt 10 ]; do
-    ip=""
-    if command -v getent >/dev/null 2>&1; then
-      ip="$(getent hosts "$host" | awk 'NR==1{print $1}')"
-    fi
-    if [ -z "$ip" ] && command -v docker >/dev/null 2>&1; then
-      net_dump="$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k " " $v.IPAddress}}{{end}}' "spiffe-${host}" 2>/dev/null || true)"
-      ip="$(printf '%s\n' "$net_dump" | awk 'NF>=2{print $2; exit}')"
-    fi
-    if [ -z "$ip" ] && command -v nslookup >/dev/null 2>&1; then
-      ip="$(nslookup "$host" 127.0.0.11 2>/dev/null | awk '/^Address: /{print $2; exit}')"
-    fi
-    if [ -z "$ip" ] && command -v ping >/dev/null 2>&1; then
-      ip="$(ping -c1 "$host" 2>/dev/null | awk -F'[()]' 'NR==1{print $2; exit}')"
-    fi
-    if [ -n "$ip" ]; then
-      printf '%s\n' "$ip"
-      return 0
-    fi
-    i=$((i + 1))
-    sleep 0.2
-  done
-  return 1
-}
-
-resolve_arg_for_url() {
-  url="$1"
-  host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\([^/:]*\).*#\1#p')"
-  port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\([0-9]*\).*#\1#p')"
-  if [ -z "$port" ]; then
-    case "$url" in
-      https://*) port="443" ;;
-      http://*) port="80" ;;
-    esac
-  fi
-  if [ -n "$host" ] && [ -n "$port" ]; then
-    ip="$(resolve_ip_for_host "$host" || true)"
-    if [ -n "$ip" ]; then
-      printf -- "--resolve %s:%s:%s" "$host" "$port" "$ip"
-      return 0
-    fi
-  fi
-  return 1
-}
-
 generate_fake_join_token() {
   if command -v python >/dev/null 2>&1; then
     python - <<'PY'
@@ -863,7 +815,7 @@ run_rogue_attest_should_fail() {
   log_file="/tmp/rogue_${label}.log"
   temp_dir="/tmp/rogue_${label}"
   temp_config="/tmp/rogue_${label}.conf"
-  outcome_marker=0
+  attestation_wait_retries=60
 
   rm -f "$log_file"
   mkdir -p "$temp_dir"
@@ -907,59 +859,53 @@ run_rogue_attest_should_fail() {
   pid=$!
   set -e
 
-  # Wait up to 60s for an explicit attestation outcome.
+  # Wait up to 60s for the rogue agent process to finish, then classify the final log.
   i=0
-  while [ $i -lt 60 ]; do
-    if text_contains "$log_file" "Node attestation was successful"; then
-      set_reason "rogue attestation succeeded"
-      kill "$pid" >/dev/null 2>&1 || true
-      wait "$pid" >/dev/null 2>&1 || true
-      ev_copy_if_exists "$log_file" "rogue_${label}.log"
-      ev_copy_if_exists "$temp_config" "rogue_${label}.conf"
-      return 1
-    fi
-    if text_contains "$log_file" "attestation failed" ||
-      text_contains "$log_file" "permission denied" ||
-      text_contains "$log_file" "invalid token" ||
-      text_contains "$log_file" "unauthorized" ||
-      text_contains "$log_file" "join token was not provided" ||
-      text_contains "$log_file" "join token does not exist"; then
-      outcome_marker=1
+  while [ $i -lt "$attestation_wait_retries" ]; do
+    if ! kill -0 "$pid" >/dev/null 2>&1; then
       break
-    fi
-    if text_contains "$log_file" "Agent crashed"; then
-      if [ "$outcome_marker" -eq 1 ]; then
-        break
-      fi
-      set_reason "rogue agent crashed without explicit attestation denial"
-      kill "$pid" >/dev/null 2>&1 || true
-      wait "$pid" >/dev/null 2>&1 || true
-      ev_copy_if_exists "$log_file" "rogue_${label}.log"
-      ev_copy_if_exists "$temp_config" "rogue_${label}.conf"
-      return 1
     fi
     i=$((i + 1))
     sleep 1
   done
 
-  kill "$pid" >/dev/null 2>&1 || true
-  wait "$pid" >/dev/null 2>&1 || true
+  if kill -0 "$pid" >/dev/null 2>&1; then
+    kill "$pid" >/dev/null 2>&1 || true
+    wait "$pid" >/dev/null 2>&1 || true
+  else
+    wait "$pid" >/dev/null 2>&1 || true
+  fi
 
   ev_copy_if_exists "$log_file" "rogue_${label}.log"
   ev_copy_if_exists "$temp_config" "rogue_${label}.conf"
 
-  if [ $i -ge "$max_retries" ]; then
+  if [ $i -ge "$attestation_wait_retries" ]; then
     ev_note "timed out waiting for attestation outcome (no explicit attestation success/failure observed)"
     set_reason "timed out waiting for attestation outcome (no explicit attestation success/failure observed)"
     return 1
   fi
 
-  if [ "$outcome_marker" -ne 1 ]; then
-    set_reason "no explicit attestation denial observed"
+  if text_contains "$log_file" "Node attestation was successful"; then
+    set_reason "rogue attestation succeeded"
     return 1
   fi
 
-  return 0
+  if text_contains "$log_file" "attestation failed" ||
+    text_contains "$log_file" "permission denied" ||
+    text_contains "$log_file" "invalid token" ||
+    text_contains "$log_file" "unauthorized" ||
+    text_contains "$log_file" "join token was not provided" ||
+    text_contains "$log_file" "join token does not exist"; then
+    return 0
+  fi
+
+  if text_contains "$log_file" "Agent crashed"; then
+    set_reason "rogue agent crashed without explicit attestation denial"
+    return 1
+  fi
+
+  set_reason "no explicit attestation denial observed"
+  return 1
 }
 
 prepare_toolb_material() {
@@ -1034,8 +980,10 @@ CAPISS_READY=0
 CAPISS_REASON=""
 CAPISS_AGENT_CERT=""
 CAPISS_AGENT_KEY=""
+CAPISS_AGENT_BUNDLE=""
 CAPISS_ROGUE_CERT=""
 CAPISS_ROGUE_KEY=""
+CAPISS_ROGUE_BUNDLE=""
 CAPISS_MINT_URL="https://capability-issuer-envoy:9443/capabilities/mint"
 CAPISS_RESOURCE_MINT_URL="https://capability-issuer-envoy:9443/capabilities/resource-mint"
 CAPISS_NO_OPA_URL="https://capability-issuer-no-opa-envoy:9444/capabilities/mint"
@@ -1080,6 +1028,7 @@ prepare_client_material() {
   outdir="/repo/tmp_svid/${service_name}_out"
   cert="$tmpdir/${service_name}_svid.pem"
   key="$tmpdir/${service_name}_svid.key"
+  bundle="$tmpdir/${service_name}_bundle.pem"
   host_repo="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/repo"}}{{.Source}}{{end}}{{end}}' spiffe-rogue-tests 2>/dev/null || true)"
   if [ -z "$host_repo" ]; then
     host_repo="$(awk '$5=="/repo"{print $4; exit}' /proc/self/mountinfo 2>/dev/null || true)"
@@ -1122,9 +1071,18 @@ prepare_client_material() {
 
   cp "$outdir/svid.0.pem" "$cert"
   cp "$outdir/svid.0.key" "$key"
+  if [ -s "$outdir/bundle.pem" ]; then
+    cp "$outdir/bundle.pem" "$bundle"
+  elif [ -s "$outdir/bundle.0.pem" ]; then
+    cp "$outdir/bundle.0.pem" "$bundle"
+  else
+    set_reason "missing trust bundle for ${service_name}"
+    return 1
+  fi
 
   CLIENT_CERT="$cert"
   CLIENT_KEY="$key"
+  CLIENT_BUNDLE="$bundle"
   return 0
 }
 
@@ -1151,6 +1109,7 @@ ensure_capiss_material() {
   fi
   CAPISS_AGENT_CERT="$CLIENT_CERT"
   CAPISS_AGENT_KEY="$CLIENT_KEY"
+  CAPISS_AGENT_BUNDLE="$CLIENT_BUNDLE"
 
   if ! prepare_client_material "rogue" "$tmpdir"; then
     CAPISS_READY=-1
@@ -1160,6 +1119,7 @@ ensure_capiss_material() {
   fi
   CAPISS_ROGUE_CERT="$CLIENT_CERT"
   CAPISS_ROGUE_KEY="$CLIENT_KEY"
+  CAPISS_ROGUE_BUNDLE="$CLIENT_BUNDLE"
 
   CAPISS_READY=1
   ev_copy_if_exists "${CAPISS_AGENT_CERT:-}" "agent-a_svid.pem"
@@ -1197,44 +1157,206 @@ ensure_capiss_envoy_ready() {
   return 0
 }
 
+expected_spiffe_for_host() {
+  case "$1" in
+    capability-issuer-envoy) printf '%s\n' 'spiffe://example.org/capability-issuer-envoy' ;;
+    capability-issuer-no-opa-envoy) printf '%s\n' 'spiffe://example.org/capability-issuer-no-opa-envoy' ;;
+    tool-b-envoy) printf '%s\n' 'spiffe://example.org/tool-b-envoy' ;;
+    *) return 1 ;;
+  esac
+}
+
+record_verified_identity() {
+  host="$1"
+  result="$2"
+  spiffe_id="$3"
+  if [ -z "${EVDIR:-}" ]; then
+    return 0
+  fi
+  case "$host" in
+    capability-issuer-envoy|capability-issuer-no-opa-envoy)
+      printf '%s' "$result" >"$EVDIR/verified_capiss_result.txt" 2>/dev/null || true
+      printf '%s' "$spiffe_id" >"$EVDIR/verified_capiss_spiffe_id.txt" 2>/dev/null || true
+      ;;
+    tool-b-envoy)
+      printf '%s' "$result" >"$EVDIR/verified_toolb_result.txt" 2>/dev/null || true
+      printf '%s' "$spiffe_id" >"$EVDIR/verified_toolb_spiffe_id.txt" 2>/dev/null || true
+      ;;
+  esac
+}
+
+write_verified_timing() {
+  status="$1"
+  duration_ms="$2"
+  if [ -z "${CURL_TIMING_OUT:-}" ]; then
+    return 0
+  fi
+  total_s="$(awk "BEGIN {printf \"%.3f\", ${duration_ms}/1000}")"
+  printf 'http_code=%s time_namelookup=0 time_connect=0 time_appconnect=0 time_starttransfer=0 time_total=%s\n' \
+    "$status" "$total_s" >"$CURL_TIMING_OUT" 2>/dev/null || true
+  if [ -n "${CURL_TIMING_RAW_OUT:-}" ]; then
+    cat "$CURL_TIMING_OUT" >"$CURL_TIMING_RAW_OUT" 2>/dev/null || true
+  fi
+  if [ -n "${CURL_STATUS_DEBUG:-}" ]; then
+    {
+      echo "parsed_status=${status}"
+      echo "timing_out_path=${CURL_TIMING_OUT}"
+      echo "timing_total_seconds=${total_s}"
+    } >"$CURL_STATUS_DEBUG" 2>/dev/null || true
+  fi
+}
+
+verified_https_request() {
+  cert="$1"
+  key="$2"
+  cafile="$3"
+  url="$4"
+  method="$5"
+  body="$6"
+  bearer="$7"
+  out="$8"
+  : >"$out"
+
+  host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\([^/:]*\).*#\1#p')"
+  port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\([0-9]*\).*#\1#p')"
+  path="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/]*\(/.*\)$#\1#p')"
+  if [ -z "$path" ]; then
+    path="/"
+  fi
+
+  expected_spiffe="$(expected_spiffe_for_host "$host" || true)"
+  if [ -z "$expected_spiffe" ]; then
+    record_verified_identity "$host" "fail" ""
+    printf '%s' ""
+    return 0
+  fi
+  if [ ! -s "$cafile" ] || [ -z "$cert" ] || [ -z "$key" ]; then
+    record_verified_identity "$host" "fail" ""
+    printf '%s' ""
+    return 0
+  fi
+
+  req_file="$(mktemp)"
+  body_file="$(mktemp)"
+  http_file="$(mktemp)"
+  http_norm_file="$(mktemp)"
+  diag_file="$(mktemp)"
+  server_cert="$(mktemp)"
+
+  if [ "$method" = "POST" ]; then
+    printf '%s' "$body" >"$body_file"
+    body_len="$(wc -c <"$body_file" | tr -d ' ')"
+  else
+    : >"$body_file"
+    body_len="0"
+  fi
+
+  {
+    printf '%s %s HTTP/1.1\r\n' "$method" "$path"
+    printf 'Host: %s\r\n' "$host"
+    printf 'Connection: close\r\n'
+    if [ -n "$bearer" ]; then
+      printf 'Authorization: Bearer %s\r\n' "$bearer"
+    fi
+    if [ "$method" = "POST" ]; then
+      printf 'Content-Type: application/json\r\n'
+      printf 'Content-Length: %s\r\n' "$body_len"
+    fi
+    printf '\r\n'
+    if [ "$method" = "POST" ]; then
+      cat "$body_file"
+    fi
+  } >"$req_file"
+
+  if [ "${DEBUG_RESOLVE:-}" = "1" ]; then
+    printf '[debug] verified_https_request url=%s host=%s port=%s path=%s expected_spiffe=%s\n' \
+      "$url" "$host" "$port" "$path" "$expected_spiffe" >&2
+  fi
+
+  start_ms="$(epoch_ms)"
+  set +e
+  $TIMEOUT_BIN 20s openssl s_client $TLS_CLIENT_ARGS \
+    -connect "${host}:${port}" \
+    -servername "$host" \
+    -cert "$cert" \
+    -key "$key" \
+    -CAfile "$cafile" \
+    -verify_return_error \
+    -showcerts \
+    -ign_eof \
+    <"$req_file" >"$http_file" 2>"$diag_file"
+  rc=$?
+  set -e
+  end_ms="$(epoch_ms)"
+
+  actual_spiffe=""
+  if awk 'BEGIN{p=0} /BEGIN CERTIFICATE/{p=1} p{print} /END CERTIFICATE/{exit}' "$diag_file" >"$server_cert" 2>/dev/null &&
+    [ -s "$server_cert" ]; then
+    actual_spiffe="$(openssl x509 -in "$server_cert" -noout -ext subjectAltName 2>/dev/null | sed -n 's/.*URI:\(spiffe:[^,]*\).*/\1/p' | head -n 1)"
+  elif awk 'BEGIN{p=0} /BEGIN CERTIFICATE/{p=1} p{print} /END CERTIFICATE/{exit}' "$http_file" >"$server_cert" 2>/dev/null &&
+    [ -s "$server_cert" ]; then
+    actual_spiffe="$(openssl x509 -in "$server_cert" -noout -ext subjectAltName 2>/dev/null | sed -n 's/.*URI:\(spiffe:[^,]*\).*/\1/p' | head -n 1)"
+  fi
+
+  verify_result="fail"
+  if [ "$rc" -eq 0 ] &&
+    grep -Eq 'Verification: OK|Verify return code: 0 \(ok\)' "$diag_file" "$http_file" &&
+    [ "$actual_spiffe" = "$expected_spiffe" ]; then
+    verify_result="ok"
+  fi
+  record_verified_identity "$host" "$verify_result" "$actual_spiffe"
+
+  tr -d '\r' <"$http_file" >"$http_norm_file" 2>/dev/null || true
+
+  status="$(awk '/^HTTP\//{print $2; exit}' "$http_norm_file")"
+  if [ -z "$status" ]; then
+    status="$(tr -d '\r' <"$diag_file" | awk '/^HTTP\//{print $2; exit}')"
+  fi
+  write_verified_timing "$status" "$((end_ms - start_ms))"
+
+  body_start_line="$(awk '
+    BEGIN {http=0}
+    /^HTTP\// {http=1; next}
+    http && /^$/ {print NR + 1; exit}
+  ' "$http_norm_file")"
+  content_length="$(awk '
+    BEGIN {IGNORECASE=1}
+    /^Content-Length:/ {gsub(/^[^:]*:[[:space:]]*/, "", $0); print $0; exit}
+  ' "$http_norm_file")"
+
+  if [ -n "$body_start_line" ] && printf '%s' "$content_length" | grep -Eq '^[0-9]+$'; then
+    tail -n +"$body_start_line" "$http_norm_file" | head -c "$content_length" >"$out" 2>/dev/null || true
+  fi
+
+  if [ ! -s "$out" ]; then
+    awk '
+      BEGIN {http=0; body=0}
+      /^HTTP\// {http=1; next}
+      http && body==0 && /^$/ {body=1; next}
+      http && body==1 {print}
+    ' "$http_norm_file" >"$out" 2>/dev/null || true
+  fi
+
+  if [ ! -s "$out" ]; then
+    tr -d '\r' <"$diag_file" | awk '
+      BEGIN {http=0; body=0}
+      /^HTTP\// {http=1; next}
+      http && body==0 && /^$/ {body=1; next}
+      http && body==1 {print}
+    ' >"$out" 2>/dev/null || true
+  fi
+
+  rm -f "$req_file" "$body_file" "$http_file" "$http_norm_file" "$diag_file" "$server_cert"
+  printf '%s' "$status"
+}
+
 mint_with_cert() {
   cert="$1"
   key="$2"
   url="$3"
   out="$4"
-  : >"$out"
-  host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\([^/:]*\).*#\1#p')"
-  port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\([0-9]*\).*#\1#p')"
-  ip=""
-  if [ "$host" = "capability-issuer-envoy" ] && [ -n "${CAPISS_ENVOY_IP:-}" ]; then
-    ip="$CAPISS_ENVOY_IP"
-  elif [ "$host" = "capability-issuer-no-opa-envoy" ] && [ -n "${CAPISS_NO_OPA_ENVOY_IP:-}" ]; then
-    ip="$CAPISS_NO_OPA_ENVOY_IP"
-  else
-    ip="$(resolve_ip_for_host "$host" || true)"
-  fi
-  resolve_arg=""
-  if [ -z "$ip" ]; then
-    resolve_arg="$(resolve_arg_for_url "$url" || true)"
-  fi
-  curl_url="$url"
-  host_header=""
-  if [ -n "$ip" ] && [ -n "$port" ]; then
-    curl_url="$(printf '%s' "$url" | sed "s#^\\(https\\?://\\)[^/]*#\\1${ip}:${port}#")"
-    host_header="Host: ${host}"
-  fi
-  if [ "${DEBUG_RESOLVE:-}" = "1" ]; then
-    printf '[debug] mint_with_cert url=%s host=%s port=%s ip=%s resolve_arg=%s host_header=%s curl_url=%s\n' \
-      "$url" "$host" "$port" "${ip:-}" "$resolve_arg" "$host_header" "$curl_url" >&2
-  fi
-  if [ -n "$host_header" ]; then
-    status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
-      -H "$host_header" -H "Content-Type: application/json" -d "$CAPISS_MINT_BODY" "$curl_url" || true)"
-  else
-    status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
-      -H "Content-Type: application/json" -d "$CAPISS_MINT_BODY" "$curl_url" || true)"
-  fi
-  printf '%s' "$status"
+  verified_https_request "$cert" "$key" "${CAPISS_AGENT_BUNDLE:-${CAPISS_ROGUE_BUNDLE:-}}" \
+    "$url" "POST" "$CAPISS_MINT_BODY" "" "$out"
 }
 
 mint_with_cert_to_file() {
@@ -1253,71 +1375,8 @@ mint_with_body() {
   url="$3"
   body="$4"
   out="$5"
-  : >"$out"
-  host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\([^/:]*\).*#\1#p')"
-  port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\([0-9]*\).*#\1#p')"
-  ip=""
-  if [ "$host" = "capability-issuer-envoy" ] && [ -n "${CAPISS_ENVOY_IP:-}" ]; then
-    ip="$CAPISS_ENVOY_IP"
-  elif [ "$host" = "capability-issuer-no-opa-envoy" ] && [ -n "${CAPISS_NO_OPA_ENVOY_IP:-}" ]; then
-    ip="$CAPISS_NO_OPA_ENVOY_IP"
-  else
-    ip="$(resolve_ip_for_host "$host" || true)"
-  fi
-  resolve_arg=""
-  if [ -z "$ip" ]; then
-    resolve_arg="$(resolve_arg_for_url "$url" || true)"
-  fi
-  curl_url="$url"
-  host_header=""
-  if [ -n "$ip" ] && [ -n "$port" ]; then
-    curl_url="$(printf '%s' "$url" | sed "s#^\\(https\\?://\\)[^/]*#\\1${ip}:${port}#")"
-    host_header="Host: ${host}"
-  fi
-  if [ "${DEBUG_RESOLVE:-}" = "1" ]; then
-    printf '[debug] mint_with_body url=%s host=%s port=%s ip=%s resolve_arg=%s host_header=%s curl_url=%s\n' \
-      "$url" "$host" "$port" "${ip:-}" "$resolve_arg" "$host_header" "$curl_url" >&2
-  fi
-  if [ -n "${CURL_TIMING_OUT:-}" ]; then
-    tmp_out="$(mktemp)"
-    if [ -n "$host_header" ]; then
-      curl -sS -o "$out" --insecure $resolve_arg --cert "$cert" --key "$key" \
-        -H "$host_header" -H "Content-Type: application/json" -d "$body" "$curl_url" \
-        -w "http_code=%{http_code} time_namelookup=%{time_namelookup} time_connect=%{time_connect} time_appconnect=%{time_appconnect} time_starttransfer=%{time_starttransfer} time_total=%{time_total}\n" \
-        >"$tmp_out" || true
-    else
-      curl -sS -o "$out" --insecure $resolve_arg --cert "$cert" --key "$key" \
-        -H "Content-Type: application/json" -d "$body" "$curl_url" \
-        -w "http_code=%{http_code} time_namelookup=%{time_namelookup} time_connect=%{time_connect} time_appconnect=%{time_appconnect} time_starttransfer=%{time_starttransfer} time_total=%{time_total}\n" \
-        >"$tmp_out" || true
-    fi
-    status="$(awk -F'[= ]' 'NR==1{print $2}' "$tmp_out" 2>/dev/null | tail -n 1)"
-    cat "$tmp_out" >"$CURL_TIMING_OUT" 2>/dev/null || true
-    if [ -n "${CURL_TIMING_RAW_OUT:-}" ]; then
-      cat "$tmp_out" >"$CURL_TIMING_RAW_OUT" 2>/dev/null || true
-    fi
-    if [ -z "$status" ] && [ -s "$CURL_TIMING_OUT" ]; then
-      status="$(awk -F'[= ]' 'NR==1{print $2}' "$CURL_TIMING_OUT" 2>/dev/null | tail -n 1)"
-    fi
-    if [ -n "${CURL_STATUS_DEBUG:-}" ]; then
-      {
-        echo "parsed_status=${status}"
-        echo "timing_out_path=${CURL_TIMING_OUT}"
-        echo "sed_path=$(command -v sed 2>/dev/null || echo missing)"
-        echo "awk_out=$(awk -F'[= ]' 'NR==1{print $2}' "$CURL_TIMING_OUT" 2>/dev/null | tail -n 1)"
-      } >"$CURL_STATUS_DEBUG" 2>/dev/null || true
-    fi
-    rm -f "$tmp_out"
-  else
-    if [ -n "$host_header" ]; then
-      status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
-        -H "$host_header" -H "Content-Type: application/json" -d "$body" "$curl_url" || true)"
-    else
-      status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
-        -H "Content-Type: application/json" -d "$body" "$curl_url" || true)"
-    fi
-  fi
-  printf '%s' "$status"
+  verified_https_request "$cert" "$key" "${CAPISS_AGENT_BUNDLE:-${CAPISS_ROGUE_BUNDLE:-}}" \
+    "$url" "POST" "$body" "" "$out"
 }
 
 mint_with_body_to_file() {
@@ -1338,35 +1397,8 @@ mint_with_body_auth() {
   body="$4"
   bearer="$5"
   out="$6"
-  : >"$out"
-  host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\([^/:]*\).*#\1#p')"
-  port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\([0-9]*\).*#\1#p')"
-  ip=""
-  if [ "$host" = "capability-issuer-envoy" ] && [ -n "${CAPISS_ENVOY_IP:-}" ]; then
-    ip="$CAPISS_ENVOY_IP"
-  elif [ "$host" = "capability-issuer-no-opa-envoy" ] && [ -n "${CAPISS_NO_OPA_ENVOY_IP:-}" ]; then
-    ip="$CAPISS_NO_OPA_ENVOY_IP"
-  else
-    ip="$(resolve_ip_for_host "$host" || true)"
-  fi
-  resolve_arg=""
-  if [ -z "$ip" ]; then
-    resolve_arg="$(resolve_arg_for_url "$url" || true)"
-  fi
-  curl_url="$url"
-  host_header=""
-  if [ -n "$ip" ] && [ -n "$port" ]; then
-    curl_url="$(printf '%s' "$url" | sed "s#^\\(https\\?://\\)[^/]*#\\1${ip}:${port}#")"
-    host_header="Host: ${host}"
-  fi
-  if [ -n "$host_header" ]; then
-    status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
-      -H "$host_header" -H "Authorization: Bearer ${bearer}" -H "Content-Type: application/json" -d "$body" "$curl_url" || true)"
-  else
-    status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
-      -H "Authorization: Bearer ${bearer}" -H "Content-Type: application/json" -d "$body" "$curl_url" || true)"
-  fi
-  printf '%s' "$status"
+  verified_https_request "$cert" "$key" "${CAPISS_AGENT_BUNDLE:-${CAPISS_ROGUE_BUNDLE:-}}" \
+    "$url" "POST" "$body" "$bearer" "$out"
 }
 
 mint_with_body_auth_to_file() {
@@ -1391,93 +1423,7 @@ toolb_request_url() {
   token="$3"
   url="$4"
   out="$5"
-  : >"$out"
-  host="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://\([^/:]*\).*#\1#p')"
-  port="$(printf '%s' "$url" | sed -n 's#^[a-zA-Z]*://[^/:]*:\([0-9]*\).*#\1#p')"
-  ip=""
-  if [ "$host" = "tool-b-envoy" ] && [ -n "${TOOLB_ENVOY_IP:-}" ]; then
-    ip="$TOOLB_ENVOY_IP"
-  else
-    ip="$(resolve_ip_for_host "$host" || true)"
-  fi
-  resolve_arg=""
-  if [ -z "$ip" ]; then
-    resolve_arg="$(resolve_arg_for_url "$url" || true)"
-  fi
-  curl_url="$url"
-  host_header=""
-  if [ -n "$ip" ] && [ -n "$port" ]; then
-    curl_url="$(printf '%s' "$url" | sed "s#^\\(https\\?://\\)[^/]*#\\1${ip}:${port}#")"
-    host_header="Host: ${host}"
-  fi
-  if [ "${DEBUG_RESOLVE:-}" = "1" ]; then
-    printf '[debug] toolb_request url=%s host=%s port=%s ip=%s resolve_arg=%s host_header=%s curl_url=%s\n' \
-      "$url" "$host" "$port" "${ip:-}" "$resolve_arg" "$host_header" "$curl_url" >&2
-  fi
-  if [ -n "${CURL_TIMING_OUT:-}" ]; then
-    tmp_out="$(mktemp)"
-    if [ -n "$token" ]; then
-      if [ -n "$host_header" ]; then
-        curl -sS -o "$out" --insecure $resolve_arg --cert "$cert" --key "$key" \
-          --cacert "$TOOLB_BUNDLE" -H "$host_header" -H "Authorization: Bearer ${token}" "$curl_url" \
-          -w "http_code=%{http_code} time_namelookup=%{time_namelookup} time_connect=%{time_connect} time_appconnect=%{time_appconnect} time_starttransfer=%{time_starttransfer} time_total=%{time_total}\n" \
-          >"$tmp_out" || true
-      else
-        curl -sS -o "$out" --insecure $resolve_arg --cert "$cert" --key "$key" \
-          --cacert "$TOOLB_BUNDLE" -H "Authorization: Bearer ${token}" "$curl_url" \
-          -w "http_code=%{http_code} time_namelookup=%{time_namelookup} time_connect=%{time_connect} time_appconnect=%{time_appconnect} time_starttransfer=%{time_starttransfer} time_total=%{time_total}\n" \
-          >"$tmp_out" || true
-      fi
-    else
-      if [ -n "$host_header" ]; then
-        curl -sS -o "$out" --insecure $resolve_arg --cert "$cert" --key "$key" \
-          --cacert "$TOOLB_BUNDLE" -H "$host_header" "$curl_url" \
-          -w "http_code=%{http_code} time_namelookup=%{time_namelookup} time_connect=%{time_connect} time_appconnect=%{time_appconnect} time_starttransfer=%{time_starttransfer} time_total=%{time_total}\n" \
-          >"$tmp_out" || true
-      else
-        curl -sS -o "$out" --insecure $resolve_arg --cert "$cert" --key "$key" \
-          --cacert "$TOOLB_BUNDLE" "$curl_url" \
-          -w "http_code=%{http_code} time_namelookup=%{time_namelookup} time_connect=%{time_connect} time_appconnect=%{time_appconnect} time_starttransfer=%{time_starttransfer} time_total=%{time_total}\n" \
-          >"$tmp_out" || true
-      fi
-    fi
-    status="$(awk -F'[= ]' 'NR==1{print $2}' "$tmp_out" 2>/dev/null | tail -n 1)"
-    cat "$tmp_out" >"$CURL_TIMING_OUT" 2>/dev/null || true
-    if [ -n "${CURL_TIMING_RAW_OUT:-}" ]; then
-      cat "$tmp_out" >"$CURL_TIMING_RAW_OUT" 2>/dev/null || true
-    fi
-    if [ -z "$status" ] && [ -s "$CURL_TIMING_OUT" ]; then
-      status="$(awk -F'[= ]' 'NR==1{print $2}' "$CURL_TIMING_OUT" 2>/dev/null | tail -n 1)"
-    fi
-    if [ -n "${CURL_STATUS_DEBUG:-}" ]; then
-      {
-        echo "parsed_status=${status}"
-        echo "timing_out_path=${CURL_TIMING_OUT}"
-        echo "sed_path=$(command -v sed 2>/dev/null || echo missing)"
-        echo "awk_out=$(awk -F'[= ]' 'NR==1{print $2}' "$CURL_TIMING_OUT" 2>/dev/null | tail -n 1)"
-      } >"$CURL_STATUS_DEBUG" 2>/dev/null || true
-    fi
-    rm -f "$tmp_out"
-  else
-    if [ -n "$token" ]; then
-      if [ -n "$host_header" ]; then
-        status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
-          --cacert "$TOOLB_BUNDLE" -H "$host_header" -H "Authorization: Bearer ${token}" "$curl_url" || true)"
-      else
-        status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
-          --cacert "$TOOLB_BUNDLE" -H "Authorization: Bearer ${token}" "$curl_url" || true)"
-      fi
-    else
-      if [ -n "$host_header" ]; then
-        status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
-          --cacert "$TOOLB_BUNDLE" -H "$host_header" "$curl_url" || true)"
-      else
-        status="$(curl -sS -o "$out" -w '%{http_code}' --insecure $resolve_arg --cert "$cert" --key "$key" \
-          --cacert "$TOOLB_BUNDLE" "$curl_url" || true)"
-      fi
-    fi
-  fi
-  printf '%s' "$status"
+  verified_https_request "$cert" "$key" "$TOOLB_BUNDLE" "$url" "GET" "" "$token" "$out"
 }
 
 toolb_request_to_file() {
@@ -2073,6 +2019,8 @@ M3S2_T1_test() {
     "assert_json_present \"$out\" '.token' && jq -r '.token' \"$out\" >\"$EVDIR/token.txt\""
   outcome_guard "mint fields correct" \
     "assert_json_eq \"$out\" '.token_type' 'biscuit' && assert_json_present \"$out\" '.expires_at' && assert_json_eq \"$out\" '.issued_to' 'spiffe://example.org/agent-a' && assert_json_eq \"$out\" '.aud' 'tool-b' && assert_json_eq \"$out\" '.act' 'read' && assert_json_eq \"$out\" '.res' 'tool-b:/secret'"
+  outcome_guard "verified issuer identity recorded" \
+    "assert_file_eq \"$EVDIR/verified_capiss_spiffe_id.txt\" \"spiffe://example.org/capability-issuer-envoy\" && assert_file_eq \"$EVDIR/verified_capiss_result.txt\" \"ok\""
   return 0
 }
 
@@ -2279,6 +2227,8 @@ M3S4_T2_test() {
   out="$EVDIR/response.json"
   outcome_guard "secret value correct" \
     "assert_json_eq \"$out\" '.secret' 'super sensitive demo secret'"
+  outcome_guard "verified tool-b identity recorded" \
+    "assert_file_eq \"$EVDIR/verified_toolb_spiffe_id.txt\" \"spiffe://example.org/tool-b-envoy\" && assert_file_eq \"$EVDIR/verified_toolb_result.txt\" \"ok\""
   return 0
 }
 

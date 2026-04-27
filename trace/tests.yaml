@@ -111,3 +111,25 @@ tests:
   - M4-T9
   - M4-T10
   status: active
+- id: E2E-M2-VERIFIED-CAPISS-MINT
+  type: e2e_case
+  source_requirements:
+  - REQ-M2-R10
+  - REQ-M2-R11
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M3S2_T1_test
+  evidence_prefixes:
+  - M3.S2-T1
+  status: active
+- id: E2E-M2-VERIFIED-TOOLB-REQUEST
+  type: e2e_case
+  source_requirements:
+  - REQ-M2-R10
+  - REQ-M2-R11
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M3S4_T2_test
+  evidence_prefixes:
+  - M3.S4-T2
+  status: active

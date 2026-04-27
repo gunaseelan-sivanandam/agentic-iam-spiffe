@@ -112,8 +112,12 @@ Outcome guards
 - $EVDIR/mint_status.txt
 - $EVDIR/response.json
 - $EVDIR/status.txt
+- $EVDIR/verified_capiss_result.txt
+- $EVDIR/verified_capiss_spiffe_id.txt
 - $EVDIR/token.txt
 - $EVDIR/toolb_envoy_ip.txt
+- $EVDIR/verified_toolb_result.txt
+- $EVDIR/verified_toolb_spiffe_id.txt
 
 ### T3 — “Rogue replayed join token rejects attestation”
 (derived directly from scripts/rogue_node_tests.sh)
@@ -796,7 +800,7 @@ Outcome guards
 
 ### What it tests
 
-That agent‑a can successfully mint a capability through capiss‑envoy when OPA allows the request, and the returned JSON includes the expected fields.
+That agent‑a can successfully mint a capability through capiss‑envoy when OPA allows the request, the returned JSON includes the expected fields, and the request path records verified issuer identity evidence.
 
 ### Step‑by‑step (as implemented)
 
@@ -831,6 +835,8 @@ Outcome guards
    - Confirms `issued_to == spiffe://example.org/agent-a`.
 6. aud/act/res correct  
    - Confirms `aud == tool-b`, `act == read`, `res == tool-b:/secret`.
+7. verified issuer identity recorded
+   - Confirms the evidence records `spiffe://example.org/capability-issuer-envoy` and an `ok` verification result.
 
 ### Evidence produced
 
@@ -1193,7 +1199,7 @@ Outcome guards
 
 ### What it tests
 
-That agent‑a can mint a capability and use it to access tool‑b `/secret` successfully.
+That agent‑a can mint a capability and use it to access tool‑b `/secret` successfully, and the request path records verified tool-b identity evidence.
 
 ### Step‑by‑step (as implemented)
 
@@ -1233,6 +1239,8 @@ Outcome guards
    - Requires HTTP status 200 from tool‑b.
 6. secret value correct  
    - Confirms the response body contains the expected secret value.
+7. verified tool-b identity recorded
+   - Confirms the evidence records `spiffe://example.org/tool-b-envoy` and an `ok` verification result.
 
 ### Evidence produced
 

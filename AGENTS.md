@@ -161,6 +161,13 @@ After a test run, validate that evidence directories were produced and contain g
 - `capability-issuer-no-opa-envoy` is test-only (`tests` profile). Do not use it for non-test flows.
 - Prefer `scripts/clean_stack.sh` over ad-hoc manual cleanup.
 - Keep evidence under `artifacts/rogue-tests/`; do not redirect unless you intentionally set `ROGUE_TEST_EVIDENCE_DIR`.
+- Never run Docker lifecycle commands in parallel in this repo.
+  Serialize:
+  - `scripts/clean_stack.sh`
+  - `docker compose ... up ...`
+  - `docker compose ... down ...`
+  - `docker compose ... run ...`
+  - only run `docker compose ... ps` or log inspection after the mutating command has completed
 
 ## Unit-test guardrails (summary)
 - For unit-test implementation details and commands, use `tests/unit/AGENTS.md`.

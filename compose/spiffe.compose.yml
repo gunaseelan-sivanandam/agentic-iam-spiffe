@@ -171,7 +171,7 @@ services:
     labels:
       spiffe.workload: "capability-issuer-no-opa"
     environment:
-      OPA_URL: http://opa-missing:8181/v1/data/capiss/allow
+      OPA_URL: http://redis:8181/v1/data/capiss/allow
       CAPISS_KEY_DIR: /var/lib/capiss/keys
       REDIS_URL: redis://redis:6379/0
       M4_MAX_DEPTH: "3"
