@@ -65,7 +65,6 @@ requirements to concrete tests. It complements integration specs in
 | M4-P2 | Discovery registry authoritative under root | `tests/unit/capiss/test_hybrid_critical.py::test_resource_mint_hybrid_new_resource_with_registry`, `tests/unit/toolb/test_budget_and_verify_biscuit.py::test_record_discovery_fails_closed_on_store_error` | Partial | Unit coverage exists; full producer authority is integration/system concern. |
 | M4-P3 | Only trusted producers may write registry | `tests/unit/toolb/test_handler_paths.py::test_do_get_search_success` | Partial | Path behavior covered; trust-boundary enforcement mostly integration-level. |
 | M4-P4 | Registry entries are TTL-bounded | `tests/unit/toolb/test_utils.py::test_record_discovery_success` | Partial | Registry write path covered; explicit TTL boundary assertions remain limited. |
-| M4-P5 | Registry model as stepping stone to receipts | `-` | Gap | Design-evolution requirement, not directly unit-testable in current implementation. |
 | M4-E1 | Enforcement independent of agent honesty | `tests/unit/capiss/test_chain_and_policy.py::test_run_policy_or_fail_fail_closed_when_opa_unavailable`, `tests/unit/toolb/test_canonical_and_chain.py::test_verify_chain_and_claims_fail_closed_if_marker_store_unavailable`, `tests/unit/toolb/test_budget_and_verify_biscuit.py::test_consume_budget_and_rate_fail_closed_on_redis_error` | Covered | Fail-closed behavior validated for key trusted components. |
 | M4-E2 | Single shared enforcement contract | `tests/unit/shared/test_enforcement_contract.py::test_verify_chain_contract_valid_root`, `tests/unit/capiss/test_chain_and_policy.py::test_verify_and_extract_chain_uses_shared_contract`, `tests/unit/toolb/test_canonical_and_chain.py::test_verify_chain_and_claims_uses_shared_contract` | Covered | Shared module owns the chain contract and both services use thin adapters. |
 | M4-E3 | capiss not in hot path for protected requests | `tests/unit/toolb/test_hybrid_critical.py::test_verify_biscuit_hybrid_root_secret_token` | Covered | Request-time checks done in tool-b verify path. |
@@ -79,6 +78,5 @@ requirements to concrete tests. It complements integration specs in
 ## Current Gaps (Explicit)
 
 - `M4-B6`: no explicit budget-renewal denial scenario test.
-- `M4-P5`: future-evolution design invariant; no direct unit assertion in current code.
 - `M4-E5`: network-boundary assurance belongs to integration/system tests.
 - `M4-O3`, `M4-O4`: observability reconstruction/drift analytics need integration or log-pipeline tests.

@@ -2693,6 +2693,107 @@ M4_T10_test() {
   return 0
 }
 
+M4_T11_test() {
+  begin_test_evidence "M4-T11" "amplified_delegated_mint_denied"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "capiss material available" "ensure_capiss_material"
+  premise_guard "capiss-envoy resolves" \
+    "capiss_ip=\"$(wait_resolve_ip capability-issuer-envoy 30)\"; test -n \"\$capiss_ip\"; CAPISS_ENVOY_IP=\"\$capiss_ip\""
+  premise_guard "capiss-envoy TCP reachable" "wait_tcp \"${CAPISS_ENVOY_IP}\" \"9443\" 30"
+  exercise_guard "mint root secret token" \
+    "mint_with_cert_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" \"$EVDIR/root_mint.json\" \"$EVDIR/root_status.txt\""
+  outcome_guard "root mint allowed 200" "assert_file_eq \"$EVDIR/root_status.txt\" \"200\""
+  root_token="$(json_get '.token' "$EVDIR/root_mint.json")"
+  exercise_guard "attempt delegated mint with amplified action" \
+    "mint_with_body_auth_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_RESOURCE_MINT_URL\" '{\"aud\":\"tool-b\",\"act\":\"write\",\"res\":\"tool-b:/secret\"}' \"\$root_token\" \"$EVDIR/amplified_mint.json\" \"$EVDIR/amplified_status.txt\""
+  outcome_guard "amplified mint denied 403" "assert_file_eq \"$EVDIR/amplified_status.txt\" \"403\""
+  outcome_guard "amplified authority reason" \
+    "assert_json_eq \"$EVDIR/amplified_mint.json\" '.reason' 'amplified_authority'"
+  return 0
+}
+
+M4_T12_test() {
+  begin_test_evidence "M4-T12" "wildcard_resource_denied"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "capiss material available" "ensure_capiss_material"
+  premise_guard "capiss-envoy resolves" \
+    "capiss_ip=\"$(wait_resolve_ip capability-issuer-envoy 30)\"; test -n \"\$capiss_ip\"; CAPISS_ENVOY_IP=\"\$capiss_ip\""
+  premise_guard "capiss-envoy TCP reachable" "wait_tcp \"${CAPISS_ENVOY_IP}\" \"9443\" 30"
+  exercise_guard "mint root secret token" \
+    "mint_with_cert_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" \"$EVDIR/root_mint.json\" \"$EVDIR/root_status.txt\""
+  outcome_guard "root mint allowed 200" "assert_file_eq \"$EVDIR/root_status.txt\" \"200\""
+  root_token="$(json_get '.token' "$EVDIR/root_mint.json")"
+  exercise_guard "attempt delegated mint with wildcard resource" \
+    "mint_with_body_auth_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_RESOURCE_MINT_URL\" '{\"aud\":\"tool-b\",\"act\":\"read\",\"res\":\"tool-b:/read-file:*\"}' \"\$root_token\" \"$EVDIR/wildcard_mint.json\" \"$EVDIR/wildcard_status.txt\""
+  outcome_guard "wildcard resource rejected 400" "assert_file_eq \"$EVDIR/wildcard_status.txt\" \"400\""
+  outcome_guard "resource validation reason" \
+    "assert_json_eq \"$EVDIR/wildcard_mint.json\" '.reason' 'res'"
+  return 0
+}
+
+M4_T13_test() {
+  begin_test_evidence "M4-T13" "budget_and_registry_ttl_bounded"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "tool-b and capiss material available" \
+    "ensure_toolb_material && ensure_capiss_material"
+  premise_guard "capiss-envoy resolves" \
+    "capiss_ip=\"$(wait_resolve_ip capability-issuer-envoy 30)\"; test -n \"\$capiss_ip\"; CAPISS_ENVOY_IP=\"\$capiss_ip\""
+  premise_guard "capiss-envoy TCP reachable" "wait_tcp \"${CAPISS_ENVOY_IP}\" \"9443\" 30"
+  premise_guard "tool-b-envoy resolves" \
+    "toolb_ip=\"$(wait_resolve_ip tool-b-envoy 30)\"; test -n \"\$toolb_ip\"; TOOLB_ENVOY_IP=\"\$toolb_ip\""
+  premise_guard "tool-b-envoy TCP reachable" "wait_tcp \"${TOOLB_ENVOY_IP}\" \"8443\" 30"
+  premise_guard "redis container running" "docker ps --format '{{.Names}}' | grep -Fxq spiffe-redis"
+  exercise_guard "mint root search token" \
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" \"\$CAPISS_SEARCH_MINT_BODY\" \"$EVDIR/root_mint.json\" \"$EVDIR/root_status.txt\""
+  outcome_guard "root mint allowed 200" "assert_file_eq \"$EVDIR/root_status.txt\" \"200\""
+  root_token="$(json_get '.token' "$EVDIR/root_mint.json")"
+  root_id="$(json_get '.root_token_id' "$EVDIR/root_mint.json")"
+  root_exp="$(json_get '.expires_at' "$EVDIR/root_mint.json")"
+  exercise_guard "discover files via search" \
+    "toolb_request_url \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$root_token\" \"\$TOOLB_SEARCH_URL\" \"$EVDIR/search_response.json\" >\"$EVDIR/search_status.txt\""
+  outcome_guard "search allowed 200" "assert_file_eq \"$EVDIR/search_status.txt\" \"200\""
+  exercise_guard "capture redis TTLs" \
+    "docker exec spiffe-redis redis-cli TTL \"m4:budget:${root_id}\" | tr -d '\\r' >\"$EVDIR/budget_ttl.txt\"; docker exec spiffe-redis redis-cli TTL \"m4:registry:${root_id}\" | tr -d '\\r' >\"$EVDIR/registry_ttl.txt\"; date +%s >\"$EVDIR/ttl_check_now.txt\""
+  outcome_guard "budget ttl bounded by root expiry" \
+    "ttl=\$(cat \"$EVDIR/budget_ttl.txt\"); now=\$(cat \"$EVDIR/ttl_check_now.txt\"); remaining=\$((root_exp - now + 1)); [ \"\$ttl\" -gt 0 ] && [ \"\$ttl\" -le \"\$remaining\" ]"
+  outcome_guard "registry ttl bounded by root expiry" \
+    "ttl=\$(cat \"$EVDIR/registry_ttl.txt\"); now=\$(cat \"$EVDIR/ttl_check_now.txt\"); remaining=\$((root_exp - now + 1)); [ \"\$ttl\" -gt 0 ] && [ \"\$ttl\" -le \"\$remaining\" ]"
+  return 0
+}
+
+M4_T14_test() {
+  begin_test_evidence "M4-T14" "protected_request_does_not_require_capiss"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "tool-b and capiss material available" \
+    "ensure_toolb_material && ensure_capiss_material"
+  premise_guard "capiss-envoy resolves" \
+    "capiss_ip=\"$(wait_resolve_ip capability-issuer-envoy 30)\"; test -n \"\$capiss_ip\"; CAPISS_ENVOY_IP=\"\$capiss_ip\""
+  premise_guard "capiss-envoy TCP reachable" "wait_tcp \"${CAPISS_ENVOY_IP}\" \"9443\" 30"
+  premise_guard "tool-b-envoy resolves" \
+    "toolb_ip=\"$(wait_resolve_ip tool-b-envoy 30)\"; test -n \"\$toolb_ip\"; TOOLB_ENVOY_IP=\"\$toolb_ip\""
+  premise_guard "tool-b-envoy TCP reachable" "wait_tcp \"${TOOLB_ENVOY_IP}\" \"8443\" 30"
+  exercise_guard "mint root search token" \
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_MINT_URL\" \"\$CAPISS_SEARCH_MINT_BODY\" \"$EVDIR/root_mint.json\" \"$EVDIR/root_status.txt\""
+  outcome_guard "root mint allowed 200" "assert_file_eq \"$EVDIR/root_status.txt\" \"200\""
+  root_token="$(json_get '.token' "$EVDIR/root_mint.json")"
+  exercise_guard "discover files via search" \
+    "toolb_request_url \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$root_token\" \"\$TOOLB_SEARCH_URL\" \"$EVDIR/search_response.json\" >\"$EVDIR/search_status.txt\""
+  outcome_guard "search allowed 200" "assert_file_eq \"$EVDIR/search_status.txt\" \"200\""
+  exercise_guard "resource mint for read-file:fileA" \
+    "mint_with_body_auth_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_RESOURCE_MINT_URL\" '{\"aud\":\"tool-b\",\"act\":\"read\",\"res\":\"tool-b:/read-file:fileA\"}' \"\$root_token\" \"$EVDIR/resource_mint.json\" \"$EVDIR/resource_status.txt\""
+  outcome_guard "resource mint allowed 200" "assert_file_eq \"$EVDIR/resource_status.txt\" \"200\""
+  resource_token="$(json_get '.token' "$EVDIR/resource_mint.json")"
+  exercise_guard "stop capiss app before protected resource use" \
+    "docker stop spiffe-capability-issuer >/dev/null"
+  exercise_guard "read file using resource token while capiss is stopped" \
+    "toolb_request_url \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$resource_token\" \"\$TOOLB_READ_FILE_URL_PREFIX/fileA\" \"$EVDIR/read_response.json\" >\"$EVDIR/read_status.txt\""
+  exercise_guard "restart capiss app after proof" \
+    "docker start spiffe-capability-issuer >/dev/null"
+  outcome_guard "read allowed without capiss hot path" "assert_file_eq \"$EVDIR/read_status.txt\" \"200\""
+  outcome_guard "returned file payload" "assert_json_eq \"$EVDIR/read_response.json\" '.id' 'fileA'"
+  return 0
+}
+
 print_section "Milestone 1 - Server and agent connection and successful entry"
 if [ "$RUN_M1" -eq 1 ]; then
   TEST_PREFIX="M1"
@@ -2768,6 +2869,10 @@ if [ "$RUN_M4" -eq 1 ]; then
   run_test "T8" "new-resource mint rate is enforced at capiss" M4_T8_test
   run_test "T9" "allow flow emits correlatable audit events" M4_T9_test
   run_test "T10" "deny flow emits correlatable mint audit event" M4_T10_test
+  run_test "T11" "amplified delegated mint is denied" M4_T11_test
+  run_test "T12" "wildcard delegated resource is denied" M4_T12_test
+  run_test "T13" "budget and registry TTLs are bounded by root expiry" M4_T13_test
+  run_test "T14" "protected request does not require capiss hot path" M4_T14_test
 fi
 
 printf '\nTotal: %d  Passed: %d  Failed: %d\n' "$TOTAL" "$PASSED" "$FAILED"

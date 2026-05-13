@@ -64,3 +64,60 @@ Usage:
 - Verified-TLS runs no longer fail intermittently due to expired server certs on `capability-issuer-no-opa-envoy`
 - The chosen fix is documented
 - `M3.S2-T4` passes reliably in repeated full and targeted runs without relying on `--insecure` behavior
+
+## OPL-002: Traceability links are structurally valid but semantically over-claimed
+
+- Status: Open
+- First observed: 2026-05-13
+- Area: requirements / architecture / traceability
+- Related command:
+  - `make qa-trace`
+- Related artifacts:
+  - `docs/requirements.md`
+  - `docs/architecture.md`
+  - `trace/tests.yaml`
+  - `artifacts/quality/traceability_report.json`
+
+### Problem
+- `qa-trace` validates trace structure, ID existence, and layer-correct usage, but it does not validate whether each `REQ -> ARCH` link is semantically correct.
+- A requirement can therefore appear satisfied when an architecture section is only adjacent to, supporting, evidentiary for, or unrelated to the requirement.
+- The current `Satisfies:` relation is too coarse because it does not distinguish direct satisfaction from support, context, evidence, or future/partial responsibility.
+
+### Evidence
+- `make qa-trace` can pass while still reporting non-blocking coverage gaps such as `requirements_without_e2e`.
+- M4 semantic review found over-claimed `Satisfies:` links where shared state or Redis-backed storage was marked as satisfying requirements whose enforcing responsibility belongs to `capiss`, `tool-b`, or Envoy.
+- Examples observed during review:
+  - `REQ-M4-B7` requires mint-rate enforcement at `capiss`; Redis/shared state supports the counter but does not enforce the mint policy.
+  - `REQ-M4-E3` requires `capiss` not to be in the protected-request hot path; issuer/shared-state participation in minting does not itself satisfy that requirement.
+  - `REQ-M4-O1` requires enforcement audit events; shared governance state does not emit request enforcement decisions.
+
+### Current understanding
+- The current trace model is structurally useful but can create false confidence when a syntactically valid link is treated as semantic satisfaction.
+- This is a proof-model problem rather than an implementation failure by itself.
+- The issue likely affects more than M4 because the same `Satisfies:` mechanism is used across all milestones.
+
+### Why this matters
+- The project operating model depends on black-box trust in authored requirements, architecture, trace mappings, and evidence.
+- If `REQ -> ARCH` links are semantically over-claimed, the trace graph can look complete while the real responsibility and proof path are unclear or wrong.
+- This weakens review quality and can hide unimplemented or only partially implemented requirements.
+
+### Immediate mitigation
+- Treat current `Satisfies:` links as structurally valid but not automatically semantically trusted.
+- Perform AI-assisted semantic review milestone by milestone before relying on trace completeness claims.
+- During review, classify each link as direct, supporting, context/evidence, partial, or wrong.
+
+### Meaningful fix options to evaluate
+1. Add an authored semantic trace review artifact:
+   - record direct vs supporting/context/evidence relationships for every `REQ -> ARCH` claim
+2. Tighten architecture wording:
+   - keep only direct responsibility in `Satisfies:`
+   - move support-only relationships to a separate relation or prose
+3. Update trace QA after review:
+   - keep structural validation
+   - add a blocking semantic-contract check only after the authored review is complete
+
+### Closure criteria
+- Complete semantic review for all milestones, starting with M4 and then covering global, M1, M2, M2.5, and M3 requirements.
+- Reclassify or remove incorrect `Satisfies:` links.
+- Document direct vs supporting architecture responsibility for each reviewed requirement.
+- Update traceability rules or review process so semantic over-claims are not treated as satisfied requirements.

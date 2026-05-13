@@ -430,8 +430,10 @@ Only trusted components (PEP/tool boundary or discovery-enabled tools) may write
 ### REQ-M4-P4 — Registry entries are TTL-bounded
 Registry entries MUST expire no later than the root token expiry (or earlier).
 
-### REQ-M4-P5 — Registry-based gating is a stepping stone to signed receipts
-This registry model is the **Option A** implementation. A future evolution may replace/augment registry proof with **signed discovery receipts**, while keeping `capiss` as the central authority.
+### Future Scope — Signed discovery receipts
+The Discovery Registry is the **Option A** implementation for M4 reduced scope.
+A future milestone may replace or augment registry proof with **signed discovery receipts**, while keeping `capiss` as the central authority.
+Signed receipts are not claimed by the current M4 implementation.
 
 ---
 
@@ -440,14 +442,14 @@ This registry model is the **Option A** implementation. A future evolution may r
 ### REQ-M4-E1 — Enforcement does not depend on agent honesty
 All security-relevant checks (attenuation rules, identity binding, depth window, extension validation, spend budget) MUST be enforced by trusted components (PEP/tool + shared enforcement path), not by agents.
 
-### REQ-M4-E2 — PEPs share a single enforcement contract
-All PEPs/tools MUST use the same enforcement contract (shared library/service) for:
+### REQ-M4-E2 — PEPs share consistent enforcement semantics
+All PEPs/tools MUST enforce the same observable contract for:
 - token validation + claims extraction
 - identity binding check
 - depth + extension check
 - spend budget check
 
-In the current reduced-scope implementation, this shared enforcement contract MUST be a single authoritative implementation of chain validation, effective-depth derivation, and attenuation checks reused by both mint-time and request-time validation paths. Service-local policy calls, store lookups, and HTTP response shaping MAY remain outside that shared contract.
+In the current reduced-scope architecture, a shared in-process implementation is used for chain validation, effective-depth derivation, and attenuation checks. Service-local policy calls, store lookups, and HTTP response shaping MAY remain outside that shared implementation.
 
 ### REQ-M4-E3 — capiss is not in the hot path for every protected request
 `capiss` MUST NOT be required for every protected request.

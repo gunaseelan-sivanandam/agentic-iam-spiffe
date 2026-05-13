@@ -95,7 +95,7 @@ It connects the Envoy boundary for verified caller identity, the tool implementa
 ## ARCH-006 Shared Governance State and Discovery Registry
 
 Type: Logical
-Satisfies: REQ-G-R2, REQ-G-R3, REQ-M4-B1, REQ-M4-B2, REQ-M4-B3, REQ-M4-B4, REQ-M4-B5, REQ-M4-B6, REQ-M4-B7, REQ-M4-P1, REQ-M4-P2, REQ-M4-P3, REQ-M4-P4, REQ-M4-P5, REQ-M4-E1, REQ-M4-E3, REQ-M4-O1, REQ-M4-O3, REQ-M4-O4
+Satisfies: REQ-G-R2, REQ-G-R3, REQ-M4-B1, REQ-M4-B2, REQ-M4-B3, REQ-M4-B4, REQ-M4-B5, REQ-M4-B6, REQ-M4-B7, REQ-M4-P1, REQ-M4-P2, REQ-M4-P3, REQ-M4-P4, REQ-M4-E1, REQ-M4-E3, REQ-M4-O1, REQ-M4-O3, REQ-M4-O4
 
 Overview:
 This subsystem provides the trusted shared state used by the current M4 implementation. It holds the budget and rate state keyed by `root_token_id`, the mint-rate state used to bound new-resource mint fan-out, and the discovery registry used to gate minting of new resource-scoped capabilities.

@@ -2088,3 +2088,205 @@ Outcome guards
 - $EVDIR/fileA_again_status.txt  
 - $EVDIR/capiss_container.log  
 - $EVDIR/capiss_events.jsonl  
+
+### T11 — “amplified delegated mint is denied”
+(derived directly from scripts/rogue_node_tests.sh)
+
+### What it tests
+
+That a delegated mint cannot request authority broader than the parent token authority.
+
+### Step-by-step (as implemented)
+
+Premise guards
+
+1. capiss material available
+   - Ensures capability issuer client material is present.
+2. capiss-envoy resolves
+   - Resolves `capability-issuer-envoy`.
+3. capiss-envoy TCP reachable
+   - Verifies the capability issuer envoy port is reachable.
+
+Exercise guards
+
+1. mint root secret token
+   - Mints a root token for the canonical secret resource and writes `root_mint.json` and `root_status.txt`.
+2. attempt delegated mint with amplified action
+   - Attempts a delegated mint using the parent token but asks for `act=write` on `tool-b:/secret`.
+   - Writes `amplified_mint.json` and `amplified_status.txt`.
+
+Outcome guards
+
+1. root mint allowed 200
+   - Requires HTTP status 200 for the root mint.
+2. amplified mint denied 403
+   - Requires HTTP status 403 for the delegated mint attempt.
+3. amplified authority reason
+   - Confirms the denial reason is `amplified_authority`.
+
+### Evidence produced
+
+- $EVDIR/root_mint.json
+- $EVDIR/root_status.txt
+- $EVDIR/amplified_mint.json
+- $EVDIR/amplified_status.txt
+
+### T12 — “wildcard delegated resource is denied”
+(derived directly from scripts/rogue_node_tests.sh)
+
+### What it tests
+
+That delegated resource mints only accept concrete canonical resources and reject wildcard resource strings.
+
+### Step-by-step (as implemented)
+
+Premise guards
+
+1. capiss material available
+   - Ensures capability issuer client material is present.
+2. capiss-envoy resolves
+   - Resolves `capability-issuer-envoy`.
+3. capiss-envoy TCP reachable
+   - Verifies the capability issuer envoy port is reachable.
+
+Exercise guards
+
+1. mint root secret token
+   - Mints a root token and writes `root_mint.json` and `root_status.txt`.
+2. attempt delegated mint with wildcard resource
+   - Attempts a delegated mint for `tool-b:/read-file:*`.
+   - Writes `wildcard_mint.json` and `wildcard_status.txt`.
+
+Outcome guards
+
+1. root mint allowed 200
+   - Requires HTTP status 200 for the root mint.
+2. wildcard resource rejected 400
+   - Requires HTTP status 400 for the wildcard resource request.
+3. resource validation reason
+   - Confirms the rejection reason is `res`.
+
+### Evidence produced
+
+- $EVDIR/root_mint.json
+- $EVDIR/root_status.txt
+- $EVDIR/wildcard_mint.json
+- $EVDIR/wildcard_status.txt
+
+### T13 — “budget and registry TTLs are bounded by root expiry”
+(derived directly from scripts/rogue_node_tests.sh)
+
+### What it tests
+
+That Redis budget and discovery-registry state created under a root token cannot outlive the root token expiry.
+
+### Step-by-step (as implemented)
+
+Premise guards
+
+1. tool-b and capiss material available
+   - Ensures client material for tool-b and capability issuer is prepared.
+2. capiss-envoy resolves
+   - Resolves `capability-issuer-envoy`.
+3. capiss-envoy TCP reachable
+   - Verifies the capability issuer envoy port is reachable.
+4. tool-b-envoy resolves
+   - Resolves `tool-b-envoy`.
+5. tool-b-envoy TCP reachable
+   - Verifies the tool-b envoy port is reachable.
+6. redis container running
+   - Confirms the Redis container used by the budget and registry state is running.
+
+Exercise guards
+
+1. mint root search token
+   - Mints a root discovery token and writes `root_mint.json` and `root_status.txt`.
+2. discover files via search
+   - Calls tool-b search using the root token and writes `search_response.json` and `search_status.txt`.
+3. capture redis TTLs
+   - Captures Redis TTLs for `m4:budget:<root_token_id>` and `m4:registry:<root_token_id>`.
+   - Captures the check time in `ttl_check_now.txt`.
+
+Outcome guards
+
+1. root mint allowed 200
+   - Requires HTTP status 200 for root mint.
+2. search allowed 200
+   - Requires HTTP status 200 for search.
+3. budget ttl bounded by root expiry
+   - Requires the budget TTL to be positive and no longer than the remaining root-token lifetime.
+4. registry ttl bounded by root expiry
+   - Requires the registry TTL to be positive and no longer than the remaining root-token lifetime.
+
+### Evidence produced
+
+- $EVDIR/root_mint.json
+- $EVDIR/root_status.txt
+- $EVDIR/search_response.json
+- $EVDIR/search_status.txt
+- $EVDIR/budget_ttl.txt
+- $EVDIR/registry_ttl.txt
+- $EVDIR/ttl_check_now.txt
+
+### T14 — “protected request does not require capiss hot path”
+(derived directly from scripts/rogue_node_tests.sh)
+
+### What it tests
+
+That using an already-minted resource token at tool-b does not require a live call to the capability issuer on the protected request path.
+
+### Step-by-step (as implemented)
+
+Premise guards
+
+1. tool-b and capiss material available
+   - Ensures client material for tool-b and capability issuer is prepared.
+2. capiss-envoy resolves
+   - Resolves `capability-issuer-envoy`.
+3. capiss-envoy TCP reachable
+   - Verifies the capability issuer envoy port is reachable.
+4. tool-b-envoy resolves
+   - Resolves `tool-b-envoy`.
+5. tool-b-envoy TCP reachable
+   - Verifies the tool-b envoy port is reachable.
+
+Exercise guards
+
+1. mint root search token
+   - Mints a root discovery token and writes `root_mint.json` and `root_status.txt`.
+2. discover files via search
+   - Calls tool-b search using the root token and writes `search_response.json` and `search_status.txt`.
+3. resource mint for read-file:fileA
+   - Mints a resource token scoped to `tool-b:/read-file:fileA`.
+   - Writes `resource_mint.json` and `resource_status.txt`.
+4. stop capiss app before protected resource use
+   - Stops the `spiffe-capability-issuer` app container after minting is complete.
+5. read file using resource token while capiss is stopped
+   - Calls `/read-file/fileA` using the already-minted resource token.
+   - Writes `read_response.json` and `read_status.txt`.
+6. restart capiss app after proof
+   - Restarts the `spiffe-capability-issuer` app container.
+
+Outcome guards
+
+1. root mint allowed 200
+   - Requires HTTP status 200 for root mint.
+2. search allowed 200
+   - Requires HTTP status 200 for search.
+3. resource mint allowed 200
+   - Requires HTTP status 200 for resource mint.
+4. read allowed without capiss hot path
+   - Requires HTTP status 200 while capiss is stopped.
+5. returned file payload
+   - Confirms returned payload identifies `fileA`.
+
+### Evidence produced
+
+- $EVDIR/root_mint.json
+- $EVDIR/root_status.txt
+- $EVDIR/search_response.json
+- $EVDIR/search_status.txt
+- $EVDIR/resource_mint.json
+- $EVDIR/resource_status.txt
+- $EVDIR/read_response.json
+- $EVDIR/read_status.txt

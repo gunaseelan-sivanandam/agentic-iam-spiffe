@@ -32,7 +32,8 @@ tests:
   status: active
 - id: E2E-M25-SUITE
   type: e2e_suite
-  source_requirements: []
+  source_requirements:
+  - REQ-M4-E5
   location:
     file: scripts/rogue_node_tests.sh
     selector: TEST_PREFIX="M2.5"
@@ -67,7 +68,8 @@ tests:
   status: active
 - id: E2E-M3-S4-SUITE
   type: e2e_suite
-  source_requirements: []
+  source_requirements:
+  - REQ-M4-E4
   location:
     file: scripts/rogue_node_tests.sh
     selector: TEST_PREFIX="M3.S4"
@@ -83,17 +85,30 @@ tests:
 - id: E2E-M4-SUITE
   type: e2e_suite
   source_requirements:
+  - REQ-M4-D1
+  - REQ-M4-D2
   - REQ-M4-D3
+  - REQ-M4-D4
   - REQ-M4-CH1
   - REQ-M4-DL1
   - REQ-M4-DL2
+  - REQ-M4-DL3
+  - REQ-M4-B1
   - REQ-M4-B2
   - REQ-M4-B3
   - REQ-M4-B4
+  - REQ-M4-B5
+  - REQ-M4-B6
   - REQ-M4-B7
   - REQ-M4-P1
   - REQ-M4-P2
+  - REQ-M4-P3
+  - REQ-M4-P4
+  - REQ-M4-E1
+  - REQ-M4-E2
+  - REQ-M4-E3
   - REQ-M4-O1
+  - REQ-M4-O2
   - REQ-M4-O3
   - REQ-M4-O4
   location:
@@ -110,6 +125,10 @@ tests:
   - M4-T8
   - M4-T9
   - M4-T10
+  - M4-T11
+  - M4-T12
+  - M4-T13
+  - M4-T14
   status: active
 - id: E2E-M2-VERIFIED-CAPISS-MINT
   type: e2e_case
