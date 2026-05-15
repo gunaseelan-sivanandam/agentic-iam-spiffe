@@ -8,6 +8,9 @@ spire/rogue/private
 spire/rogue/fake_token
 tmp_svid/
 capiss_keys/
+.env
+.env.*
+!.env.example
 test_report.log
 artifacts/
 docs/local_status_capture/
@@ -19,4 +22,5 @@ htmlcov/
 __pycache__/
 mutants/
 diff-coverage.txt
+.codex
 .codex/

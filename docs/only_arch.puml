@@ -1,70 +1,87 @@
 @startuml
-title Agentic IAM with SPIFFE/SPIRE — Component Architecture (M4)
+!pragma layout smetana
+left to right direction
+title Agentic IAM with SPIFFE/SPIRE - Component Architecture (M4 + M4a/M4b)
 
 skinparam componentStyle rectangle
-skinparam linetype ortho
 skinparam packageStyle rectangle
-skinparam LegendBackgroundColor white
-skinparam LegendBorderColor black
-
-package "Control Plane" {
-  [spire-server]
-  [spire-token-init]
-  [spire-agent]
+skinparam linetype ortho
+skinparam shadowing false
+skinparam ArrowColor #33445c
+skinparam defaultFontName Arial
+skinparam package {
+  BorderColor #a5afbf
+  BackgroundColor #ffffff
+}
+skinparam component {
+  BorderColor #41516a
+  BackgroundColor #ffffff
 }
 
-package "Capability Issuer" {
-  [capability-issuer]
-  [capability-issuer-envoy]
-  [opa]
+package "SPIRE control plane" {
+  [spire-token-init] as token_init
+  [spire-server] as spire_server
+  [spire-agent] as spire_agent
 }
 
-package "Enforcement State" {
-  [redis]
+package "Capability issuance path" {
+  [agent-a / rogue] as capiss_clients
+  [capability-issuer-envoy] as capiss_envoy
+  [capability-issuer] as capiss_app
+  [OPA] as opa
+  [Redis] as redis_capiss
 }
 
-package "Tool-B" {
-  [tool-b]
-  [tool-b-envoy]
+package "Current protected resource path: tool-b" {
+  [agent-a / rogue] as toolb_clients
+  [tool-b-envoy] as toolb_envoy
+  [tool-b] as toolb_app
+  [Redis] as redis_toolb
 }
 
-package "Clients" {
-  [agent-a]
-  [rogue]
+package "M4a/M4b Jira connector" #fff9ec {
+  [agent-a / rogue] as jira_clients
+  [jira-tool-envoy] as jira_envoy
+  [jira-tool] as jira_tool
+  [Redis] as redis_jira
+  [jira-mock] as jira_mock
+  [Jira Cloud\noptional live smoke] as jira_cloud
 }
 
-' Control plane interactions
-[spire-token-init] --> [spire-server]
-[spire-agent] --> [spire-server] : SPIFFE mTLS
+token_init --> spire_server
+spire_agent --> spire_server : node attestation
 
-' Data plane
-[agent-a] -[#green]-> [capability-issuer-envoy] : root/resource mint
-[rogue] -[#green]-> [capability-issuer-envoy] : root/resource mint
-[capability-issuer-envoy] --> [capability-issuer] : Trusted identity header
-[capability-issuer] --> [opa] : Policy decision
-[capability-issuer] -[#brown]-> [redis] : root budget init + registry read + mint marker
+capiss_clients --> capiss_envoy : mTLS mint request
+capiss_envoy --> capiss_app : trusted identity header
+capiss_app --> opa : policy decision
+capiss_app --> redis_capiss : root budget, registry, mint marker
+note right of opa
+  M4a/M4b policy:
+  agent-a may mint read/write only
+  for jira-tool:/project:IAM
+end note
 
-[agent-a] -[#orange]-> [tool-b-envoy] : capability-enforced request
-[rogue] -[#orange]-> [tool-b-envoy] : capability-enforced request
-[tool-b-envoy] --> [tool-b] : Trusted identity header
-[tool-b] -[#brown]-> [redis] : budget/rate + discovery writes
+toolb_clients --> toolb_envoy : mTLS tool request
+toolb_envoy --> toolb_app : trusted identity header
+toolb_app --> redis_toolb : budget/rate and discovery writes
 
-' Offline delegation (not in capiss hot path)
-[agent-a] -[#purple,dashed]-> [rogue] : offline delegated token handoff
+jira_clients -[#b98922,dashed]-> jira_envoy : mTLS issue read / description write
+jira_envoy -[#b98922,dashed]-> jira_tool : trusted identity header
+jira_tool -[#b98922,dashed]-> redis_jira : budget/rate
+jira_tool -[#b98922,dashed]-> jira_mock : authorized upstream only
+jira_tool -[#b98922,dashed]-> jira_cloud : optional live mode
+note right of jira_tool
+  M4a/M4b:
+  GET IAM-1 allowed
+  PUT IAM description requires write
+  GET NAS-1 denied before upstream
+end note
 
-' SPIFFE Workload API
-[spire-agent] -[#blue,dashed]-> [capability-issuer-envoy]
-[spire-agent] -[#blue,dashed]-> [tool-b-envoy]
-[spire-agent] -[#blue,dashed]-> [agent-a]
-[spire-agent] -[#blue,dashed]-> [rogue]
+spire_agent -[#2f66b3,dashed]-> capiss_envoy : Workload API
+spire_agent -[#2f66b3,dashed]-> toolb_envoy : Workload API
+spire_agent -[#2f66b3,dashed]-> jira_envoy : Workload API target
 
-legend right
-  |= Line |= Meaning |
-  | <color:blue><line:blue,dashed>────</line></color> | Workload API |
-  | <color:green><line:green>────</line></color> | Mint request |
-  | <color:orange><line:orange>────</line></color> | Protected tool request |
-  | <color:brown><line:brown>────</line></color> | Trusted state access (Redis) |
-  | <color:purple><line:purple,dashed>────</line></color> | Offline delegation handoff |
+legend bottom
+  Jira connector lines show the implemented M4a/M4b runtime path.
 endlegend
-
 @enduml

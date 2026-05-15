@@ -13,6 +13,7 @@ from tests.unit.shared.loaders import REPO_ROOT, load_module_from_path
 
 CAPISS_APP_PATH = Path(REPO_ROOT, "services", "capability-issuer", "app.py")
 TOOLB_SERVER_PATH = Path(REPO_ROOT, "services", "tool-b", "server.py")
+JIRATOOL_SERVER_PATH = Path(REPO_ROOT, "services", "jira-tool", "server.py")
 SHARED_ENFORCEMENT_PATH = Path(REPO_ROOT, "services", "shared", "enforcement_contract.py")
 
 
@@ -206,6 +207,18 @@ def toolb_module(monkeypatch):
     monkeypatch.setenv("M4_REQUEST_COST", "1")
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
     return load_module_from_path(TOOLB_SERVER_PATH, "toolb_server_test")
+
+
+@pytest.fixture()
+def jiratool_module(monkeypatch):
+    monkeypatch.setenv("M4_MAX_DEPTH", "3")
+    monkeypatch.setenv("M4_RATE_LIMIT", "20")
+    monkeypatch.setenv("M4_RATE_WINDOW_SECONDS", "10")
+    monkeypatch.setenv("M4_REQUEST_COST", "1")
+    monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+    monkeypatch.setenv("JIRA_UPSTREAM_MODE", "mock")
+    monkeypatch.setenv("JIRA_MOCK_BASE_URL", "http://jira-mock:8080")
+    return load_module_from_path(JIRATOOL_SERVER_PATH, "jiratool_server_test")
 
 
 @pytest.fixture()

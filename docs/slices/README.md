@@ -26,6 +26,10 @@ Start from:
 docs/slices/_template/
 ```
 
+## Implemented slice bundles
+- `docs/slices/m4a-jira-project-access/`: implemented M4a bundle for Jira project reads with a broad upstream credential narrowed by capiss, OPA, and `jira-tool`.
+- `docs/slices/m4b-jira-description-write/`: implemented M4b bundle for project-scoped Jira description writes using the M4a Jira boundary.
+
 ## Required files
 - `plan.md`
 - `requirements_delta.md`

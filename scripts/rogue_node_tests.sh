@@ -64,6 +64,8 @@ RUN_M2=1
 RUN_M25=1
 RUN_M3=1
 RUN_M4=1
+RUN_M4A=1
+RUN_M4B=1
 
 if [ -n "${TEST_MILESTONES:-}" ]; then
   RUN_M1=0
@@ -71,6 +73,8 @@ if [ -n "${TEST_MILESTONES:-}" ]; then
   RUN_M25=0
   RUN_M3=0
   RUN_M4=0
+  RUN_M4A=0
+  RUN_M4B=0
   for token in $(printf '%s' "$TEST_MILESTONES" | tr ',' ' '); do
     case "$token" in
       m1|M1) RUN_M1=1 ;;
@@ -78,6 +82,8 @@ if [ -n "${TEST_MILESTONES:-}" ]; then
       m25|M2.5|M2_5) RUN_M25=1 ;;
       m3|M3) RUN_M3=1 ;;
       m4|M4) RUN_M4=1 ;;
+      m4a|M4a|M4A) RUN_M4A=1 ;;
+      m4b|M4b|M4B) RUN_M4B=1 ;;
     esac
   done
 fi
@@ -560,6 +566,14 @@ resolve_host_ip() {
         container="spiffe-capability-issuer-no-opa-envoy"
         network_suffix="capiss_edge_net"
         ;;
+      jira-tool-envoy)
+        container="spiffe-jira-tool-envoy"
+        network_suffix="jiratool_edge_net"
+        ;;
+      jira-mock)
+        container="spiffe-jira-mock"
+        network_suffix="jiratool_upstream_net"
+        ;;
       *)
         container=""
         network_suffix=""
@@ -985,13 +999,20 @@ CAPISS_ROGUE_CERT=""
 CAPISS_ROGUE_KEY=""
 CAPISS_ROGUE_BUNDLE=""
 CAPISS_MINT_URL="https://capability-issuer-envoy:9443/capabilities/mint"
+CAPISS_ROOT_MINT_URL="https://capability-issuer-envoy:9443/capabilities/root-mint"
 CAPISS_RESOURCE_MINT_URL="https://capability-issuer-envoy:9443/capabilities/resource-mint"
 CAPISS_NO_OPA_URL="https://capability-issuer-no-opa-envoy:9444/capabilities/mint"
 TOOLB_SECRET_URL="https://tool-b-envoy:8443/secret"
 TOOLB_SEARCH_URL="https://tool-b-envoy:8443/search"
 TOOLB_READ_FILE_URL_PREFIX="https://tool-b-envoy:8443/read-file"
+JIRA_TOOL_ISSUE_URL_PREFIX="https://jira-tool-envoy:10443/jira/rest/api/3/issue"
+JIRA_MOCK_URL="http://jira-mock:8080"
 CAPISS_MINT_BODY='{"aud":"tool-b","act":"read","res":"tool-b:/secret"}'
 CAPISS_SEARCH_MINT_BODY='{"aud":"tool-b","act":"read","res":"tool-b:/search"}'
+JIRA_IAM_MINT_BODY='{"aud":"jira-tool","act":"read","res":"jira-tool:/project:IAM"}'
+JIRA_IAM_WRITE_MINT_BODY='{"aud":"jira-tool","act":"write","res":"jira-tool:/project:IAM"}'
+JIRA_NAS_MINT_BODY='{"aud":"jira-tool","act":"read","res":"jira-tool:/project:NAS"}'
+JIRA_NAS_WRITE_MINT_BODY='{"aud":"jira-tool","act":"write","res":"jira-tool:/project:NAS"}'
 
 ensure_toolb_material() {
   if [ "$TOOLB_READY" -eq 1 ]; then
@@ -1154,6 +1175,42 @@ ensure_capiss_envoy_ready() {
     set_reason "failed to resolve capability-issuer-envoy IP"
     return 1
   fi
+  if [ -n "${CAPISS_AGENT_CERT:-}" ] && [ -n "${CAPISS_AGENT_KEY:-}" ]; then
+    start="$(date +%s)"
+    err_file="/tmp/capiss_health.err"
+    echo "[gate] capability-issuer-envoy health check"
+    while true; do
+      status="$(curl -sS --insecure --cert "$CAPISS_AGENT_CERT" --key "$CAPISS_AGENT_KEY" \
+        --resolve "capability-issuer-envoy:9443:${CAPISS_ENVOY_IP}" \
+        -o /dev/null -w '%{http_code}' \
+        https://capability-issuer-envoy:9443/health 2>"$err_file" || true)"
+      if [ "$status" = "200" ]; then
+        echo "[gate] capability-issuer-envoy health OK"
+        return 0
+      fi
+      now="$(date +%s)"
+      if [ $((now - start)) -ge 30 ]; then
+        set_reason "capability-issuer-envoy health not ready in 30s: status=${status:-none} err=$(cat "$err_file" 2>/dev/null || true)"
+        return 1
+      fi
+      sleep 0.5
+    done
+  fi
+  return 0
+}
+
+ensure_jira_envoy_ready() {
+  if ! wait_dns "jira-tool-envoy" 30; then
+    return 1
+  fi
+  if ! wait_tcp "jira-tool-envoy" "10443" 30; then
+    return 1
+  fi
+  JIRA_ENVOY_IP="$(wait_resolve_ip "jira-tool-envoy" 30 || true)"
+  if [ -z "${JIRA_ENVOY_IP:-}" ]; then
+    set_reason "failed to resolve jira-tool-envoy IP"
+    return 1
+  fi
   return 0
 }
 
@@ -1162,6 +1219,7 @@ expected_spiffe_for_host() {
     capability-issuer-envoy) printf '%s\n' 'spiffe://example.org/capability-issuer-envoy' ;;
     capability-issuer-no-opa-envoy) printf '%s\n' 'spiffe://example.org/capability-issuer-no-opa-envoy' ;;
     tool-b-envoy) printf '%s\n' 'spiffe://example.org/tool-b-envoy' ;;
+    jira-tool-envoy) printf '%s\n' 'spiffe://example.org/jira-tool-envoy' ;;
     *) return 1 ;;
   esac
 }
@@ -1181,6 +1239,10 @@ record_verified_identity() {
     tool-b-envoy)
       printf '%s' "$result" >"$EVDIR/verified_toolb_result.txt" 2>/dev/null || true
       printf '%s' "$spiffe_id" >"$EVDIR/verified_toolb_spiffe_id.txt" 2>/dev/null || true
+      ;;
+    jira-tool-envoy)
+      printf '%s' "$result" >"$EVDIR/verified_jiratool_result.txt" 2>/dev/null || true
+      printf '%s' "$spiffe_id" >"$EVDIR/verified_jiratool_spiffe_id.txt" 2>/dev/null || true
       ;;
   esac
 }
@@ -1243,7 +1305,7 @@ verified_https_request() {
   diag_file="$(mktemp)"
   server_cert="$(mktemp)"
 
-  if [ "$method" = "POST" ]; then
+  if [ "$method" = "POST" ] || [ "$method" = "PUT" ]; then
     printf '%s' "$body" >"$body_file"
     body_len="$(wc -c <"$body_file" | tr -d ' ')"
   else
@@ -1258,12 +1320,12 @@ verified_https_request() {
     if [ -n "$bearer" ]; then
       printf 'Authorization: Bearer %s\r\n' "$bearer"
     fi
-    if [ "$method" = "POST" ]; then
+    if [ "$method" = "POST" ] || [ "$method" = "PUT" ]; then
       printf 'Content-Type: application/json\r\n'
       printf 'Content-Length: %s\r\n' "$body_len"
     fi
     printf '\r\n'
-    if [ "$method" = "POST" ]; then
+    if [ "$method" = "POST" ] || [ "$method" = "PUT" ]; then
       cat "$body_file"
     fi
   } >"$req_file"
@@ -1434,6 +1496,46 @@ toolb_request_to_file() {
   status_file="$5"
   status="$(toolb_request "$cert" "$key" "$token" "$out")"
   printf '%s' "$status" >"$status_file"
+}
+
+jiratool_request_to_file() {
+  cert="$1"
+  key="$2"
+  token="$3"
+  issue_key="$4"
+  out="$5"
+  status_file="$6"
+  status="$(verified_https_request "$cert" "$key" "${CAPISS_AGENT_BUNDLE:-${CAPISS_ROGUE_BUNDLE:-}}" \
+    "${JIRA_TOOL_ISSUE_URL_PREFIX}/${issue_key}" "GET" "" "$token" "$out")"
+  printf '%s' "$status" >"$status_file"
+}
+
+jiratool_put_to_file() {
+  cert="$1"
+  key="$2"
+  token="$3"
+  issue_key="$4"
+  body="$5"
+  out="$6"
+  status_file="$7"
+  status="$(verified_https_request "$cert" "$key" "${CAPISS_AGENT_BUNDLE:-${CAPISS_ROGUE_BUNDLE:-}}" \
+    "${JIRA_TOOL_ISSUE_URL_PREFIX}/${issue_key}" "PUT" "$body" "$token" "$out")"
+  printf '%s' "$status" >"$status_file"
+}
+
+jira_mock_reset() {
+  curl -sS -X POST "${JIRA_MOCK_URL}/__test__/reset" >/dev/null
+}
+
+jira_mock_request_log() {
+  out="$1"
+  curl -sS "${JIRA_MOCK_URL}/__test__/requests" >"$out"
+}
+
+sanitize_token_response() {
+  raw="$1"
+  dest="$2"
+  jq 'del(.token)' "$raw" >"$dest"
 }
 
 expect_edge_unreachable() {
@@ -2794,6 +2896,351 @@ M4_T14_test() {
   return 0
 }
 
+M4A_T1_test() {
+  begin_test_evidence "M4a-T1" "mock_upstream_breadth"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "jira-mock health reachable from test harness" \
+    "wait_http_ready \"${JIRA_MOCK_URL}/health\" \"\" 30"
+  exercise_guard "direct mock read for IAM-1 and NAS-1" \
+    "curl -sS -o \"$EVDIR/iam_1.json\" -w '%{http_code}' \"${JIRA_MOCK_URL}/rest/api/3/issue/IAM-1\" >\"$EVDIR/iam_1_status.txt\"; curl -sS -o \"$EVDIR/nas_1.json\" -w '%{http_code}' \"${JIRA_MOCK_URL}/rest/api/3/issue/NAS-1\" >\"$EVDIR/nas_1_status.txt\""
+  outcome_guard "mock returns IAM issue" \
+    "assert_file_eq \"$EVDIR/iam_1_status.txt\" \"200\" && assert_json_eq \"$EVDIR/iam_1.json\" '.fields.project.key' 'IAM'"
+  outcome_guard "mock returns NAS issue" \
+    "assert_file_eq \"$EVDIR/nas_1_status.txt\" \"200\" && assert_json_eq \"$EVDIR/nas_1.json\" '.fields.project.key' 'NAS'"
+  return 0
+}
+
+M4A_T2_test() {
+  begin_test_evidence "M4a-T2" "allowed_mint_and_iam_read"
+  echo "EVIDENCE_DIR=$EVDIR"
+  raw="/tmp/m4a_t2_mint_$$.json"
+  token_tmp="/tmp/m4a_t2_token_$$.txt"
+  premise_guard "capiss material available" "ensure_capiss_material"
+  premise_guard "capiss-envoy reachable" \
+    "ensure_capiss_envoy_ready; echo \"${CAPISS_ENVOY_IP:-}\" >\"$EVDIR/capiss_envoy_ip.txt\""
+  premise_guard "jira-tool-envoy reachable" \
+    "ensure_jira_envoy_ready; echo \"${JIRA_ENVOY_IP:-}\" >\"$EVDIR/jira_envoy_ip.txt\""
+  exercise_guard "reset jira mock request log" "jira_mock_reset"
+  exercise_guard "mint IAM Jira root token" \
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_ROOT_MINT_URL\" \"\$JIRA_IAM_MINT_BODY\" \"$raw\" \"$EVDIR/mint_status.txt\"; sanitize_token_response \"$raw\" \"$EVDIR/mint_body.json\"; jq -r '.token' \"$raw\" >\"$token_tmp\""
+  outcome_guard "IAM Jira mint allowed" \
+    "assert_file_eq \"$EVDIR/mint_status.txt\" \"200\" && assert_json_eq \"$EVDIR/mint_body.json\" '.aud' 'jira-tool' && assert_json_eq \"$EVDIR/mint_body.json\" '.act' 'read' && assert_json_eq \"$EVDIR/mint_body.json\" '.res' 'jira-tool:/project:IAM'" || return 1
+  exercise_guard "read IAM-1 through jira-tool-envoy" \
+    "token=\"\$(cat \"$token_tmp\")\"; jiratool_request_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$token\" \"IAM-1\" \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
+  outcome_guard "IAM-1 read allowed" \
+    "assert_file_eq \"$EVDIR/status.txt\" \"200\" && assert_json_eq \"$EVDIR/response.json\" '.fields.project.key' 'IAM'"
+  outcome_guard "verified jira-tool identity recorded" \
+    "assert_file_eq \"$EVDIR/verified_jiratool_spiffe_id.txt\" \"spiffe://example.org/jira-tool-envoy\" && assert_file_eq \"$EVDIR/verified_jiratool_result.txt\" \"ok\""
+  return 0
+}
+
+M4A_T3_test() {
+  begin_test_evidence "M4a-T3" "non_allowed_project_mint_denied"
+  echo "EVIDENCE_DIR=$EVDIR"
+  raw="/tmp/m4a_t3_mint_$$.json"
+  premise_guard "capiss material available" "ensure_capiss_material"
+  premise_guard "capiss-envoy reachable" \
+    "ensure_capiss_envoy_ready; echo \"${CAPISS_ENVOY_IP:-}\" >\"$EVDIR/capiss_envoy_ip.txt\""
+  exercise_guard "attempt NAS Jira root mint as agent-a" \
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_ROOT_MINT_URL\" \"\$JIRA_NAS_MINT_BODY\" \"$raw\" \"$EVDIR/mint_status.txt\"; sanitize_token_response \"$raw\" \"$EVDIR/mint_body.json\""
+  outcome_guard "NAS mint denied by policy" \
+    "assert_file_eq \"$EVDIR/mint_status.txt\" \"403\" && assert_json_eq \"$EVDIR/mint_body.json\" '.reason' 'policy'"
+  return 0
+}
+
+M4A_T4_test() {
+  begin_test_evidence "M4a-T4" "nas_read_denied_before_upstream"
+  echo "EVIDENCE_DIR=$EVDIR"
+  raw="/tmp/m4a_t4_mint_$$.json"
+  token_tmp="/tmp/m4a_t4_token_$$.txt"
+  premise_guard "capiss material and jira-tool available" \
+    "ensure_capiss_material && ensure_capiss_envoy_ready && ensure_jira_envoy_ready"
+  exercise_guard "reset jira mock request log" "jira_mock_reset"
+  exercise_guard "mint IAM Jira root token" \
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_ROOT_MINT_URL\" \"\$JIRA_IAM_MINT_BODY\" \"$raw\" \"$EVDIR/mint_status.txt\"; sanitize_token_response \"$raw\" \"$EVDIR/mint_body.json\"; jq -r '.token' \"$raw\" >\"$token_tmp\""
+  outcome_guard "IAM Jira mint allowed" "assert_file_eq \"$EVDIR/mint_status.txt\" \"200\"" || return 1
+  exercise_guard "attempt NAS-1 read with IAM token" \
+    "token=\"\$(cat \"$token_tmp\")\"; jiratool_request_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$token\" \"NAS-1\" \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
+  exercise_guard "capture mock request log" "jira_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "NAS-1 denied by local project mismatch" \
+    "assert_file_eq \"$EVDIR/status.txt\" \"403\" && assert_json_eq \"$EVDIR/response.json\" '.reason' 'project_mismatch'"
+  outcome_guard "mock saw no upstream request" \
+    "jq -e '.requests | length == 0' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M4A_T5_test() {
+  begin_test_evidence "M4a-T5" "rogue_jira_mint_denied"
+  echo "EVIDENCE_DIR=$EVDIR"
+  raw="/tmp/m4a_t5_mint_$$.json"
+  premise_guard "capiss material available" "ensure_capiss_material"
+  premise_guard "capiss-envoy reachable" \
+    "ensure_capiss_envoy_ready; echo \"${CAPISS_ENVOY_IP:-}\" >\"$EVDIR/capiss_envoy_ip.txt\""
+  exercise_guard "attempt IAM Jira root mint as rogue" \
+    "mint_with_body_to_file \"\$CAPISS_ROGUE_CERT\" \"\$CAPISS_ROGUE_KEY\" \"\$CAPISS_ROOT_MINT_URL\" \"\$JIRA_IAM_MINT_BODY\" \"$raw\" \"$EVDIR/mint_status.txt\"; sanitize_token_response \"$raw\" \"$EVDIR/mint_body.json\""
+  outcome_guard "rogue mint denied by policy" \
+    "assert_file_eq \"$EVDIR/mint_status.txt\" \"403\" && assert_json_eq \"$EVDIR/mint_body.json\" '.reason' 'policy'"
+  return 0
+}
+
+M4A_T6_test() {
+  begin_test_evidence "M4a-T6" "stolen_jira_token_denied"
+  echo "EVIDENCE_DIR=$EVDIR"
+  raw="/tmp/m4a_t6_mint_$$.json"
+  token_tmp="/tmp/m4a_t6_token_$$.txt"
+  premise_guard "capiss material and jira-tool available" \
+    "ensure_capiss_material && ensure_capiss_envoy_ready && ensure_jira_envoy_ready"
+  exercise_guard "reset jira mock request log" "jira_mock_reset"
+  exercise_guard "mint IAM Jira root token as agent-a" \
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_ROOT_MINT_URL\" \"\$JIRA_IAM_MINT_BODY\" \"$raw\" \"$EVDIR/mint_status.txt\"; sanitize_token_response \"$raw\" \"$EVDIR/mint_body.json\"; jq -r '.token' \"$raw\" >\"$token_tmp\""
+  outcome_guard "IAM Jira mint allowed" "assert_file_eq \"$EVDIR/mint_status.txt\" \"200\"" || return 1
+  exercise_guard "rogue uses stolen agent token" \
+    "token=\"\$(cat \"$token_tmp\")\"; jiratool_request_to_file \"\$CAPISS_ROGUE_CERT\" \"\$CAPISS_ROGUE_KEY\" \"\$token\" \"IAM-1\" \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
+  exercise_guard "capture mock request log" "jira_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "stolen token denied by subject binding" \
+    "assert_file_eq \"$EVDIR/status.txt\" \"403\" && assert_json_eq \"$EVDIR/response.json\" '.reason' 'sub_mismatch'"
+  outcome_guard "mock saw no upstream request" \
+    "jq -e '.requests | length == 0' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M4A_T7_test() {
+  begin_test_evidence "M4a-T7" "jira_budget_consumption"
+  echo "EVIDENCE_DIR=$EVDIR"
+  raw="/tmp/m4a_t7_mint_$$.json"
+  token_tmp="/tmp/m4a_t7_token_$$.txt"
+  premise_guard "capiss material and jira-tool available" \
+    "ensure_capiss_material && ensure_capiss_envoy_ready && ensure_jira_envoy_ready"
+  premise_guard "redis container running" "docker ps --format '{{.Names}}' | grep -Fxq spiffe-redis"
+  exercise_guard "mint IAM Jira root token" \
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_ROOT_MINT_URL\" \"\$JIRA_IAM_MINT_BODY\" \"$raw\" \"$EVDIR/mint_status.txt\"; sanitize_token_response \"$raw\" \"$EVDIR/mint_body.json\"; jq -r '.token' \"$raw\" >\"$token_tmp\""
+  outcome_guard "IAM Jira mint allowed" "assert_file_eq \"$EVDIR/mint_status.txt\" \"200\"" || return 1
+  root_id="$(json_get '.root_token_id' "$EVDIR/mint_body.json")"
+  exercise_guard "read IAM-1 once" \
+    "token=\"\$(cat \"$token_tmp\")\"; jiratool_request_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$token\" \"IAM-1\" \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
+  exercise_guard "capture remaining root budget" \
+    "docker exec spiffe-redis redis-cli GET \"m4:budget:${root_id}\" | tr -d '\\r' >\"$EVDIR/budget_remaining.txt\""
+  outcome_guard "read allowed" "assert_file_eq \"$EVDIR/status.txt\" \"200\""
+  outcome_guard "budget consumed once" "assert_file_eq \"$EVDIR/budget_remaining.txt\" \"9\""
+  return 0
+}
+
+M4A_T8_test() {
+  begin_test_evidence "M4a-T8" "jira_budget_exhaustion"
+  echo "EVIDENCE_DIR=$EVDIR"
+  raw="/tmp/m4a_t8_mint_$$.json"
+  token_tmp="/tmp/m4a_t8_token_$$.txt"
+  premise_guard "capiss material and jira-tool available" \
+    "ensure_capiss_material && ensure_capiss_envoy_ready && ensure_jira_envoy_ready"
+  exercise_guard "reset jira mock request log" "jira_mock_reset"
+  exercise_guard "mint IAM Jira root token" \
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_ROOT_MINT_URL\" \"\$JIRA_IAM_MINT_BODY\" \"$raw\" \"$EVDIR/mint_status.txt\"; sanitize_token_response \"$raw\" \"$EVDIR/mint_body.json\"; jq -r '.token' \"$raw\" >\"$token_tmp\""
+  outcome_guard "IAM Jira mint allowed" "assert_file_eq \"$EVDIR/mint_status.txt\" \"200\"" || return 1
+  exercise_guard "consume Jira budget with eleven reads" \
+    "token=\"\$(cat \"$token_tmp\")\"; i=1; : >\"$EVDIR/statuses.txt\"; while [ \$i -le 11 ]; do jiratool_request_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$token\" \"IAM-1\" \"$EVDIR/resp_\${i}.json\" \"$EVDIR/st_\${i}.txt\"; cat \"$EVDIR/st_\${i}.txt\" >>\"$EVDIR/statuses.txt\"; echo >>\"$EVDIR/statuses.txt\"; i=\$((i+1)); done"
+  exercise_guard "capture mock request log" "jira_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "first ten reads allowed" \
+    "i=1; while [ \$i -le 10 ]; do assert_file_eq \"$EVDIR/st_\${i}.txt\" \"200\" || exit 1; i=\$((i+1)); done"
+  outcome_guard "eleventh read denied by budget" \
+    "assert_file_eq \"$EVDIR/st_11.txt\" \"403\" && assert_json_eq \"$EVDIR/resp_11.json\" '.reason' 'budget_exceeded'"
+  outcome_guard "mock saw only ten upstream calls" \
+    "jq -e '.requests | length == 10' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M4A_T9_test() {
+  begin_test_evidence "M4a-T9" "upstream_project_mismatch_denied"
+  echo "EVIDENCE_DIR=$EVDIR"
+  raw="/tmp/m4a_t9_mint_$$.json"
+  token_tmp="/tmp/m4a_t9_token_$$.txt"
+  premise_guard "capiss material and jira-tool available" \
+    "ensure_capiss_material && ensure_capiss_envoy_ready && ensure_jira_envoy_ready"
+  exercise_guard "reset jira mock request log" "jira_mock_reset"
+  exercise_guard "mint IAM Jira root token" \
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_ROOT_MINT_URL\" \"\$JIRA_IAM_MINT_BODY\" \"$raw\" \"$EVDIR/mint_status.txt\"; sanitize_token_response \"$raw\" \"$EVDIR/mint_body.json\"; jq -r '.token' \"$raw\" >\"$token_tmp\""
+  outcome_guard "IAM Jira mint allowed" "assert_file_eq \"$EVDIR/mint_status.txt\" \"200\"" || return 1
+  exercise_guard "read IAM-999 with mismatched upstream project field" \
+    "token=\"\$(cat \"$token_tmp\")\"; jiratool_request_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$token\" \"IAM-999\" \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
+  exercise_guard "capture mock request log" "jira_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "upstream mismatch denied locally" \
+    "assert_file_eq \"$EVDIR/status.txt\" \"403\" && assert_json_eq \"$EVDIR/response.json\" '.reason' 'upstream_project_mismatch'"
+  outcome_guard "upstream was called exactly once" \
+    "jq -e '(.requests | length == 1) and (.requests[0].issue_key == \"IAM-999\")' \"$EVDIR/mock_requests.json\" >/dev/null"
+  outcome_guard "upstream body not returned" \
+    "! grep -Fq 'Mismatched upstream project fixture' \"$EVDIR/response.json\""
+  return 0
+}
+
+M4A_T10_test() {
+  begin_test_evidence "M4a-T10" "jira_audit_trace_reconstruction"
+  echo "EVIDENCE_DIR=$EVDIR"
+  raw="/tmp/m4a_t10_mint_$$.json"
+  token_tmp="/tmp/m4a_t10_token_$$.txt"
+  premise_guard "capiss material and jira-tool available" \
+    "ensure_capiss_material && ensure_capiss_envoy_ready && ensure_jira_envoy_ready"
+  exercise_guard "record log capture start time" \
+    "date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
+  exercise_guard "reset jira mock request log" "jira_mock_reset"
+  exercise_guard "mint IAM Jira root token" \
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_ROOT_MINT_URL\" \"\$JIRA_IAM_MINT_BODY\" \"$raw\" \"$EVDIR/mint_status.txt\"; sanitize_token_response \"$raw\" \"$EVDIR/mint_body.json\"; jq -r '.token' \"$raw\" >\"$token_tmp\""
+  outcome_guard "IAM Jira mint allowed" "assert_file_eq \"$EVDIR/mint_status.txt\" \"200\"" || return 1
+  root_id="$(json_get '.root_token_id' "$EVDIR/mint_body.json")"
+  token_id="$(json_get '.token_id' "$EVDIR/mint_body.json")"
+  exercise_guard "read IAM-1 through jira-tool-envoy" \
+    "token=\"\$(cat \"$token_tmp\")\"; jiratool_request_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$token\" \"IAM-1\" \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
+  outcome_guard "IAM-1 read allowed" "assert_file_eq \"$EVDIR/status.txt\" \"200\""
+  exercise_guard "capture capiss and jira-tool logs since flow start" \
+    "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; docker logs --since \"\$since\" spiffe-capability-issuer >\"$EVDIR/capiss_container.log\" 2>&1; docker logs --since \"\$since\" spiffe-jira-tool >\"$EVDIR/jiratool_container.log\" 2>&1; grep -F '\"event_type\"' \"$EVDIR/capiss_container.log\" >\"$EVDIR/capiss_events.jsonl\" || :; grep -F '\"event_type\"' \"$EVDIR/jiratool_container.log\" >\"$EVDIR/jiratool_events.jsonl\" || :"
+  outcome_guard "capiss Jira root mint event correlated" \
+    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"root_mint\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .aud==\"jira-tool\" and .act==\"read\" and .res==\"jira-tool:/project:IAM\" and .root_token_id==\$root and .token_id==\$token and .policy_id==\"capiss.allow.v3\")' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
+  outcome_guard "jira-tool allow event correlated" \
+    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"jiratool_enforcement_decision\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .aud==\"jira-tool\" and .act==\"read\" and .res==\"jira-tool:/project:IAM\" and .jira_operation==\"issue_read\" and .requested_project==\"IAM\" and .token_project==\"IAM\" and .issue_key==\"IAM-1\" and .upstream_called==true and .upstream_status==200 and (.budget_remaining|type)==\"number\")' \"$EVDIR/jiratool_events.jsonl\" >/dev/null"
+  return 0
+}
+
+M4B_T1_test() {
+  begin_test_evidence "M4b-T1" "allowed_write_update_and_readback"
+  echo "EVIDENCE_DIR=$EVDIR"
+  raw="/tmp/m4b_t1_mint_$$.json"
+  token_tmp="/tmp/m4b_t1_token_$$.txt"
+  body_file="/tmp/m4b_t1_body_$$.json"
+  premise_guard "capiss material and jira-tool available" \
+    "ensure_capiss_material && ensure_capiss_envoy_ready && ensure_jira_envoy_ready"
+  exercise_guard "reset jira mock request log" "jira_mock_reset"
+  exercise_guard "mint IAM Jira write root token" \
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_ROOT_MINT_URL\" \"\$JIRA_IAM_WRITE_MINT_BODY\" \"$raw\" \"$EVDIR/mint_status.txt\"; sanitize_token_response \"$raw\" \"$EVDIR/mint_body.json\"; jq -r '.token' \"$raw\" >\"$token_tmp\""
+  outcome_guard "IAM Jira write mint allowed" \
+    "assert_file_eq \"$EVDIR/mint_status.txt\" \"200\" && assert_json_eq \"$EVDIR/mint_body.json\" '.act' 'write' && assert_json_eq \"$EVDIR/mint_body.json\" '.res' 'jira-tool:/project:IAM'" || return 1
+  marker="$(date -u '+%d.%m.%y %H.%M.%S UTC - Description updated by SPIRE service jira-tool')"
+  printf '%s' "$marker" >"$EVDIR/marker.txt"
+  exercise_guard "build sanitized description update body" \
+    "jq -nc --arg description \"\$(cat \"$EVDIR/marker.txt\")\" '{description:\$description}' >\"$body_file\""
+  exercise_guard "update IAM-1 description through jira-tool-envoy" \
+    "token=\"\$(cat \"$token_tmp\")\"; body=\"\$(cat \"$body_file\")\"; jiratool_put_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$token\" \"IAM-1\" \"\$body\" \"$EVDIR/update_response.json\" \"$EVDIR/update_status.txt\""
+  exercise_guard "read IAM-1 back with write token" \
+    "token=\"\$(cat \"$token_tmp\")\"; jiratool_request_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$token\" \"IAM-1\" \"$EVDIR/readback.json\" \"$EVDIR/readback_status.txt\""
+  exercise_guard "capture mock request log" "jira_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "description update returned no content" "assert_file_eq \"$EVDIR/update_status.txt\" \"204\""
+  outcome_guard "write token can read back marker" \
+    "assert_file_eq \"$EVDIR/readback_status.txt\" \"200\" && grep -Fq \"\$(cat \"$EVDIR/marker.txt\")\" \"$EVDIR/readback.json\""
+  outcome_guard "mock saw PUT then GET for IAM-1" \
+    "jq -e '.requests | length == 2 and .[0].method == \"PUT\" and .[0].issue_key == \"IAM-1\" and .[0].status == 204 and .[1].method == \"GET\" and .[1].issue_key == \"IAM-1\" and .[1].status == 200' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M4B_T2_test() {
+  begin_test_evidence "M4b-T2" "read_token_write_denied"
+  echo "EVIDENCE_DIR=$EVDIR"
+  raw="/tmp/m4b_t2_mint_$$.json"
+  token_tmp="/tmp/m4b_t2_token_$$.txt"
+  premise_guard "capiss material and jira-tool available" \
+    "ensure_capiss_material && ensure_capiss_envoy_ready && ensure_jira_envoy_ready"
+  exercise_guard "reset jira mock request log" "jira_mock_reset"
+  exercise_guard "mint IAM Jira read root token" \
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_ROOT_MINT_URL\" \"\$JIRA_IAM_MINT_BODY\" \"$raw\" \"$EVDIR/mint_status.txt\"; sanitize_token_response \"$raw\" \"$EVDIR/mint_body.json\"; jq -r '.token' \"$raw\" >\"$token_tmp\""
+  outcome_guard "IAM Jira read mint allowed" "assert_file_eq \"$EVDIR/mint_status.txt\" \"200\"" || return 1
+  exercise_guard "attempt description write with read token" \
+    "token=\"\$(cat \"$token_tmp\")\"; jiratool_put_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$token\" \"IAM-2\" '{\"description\":\"read token must not write\"}' \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
+  exercise_guard "capture mock request log" "jira_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "read token write denied" \
+    "assert_file_eq \"$EVDIR/status.txt\" \"403\" && assert_json_eq \"$EVDIR/response.json\" '.reason' 'insufficient_authority'"
+  outcome_guard "mock saw no write request" \
+    "jq -e '.requests | length == 0' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M4B_T3_test() {
+  begin_test_evidence "M4b-T3" "nas_write_mint_denied"
+  echo "EVIDENCE_DIR=$EVDIR"
+  raw="/tmp/m4b_t3_mint_$$.json"
+  premise_guard "capiss material available" "ensure_capiss_material"
+  premise_guard "capiss-envoy reachable" \
+    "ensure_capiss_envoy_ready; echo \"${CAPISS_ENVOY_IP:-}\" >\"$EVDIR/capiss_envoy_ip.txt\""
+  exercise_guard "attempt NAS Jira write root mint as agent-a" \
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_ROOT_MINT_URL\" \"\$JIRA_NAS_WRITE_MINT_BODY\" \"$raw\" \"$EVDIR/mint_status.txt\"; sanitize_token_response \"$raw\" \"$EVDIR/mint_body.json\""
+  outcome_guard "NAS write mint denied by policy" \
+    "assert_file_eq \"$EVDIR/mint_status.txt\" \"403\" && assert_json_eq \"$EVDIR/mint_body.json\" '.reason' 'policy'"
+  return 0
+}
+
+M4B_T4_test() {
+  begin_test_evidence "M4b-T4" "nas_write_denied_before_upstream"
+  echo "EVIDENCE_DIR=$EVDIR"
+  raw="/tmp/m4b_t4_mint_$$.json"
+  token_tmp="/tmp/m4b_t4_token_$$.txt"
+  premise_guard "capiss material and jira-tool available" \
+    "ensure_capiss_material && ensure_capiss_envoy_ready && ensure_jira_envoy_ready"
+  exercise_guard "reset jira mock request log" "jira_mock_reset"
+  exercise_guard "mint IAM Jira write root token" \
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_ROOT_MINT_URL\" \"\$JIRA_IAM_WRITE_MINT_BODY\" \"$raw\" \"$EVDIR/mint_status.txt\"; sanitize_token_response \"$raw\" \"$EVDIR/mint_body.json\"; jq -r '.token' \"$raw\" >\"$token_tmp\""
+  outcome_guard "IAM Jira write mint allowed" "assert_file_eq \"$EVDIR/mint_status.txt\" \"200\"" || return 1
+  exercise_guard "attempt NAS-1 write with IAM write token" \
+    "token=\"\$(cat \"$token_tmp\")\"; jiratool_put_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$token\" \"NAS-1\" '{\"description\":\"must not update NAS\"}' \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
+  exercise_guard "capture mock request log" "jira_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "NAS-1 write denied by local project mismatch" \
+    "assert_file_eq \"$EVDIR/status.txt\" \"403\" && assert_json_eq \"$EVDIR/response.json\" '.reason' 'project_mismatch'"
+  outcome_guard "mock saw no upstream request" \
+    "jq -e '.requests | length == 0' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M4B_T5_test() {
+  begin_test_evidence "M4b-T5" "description_write_body_shape"
+  echo "EVIDENCE_DIR=$EVDIR"
+  raw="/tmp/m4b_t5_mint_$$.json"
+  token_tmp="/tmp/m4b_t5_token_$$.txt"
+  premise_guard "capiss material and jira-tool available" \
+    "ensure_capiss_material && ensure_capiss_envoy_ready && ensure_jira_envoy_ready"
+  exercise_guard "reset jira mock request log" "jira_mock_reset"
+  exercise_guard "mint IAM Jira write root token" \
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_ROOT_MINT_URL\" \"\$JIRA_IAM_WRITE_MINT_BODY\" \"$raw\" \"$EVDIR/mint_status.txt\"; sanitize_token_response \"$raw\" \"$EVDIR/mint_body.json\"; jq -r '.token' \"$raw\" >\"$token_tmp\""
+  outcome_guard "IAM Jira write mint allowed" "assert_file_eq \"$EVDIR/mint_status.txt\" \"200\"" || return 1
+  exercise_guard "attempt malformed description write" \
+    "token=\"\$(cat \"$token_tmp\")\"; jiratool_put_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$token\" \"IAM-1\" '{' \"$EVDIR/malformed_response.json\" \"$EVDIR/malformed_status.txt\""
+  exercise_guard "attempt unrelated-field write" \
+    "token=\"\$(cat \"$token_tmp\")\"; jiratool_put_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$token\" \"IAM-1\" '{\"description\":\"ok\",\"summary\":\"bad\"}' \"$EVDIR/extra_response.json\" \"$EVDIR/extra_status.txt\""
+  exercise_guard "capture mock request log" "jira_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "malformed body rejected" \
+    "assert_file_eq \"$EVDIR/malformed_status.txt\" \"400\" && assert_json_eq \"$EVDIR/malformed_response.json\" '.reason' 'malformed_body'"
+  outcome_guard "unrelated fields rejected" \
+    "assert_file_eq \"$EVDIR/extra_status.txt\" \"400\" && assert_json_eq \"$EVDIR/extra_response.json\" '.reason' 'unsupported_fields'"
+  outcome_guard "mock saw no invalid write request" \
+    "jq -e '.requests | length == 0' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M4B_T6_test() {
+  begin_test_evidence "M4b-T6" "write_audit_trace_reconstruction"
+  echo "EVIDENCE_DIR=$EVDIR"
+  raw="/tmp/m4b_t6_mint_$$.json"
+  token_tmp="/tmp/m4b_t6_token_$$.txt"
+  premise_guard "capiss material and jira-tool available" \
+    "ensure_capiss_material && ensure_capiss_envoy_ready && ensure_jira_envoy_ready"
+  exercise_guard "record log capture start time" \
+    "date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
+  exercise_guard "reset jira mock request log" "jira_mock_reset"
+  exercise_guard "mint IAM Jira write root token" \
+    "mint_with_body_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$CAPISS_ROOT_MINT_URL\" \"\$JIRA_IAM_WRITE_MINT_BODY\" \"$raw\" \"$EVDIR/mint_status.txt\"; sanitize_token_response \"$raw\" \"$EVDIR/mint_body.json\"; jq -r '.token' \"$raw\" >\"$token_tmp\""
+  outcome_guard "IAM Jira write mint allowed" "assert_file_eq \"$EVDIR/mint_status.txt\" \"200\"" || return 1
+  root_id="$(json_get '.root_token_id' "$EVDIR/mint_body.json")"
+  token_id="$(json_get '.token_id' "$EVDIR/mint_body.json")"
+  exercise_guard "write IAM-2 description through jira-tool-envoy" \
+    "token=\"\$(cat \"$token_tmp\")\"; jiratool_put_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$token\" \"IAM-2\" '{\"description\":\"M4b audit marker\"}' \"$EVDIR/write_response.json\" \"$EVDIR/write_status.txt\""
+  exercise_guard "read IAM-2 with write token through jira-tool-envoy" \
+    "token=\"\$(cat \"$token_tmp\")\"; jiratool_request_to_file \"\$CAPISS_AGENT_CERT\" \"\$CAPISS_AGENT_KEY\" \"\$token\" \"IAM-2\" \"$EVDIR/read_response.json\" \"$EVDIR/read_status.txt\""
+  outcome_guard "write and read allowed" \
+    "assert_file_eq \"$EVDIR/write_status.txt\" \"204\" && assert_file_eq \"$EVDIR/read_status.txt\" \"200\""
+  exercise_guard "capture capiss and jira-tool logs since flow start" \
+    "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; docker logs --since \"\$since\" spiffe-capability-issuer >\"$EVDIR/capiss_container.log\" 2>&1; docker logs --since \"\$since\" spiffe-jira-tool >\"$EVDIR/jiratool_container.log\" 2>&1; grep -F '\"event_type\"' \"$EVDIR/capiss_container.log\" >\"$EVDIR/capiss_events.jsonl\" || :; grep -F '\"event_type\"' \"$EVDIR/jiratool_container.log\" >\"$EVDIR/jiratool_events.jsonl\" || :"
+  outcome_guard "capiss Jira write root mint event correlated" \
+    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"root_mint\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .aud==\"jira-tool\" and .act==\"write\" and .res==\"jira-tool:/project:IAM\" and .root_token_id==\$root and .token_id==\$token and .policy_id==\"capiss.allow.v3\")' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
+  outcome_guard "jira-tool write allow event correlated" \
+    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"jiratool_enforcement_decision\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .aud==\"jira-tool\" and .act==\"write\" and .res==\"jira-tool:/project:IAM\" and .jira_operation==\"issue_description_write\" and .requested_project==\"IAM\" and .token_project==\"IAM\" and .issue_key==\"IAM-2\" and .upstream_called==true and .upstream_status==204 and (.budget_remaining|type)==\"number\")' \"$EVDIR/jiratool_events.jsonl\" >/dev/null"
+  outcome_guard "jira-tool read allow event with write token correlated" \
+    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"jiratool_enforcement_decision\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .aud==\"jira-tool\" and .act==\"write\" and .res==\"jira-tool:/project:IAM\" and .jira_operation==\"issue_read\" and .requested_project==\"IAM\" and .token_project==\"IAM\" and .issue_key==\"IAM-2\" and .upstream_called==true and .upstream_status==200 and (.budget_remaining|type)==\"number\")' \"$EVDIR/jiratool_events.jsonl\" >/dev/null"
+  return 0
+}
+
 print_section "Milestone 1 - Server and agent connection and successful entry"
 if [ "$RUN_M1" -eq 1 ]; then
   TEST_PREFIX="M1"
@@ -2873,6 +3320,32 @@ if [ "$RUN_M4" -eq 1 ]; then
   run_test "T12" "wildcard delegated resource is denied" M4_T12_test
   run_test "T13" "budget and registry TTLs are bounded by root expiry" M4_T13_test
   run_test "T14" "protected request does not require capiss hot path" M4_T14_test
+fi
+
+print_section "Milestone 4a — Jira project access with broad upstream credential"
+if [ "$RUN_M4A" -eq 1 ]; then
+  TEST_PREFIX="M4a"
+  run_test "T1" "mock upstream can read IAM and NAS projects" M4A_T1_test
+  run_test "T2" "agent-a can mint IAM Jira token and read IAM-1" M4A_T2_test
+  run_test "T3" "non-allowed NAS project mint is denied" M4A_T3_test
+  run_test "T4" "IAM token cannot read NAS-1 before upstream use" M4A_T4_test
+  run_test "T5" "rogue cannot mint IAM Jira token" M4A_T5_test
+  run_test "T6" "rogue cannot replay stolen Jira token" M4A_T6_test
+  run_test "T7" "Jira read consumes shared root budget" M4A_T7_test
+  run_test "T8" "Jira budget exhaustion denies eleventh read" M4A_T8_test
+  run_test "T9" "upstream project mismatch is denied" M4A_T9_test
+  run_test "T10" "Jira audit trace reconstructs mint and use" M4A_T10_test
+fi
+
+print_section "Milestone 4b — Jira project-scoped description write"
+if [ "$RUN_M4B" -eq 1 ]; then
+  TEST_PREFIX="M4b"
+  run_test "T1" "write token updates IAM description and reads marker" M4B_T1_test
+  run_test "T2" "read token cannot update Jira description" M4B_T2_test
+  run_test "T3" "non-allowed NAS write mint is denied" M4B_T3_test
+  run_test "T4" "IAM write token cannot update NAS before upstream use" M4B_T4_test
+  run_test "T5" "description writes reject malformed or overbroad bodies" M4B_T5_test
+  run_test "T6" "Jira write audit trace reconstructs mint and use" M4B_T6_test
 fi
 
 printf '\nTotal: %d  Passed: %d  Failed: %d\n' "$TOTAL" "$PASSED" "$FAILED"

@@ -6,6 +6,8 @@ This document defines the authoritative requirements for:
 - Milestone 2 - Workload identity and mTLS authorization
 - Milestone 3 - Capability issuance and enforcement
 - Milestone 4 - Delegation of capability tokens 
+- Milestone 4a - Jira project access with broad upstream credential
+- Milestone 4b - Jira project-scoped description write
 
 These requirements are written as normative statements.  
 They define what the system shall enforce, independent of specific implementation details.
@@ -542,7 +544,152 @@ The system MUST provide enough data to detect boundary erosion patterns, includi
 
 ---
 
-# 8. Test contract requirements
+# 8. Milestone 4a — Jira project access with broad upstream credential
+
+## Goal
+Apply the M4 capability and governance model to a real Jira-shaped use case: a trusted Jira connector may hold an upstream Jira API credential with access to multiple projects, but the agent shall only read issues from the project explicitly authorized by OPA and minted by `capiss`.
+
+## Concrete M4a scope
+- Authorization subject: workload identity, specifically `spiffe://example.org/agent-a`.
+- Allowed Jira space/project: `agentic-iam-spiffe`, project key `IAM`.
+- Allowed issue examples: `IAM-1`, `IAM-2`.
+- Non-allowed test/demo space/project: `No-Agent-Space`, project key `NAS`.
+- Non-allowed issue examples: `NAS-1`, `NAS-2`.
+- Supported operation: issue read only, using `GET /jira/rest/api/3/issue/<ISSUE_KEY>`.
+- Supported token authority: `aud=jira-tool`, `act=read`, `res=jira-tool:/project:IAM`.
+- OPA contains only allowed projects; non-allowed issue/project keys are test and demo inputs, not a disallowed policy list.
+- Confluence, human-user authorization, OAuth 3LO, delete operations, arbitrary Jira writes, and issue-level attenuation are deferred. Jira description writes are not M4a behavior; they are covered only by the narrower M4b scope.
+
+## REQ-M4A-J1 — Wide upstream credential is not caller authority
+A broad Jira API credential held by `jira-tool` SHALL NOT grant broad authority to the agent.
+Agent authority for Jira access SHALL come from authenticated workload identity plus a capiss-minted capability token authorized by OPA.
+
+## REQ-M4A-J2 — Jira API credential isolation
+The Jira API credential SHALL remain inside `jira-tool` in live mode.
+The agent SHALL NOT receive, forward, log, store, or embed the Jira API credential in tokens, prompts, demo output, or evidence.
+
+## REQ-M4A-J3 — OPA allowed-project minting
+`capiss` SHALL mint Jira project authority only when OPA explicitly allows the authenticated workload identity for the requested Jira project.
+For M4a, `spiffe://example.org/agent-a` may be allowed for project `IAM`; all other Jira project mint requests SHALL deny by default.
+
+## REQ-M4A-J4 — Jira canonical project resource
+Jira project authority SHALL use a deterministic canonical resource:
+- `aud="jira-tool"`
+- `act="read"`
+- `res="jira-tool:/project:<PROJECT_KEY>"`
+
+For the concrete M4a demo, the allowed resource is `jira-tool:/project:IAM`.
+Project keys SHALL be strict uppercase Jira-style keys and SHALL NOT use wildcards, lists, prefixes, regex, glob syntax, or equivalent pattern semantics.
+
+## REQ-M4A-J5 — Issue-read-only Jira facade
+M4a SHALL support only Jira-shaped issue reads through the protected facade:
+- agent-facing path: `GET /jira/rest/api/3/issue/<ISSUE_KEY>`
+- upstream path: `/rest/api/3/issue/<ISSUE_KEY>`
+
+Search, raw Jira proxying, arbitrary URLs, JQL, write, update, comment, and delete operations are out of scope and SHALL NOT be treated as implemented M4a behavior.
+
+## REQ-M4A-J6 — Request-time project enforcement before upstream use
+`jira-tool` SHALL derive the requested project from the issue key prefix before the first `-`.
+Before using the upstream Jira credential, `jira-tool` SHALL deny the request unless the derived project exactly matches the project in the verified capability token.
+
+## REQ-M4A-J7 — No upstream call on project-scope denial
+When the requested issue project does not match the verified token project, `jira-tool` SHALL deny before calling Jira or the Jira mock.
+Evidence SHALL show whether the upstream was called for project-scope denials.
+
+## REQ-M4A-J8 — Upstream project verification on successful issue responses
+For successful upstream issue responses, `jira-tool` SHALL verify that `fields.project.key` matches the authorized project before returning the body.
+If the project key is missing, malformed, or different, `jira-tool` SHALL deny and SHALL NOT return the upstream issue body.
+
+## REQ-M4A-J9 — In-scope upstream response handling
+For an otherwise authorized in-scope request, successful Jira issue responses MAY pass through unchanged after project verification.
+Upstream Jira errors for in-scope authorized requests MAY pass through with upstream status and body.
+Local authorization denials SHALL use local deny bodies and SHALL NOT reveal whether the requested Jira project exists upstream.
+
+## REQ-M4A-J10 — M4 enforcement primitives apply to Jira
+Jira access SHALL reuse the existing M3/M4 enforcement primitives where applicable:
+- valid caller identity remains required (`REQ-M3-R2`, `REQ-M4-E4`)
+- token authenticity, expiry, subject, audience, action, and resource are enforced at request time (`REQ-M3-R16` through `REQ-M3-R24`)
+- budget and request-rate governance are enforced by trusted shared state keyed by `root_token_id` (`REQ-M4-B1` through `REQ-M4-B6`)
+- trusted-store failures fail closed (`REQ-G-R3`)
+
+## REQ-M4A-J11 — Jira network segmentation
+Jira facade traffic SHALL use an edge/app boundary equivalent to the existing Envoy pattern:
+- edge clients reach `jira-tool-envoy`, not `jira-tool` directly
+- `jira-tool` and `jira-mock` SHALL NOT be attached to the Jira edge network
+- Redis SHALL be reachable to `jira-tool` only through an internal app network
+- `jira-mock` SHALL be upstream-only test infrastructure and SHALL NOT be reachable by edge clients or agents
+
+## REQ-M4A-J12 — Jira audit and non-disclosure evidence
+For every protected Jira issue-read decision, `jira-tool` SHALL emit a structured audit event containing the decision result, reason code, caller subject, token identifiers, evaluated `aud`/`act`/`res`, requested project, token project, issue key, whether upstream was called, upstream status when available, and budget remaining when consumed.
+Audit and demo output SHALL NOT include bearer token strings or Jira API credentials.
+
+## REQ-M4A-J13 — Broad-upstream proof for mock and live smoke
+Deterministic M4a tests SHALL prove that the Jira mock can return both allowed `IAM-*` and non-allowed `NAS-*` issue data independently of `jira-tool`.
+When optional live smoke is run, it SHALL first prove that the same live Jira API credential can directly read both an allowed `IAM-*` issue and a non-allowed `NAS-*` issue before evaluating the protected capiss/jira-tool path.
+
+---
+
+# 9. Milestone 4b — Jira project-scoped description write
+
+## Goal
+Extend the Jira facade from M4a read-only access to a deliberately narrow project-scoped description write. The upstream Jira API credential may be broad, but the agent may write only the description field for issues in the OPA-allowed project through `capiss` and `jira-tool`.
+
+## Concrete M4b scope
+- Authorization subject: workload identity, specifically `spiffe://example.org/agent-a`.
+- Allowed Jira project key: `IAM`.
+- Non-allowed test/demo project key: `NAS`.
+- Supported read operation: `GET /jira/rest/api/3/issue/<ISSUE_KEY>`.
+- Supported write operation: `PUT /jira/rest/api/3/issue/<ISSUE_KEY>` with body `{"description":"<plain text>"}`.
+- Supported write authority: `aud=jira-tool`, `act=write`, `res=jira-tool:/project:IAM`.
+- `act=write` includes project-scoped issue read and description replacement for the same project.
+- `act=read` remains read-only and SHALL NOT authorize writes.
+- Non-allowed issue/project keys remain test and demo inputs, not policy deny-list entries.
+
+## REQ-M4B-W1 — Wide upstream credential is not write authority
+A broad Jira API credential held by `jira-tool` SHALL NOT grant broad write authority to the agent.
+Agent write authority SHALL come from authenticated workload identity plus a capiss-minted `act=write` capability token authorized by OPA.
+
+## REQ-M4B-W2 — OPA allowed-project write minting
+`capiss` SHALL mint Jira project write authority only when OPA explicitly allows the authenticated workload identity for the requested Jira project and action.
+For M4b, `spiffe://example.org/agent-a` may mint `aud=jira-tool`, `act=write`, `res=jira-tool:/project:IAM`; other Jira project write mint requests SHALL deny by default.
+
+## REQ-M4B-W3 — Jira read/write action semantics
+`jira-tool` SHALL allow `GET /jira/rest/api/3/issue/<ISSUE_KEY>` with either `act=read` or `act=write` for the matching project.
+`jira-tool` SHALL allow `PUT /jira/rest/api/3/issue/<ISSUE_KEY>` only with `act=write` for the matching project.
+An `act=read` token SHALL NOT update Jira description content.
+
+## REQ-M4B-W4 — Description-only update body
+M4b writes SHALL accept only a JSON object containing exactly one `description` string field.
+`jira-tool` SHALL reject malformed bodies, non-string descriptions, and unrelated fields before calling upstream Jira or `jira-mock`.
+For upstream Jira REST v3, `jira-tool` SHALL convert the plain-text description string into Jira Atlassian Document Format under `fields.description`.
+
+## REQ-M4B-W5 — Write project enforcement before upstream use
+For description writes, `jira-tool` SHALL derive the requested project from the issue key prefix before the first `-`.
+Before using the upstream Jira credential, `jira-tool` SHALL deny the request unless the derived project exactly matches the project in the verified capability token.
+
+## REQ-M4B-W6 — In-scope write response behavior
+For a successful in-scope description update, `jira-tool` SHALL return `204 No Content`.
+Upstream Jira errors for otherwise authorized in-scope writes MAY pass through with upstream status and body.
+Local authorization and body-shape denials SHALL use local deny bodies and SHALL NOT reveal whether the requested Jira project exists upstream.
+
+## REQ-M4B-W7 — M4 governance applies to Jira writes
+Jira description writes SHALL reuse the existing M3/M4 enforcement primitives where applicable:
+- valid caller identity remains required
+- token authenticity, expiry, subject, audience, action, and resource are enforced at request time
+- budget and request-rate governance are enforced by trusted shared state keyed by `root_token_id`
+- trusted-store failures fail closed
+
+## REQ-M4B-W8 — Jira write audit and non-disclosure evidence
+For every protected Jira description-write decision, `jira-tool` SHALL emit a structured audit event containing the decision result, reason code, caller subject, token identifiers, evaluated `aud`/`act`/`res`, requested project, token project, issue key, operation, whether upstream was called, upstream status when available, and budget remaining when consumed.
+Audit, demo output, and evidence SHALL NOT include bearer token strings or Jira API credentials.
+
+## REQ-M4B-W9 — Write proof for mock and live smoke
+Deterministic M4b tests SHALL prove that an allowed IAM write mint succeeds, an IAM description update returns `204`, a write token can read back the marker, a read token cannot write, NAS write minting is denied by capiss, NAS writes with an IAM write token are denied by `jira-tool` before upstream use, and audit evidence reconstructs the decisions.
+When optional live smoke is run, it SHALL perform a protected IAM description write, verify the marker through protected GET with the write token, and prove NAS write denial by both capiss and `jira-tool`.
+
+---
+
+# 10. Test contract requirements
 
 These requirements are mandatory for negative security tests.
 
@@ -572,7 +719,7 @@ Evidence may include, as applicable, TLS transcripts, server-side entry snapshot
 
 ---
 
-# 9. Milestone summaries
+# 11. Milestone summaries
 
 ## Milestone 1 summary
 The system shall allow only explicitly authorized nodes to join the trust domain and obtain node identity.  
@@ -589,23 +736,36 @@ The system shall not treat identity as sufficient authority.
 Authority shall be explicitly minted under policy as a capability artifact.  
 Protected access shall require both valid caller identity and a valid, enforced capability token.
 
+## Milestone 4a summary
+The system shall apply the M4 authority model to Jira project access.
+A trusted Jira connector may hold an upstream credential with access to `IAM` and `NAS`, but the agent may only mint and use project-read authority for the OPA-allowed project `IAM`.
+The protected Jira facade shall deny `NAS` reads before upstream use and prove the denial through black-box evidence.
+
+## Milestone 4b summary
+The system shall extend Jira access to project-scoped description replacement only.
+`act=write` may read and replace issue descriptions in the OPA-allowed `IAM` project, while `act=read` remains read-only.
+The protected Jira facade shall deny `NAS` writes before upstream use and prove description update behavior through black-box evidence.
+
 ---
 
-# 10. Out of scope for these milestones
+# 12. Out of scope for these milestones
 
-The following are intentionally out of scope for Milestones 1 through 3 and shall not be assumed to be provided by these milestones:
+The following are intentionally out of scope for the implemented and approved milestones in this document unless a milestone explicitly says otherwise:
 
 - Proof-of-possession or `cnf` hard binding as a formal milestone requirement
-- Delegation
-- Attenuation
+- Cross-subject delegation
+- Broad attenuation beyond the reduced M4/M4a scopes
 - Governance, revocation strategy, and HITL constraints
 - Intent-to-mechanics compilation
+- Confluence support in M4a/M4b
+- Jira comments, transitions, attachments, search, delete, arbitrary field update, or issue-level attenuation in M4a/M4b
+- Human-user Jira authorization or OAuth 3LO in M4a/M4b
 
 Future milestones may introduce additional requirements in these areas.
 
 ---
 
-# 11. Completion rule
+# 13. Completion rule
 
 A milestone shall be considered complete only when its requirements are satisfied and supported by sufficient evidence.  
 A working demo alone shall not be treated as proof of milestone completion.

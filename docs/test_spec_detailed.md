@@ -2290,3 +2290,59 @@ Outcome guards
 - $EVDIR/resource_status.txt
 - $EVDIR/read_response.json
 - $EVDIR/read_status.txt
+
+## Milestone 4a - Jira project access with broad upstream credential
+
+These tests are implemented in `scripts/rogue_node_tests.sh` as `M4A_T1_test` through `M4A_T10_test`. They prove that broad Jira/mock upstream access does not become broad agent authority: `capiss` and OPA mint only the allowed IAM project token, and `jira-tool` enforces identity, token action, project scope, budget/rate state, and upstream project verification before returning data.
+
+### M4a-T1 - mock upstream breadth
+Directly reads `IAM-1` and `NAS-1` from `jira-mock` to prove the upstream test data is broader than the agent's allowed project.
+
+### M4a-T2 - allowed mint and IAM read
+Mints `aud=jira-tool`, `act=read`, `res=jira-tool:/project:IAM` for agent-a, reads `IAM-1` through `jira-tool-envoy`, and records the verified `jira-tool-envoy` SPIFFE identity.
+
+### M4a-T3 - non-allowed project mint denied
+Attempts a NAS Jira root mint as agent-a and expects `403` with reason `policy`.
+
+### M4a-T4 - NAS read denied before upstream
+Uses an IAM read token against `NAS-1`, expects `403` with reason `project_mismatch`, and verifies the mock request log is empty.
+
+### M4a-T5 - rogue Jira mint denied
+Attempts an IAM Jira root mint using rogue client material and expects `403` with reason `policy`.
+
+### M4a-T6 - stolen Jira token denied
+Mints an IAM token as agent-a, reuses it with rogue client material, and expects `403` with reason `sub_mismatch` before upstream use.
+
+### M4a-T7 - Jira budget consumption
+Reads `IAM-1` once with an IAM token and verifies Redis budget remaining is `9`.
+
+### M4a-T8 - Jira budget exhaustion
+Performs eleven protected reads with one IAM token, expects the first ten to succeed and the eleventh to deny with `budget_exceeded`, and verifies only ten upstream calls occurred.
+
+### M4a-T9 - upstream project mismatch denied
+Reads the mismatch fixture `IAM-999`, expects `upstream_project_mismatch`, and verifies the mismatched upstream body is not returned.
+
+### M4a-T10 - Jira audit trace reconstruction
+Captures capiss and jira-tool logs after an allowed read and verifies correlated `capiss_mint_decision` and `jiratool_enforcement_decision` events.
+
+## Milestone 4b - Jira project-scoped description write
+
+These tests are implemented in `scripts/rogue_node_tests.sh` as `M4B_T1_test` through `M4B_T6_test`. They prove `act=write` is project-scoped read plus description replacement only. `act=read` cannot write, malformed or overbroad bodies are rejected locally, and NAS writes are denied before any upstream call.
+
+### M4b-T1 - allowed write update and readback
+Mints `aud=jira-tool`, `act=write`, `res=jira-tool:/project:IAM`, writes a timestamp marker to `IAM-1`, reads the issue back with the write token, and verifies the mock saw PUT then GET.
+
+### M4b-T2 - read token write denied
+Mints an IAM read token, attempts description PUT, and expects `403` with reason `insufficient_authority` and no mock write.
+
+### M4b-T3 - NAS write mint denied
+Attempts a NAS write root mint as agent-a and expects `403` with reason `policy`.
+
+### M4b-T4 - NAS write denied before upstream
+Uses an IAM write token against `NAS-1`, expects `403` with reason `project_mismatch`, and verifies no mock request occurred.
+
+### M4b-T5 - description write body shape
+Sends malformed JSON and a body containing both `description` and `summary`, expects `400` with `malformed_body` or `unsupported_fields`, and verifies no mock request occurred.
+
+### M4b-T6 - write audit trace reconstruction
+Mints an IAM write token, writes and reads `IAM-2`, captures capiss and jira-tool logs, and verifies correlated write mint plus jira-tool write/read allow events.

@@ -58,8 +58,8 @@ def test_root_mint_requires_spiffe_id_logs_final_decision(capiss_module, monkeyp
                 "result": "deny",
                 "reason_code": "missing_spiffe_id",
                 "decision_type": "root_mint",
-                "policy_id": "capiss.allow.v2",
-                "policy_hash": "sha256:capiss-policy-v2",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
             }
         ],
     )
@@ -92,8 +92,8 @@ def test_root_mint_rejects_invalid_spiffe_id(capiss_module, monkeypatch, guard):
                 "result": "deny",
                 "reason_code": "invalid_spiffe_id",
                 "decision_type": "root_mint",
-                "policy_id": "capiss.allow.v2",
-                "policy_hash": "sha256:capiss-policy-v2",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
             }
         ],
     )
@@ -132,8 +132,8 @@ def test_root_mint_rejects_invalid_resource(capiss_module, monkeypatch, guard):
                 "aud": "tool-b",
                 "act": "read",
                 "res": "bad",
-                "policy_id": "capiss.allow.v2",
-                "policy_hash": "sha256:capiss-policy-v2",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
             }
         ],
     )
@@ -185,8 +185,8 @@ def test_root_mint_fail_closed_when_budget_store_unavailable(capiss_module, monk
                 "act": "read",
                 "res": "tool-b:/search",
                 "error": "down",
-                "policy_id": "capiss.allow.v2",
-                "policy_hash": "sha256:capiss-policy-v2",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
             }
         ],
     )
@@ -238,8 +238,8 @@ def test_root_mint_fail_closed_when_marker_store_unavailable(capiss_module, monk
                 "act": "read",
                 "res": "tool-b:/search",
                 "error": "down",
-                "policy_id": "capiss.allow.v2",
-                "policy_hash": "sha256:capiss-policy-v2",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
             }
         ],
     )
@@ -293,8 +293,8 @@ def test_root_mint_success_logs_final_decision(capiss_module, monkeypatch, guard
                 "aud": "tool-b",
                 "act": "read",
                 "res": "tool-b:/search",
-                "policy_id": "capiss.allow.v2",
-                "policy_hash": "sha256:capiss-policy-v2",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
             }
         ],
     )
@@ -332,8 +332,8 @@ def test_root_mint_bad_payload_logs_final_decision(capiss_module, monkeypatch, g
                 "subject_spiffe_id": SPIFFE_ID,
                 "aud": "tool-b",
                 "act": "read",
-                "policy_id": "capiss.allow.v2",
-                "policy_hash": "sha256:capiss-policy-v2",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
             }
         ],
     )
@@ -380,8 +380,8 @@ def test_root_mint_policy_deny_logs_final_decision(capiss_module, monkeypatch, g
                 "aud": "tool-b",
                 "act": "read",
                 "res": "tool-b:/search",
-                "policy_id": "capiss.allow.v2",
-                "policy_hash": "sha256:capiss-policy-v2",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
             }
         ],
     )
@@ -463,8 +463,8 @@ def test_resource_mint_requires_bearer_token_logs_final_decision(capiss_module, 
                 "aud": "tool-b",
                 "act": "read",
                 "res": "tool-b:/search",
-                "policy_id": "capiss.allow.v2",
-                "policy_hash": "sha256:capiss-policy-v2",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
             }
         ],
     )
@@ -505,8 +505,8 @@ def test_resource_mint_rejects_invalid_parent_token(capiss_module, monkeypatch, 
                 "aud": "tool-b",
                 "act": "read",
                 "res": "tool-b:/search",
-                "policy_id": "capiss.allow.v2",
-                "policy_hash": "sha256:capiss-policy-v2",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
             }
         ],
     )
@@ -558,8 +558,8 @@ def test_resource_mint_rejects_subject_mismatch(capiss_module, monkeypatch, guar
                 "aud": "tool-b",
                 "act": "read",
                 "res": "tool-b:/search",
-                "policy_id": "capiss.allow.v2",
-                "policy_hash": "sha256:capiss-policy-v2",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
             }
         ],
     )
@@ -611,8 +611,8 @@ def test_resource_mint_enforces_depth_limit(capiss_module, monkeypatch, guard):
                 "aud": "tool-b",
                 "act": "read",
                 "res": "tool-b:/search",
-                "policy_id": "capiss.allow.v2",
-                "policy_hash": "sha256:capiss-policy-v2",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
             }
         ],
     )
@@ -666,8 +666,8 @@ def test_resource_mint_registry_miss_logs_final_decision(capiss_module, monkeypa
                 "act": "read",
                 "res": "tool-b:/read-file:fileA",
                 "registry_hit": False,
-                "policy_id": "capiss.allow.v2",
-                "policy_hash": "sha256:capiss-policy-v2",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
             }
         ],
     )
@@ -721,8 +721,8 @@ def test_resource_mint_fail_closed_on_registry_store_error(capiss_module, monkey
                 "act": "read",
                 "res": "tool-b:/read-file:fileA",
                 "error": "down",
-                "policy_id": "capiss.allow.v2",
-                "policy_hash": "sha256:capiss-policy-v2",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
             }
         ],
     )
@@ -786,8 +786,8 @@ def test_resource_mint_success_logs_final_decision(capiss_module, monkeypatch, g
                 "act": "read",
                 "res": "tool-b:/search",
                 "registry_hit": True,
-                "policy_id": "capiss.allow.v2",
-                "policy_hash": "sha256:capiss-policy-v2",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
             }
         ],
     )
@@ -851,8 +851,8 @@ def test_resource_mint_success_logs_delegator_provenance(capiss_module, monkeypa
                 "act": "read",
                 "res": "tool-b:/read-file:fileA",
                 "registry_hit": True,
-                "policy_id": "capiss.allow.v2",
-                "policy_hash": "sha256:capiss-policy-v2",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
             }
         ],
     )
@@ -903,8 +903,8 @@ def test_resource_mint_rejects_amplified_authority(capiss_module, monkeypatch, g
                 "aud": "tool-b",
                 "act": "write",
                 "res": "tool-b:/search",
-                "policy_id": "capiss.allow.v2",
-                "policy_hash": "sha256:capiss-policy-v2",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
             }
         ],
     )
@@ -1054,8 +1054,8 @@ def test_resource_mint_denies_when_mint_rate_exceeded(capiss_module, monkeypatch
                 "act": "read",
                 "res": "tool-b:/read-file:fileA",
                 "registry_hit": True,
-                "policy_id": "capiss.allow.v2",
-                "policy_hash": "sha256:capiss-policy-v2",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
             }
         ],
     )
@@ -1111,8 +1111,8 @@ def test_resource_mint_fail_closed_when_mint_rate_store_unavailable(capiss_modul
                 "res": "tool-b:/read-file:fileA",
                 "registry_hit": True,
                 "error": "store_unavailable",
-                "policy_id": "capiss.allow.v2",
-                "policy_hash": "sha256:capiss-policy-v2",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
             }
         ],
     )
@@ -1168,8 +1168,8 @@ def test_resource_mint_policy_deny_logs_final_decision(capiss_module, monkeypatc
                 "act": "read",
                 "res": "tool-b:/search",
                 "registry_hit": True,
-                "policy_id": "capiss.allow.v2",
-                "policy_hash": "sha256:capiss-policy-v2",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
             }
         ],
     )
@@ -1216,8 +1216,8 @@ def test_resource_mint_bad_payload_logs_final_decision(capiss_module, monkeypatc
                 "delegation_depth": 0,
                 "aud": "tool-b",
                 "act": "read",
-                "policy_id": "capiss.allow.v2",
-                "policy_hash": "sha256:capiss-policy-v2",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
             }
         ],
     )

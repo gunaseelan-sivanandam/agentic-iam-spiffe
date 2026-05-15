@@ -1,0 +1,146 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="860" viewBox="0 0 1400 860" role="img" aria-labelledby="title desc">
+  <title id="title">Agentic IAM component architecture with M4a/M4b Jira connector</title>
+  <desc id="desc">C4-style component architecture. Rows show capability issuance, current tool-b enforcement, and the M4a/M4b Jira connector. Jira lines are dashed and labeled M4a/M4b runtime.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfaf7; }
+      .title { font: 700 28px Arial, sans-serif; fill: #142033; }
+      .subtitle { font: 15px Arial, sans-serif; fill: #516070; }
+      .boundary { fill: #ffffff; stroke: #a5afbf; stroke-width: 2; rx: 16; }
+      .boundary-target { fill: #fff9ec; stroke: #b98922; stroke-width: 2.5; stroke-dasharray: 10 7; rx: 16; }
+      .boundary-title { font: 700 16px Arial, sans-serif; fill: #1f2a44; }
+      .box { fill: #ffffff; stroke: #41516a; stroke-width: 1.6; rx: 10; }
+      .box-client { fill: #eef4ff; stroke: #2f66b3; }
+      .box-envoy { fill: #e8f2ff; stroke: #2f66b3; }
+      .box-app { fill: #edf8ef; stroke: #2b7a3d; }
+      .box-policy { fill: #fff5df; stroke: #b76b00; }
+      .box-state { fill: #f1edff; stroke: #6f55b5; }
+      .box-target { fill: #fff3cf; stroke: #b98922; }
+      .box-upstream { fill: #f4f4f4; stroke: #666666; }
+      .label { font: 13px Arial, sans-serif; fill: #182437; text-anchor: middle; dominant-baseline: middle; }
+      .small { font: 12px Arial, sans-serif; fill: #4d5a6b; }
+      .note { fill: #fffef8; stroke: #c8b778; stroke-width: 1.4; rx: 10; }
+      .note-text { font: 12px Arial, sans-serif; fill: #4d3c00; }
+      .arrow { fill: none; stroke: #33445c; stroke-width: 2.2; marker-end: url(#arrow); }
+      .arrow-mtls { stroke: #2f66b3; }
+      .arrow-internal { stroke: #2b7a3d; }
+      .arrow-state { stroke: #6f55b5; }
+      .arrow-target { stroke: #b98922; stroke-dasharray: 8 6; }
+      .arrow-workload { stroke: #2f66b3; stroke-dasharray: 6 6; }
+      .edge-label { font: 12px Arial, sans-serif; fill: #2d3a4d; text-anchor: middle; }
+      .legend { fill: #ffffff; stroke: #a5afbf; stroke-width: 1.4; rx: 10; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#33445c"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1400" height="860"/>
+  <text class="title" x="40" y="45">Agentic IAM with SPIFFE/SPIRE - Component Architecture</text>
+  <text class="subtitle" x="40" y="72">Current M4 runtime plus M4a/M4b Jira connector. Jira boxes and lines are dashed runtime.</text>
+
+  <rect class="boundary" x="40" y="100" width="1320" height="105"/>
+  <text class="boundary-title" x="62" y="128">SPIRE control plane</text>
+  <rect class="box" x="170" y="145" width="170" height="40"/>
+  <text class="label" x="255" y="165">spire-token-init</text>
+  <rect class="box" x="430" y="145" width="170" height="40"/>
+  <text class="label" x="515" y="165">spire-server</text>
+  <rect class="box" x="690" y="145" width="170" height="40"/>
+  <text class="label" x="775" y="165">spire-agent</text>
+  <path class="arrow" d="M 340 165 H 430"/>
+  <path class="arrow" d="M 600 165 H 690"/>
+  <text class="small" x="900" y="160">Workload API provides SVIDs to clients and Envoy boundaries.</text>
+
+  <rect class="boundary" x="40" y="240" width="1320" height="145"/>
+  <text class="boundary-title" x="62" y="268">Capability issuance path</text>
+  <rect class="box box-client" x="85" y="305" width="150" height="44"/>
+  <text class="label" x="160" y="327">agent-a / rogue</text>
+  <rect class="box box-envoy" x="310" y="305" width="185" height="44"/>
+  <text class="label" x="402" y="327">capability-issuer-envoy</text>
+  <rect class="box box-app" x="570" y="305" width="175" height="44"/>
+  <text class="label" x="657" y="327">capability-issuer</text>
+  <rect class="box box-policy" x="820" y="305" width="120" height="44"/>
+  <text class="label" x="880" y="327">OPA</text>
+  <rect class="box box-state" x="1015" y="305" width="125" height="44"/>
+  <text class="label" x="1077" y="327">Redis</text>
+  <rect class="note" x="1165" y="290" width="165" height="72"/>
+  <text class="note-text" x="1180" y="314">M4a/M4b policy:</text>
+  <text class="note-text" x="1180" y="334">agent-a may mint read/write</text>
+  <text class="note-text" x="1180" y="354">for jira-tool:/project:IAM</text>
+  <path class="arrow arrow-mtls" d="M 235 327 H 310"/>
+  <text class="edge-label" x="272" y="316">mTLS</text>
+  <path class="arrow arrow-internal" d="M 495 327 H 570"/>
+  <text class="edge-label" x="532" y="316">trusted ID</text>
+  <path class="arrow arrow-internal" d="M 745 327 H 820"/>
+  <text class="edge-label" x="782" y="316">policy</text>
+  <path class="arrow arrow-state" d="M 745 344 H 1015"/>
+  <text class="edge-label" x="880" y="366">budget init, registry, mint marker</text>
+
+  <rect class="boundary" x="40" y="425" width="1320" height="130"/>
+  <text class="boundary-title" x="62" y="453">Current protected resource path: tool-b</text>
+  <rect class="box box-client" x="85" y="485" width="150" height="44"/>
+  <text class="label" x="160" y="507">agent-a / rogue</text>
+  <rect class="box box-envoy" x="310" y="485" width="185" height="44"/>
+  <text class="label" x="402" y="507">tool-b-envoy</text>
+  <rect class="box box-app" x="570" y="485" width="175" height="44"/>
+  <text class="label" x="657" y="507">tool-b</text>
+  <rect class="box box-state" x="1015" y="485" width="125" height="44"/>
+  <text class="label" x="1077" y="507">Redis</text>
+  <rect class="note" x="1165" y="470" width="165" height="72"/>
+  <text class="note-text" x="1180" y="494">Enforces token, subject,</text>
+  <text class="note-text" x="1180" y="514">chain, depth, budget,</text>
+  <text class="note-text" x="1180" y="534">rate, discovery registry.</text>
+  <path class="arrow arrow-mtls" d="M 235 507 H 310"/>
+  <text class="edge-label" x="272" y="496">mTLS</text>
+  <path class="arrow arrow-internal" d="M 495 507 H 570"/>
+  <text class="edge-label" x="532" y="496">trusted ID</text>
+  <path class="arrow arrow-state" d="M 745 507 H 1015"/>
+  <text class="edge-label" x="880" y="496">budget/rate and discovery writes</text>
+
+  <rect class="boundary-target" x="40" y="595" width="1320" height="170"/>
+  <text class="boundary-title" x="62" y="623">M4a/M4b Jira connector</text>
+  <rect class="box box-client" x="85" y="665" width="150" height="44"/>
+  <text class="label" x="160" y="687">agent-a / rogue</text>
+  <rect class="box box-target" x="310" y="665" width="185" height="44"/>
+  <text class="label" x="402" y="687">jira-tool-envoy</text>
+  <rect class="box box-target" x="570" y="665" width="175" height="44"/>
+  <text class="label" x="657" y="687">jira-tool</text>
+  <rect class="box box-state" x="820" y="665" width="125" height="44"/>
+  <text class="label" x="882" y="687">Redis</text>
+  <rect class="box box-upstream" x="1015" y="640" width="125" height="44"/>
+  <text class="label" x="1077" y="662">jira-mock</text>
+  <rect class="box box-upstream" x="1015" y="710" width="125" height="44"/>
+  <text class="label" x="1077" y="732">Jira Cloud</text>
+  <rect class="note" x="1165" y="640" width="165" height="105"/>
+  <text class="note-text" x="1180" y="664">Read plus narrow write:</text>
+  <text class="note-text" x="1180" y="684">GET IAM-1 allowed</text>
+  <text class="note-text" x="1180" y="704">PUT description needs write</text>
+  <text class="note-text" x="1180" y="724">NAS denied before upstream.</text>
+  <path class="arrow arrow-target" d="M 235 687 H 310"/>
+  <text class="edge-label" x="272" y="676">mTLS</text>
+  <path class="arrow arrow-target" d="M 495 687 H 570"/>
+  <text class="edge-label" x="532" y="676">trusted ID</text>
+  <path class="arrow arrow-target" d="M 745 687 H 820"/>
+  <text class="edge-label" x="782" y="676">budget/rate</text>
+  <path class="arrow arrow-target" d="M 745 680 H 1015 V 662"/>
+  <text class="edge-label" x="900" y="658">authorized upstream only</text>
+  <path class="arrow arrow-target" d="M 745 694 H 1015 V 732"/>
+  <text class="edge-label" x="900" y="728">optional live smoke</text>
+
+  <path class="arrow arrow-workload" d="M 775 185 V 220 H 402 V 305"/>
+  <path class="arrow arrow-workload" d="M 775 220 H 402 V 485"/>
+  <path class="arrow arrow-workload" d="M 775 220 H 402 V 665"/>
+  <text class="edge-label" x="610" y="236">Workload API SVIDs to Envoy boundaries</text>
+
+  <rect class="legend" x="40" y="795" width="1320" height="45"/>
+  <line class="arrow arrow-mtls" x1="70" y1="818" x2="125" y2="818"/>
+  <text class="small" x="140" y="822">mTLS edge call</text>
+  <line class="arrow arrow-internal" x1="270" y1="818" x2="325" y2="818"/>
+  <text class="small" x="340" y="822">trusted internal call</text>
+  <line class="arrow arrow-state" x1="500" y1="818" x2="555" y2="818"/>
+  <text class="small" x="570" y="822">shared governance state</text>
+  <line class="arrow arrow-target" x1="785" y1="818" x2="840" y2="818"/>
+  <text class="small" x="855" y="822">M4a/M4b</text>
+  <line class="arrow arrow-workload" x1="1060" y1="818" x2="1115" y2="818"/>
+  <text class="small" x="1130" y="822">SPIRE Workload API</text>
+</svg>

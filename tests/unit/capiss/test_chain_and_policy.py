@@ -419,8 +419,8 @@ def test_run_policy_or_fail_denies_when_policy_denies(capiss_module, monkeypatch
                     "result": "deny",
                     "reason_code": "policy",
                     "policy_input": policy_input,
-                    "policy_id": "capiss.allow.v2",
-                    "policy_hash": "sha256:capiss-policy-v2",
+                    "policy_id": "capiss.allow.v3",
+                    "policy_hash": "sha256:capiss-policy-v3",
                 },
             )
         ],

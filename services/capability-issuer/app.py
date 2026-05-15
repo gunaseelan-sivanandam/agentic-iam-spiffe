@@ -50,6 +50,9 @@ CAPISS_KEY_FILE = os.path.join(CAPISS_KEY_DIR, "root_key.b64")
 CAPISS_PUBLIC_KEY_FILE = os.path.join(CAPISS_KEY_DIR, "root_public_key.b64")
 
 FACT_RE = re.compile(r"^([a-zA-Z_][a-zA-Z0-9_]*)\((.*)\)$")
+JIRA_PROJECT_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]{1,9}$")
+CAPISS_POLICY_ID = "capiss.allow.v3"
+CAPISS_POLICY_HASH = "sha256:capiss-policy-v3"
 
 CONSUME_MINT_RATE_LUA = """
 local mint_rate_key = KEYS[1]
@@ -227,10 +230,28 @@ def validate_mint_payload(payload: dict | None) -> tuple[dict | None, JSONRespon
     return cleaned, None
 
 
+# DD: DD-126
+# Implements: ARCH-004, ARCH-012, ARCH-021
+# Title: canonicalize_jira_project_resource capability issuer Jira project resource guard
+def canonicalize_jira_project_resource(res: str) -> str | None:
+    if not res.startswith("jira-tool:/project:"):
+        return None
+
+    project_key = res.removeprefix("jira-tool:/project:")
+    if not JIRA_PROJECT_KEY_RE.fullmatch(project_key):
+        return None
+    if any(marker in project_key for marker in ("*", "?", "[", "]", ",", ":")):
+        return None
+    return f"jira-tool:/project:{project_key}"
+
+
 # DD: DD-101
-# Implements: ARCH-004, ARCH-012
+# Implements: ARCH-004, ARCH-012, ARCH-021
 # Title: canonicalize_resource capability issuer resource canonicalization guard
 def canonicalize_resource(aud: str, res: str) -> str | None:
+    if aud == "jira-tool":
+        return canonicalize_jira_project_resource(res)
+
     if aud != "tool-b":
         return None
 
@@ -548,8 +569,8 @@ def log_mint_decision(
         "delegation_depth": delegation_depth,
         "registry_hit": registry_hit,
         "error": error if error else None,
-        "policy_id": "capiss.allow.v2",
-        "policy_hash": "sha256:capiss-policy-v2",
+        "policy_id": CAPISS_POLICY_ID,
+        "policy_hash": CAPISS_POLICY_HASH,
     }
     log_event("capiss_mint_decision", **{key: value for key, value in fields.items() if value is not None})
 
@@ -577,8 +598,8 @@ def run_policy_or_fail(policy_input: dict[str, object]) -> tuple[bool, JSONRespo
             result="deny",
             reason_code="policy",
             policy_input=policy_input,
-            policy_id="capiss.allow.v2",
-            policy_hash="sha256:capiss-policy-v2",
+            policy_id=CAPISS_POLICY_ID,
+            policy_hash=CAPISS_POLICY_HASH,
         )
         return False, JSONResponse(
             status_code=403,

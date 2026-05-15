@@ -18,6 +18,28 @@ allow if {
   input.res == "tool-b:/search"
 }
 
+# DD: DD-127
+# Implements: ARCH-013, ARCH-021
+# Title: allow_jira_project_root_mint OPA Jira project root mint policy
+allow if {
+  input.decision_type == "root_mint"
+  input.sub == "spiffe://example.org/agent-a"
+  input.aud == "jira-tool"
+  input.act == "read"
+  input.res == "jira-tool:/project:IAM"
+}
+
+# DD: DD-128
+# Implements: ARCH-021, ARCH-025
+# Title: allow_jira_project_write_root_mint OPA Jira project write mint policy
+allow if {
+  input.decision_type == "root_mint"
+  input.sub == "spiffe://example.org/agent-a"
+  input.aud == "jira-tool"
+  input.act == "write"
+  input.res == "jira-tool:/project:IAM"
+}
+
 allow if {
   input.decision_type == "resource_mint"
   input.sub == "spiffe://example.org/agent-a"

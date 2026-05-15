@@ -4,6 +4,7 @@ Status of this document:
 - This is an internal engineering support matrix for unit-test planning and review.
 - It is not the primary black-box proof source for requirement satisfaction.
 - Requirement satisfaction should be argued first through authored runtime mappings and evidence.
+- This matrix remains scoped to the M4 trust-gate requirements validated by `make traceability-check`. M4a/M4b Jira unit tests are implemented and are described in their slice validation files; black-box Jira proof is mapped in `trace/tests.yaml`.
 
 This document specifies unit-test trust controls for the M4 slice and maps
 requirements to concrete tests. It complements integration specs in

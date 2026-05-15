@@ -6,21 +6,23 @@ It is the authoritative architecture source for traceability.
 Scope notes:
 - This document describes the current implementation only.
 - It does not describe target-state or future architecture.
+- Exception: sections explicitly marked as `Approved target` describe pre-implementation slice architecture that has been reviewed before code, and must not be read as current runtime behavior until implemented and validated.
 - `Satisfies` lists identify which requirements each section is responsible for satisfying.
 
 ## Diagrams
 
 ### Component Architecture
 
-This diagram shows the main runtime components and their trust-oriented relationships in the current implementation.
+This diagram shows the main runtime components and their trust-oriented relationships, including the M4a/M4b Jira components.
 
-![Component architecture diagram](only_arch.png)
+![Component architecture diagram](only_arch.svg)
 
 ### Network Architecture
 
-This diagram shows the current network segmentation and boundary layout used by the stack.
+This diagram shows the current network segmentation and boundary layout used by the stack, including the M4a/M4b Jira networks.
+Redis is shown in multiple internal networks as the same shared state service attached where needed.
 
-![Network architecture diagram](architecture_diagram.png)
+![Network architecture diagram](architecture_diagram.svg)
 
 ## ARCH-001 Trust Bootstrap and Node Admission
 
@@ -326,3 +328,117 @@ It is responsible for proving that the intended negative or positive path was ac
 
 Interactions:
 It orchestrates Docker-based scenarios, records evidence under `artifacts/rogue-tests`, and writes the summarized run output into `test_report.log`.
+
+## ARCH-021 M4a/M4b Jira Authority Issuance and Policy
+
+Type: Logical
+Satisfies: REQ-M4A-J1, REQ-M4A-J3, REQ-M4A-J4, REQ-M4B-W1, REQ-M4B-W2
+
+Status:
+Implemented in M4a; extended in M4b.
+
+Overview:
+This subsystem extends the existing capability issuance model to Jira project authority. It keeps Jira access and description-write authority as explicit authority minted by `capiss` under OPA policy rather than as a side effect of a broad upstream Jira API credential.
+
+Trust/Responsibility:
+OPA is the source of truth for allowed Jira projects and actions. For M4a, `spiffe://example.org/agent-a` may mint `aud=jira-tool`, `act=read`, `res=jira-tool:/project:IAM`. For M4b, the same workload may also mint `aud=jira-tool`, `act=write`, `res=jira-tool:/project:IAM`. Other Jira project/action mint requests deny by default. `capiss` remains responsible for required authority fields, canonical Jira resource validation, policy evaluation, root token issuance, root budget initialization, and mint-decision audit events.
+
+Interactions:
+The agent calls `capability-issuer-envoy` over mTLS. The Envoy boundary injects verified caller identity into `capiss`. `capiss` sends the requested Jira authority tuple to OPA, and on allow returns a signed root capability token that `jira-tool` can verify locally.
+
+## ARCH-025 M4b Jira Write Action Semantics
+
+Type: Logical
+Satisfies: REQ-M4B-W2, REQ-M4B-W3
+
+Status:
+Implemented in M4b.
+
+Overview:
+M4b adds one new Jira action, `act=write`, while keeping the same project-scoped resource model from M4a. The action is intentionally not a general Jira write grant.
+
+Trust/Responsibility:
+OPA and `capiss` are responsible for minting only the allowed `IAM` write tuple. `jira-tool` is responsible for interpreting `act=write` as permission to read issues and replace descriptions in the matching project. `act=read` remains read-only and cannot satisfy a write request.
+
+Interactions:
+`GET /jira/rest/api/3/issue/<ISSUE_KEY>` accepts either `act=read` or `act=write` after subject, audience, expiry, project, budget, and rate checks pass. `PUT /jira/rest/api/3/issue/<ISSUE_KEY>` accepts only `act=write` after the same checks pass.
+
+## ARCH-022 jira-tool-envoy
+
+Type: Component
+Satisfies: REQ-M4A-J11
+
+Status:
+Implemented in M4a.
+
+Overview:
+`jira-tool-envoy` is the trusted ingress boundary for the Jira facade. It mirrors the existing boundary pattern used for `tool-b-envoy`: terminate mTLS, derive verified caller identity, inject the trusted identity header, and forward traffic inward to `jira-tool`.
+
+Trust/Responsibility:
+Its responsibility is transport authentication, server identity presentation to clients, verified caller identity propagation, and network-boundary preservation. It is not the semantic Jira authorization decision point; `capiss` and `jira-tool` own authority issuance and use-time enforcement.
+
+Interactions:
+`jira-tool-envoy` is attached to `jiratool_edge_net` and `jiratool_app_net`. `agent-a` and `rogue` are attached to `jiratool_edge_net` so positive and negative proofs exercise the boundary. `jira-tool` is not attached to the edge network. The host exposure is `10443` for the Jira facade only.
+
+## ARCH-023 jira-tool
+
+Type: Component
+Satisfies: REQ-M4A-J1, REQ-M4A-J2, REQ-M4A-J5, REQ-M4A-J6, REQ-M4A-J7, REQ-M4A-J8, REQ-M4A-J9, REQ-M4A-J10, REQ-M4A-J12, REQ-M4B-W1, REQ-M4B-W3, REQ-M4B-W4, REQ-M4B-W5, REQ-M4B-W6, REQ-M4B-W7, REQ-M4B-W8
+
+Status:
+Implemented in M4a; extended in M4b.
+
+Overview:
+`jira-tool` is the protected Jira resource server and request-time PEP for M4a/M4b. It holds the upstream Jira API credential in live mode, but it must not treat that credential as caller authority.
+
+Trust/Responsibility:
+`jira-tool` verifies capiss-signed root Jira project tokens, binds token subject to the Envoy-injected SPIFFE identity, enforces `aud=jira-tool`, action semantics, and project resource scope, consumes shared M4 request budget/rate state, and only then calls Jira or `jira-mock`. It supports issue reads for M4a and the M4b description-only update route.
+
+Interactions:
+For `GET /jira/rest/api/3/issue/<ISSUE_KEY>`, `jira-tool` derives the requested project from the issue key prefix, compares it with the token project, and denies project mismatch before upstream use. For successful upstream issue responses, it verifies `fields.project.key` matches the authorized project before returning the body unchanged. For `PUT /jira/rest/api/3/issue/<ISSUE_KEY>`, it requires `act=write`, accepts only a single plain-text `description` field, converts that text to Jira REST v3 Atlassian Document Format under `fields.description`, and returns `204 No Content` on successful upstream update. It constructs upstream Jira Basic auth internally in live mode, uses no real Jira credential in mock mode, strips client-supplied authorization or impersonation headers before upstream calls, and emits `jiratool_enforcement_decision` audit events.
+
+Network and State:
+`jira-tool` is attached to `jiratool_app_net`, not `jiratool_edge_net`. It reaches Redis over `jiratool_app_net` for `m4:budget:<root_token_id>` and request-rate checks. It reaches `jira-mock` only as upstream test infrastructure, or Jira Cloud only in explicit live mode.
+
+## ARCH-026 Jira Description Update Adapter
+
+Type: Logical
+Satisfies: REQ-M4B-W4, REQ-M4B-W5, REQ-M4B-W6, REQ-M4B-W8, REQ-M4B-W9
+
+Status:
+Implemented in M4b.
+
+Overview:
+The description update adapter is the narrow write surface inside `jira-tool`. It deliberately is not a transparent Jira proxy and does not accept arbitrary `fields`, comments, transitions, attachments, search, delete, or raw Jira REST payloads.
+
+Trust/Responsibility:
+`jira-tool` owns local request validation, action/project authorization, ADF conversion, upstream dispatch, and audit logging. The agent supplies only plain text; it never receives the upstream Jira credential or controls the upstream authorization headers.
+
+Interactions:
+The agent sends `PUT /jira/rest/api/3/issue/<ISSUE_KEY>` with `{"description":"..."}`. `jira-tool` authorizes the request before reading the request as upstream authority, converts the description to Jira Cloud ADF, calls `/rest/api/3/issue/<ISSUE_KEY>` with method `PUT`, and returns `204` on success. `jira-mock` stores the resulting description document and request log for deterministic black-box evidence.
+
+Authoritative State:
+| State | Store/System | Writer | Reader | TTL/Lifecycle | Decision Impact | Classification |
+| --- | --- | --- | --- | --- | --- | --- |
+| Jira allowed project/action tuple | OPA policy/data | Operator/repo config | OPA during capiss mint decision | Deployment lifecycle | Determines whether `agent-a` may mint `act=write` for `jira-tool:/project:IAM` | Authoritative |
+| `m4:budget:<root_token_id>` | Redis | capiss initializes; `jira-tool` consumes | `jira-tool` | Bounded by root token expiry | Denies Jira reads/writes when budget is missing, invalid, exhausted, or store unavailable | Authoritative |
+| M4 request-rate key | Redis | `jira-tool` | `jira-tool` | Rate window/root TTL bounded | Denies Jira reads/writes on rate limit or store error | Authoritative |
+| Jira issue description | Jira Cloud or `jira-mock` | `jira-tool` after local authorization | Jira Cloud, `jira-mock`, protected GET path | Upstream lifecycle | Holds the live or mock description update left by M4b smoke/demo | Upstream state |
+| Jira mock request log | `jira-mock` memory | `jira-mock` | test harness | Test lifecycle | Evidence that project/body denials did not call upstream and allowed writes did call upstream | Test evidence |
+
+## ARCH-024 jira-mock and Live Jira Smoke Proof
+
+Type: Logical
+Satisfies: REQ-M4A-J13, REQ-M4B-W9
+
+Status:
+Implemented in M4a; extended in M4b.
+
+Overview:
+The Jira proof model must show that the upstream can access more Jira data than the agent is authorized to use through `capiss` and `jira-tool`. The local deterministic proof uses `jira-mock`; optional live smoke uses Jira Cloud with a broad API credential.
+
+Trust/Responsibility:
+`jira-mock` is broad upstream test infrastructure, not an enforcement component. It contains data for allowed project `IAM` and non-allowed project `NAS`, can return both when reached directly by test/internal access, stores description updates accepted by `jira-tool`, and logs GET/PUT requests. Optional live smoke must first prove the live Jira API credential can directly read both an `IAM-*` issue and a `NAS-*` issue before evaluating the protected path, then performs the protected M4b description update through `jira-tool`.
+
+Interactions:
+`jira-mock` is reachable by `jira-tool` and by the test harness for precondition and request-log evidence. It is not attached to the Jira edge network and is not host-exposed. Its request-log/reset endpoints are test-only and must not be reachable by agents.

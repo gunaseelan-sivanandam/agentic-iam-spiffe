@@ -13,6 +13,7 @@ Important:
 - Applies only to unit tests in:
   - `tests/unit/capiss/`
   - `tests/unit/toolb/`
+  - `tests/unit/jiratool/`
   - shared unit helpers in `tests/unit/`
 - Integration/E2E harness guidance stays in the repo-root `AGENTS.md`.
 

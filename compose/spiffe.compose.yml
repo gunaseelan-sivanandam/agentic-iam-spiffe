@@ -71,6 +71,8 @@ services:
       - tool-b-envoy
       - capability-issuer-envoy
       - capability-issuer-no-opa-envoy
+      - jira-tool-envoy
+      - jira-mock
       - agent-a
       - rogue
     volumes:
@@ -85,6 +87,8 @@ services:
       - default
       - toolb_edge_net
       - capiss_edge_net
+      - jiratool_edge_net
+      - jiratool_upstream_net
     profiles:
       - tests
 
@@ -125,6 +129,60 @@ services:
     networks:
       - toolb_edge_net
       - toolb_app_net
+
+  jira-mock:
+    build:
+      context: ..
+      dockerfile: services/jira-mock/Dockerfile
+    container_name: spiffe-jira-mock
+    networks:
+      - jiratool_upstream_net
+
+  jira-tool:
+    build:
+      context: ..
+      dockerfile: services/jira-tool/Dockerfile
+    container_name: spiffe-jira-tool
+    labels:
+      spiffe.workload: "jira-tool"
+    environment:
+      CAPISS_PUBLIC_KEY_PATH: /var/lib/capiss/keys/root_public_key.b64
+      REDIS_URL: redis://redis:6379/0
+      M4_MAX_DEPTH: "3"
+      M4_RATE_LIMIT: "20"
+      M4_RATE_WINDOW_SECONDS: "10"
+      M4_REQUEST_COST: "1"
+      JIRA_UPSTREAM_MODE: ${JIRA_UPSTREAM_MODE:-mock}
+      JIRA_MOCK_BASE_URL: http://jira-mock:8080
+      JIRA_BASE_URL: ${JIRA_BASE_URL:-}
+      JIRA_EMAIL: ${JIRA_EMAIL:-}
+      JIRA_API_TOKEN: ${JIRA_API_TOKEN:-}
+    volumes:
+      - ../capiss_keys:/var/lib/capiss/keys:ro
+      - ../spire/agent:/run/spire/agent:ro
+    depends_on:
+      - spire-agent
+      - redis
+      - jira-mock
+    networks:
+      - jiratool_app_net
+      - jiratool_upstream_net
+
+  jira-tool-envoy:
+    build: ../services/jira-tool-envoy
+    container_name: spiffe-jira-tool-envoy
+    labels:
+      spiffe.workload: "jira-tool-envoy"
+    depends_on:
+      - spire-agent
+      - jira-tool
+    ports:
+      - "10443:10443"
+    volumes:
+      - ../spire/agent:/run/spire/agent:ro
+    networks:
+      - jiratool_edge_net
+      - jiratool_app_net
 
   capability-issuer:
     build:
@@ -217,6 +275,7 @@ services:
     networks:
       - capiss_app_net
       - toolb_app_net
+      - jiratool_app_net
 
   agent-a:
     build: ../agents/agent-a
@@ -226,9 +285,11 @@ services:
     depends_on:
       - tool-b-envoy
       - capability-issuer-envoy
+      - jira-tool-envoy
     environment:
       TOOL_B_URL: https://tool-b-envoy:8443
       CAPABILITY_ISSUER_URL: https://capability-issuer-envoy:9443
+      JIRA_TOOL_URL: https://jira-tool-envoy:10443
     command: ["/app/client.sh"]
     volumes:
       - ../spire/agent:/run/spire/agent:ro
@@ -236,6 +297,7 @@ services:
     networks:
       - toolb_edge_net
       - capiss_edge_net
+      - jiratool_edge_net
     profiles:
       - clients
       - tests
@@ -247,8 +309,10 @@ services:
       spiffe.workload: "rogue"
     depends_on:
       - tool-b-envoy
+      - jira-tool-envoy
     environment:
       TOOL_B_URL: https://tool-b-envoy:8443
+      JIRA_TOOL_URL: https://jira-tool-envoy:10443
     command: ["/app/rogue.sh"]
     volumes:
       - ../spire/agent:/run/spire/agent:ro
@@ -256,6 +320,7 @@ services:
     networks:
       - toolb_edge_net
       - capiss_edge_net
+      - jiratool_edge_net
     profiles:
       - clients
       - tests
@@ -265,3 +330,6 @@ networks:
   toolb_app_net: {}
   capiss_edge_net: {}
   capiss_app_net: {}
+  jiratool_edge_net: {}
+  jiratool_app_net: {}
+  jiratool_upstream_net: {}

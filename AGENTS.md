@@ -161,6 +161,12 @@ After a test run, validate that evidence directories were produced and contain g
 - `capability-issuer-no-opa-envoy` is test-only (`tests` profile). Do not use it for non-test flows.
 - Prefer `scripts/clean_stack.sh` over ad-hoc manual cleanup.
 - Keep evidence under `artifacts/rogue-tests/`; do not redirect unless you intentionally set `ROGUE_TEST_EVIDENCE_DIR`.
+- Architecture diagrams should use a C4-style, grid-aligned layout:
+  - group components by trust boundary or network zone
+  - keep flows mostly left-to-right or top-to-bottom
+  - prefer orthogonal connectors with minimal crossings
+  - label target-state or planned components explicitly
+  - avoid ad-hoc diagrams with diagonal arrow clutter or ambiguous trust boundaries
 - Never run Docker lifecycle commands in parallel in this repo.
   Serialize:
   - `scripts/clean_stack.sh`

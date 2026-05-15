@@ -1,93 +1,99 @@
 @startuml
-title Agentic IAM with SPIFFE/SPIRE — Architecture & Network Segmentation (M4)
+!pragma layout smetana
+left to right direction
+title Agentic IAM with SPIFFE/SPIRE - Network Architecture (M4 + M4a/M4b)
 
 skinparam componentStyle rectangle
-skinparam linetype ortho
 skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam package {
+  BorderColor #a5afbf
+  BackgroundColor #ffffff
+}
+skinparam component {
+  BorderColor #41516a
+  BackgroundColor #ffffff
+}
 
-package "SPIRE Control Plane (default)" {
+package "SPIRE control plane" {
+  [spire-token-init] as token_init
   [spire-server] as spire_server
-  [spire-token-init] as spire_token_init
   [spire-agent] as spire_agent
 }
 
-package "capiss_app_net (internal)" {
-  [capability-issuer] as capiss_app
-  [opa] as opa
-  [redis] as redis_capiss
-}
-
-package "capiss_edge_net (edge)" {
+package "capiss_edge_net" #edf6ff {
+  [agent-a] as capiss_agent
+  [rogue] as capiss_rogue
   [capability-issuer-envoy] as capiss_envoy
-  [capability-issuer-no-opa-envoy] as capiss_no_opa_envoy
-  [agent-a] as agent_a
-  [rogue] as rogue
+}
+package "capiss_app_net" #edf8ef {
+  [capability-issuer] as capiss_app
+}
+package "capiss internal dependencies" {
+  [OPA] as opa
+  [Redis] as redis_capiss
 }
 
-package "toolb_app_net (internal)" {
-  [tool-b] as toolb_app
-  [redis] as redis_toolb
-}
-
-package "toolb_edge_net (edge)" {
+package "toolb_edge_net" #edf6ff {
+  [agent-a] as toolb_agent
+  [rogue] as toolb_rogue
   [tool-b-envoy] as toolb_envoy
-  [agent-a] as agent_a_2
-  [rogue] as rogue_2
+}
+package "toolb_app_net" #edf8ef {
+  [tool-b] as toolb_app
+}
+package "tool-b shared state" {
+  [Redis] as redis_toolb
 }
 
-' Workload API socket mounts
-spire_agent -[#blue,dashed]-> toolb_app : Workload API
-spire_agent -[#blue,dashed]-> capiss_envoy : Workload API
-spire_agent -[#blue,dashed]-> capiss_no_opa_envoy : Workload API
-spire_agent -[#blue,dashed]-> agent_a : Workload API
-spire_agent -[#blue,dashed]-> rogue : Workload API
+package "jiratool_edge_net (M4a/M4b)" #fff9ec {
+  [agent-a] as jira_agent
+  [rogue] as jira_rogue
+  [jira-tool-envoy\nhost:10443] as jira_envoy
+}
+package "jiratool_app_net (M4a/M4b)" #fff9ec {
+  [jira-tool] as jira_tool
+  [Redis] as redis_jira
+}
+package "Jira upstream side, not edge" #f4f4f4 {
+  [jira-mock] as jira_mock
+  [Jira Cloud\noptional live smoke] as jira_cloud
+}
 
-' Control plane
-spire_token_init --> spire_server
-spire_agent --> spire_server : Node attestation
+token_init --> spire_server
+spire_agent --> spire_server : node attestation
 
-' Edge to app segmentation
-capiss_envoy --> capiss_app : HTTP (internal)
-capiss_no_opa_envoy --> capiss_app : HTTP (internal)
-toolb_envoy --> toolb_app : HTTP (internal)
+capiss_agent --> capiss_envoy : mTLS
+capiss_rogue --> capiss_envoy : mTLS negative proof
+capiss_envoy --> capiss_app : internal HTTP + trusted identity
+capiss_app --> opa : policy query
+capiss_app --> redis_capiss : budget, registry, mint marker
 
-' OPA policy check
-capiss_app --> opa : Policy query (internal)
+toolb_agent --> toolb_envoy : mTLS
+toolb_rogue --> toolb_envoy : mTLS negative proof
+toolb_envoy --> toolb_app : internal HTTP + trusted identity
+toolb_app --> redis_toolb : spend/rate + discovery writes
 
-' Shared state
-capiss_app -[#brown]-> redis_capiss : root budget init + registry read + mint marker
-redis_toolb -[#brown]-> capiss_app : shared root_token_id state
+jira_agent -[#b98922,dashed]-> jira_envoy : mTLS issue read / description write
+jira_rogue -[#b98922,dashed]-> jira_envoy : mTLS negative proof
+jira_envoy -[#b98922,dashed]-> jira_tool : internal HTTP + trusted identity
+jira_tool -[#b98922,dashed]-> redis_jira : budget/rate
+jira_tool -[#b98922,dashed]-> jira_mock : authorized upstream only
+jira_tool -[#b98922,dashed]-> jira_cloud : optional live mode
 
-'tool-b enforcement path
-toolb_app -[#brown]-> redis_toolb : spend/rate consume + discovery writes
-note right of toolb_app
-  Per request enforcement at tool-b:
-  - chain integrity verification
-  - derived depth <= N
-  - identity binding (x-spiffe-id)
-  - budget/rate consume (root_token_id)
-  - fail closed on store errors
+note bottom of jira_envoy
+  Edge clients do not route directly to jira-tool or jira-mock.
+end note
+note bottom of jira_tool
+  Project mismatch and read-token writes deny before upstream use.
+end note
+note bottom of jira_mock
+  Mock has IAM and NAS data but is upstream-only and not host-exposed.
 end note
 
-' Discovery flow (Option A registry)
-agent_a_2 --> toolb_envoy : GET /search (mTLS + token)
-toolb_app -[#brown]-> redis_toolb : write discovered canonical res
-agent_a --> capiss_envoy : POST /capabilities/resource-mint
-capiss_app -[#brown]-> redis_capiss : registry membership check
-
-' Offline delegation handoff
-agent_a -[#purple,dashed]-> rogue : delegated token handoff (offline)
-
-' Client calls
-agent_a --> capiss_envoy : Root mint (mTLS)
-rogue --> capiss_envoy : Root mint (mTLS)
-agent_a_2 --> toolb_envoy : /secret,/search,/read-file/* (mTLS)
-rogue_2 --> toolb_envoy : /secret,/search,/read-file/* (mTLS)
-
-' Test-only service
-note right of capiss_no_opa_envoy
-  Test-only:
-  Envoy -> capability-issuer with OPA URL missing
-  Validates fail-closed when OPA unavailable
-end note
+legend bottom
+  Jira networks and arrows show the implemented M4a/M4b runtime path.
+endlegend
 @enduml

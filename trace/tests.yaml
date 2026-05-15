@@ -130,6 +130,240 @@ tests:
   - M4-T13
   - M4-T14
   status: active
+- id: E2E-M4A-SUITE
+  type: e2e_suite
+  source_requirements:
+  - REQ-M4A-J1
+  - REQ-M4A-J2
+  - REQ-M4A-J3
+  - REQ-M4A-J4
+  - REQ-M4A-J5
+  - REQ-M4A-J6
+  - REQ-M4A-J7
+  - REQ-M4A-J8
+  - REQ-M4A-J9
+  - REQ-M4A-J10
+  - REQ-M4A-J11
+  - REQ-M4A-J12
+  - REQ-M4A-J13
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: TEST_PREFIX="M4a"
+  evidence_prefixes:
+  - M4a-T1
+  - M4a-T2
+  - M4a-T3
+  - M4a-T4
+  - M4a-T5
+  - M4a-T6
+  - M4a-T7
+  - M4a-T8
+  - M4a-T9
+  - M4a-T10
+  status: active
+- id: E2E-M4A-T1-MOCK-BREADTH
+  type: e2e_case
+  source_requirements:
+  - REQ-M4A-J13
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M4A_T1_test
+  evidence_prefixes:
+  - M4a-T1
+  status: active
+- id: E2E-M4A-T2-IAM-READ
+  type: e2e_case
+  source_requirements:
+  - REQ-M4A-J1
+  - REQ-M4A-J3
+  - REQ-M4A-J4
+  - REQ-M4A-J5
+  - REQ-M4A-J10
+  - REQ-M4A-J11
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M4A_T2_test
+  evidence_prefixes:
+  - M4a-T2
+  status: active
+- id: E2E-M4A-T3-NAS-MINT-DENY
+  type: e2e_case
+  source_requirements:
+  - REQ-M4A-J3
+  - REQ-M4A-J4
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M4A_T3_test
+  evidence_prefixes:
+  - M4a-T3
+  status: active
+- id: E2E-M4A-T4-NAS-READ-DENY
+  type: e2e_case
+  source_requirements:
+  - REQ-M4A-J6
+  - REQ-M4A-J7
+  - REQ-M4A-J9
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M4A_T4_test
+  evidence_prefixes:
+  - M4a-T4
+  status: active
+- id: E2E-M4A-T5-ROGUE-MINT-DENY
+  type: e2e_case
+  source_requirements:
+  - REQ-M4A-J3
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M4A_T5_test
+  evidence_prefixes:
+  - M4a-T5
+  status: active
+- id: E2E-M4A-T6-STOLEN-TOKEN-DENY
+  type: e2e_case
+  source_requirements:
+  - REQ-M4A-J10
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M4A_T6_test
+  evidence_prefixes:
+  - M4a-T6
+  status: active
+- id: E2E-M4A-T7-BUDGET-CONSUMPTION
+  type: e2e_case
+  source_requirements:
+  - REQ-M4A-J10
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M4A_T7_test
+  evidence_prefixes:
+  - M4a-T7
+  status: active
+- id: E2E-M4A-T8-BUDGET-EXHAUSTION
+  type: e2e_case
+  source_requirements:
+  - REQ-M4A-J10
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M4A_T8_test
+  evidence_prefixes:
+  - M4a-T8
+  status: active
+- id: E2E-M4A-T9-UPSTREAM-MISMATCH
+  type: e2e_case
+  source_requirements:
+  - REQ-M4A-J8
+  - REQ-M4A-J9
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M4A_T9_test
+  evidence_prefixes:
+  - M4a-T9
+  status: active
+- id: E2E-M4A-T10-AUDIT-TRACE
+  type: e2e_case
+  source_requirements:
+  - REQ-M4A-J12
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M4A_T10_test
+  evidence_prefixes:
+  - M4a-T10
+  status: active
+- id: E2E-M4B-SUITE
+  type: e2e_suite
+  source_requirements:
+  - REQ-M4B-W1
+  - REQ-M4B-W2
+  - REQ-M4B-W3
+  - REQ-M4B-W4
+  - REQ-M4B-W5
+  - REQ-M4B-W6
+  - REQ-M4B-W7
+  - REQ-M4B-W8
+  - REQ-M4B-W9
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: TEST_PREFIX="M4b"
+  evidence_prefixes:
+  - M4b-T1
+  - M4b-T2
+  - M4b-T3
+  - M4b-T4
+  - M4b-T5
+  - M4b-T6
+  status: active
+- id: E2E-M4B-T1-IAM-WRITE-READBACK
+  type: e2e_case
+  source_requirements:
+  - REQ-M4B-W1
+  - REQ-M4B-W2
+  - REQ-M4B-W3
+  - REQ-M4B-W6
+  - REQ-M4B-W7
+  - REQ-M4B-W9
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M4B_T1_test
+  evidence_prefixes:
+  - M4b-T1
+  status: active
+- id: E2E-M4B-T2-READ-TOKEN-WRITE-DENY
+  type: e2e_case
+  source_requirements:
+  - REQ-M4B-W3
+  - REQ-M4B-W9
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M4B_T2_test
+  evidence_prefixes:
+  - M4b-T2
+  status: active
+- id: E2E-M4B-T3-NAS-WRITE-MINT-DENY
+  type: e2e_case
+  source_requirements:
+  - REQ-M4B-W2
+  - REQ-M4B-W9
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M4B_T3_test
+  evidence_prefixes:
+  - M4b-T3
+  status: active
+- id: E2E-M4B-T4-NAS-WRITE-DENY
+  type: e2e_case
+  source_requirements:
+  - REQ-M4B-W5
+  - REQ-M4B-W6
+  - REQ-M4B-W9
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M4B_T4_test
+  evidence_prefixes:
+  - M4b-T4
+  status: active
+- id: E2E-M4B-T5-BODY-SHAPE-DENY
+  type: e2e_case
+  source_requirements:
+  - REQ-M4B-W4
+  - REQ-M4B-W6
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M4B_T5_test
+  evidence_prefixes:
+  - M4b-T5
+  status: active
+- id: E2E-M4B-T6-WRITE-AUDIT-TRACE
+  type: e2e_case
+  source_requirements:
+  - REQ-M4B-W8
+  - REQ-M4B-W9
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M4B_T6_test
+  evidence_prefixes:
+  - M4b-T6
+  status: active
 - id: E2E-M2-VERIFIED-CAPISS-MINT
   type: e2e_case
   source_requirements:

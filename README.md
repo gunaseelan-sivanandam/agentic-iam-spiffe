@@ -62,6 +62,8 @@ This lab is a small, reproducible playground for separating “who is calling”
 - A clear ingress boundary using Envoy to terminate mTLS and forward verified identity to internal services under network isolation.
 - Explicit authority using capability tokens (Biscuit), minted behind the boundary and enforced at the tool. Authentication alone is not sufficient to perform protected actions.
 - M4 governance truth slice for tool-b: shared chain/depth enforcement contract used by both `capiss` and `tool-b`, chain metadata, derived depth checks (`N=3`), spend/rate enforcement in Redis per `root_token_id`, discovery-registry-gated resource minting, and fail-closed enforcement on trusted-store errors.
+- M4a Jira project access: `jira-tool` holds the broad upstream Jira/mock credential, while `capiss`, OPA, and `jira-tool` narrow agent authority to the OPA-allowed `IAM` project.
+- M4b Jira description write: the same Jira boundary now supports a narrow `act=write` authority for `jira-tool:/project:IAM`; write tokens can read and replace issue descriptions in that project, while read tokens and non-allowed project inputs are denied before upstream use.
 - Evidence-based security tests built around a Premise / Exercise / Outcome structure, with artifacts captured so failures can be inspected and false-green tests are less likely.
 
 #### Planned (not implemented yet, goals may evolve):
@@ -80,12 +82,19 @@ This lab is a small, reproducible playground for separating “who is calling”
 
 ## Architecture
 
-### Component-level architecture:
+### Component-level architecture
 
-![Component architecture diagram](docs/only_arch.png)
+The authoritative component diagram is embedded in `docs/architecture.md` and backed by `docs/only_arch.puml`.
+It includes the current M4 runtime components plus the M4a/M4b Jira connector components.
 
-### Network segmentation and trust boundaries:
-![Network segmentation diagram](docs/architecture_diagram.png)
+![Component architecture diagram](docs/only_arch.svg)
+
+### Network segmentation and trust boundaries
+
+The authoritative network diagram is embedded in `docs/architecture.md` and backed by `docs/architecture_diagram.puml`.
+It includes the current M4 networks plus the M4a/M4b `jiratool_edge_net` and `jiratool_app_net` segmentation.
+
+![Network segmentation diagram](docs/architecture_diagram.svg)
 
 # Milestones
 ## Milestones implemented
@@ -115,6 +124,22 @@ This lab is a small, reproducible playground for separating “who is calling”
  - Enforces per-request budget and rate keyed by `root_token_id` via Redis (trusted shared state).
  - Adds discovery registry flow (`GET /search`) and registry-gated resource minting (`POST /capabilities/resource-mint`).
  - Keeps capiss out of protected request hot path (capiss mints; tool enforces request-time checks).
+
+### Milestone 4a — Jira project access with broad upstream credential
+ - Applies the M4 authority model to a real Jira-shaped connector.
+ - `jira-tool` may hold an upstream Jira API credential that can read both `IAM` and `NAS` projects.
+ - `capiss` and OPA mint only `aud=jira-tool`, `act=read`, `res=jira-tool:/project:IAM` for `agent-a`.
+ - `jira-tool` permits issue reads such as `IAM-1` only after local token, identity, project, and budget checks.
+ - Reads for non-allowed project inputs such as `NAS-1` are denied before upstream use.
+ - The deterministic proof uses `jira-mock`; optional live smoke uses Jira Cloud through the same `jira-tool` enforcement path.
+
+### Milestone 4b — Jira project-scoped description write
+ - Extends the Jira connector with one intentionally narrow mutation: replace an issue description.
+ - `capiss` and OPA may mint `aud=jira-tool`, `act=write`, `res=jira-tool:/project:IAM` for `agent-a`.
+ - `GET /jira/rest/api/3/issue/<ISSUE_KEY>` accepts read or write authority; `PUT /jira/rest/api/3/issue/<ISSUE_KEY>` requires write authority.
+ - Agent-facing writes accept only `{"description":"..."}`; `jira-tool` converts the plain text to Jira Cloud REST v3 ADF before upstream use.
+ - Read tokens cannot write, NAS write minting is denied by policy, and NAS writes attempted with an IAM write token are denied by `jira-tool` before Jira/mock sees them.
+ - The deterministic proof uses `jira-mock`; live smoke proves the same behavior against Jira Cloud and intentionally leaves the allowed issue description changed.
 
 ## Planned Milestones
  - Note: Milestones 5–8 are exploratory and may evolve as architectural choices are validated.
@@ -158,6 +183,27 @@ Run the full test suite:
 ```bash
 docker compose --profile tests -f compose/spiffe.compose.yml up --build --abort-on-container-exit rogue-tests
 ```
+
+Run only the Jira M4a/M4b mock E2E suite:
+```bash
+docker compose --profile tests -f compose/spiffe.compose.yml run --rm \
+  -e TEST_MILESTONES=m4a,m4b rogue-tests
+```
+
+Run the agent Jira mock demo through `jira-tool`:
+```bash
+docker compose -f compose/spiffe.compose.yml up -d --build
+docker compose --profile clients -f compose/spiffe.compose.yml run --rm --no-deps \
+  agent-a /app/jira_demo.sh
+```
+
+Run live Jira Cloud smoke when `.env` contains live Jira inputs:
+```bash
+JIRA_UPSTREAM_MODE=live docker compose --env-file .env \
+  -f compose/spiffe.compose.yml up -d --no-deps --force-recreate jira-tool
+make jira-live-smoke
+```
+The live smoke first proves the direct Jira API credential can read both the allowed `IAM-*` issue and the non-allowed `NAS-*` issue, then proves the protected `jira-tool` path narrows that authority. The script fails if the running `jira-tool` is not in live mode and intentionally leaves the allowed issue description updated.
 
 M4 root mint example (`agent-a` mTLS identity):
 ```bash

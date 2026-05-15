@@ -121,3 +121,62 @@ Usage:
 - Reclassify or remove incorrect `Satisfies:` links.
 - Document direct vs supporting architecture responsibility for each reviewed requirement.
 - Update traceability rules or review process so semantic over-claims are not treated as satisfied requirements.
+
+## OPL-003: Compatibility mint endpoint should be retired after root-mint migration
+
+- Status: Open
+- First observed: 2026-05-14
+- Area: capability issuance API lifecycle
+- Related slice:
+  - `docs/slices/m4a-jira-project-access/`
+- Related endpoint:
+  - `/capabilities/mint`
+  - `/capabilities/root-mint`
+
+### Problem
+- `capiss` still exposes `/capabilities/mint` as a backward-compatible path that dispatches to root mint.
+- New M4a docs and tests should use `/capabilities/root-mint`, but existing M3/M4 paths still depend on the compatibility endpoint.
+- Keeping both endpoints indefinitely weakens API clarity and can make examples or tests ambiguous about root minting versus delegated/resource minting.
+
+### Current understanding
+- The compatibility endpoint is intentionally retained for existing evidence paths.
+- Retiring it is outside M4a because the Jira slice should not disturb existing M3/M4 proof while adding a new connector.
+
+### Meaningful fix options to evaluate
+1. Migrate all existing docs, helpers, and tests to `/capabilities/root-mint`.
+2. Add a deprecation warning or audit marker on `/capabilities/mint` before removal.
+3. Remove `/capabilities/mint` after all black-box evidence paths use `/capabilities/root-mint`.
+
+### Closure criteria
+- No tests, docs, scripts, or demos depend on `/capabilities/mint`.
+- `/capabilities/mint` is removed or explicitly deprecated with a planned removal window.
+- Full E2E, unit, QA trace, and evidence gates pass after migration.
+
+## OPL-004: capiss policy hash is static rather than computed from OPA policy source
+
+- Status: Open
+- First observed: 2026-05-14
+- Area: auditability / policy provenance
+- Related slice:
+  - `docs/slices/m4a-jira-project-access/`
+- Related audit event:
+  - `capiss_mint_decision`
+
+### Problem
+- `capiss_mint_decision` events include a policy id/hash, but the hash is currently a static version string rather than a digest computed from the actual OPA policy source and data.
+- M4a intentionally advances the static policy version for Jira semantics, but it does not implement real policy hashing.
+- Static version strings are useful for coarse audit continuity, but they do not prove exactly which policy content produced a mint decision.
+
+### Current understanding
+- Real policy hashing is an observability hardening task, not required to prove M4a Jira project access.
+- Implementing it requires deciding which policy/data files are in the hash boundary and how `capiss` obtains that digest reliably.
+
+### Meaningful fix options to evaluate
+1. Compute a deterministic digest from mounted OPA policy/data files at service startup.
+2. Have OPA expose a policy bundle revision or digest that `capiss` records in mint-decision events.
+3. Store an operator-supplied policy bundle version and treat it as advisory until real hashing is implemented.
+
+### Closure criteria
+- Mint-decision audit events include a policy provenance value derived from actual policy content or a documented policy bundle revision.
+- The hash/version boundary is documented in architecture.
+- Tests prove the audit field changes when policy content or bundle revision changes.

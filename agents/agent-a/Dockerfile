@@ -7,5 +7,6 @@ COPY --from=spire /opt/spire/bin/spire-agent /opt/spire/bin/spire-agent
 
 WORKDIR /app
 COPY client.sh /app/client.sh
-RUN chmod +x /app/client.sh
+COPY jira_demo.sh /app/jira_demo.sh
+RUN chmod +x /app/client.sh /app/jira_demo.sh
 CMD ["/app/client.sh"]
