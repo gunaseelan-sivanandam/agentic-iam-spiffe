@@ -1,14 +1,14 @@
 @startuml
 !pragma layout smetana
 left to right direction
-title Agentic IAM with SPIFFE/SPIRE - Component Architecture (M4 + M4a/M4b)
+title Agentic IAM with SPIFFE/SPIRE - Component Architecture
 
 skinparam componentStyle rectangle
 skinparam packageStyle rectangle
 skinparam linetype ortho
 skinparam shadowing false
-skinparam ArrowColor #33445c
 skinparam defaultFontName Arial
+skinparam ArrowColor #33445c
 skinparam package {
   BorderColor #a5afbf
   BackgroundColor #ffffff
@@ -18,70 +18,91 @@ skinparam component {
   BackgroundColor #ffffff
 }
 
-package "SPIRE control plane" {
+package "Workload clients" as clients #FFFFFF {
+  [agent-a / rogue] as agent_a
+  [Codex launcher] as codex_launcher
+  [codex-jira-mcp-adapter\nM5 MCP stdio] as codex_adapter
+}
+
+package "SPIFFE mTLS edge" as edge #FFFFFF {
+  [capability-issuer-envoy] as capiss_envoy
+  [tool-b-envoy] as toolb_envoy
+  [jira-tool-envoy\nM4a/M4b] as jira_envoy
+  [jira-mcp-envoy\nM5] as jiramcp_envoy
+}
+
+package "Application / PEP services" as app #FFFFFF {
+  [capability-issuer] as capiss_app
+  [tool-b] as toolb_app
+  [jira-tool PEP\nM4a/M4b] as jira_tool
+  [jira-mcp-gateway PEP\nM5] as jiramcp_gateway
+}
+
+package "Governance state and policy" as gov #FFFFFF {
+  [Redis\nbudget/rate/markers] as redis
+  [OPA] as opa
+  [capability keys] as keys
+}
+
+package "Upstream systems" as upstream #FFFFFF {
+  [jira-mock\nM4 mock] as jira_mock
+  [jira-mcp-mock\nM5 mock default] as jiramcp_mock
+  [Jira Cloud\nexplicit live mode] as jira_cloud
+}
+
+package "SPIRE control plane" as spire #FFFFFF {
   [spire-token-init] as token_init
   [spire-server] as spire_server
   [spire-agent] as spire_agent
 }
 
-package "Capability issuance path" {
-  [agent-a / rogue] as capiss_clients
-  [capability-issuer-envoy] as capiss_envoy
-  [capability-issuer] as capiss_app
-  [OPA] as opa
-  [Redis] as redis_capiss
-}
+token_init --> spire_server : registers entries
+spire_server --> spire_agent : SVID issuance
+spire_agent ..> capiss_envoy : Workload API
+spire_agent ..> toolb_envoy : Workload API
+spire_agent ..> jira_envoy : Workload API
+spire_agent ..> jiramcp_envoy : Workload API
+spire_agent ..> codex_adapter : Workload API
 
-package "Current protected resource path: tool-b" {
-  [agent-a / rogue] as toolb_clients
-  [tool-b-envoy] as toolb_envoy
-  [tool-b] as toolb_app
-  [Redis] as redis_toolb
-}
+agent_a -[#2F66B3]-> capiss_envoy : mint aud/act/res
+capiss_envoy -[#2B7A3D]-> capiss_app : verified SPIFFE subject
+capiss_app -[#2B7A3D]-> opa : allow/deny
+capiss_app -[#6F55B5]-> redis : budget + mint marker
+capiss_app -[#6F55B5]-> keys : sign capability
 
-package "M4a/M4b Jira connector" #fff9ec {
-  [agent-a / rogue] as jira_clients
-  [jira-tool-envoy] as jira_envoy
-  [jira-tool] as jira_tool
-  [Redis] as redis_jira
-  [jira-mock] as jira_mock
-  [Jira Cloud\noptional live smoke] as jira_cloud
-}
+agent_a -[#2F66B3]-> toolb_envoy : protected call
+toolb_envoy -[#2B7A3D]-> toolb_app : verified SPIFFE subject
+toolb_app -[#6F55B5]-> redis : budget/rate/discovery
 
-token_init --> spire_server
-spire_agent --> spire_server : node attestation
+agent_a -[#B98922]-> jira_envoy : M4a/M4b Jira read/write
+jira_envoy -[#B98922]-> jira_tool : verified SPIFFE subject
+jira_tool -[#6F55B5]-> redis : budget/rate
+jira_tool -[#B98922,dashed]-> jira_mock : mock upstream
+jira_tool -[#B98922,dashed]-> jira_cloud : live smoke only
 
-capiss_clients --> capiss_envoy : mTLS mint request
-capiss_envoy --> capiss_app : trusted identity header
-capiss_app --> opa : policy decision
-capiss_app --> redis_capiss : root budget, registry, mint marker
-note right of opa
-  M4a/M4b policy:
-  agent-a may mint read/write only
-  for jira-tool:/project:IAM
+codex_launcher -[#6F55B5]-> codex_adapter : docker exec -T stdio MCP
+codex_adapter -[#6F55B5]-> capiss_envoy : mint M5 capability
+codex_adapter -[#6F55B5]-> jiramcp_envoy : read_project_summary/create_story
+jiramcp_envoy -[#6F55B5]-> jiramcp_gateway : verified SPIFFE subject
+jiramcp_gateway -[#6F55B5]-> redis : budget/rate/audit
+jiramcp_gateway -[#6F55B5,dashed]-> jiramcp_mock : mock upstream
+jiramcp_gateway -[#6F55B5,dashed]-> jira_cloud : explicit live mode
+
+note right of capiss_app
+  Capiss authorizes aud/act/res and subject.
+  M4 and M5 authorities are separate.
 end note
 
-toolb_clients --> toolb_envoy : mTLS tool request
-toolb_envoy --> toolb_app : trusted identity header
-toolb_app --> redis_toolb : budget/rate and discovery writes
-
-jira_clients -[#b98922,dashed]-> jira_envoy : mTLS issue read / description write
-jira_envoy -[#b98922,dashed]-> jira_tool : trusted identity header
-jira_tool -[#b98922,dashed]-> redis_jira : budget/rate
-jira_tool -[#b98922,dashed]-> jira_mock : authorized upstream only
-jira_tool -[#b98922,dashed]-> jira_cloud : optional live mode
-note right of jira_tool
-  M4a/M4b:
-  GET IAM-1 allowed
-  PUT IAM description requires write
-  GET NAS-1 denied before upstream
+note right of jiramcp_gateway
+  M5 exposes only read_project_summary and create_story.
+  IAM is allowed; NAS is denied before Jira use.
 end note
-
-spire_agent -[#2f66b3,dashed]-> capiss_envoy : Workload API
-spire_agent -[#2f66b3,dashed]-> toolb_envoy : Workload API
-spire_agent -[#2f66b3,dashed]-> jira_envoy : Workload API target
 
 legend bottom
-  Jira connector lines show the implemented M4a/M4b runtime path.
+  Blue: mTLS edge request
+  Green: internal verified identity call
+  Purple: M5 Codex Jira MCP authority
+  Brown: M4a/M4b Jira tool authority
+  Dashed: mock or explicit live upstream path
 endlegend
 @enduml

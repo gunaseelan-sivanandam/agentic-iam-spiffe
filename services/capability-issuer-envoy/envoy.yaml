@@ -39,6 +39,9 @@ static_resources:
                     - san_type: URI
                       matcher:
                         exact: "spiffe://example.org/rogue"
+                    - san_type: URI
+                      matcher:
+                        exact: "spiffe://example.org/codex-jira-mcp-adapter"
           filters:
             - name: envoy.filters.network.http_connection_manager
               typed_config:

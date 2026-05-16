@@ -40,6 +40,28 @@ allow if {
   input.res == "jira-tool:/project:IAM"
 }
 
+# DD: DD-130
+# Implements: ARCH-028
+# Title: allow_jira_mcp_summary_root_mint OPA Jira MCP summary mint policy
+allow if {
+  input.decision_type == "root_mint"
+  input.sub == "spiffe://example.org/codex-jira-mcp-adapter"
+  input.aud == "jira-mcp-gateway"
+  input.act == "read_project_summary"
+  input.res == "jira-mcp:/project:IAM"
+}
+
+# DD: DD-131
+# Implements: ARCH-028
+# Title: allow_jira_mcp_story_root_mint OPA Jira MCP story mint policy
+allow if {
+  input.decision_type == "root_mint"
+  input.sub == "spiffe://example.org/codex-jira-mcp-adapter"
+  input.aud == "jira-mcp-gateway"
+  input.act == "create_story"
+  input.res == "jira-mcp:/project:IAM"
+}
+
 allow if {
   input.decision_type == "resource_mint"
   input.sub == "spiffe://example.org/agent-a"

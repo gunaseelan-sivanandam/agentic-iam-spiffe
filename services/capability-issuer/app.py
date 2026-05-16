@@ -245,10 +245,28 @@ def canonicalize_jira_project_resource(res: str) -> str | None:
     return f"jira-tool:/project:{project_key}"
 
 
+# DD: DD-129
+# Implements: ARCH-028
+# Title: canonicalize_jira_mcp_project_resource capability issuer Jira MCP project resource guard
+def canonicalize_jira_mcp_project_resource(res: str) -> str | None:
+    if not res.startswith("jira-mcp:/project:"):
+        return None
+
+    project_key = res.removeprefix("jira-mcp:/project:")
+    if not JIRA_PROJECT_KEY_RE.fullmatch(project_key):
+        return None
+    if any(marker in project_key for marker in ("*", "?", "[", "]", ",", ":", "/", " ")):
+        return None
+    return f"jira-mcp:/project:{project_key}"
+
+
 # DD: DD-101
 # Implements: ARCH-004, ARCH-012, ARCH-021
 # Title: canonicalize_resource capability issuer resource canonicalization guard
 def canonicalize_resource(aud: str, res: str) -> str | None:
+    if aud == "jira-mcp-gateway":
+        return canonicalize_jira_mcp_project_resource(res)
+
     if aud == "jira-tool":
         return canonicalize_jira_project_resource(res)
 

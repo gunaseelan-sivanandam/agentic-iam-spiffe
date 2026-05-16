@@ -1,99 +1,116 @@
 @startuml
 !pragma layout smetana
 left to right direction
-title Agentic IAM with SPIFFE/SPIRE - Network Architecture (M4 + M4a/M4b)
+title Agentic IAM with SPIFFE/SPIRE - Layered Network Architecture
 
+skinparam shadowing false
+skinparam linetype ortho
+skinparam defaultFontName Arial
 skinparam componentStyle rectangle
 skinparam packageStyle rectangle
-skinparam linetype ortho
-skinparam shadowing false
-skinparam defaultFontName Arial
 skinparam package {
-  BorderColor #a5afbf
-  BackgroundColor #ffffff
+  BorderColor #B9C2CF
+  BackgroundColor #FFFFFF
 }
 skinparam component {
-  BorderColor #41516a
-  BackgroundColor #ffffff
+  BorderColor #45546B
+  BackgroundColor #FFFFFF
 }
 
-package "SPIRE control plane" {
+package "Caller / Workload" as callers #FFFFFF {
+  [agent-a] as agent_a
+  [rogue tests] as rogue
+  [Codex MCP client] as codex
+  [codex_jira_mcp.sh\nstdio launcher] as launcher
+  [codex-jira-mcp-adapter] as adapter
+}
+
+package "SPIFFE mTLS Edge" as edge #EAF3FF {
+  [capability-issuer-envoy\n:9443] as capiss_envoy
+  [tool-b-envoy\n:8443] as toolb_envoy
+  [jira-tool-envoy\n:10443] as jira_envoy
+  [jira-mcp-envoy\n:11443] as jiramcp_envoy
+}
+
+package "Protected App / PEP" as app #EDF8EF {
+  [capability-issuer] as capiss
+  [tool-b] as toolb
+  [jira-tool PEP\nM4a/M4b] as jira_tool
+  [jira-mcp-gateway PEP\nM5] as jiramcp_gateway
+}
+
+package "Governance State" as state #F1EDFF {
+  [Redis\nbudget / rate / registry] as redis
+  [capiss keys] as capiss_keys
+}
+
+package "Policy / Upstream" as upstream #F4F4F4 {
+  [OPA] as opa
+  [jira-mock\nM4 mock default] as jira_mock
+  [jira-mcp-mock\nM5 mock default] as jiramcp_mock
+  [Jira Cloud\nexplicit live mode] as jira_cloud
+}
+
+package "SPIRE control plane" as spire #FFFFFF {
   [spire-token-init] as token_init
   [spire-server] as spire_server
   [spire-agent] as spire_agent
 }
 
-package "capiss_edge_net" #edf6ff {
-  [agent-a] as capiss_agent
-  [rogue] as capiss_rogue
-  [capability-issuer-envoy] as capiss_envoy
-}
-package "capiss_app_net" #edf8ef {
-  [capability-issuer] as capiss_app
-}
-package "capiss internal dependencies" {
-  [OPA] as opa
-  [Redis] as redis_capiss
-}
-
-package "toolb_edge_net" #edf6ff {
-  [agent-a] as toolb_agent
-  [rogue] as toolb_rogue
-  [tool-b-envoy] as toolb_envoy
-}
-package "toolb_app_net" #edf8ef {
-  [tool-b] as toolb_app
-}
-package "tool-b shared state" {
-  [Redis] as redis_toolb
-}
-
-package "jiratool_edge_net (M4a/M4b)" #fff9ec {
-  [agent-a] as jira_agent
-  [rogue] as jira_rogue
-  [jira-tool-envoy\nhost:10443] as jira_envoy
-}
-package "jiratool_app_net (M4a/M4b)" #fff9ec {
-  [jira-tool] as jira_tool
-  [Redis] as redis_jira
-}
-package "Jira upstream side, not edge" #f4f4f4 {
-  [jira-mock] as jira_mock
-  [Jira Cloud\noptional live smoke] as jira_cloud
-}
-
-token_init --> spire_server
+token_init --> spire_server : workload entries
 spire_agent --> spire_server : node attestation
+spire_agent ..> agent_a : SVID
+spire_agent ..> adapter : SVID
+spire_agent ..> capiss_envoy : SVID
+spire_agent ..> jiramcp_envoy : SVID
 
-capiss_agent --> capiss_envoy : mTLS
-capiss_rogue --> capiss_envoy : mTLS negative proof
-capiss_envoy --> capiss_app : internal HTTP + trusted identity
-capiss_app --> opa : policy query
-capiss_app --> redis_capiss : budget, registry, mint marker
+agent_a --> capiss_envoy : mTLS mint
+adapter -[#6B4CC2]-> capiss_envoy : mTLS mint\naud=jira-mcp-gateway
+capiss_envoy --> capiss : trusted identity header
+capiss --> opa : policy query
+capiss --> redis : budget / registry / mint marker
+capiss --> capiss_keys : sign tokens
 
-toolb_agent --> toolb_envoy : mTLS
-toolb_rogue --> toolb_envoy : mTLS negative proof
-toolb_envoy --> toolb_app : internal HTTP + trusted identity
-toolb_app --> redis_toolb : spend/rate + discovery writes
+agent_a --> toolb_envoy : mTLS
+rogue -[#B34B4B,dashed]-> toolb_envoy : negative proof
+toolb_envoy --> toolb : trusted identity header
+toolb --> redis : request budget / discovery
 
-jira_agent -[#b98922,dashed]-> jira_envoy : mTLS issue read / description write
-jira_rogue -[#b98922,dashed]-> jira_envoy : mTLS negative proof
-jira_envoy -[#b98922,dashed]-> jira_tool : internal HTTP + trusted identity
-jira_tool -[#b98922,dashed]-> redis_jira : budget/rate
-jira_tool -[#b98922,dashed]-> jira_mock : authorized upstream only
-jira_tool -[#b98922,dashed]-> jira_cloud : optional live mode
+agent_a -[#B98922]-> jira_envoy : M4a/M4b Jira read/write
+rogue -[#B34B4B,dashed]-> jira_envoy : stolen-token negative proof
+jira_envoy -[#B98922]-> jira_tool : trusted identity header
+jira_tool -[#B98922]-> redis : consume before upstream
+jira_tool -[#B98922]-> jira_mock : mock default
+jira_tool -[#B98922,dashed]-> jira_cloud : explicit live mode
 
-note bottom of jira_envoy
-  Edge clients do not route directly to jira-tool or jira-mock.
+codex -[#6B4CC2]-> launcher : stdio MCP
+launcher -[#6B4CC2]-> adapter : docker compose exec -T
+adapter -[#6B4CC2]-> jiramcp_envoy : mTLS protected request
+rogue -[#B34B4B,dashed]-> jiramcp_envoy : stolen-token negative proof
+jiramcp_envoy -[#6B4CC2]-> jiramcp_gateway : trusted identity header
+jiramcp_gateway -[#6B4CC2]-> redis : consume before upstream
+jiramcp_gateway -[#6B4CC2]-> jiramcp_mock : mock default
+jiramcp_gateway -[#6B4CC2,dashed]-> jira_cloud : explicit live mode
+
+note bottom of app
+  PEPs enforce token, Envoy identity, action, resource, project,
+  payload shape, and budget/rate before upstream use.
 end note
-note bottom of jira_tool
-  Project mismatch and read-token writes deny before upstream use.
+
+note bottom of upstream
+  Upstream Jira data can be broad IAM/NAS.
+  Protected M4 and M5 paths authorize IAM only.
 end note
-note bottom of jira_mock
-  Mock has IAM and NAS data but is upstream-only and not host-exposed.
+
+note bottom of callers
+  Host .env access is outside the runtime boundary.
+  The adapter container itself has no Jira credential.
 end note
 
 legend bottom
-  Jira networks and arrows show the implemented M4a/M4b runtime path.
+  Blue/green: base capiss and tool-b paths
+  Brown: M4a/M4b Jira tool authority
+  Purple: M5 Codex Jira MCP authority
+  Dashed: negative proof or explicit live mode path
 endlegend
 @enduml

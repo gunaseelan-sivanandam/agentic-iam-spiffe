@@ -38,10 +38,10 @@ Detailed test specs:
   - runtime evidence under `artifacts/rogue-tests/`
 - Internal implementation artifacts such as `DD-*`, `UT-*`, source helpers, and local test doubles are engineering controls for design and regression. They are not the primary proof source for externally visible behavior.
 - Security-relevant hidden state or governance logic must be authored before implementation through:
-  - architecture state inventory
-  - slice ADR/DDR
-  - implementation contract
+  - the slice `plan.md`
+  - `docs/architecture.md` when the runtime architecture or state inventory changes
 - Slice review bundles live under `docs/slices/`.
+  - New Phase 1 workflow: run `grill-me`, then author `plan.md`, then author `test_plan.md`.
 
 ## What exists today
 Most production systems already separate authentication and authorization.
@@ -64,6 +64,7 @@ This lab is a small, reproducible playground for separating “who is calling”
 - M4 governance truth slice for tool-b: shared chain/depth enforcement contract used by both `capiss` and `tool-b`, chain metadata, derived depth checks (`N=3`), spend/rate enforcement in Redis per `root_token_id`, discovery-registry-gated resource minting, and fail-closed enforcement on trusted-store errors.
 - M4a Jira project access: `jira-tool` holds the broad upstream Jira/mock credential, while `capiss`, OPA, and `jira-tool` narrow agent authority to the OPA-allowed `IAM` project.
 - M4b Jira description write: the same Jira boundary now supports a narrow `act=write` authority for `jira-tool:/project:IAM`; write tokens can read and replace issue descriptions in that project, while read tokens and non-allowed project inputs are denied before upstream use.
+- M5 Codex Jira MCP Slice 1: Codex reaches Jira only through a local MCP launcher and `codex-jira-mcp-adapter`; the adapter mints `aud=jira-mcp-gateway` tokens and calls a separate `jira-mcp-gateway` through `jira-mcp-envoy` for bounded IAM project summaries and IAM story creation.
 - Evidence-based security tests built around a Premise / Exercise / Outcome structure, with artifacts captured so failures can be inspected and false-green tests are less likely.
 
 #### Planned (not implemented yet, goals may evolve):
@@ -85,14 +86,14 @@ This lab is a small, reproducible playground for separating “who is calling”
 ### Component-level architecture
 
 The authoritative component diagram is embedded in `docs/architecture.md` and backed by `docs/only_arch.puml`.
-It includes the current M4 runtime components plus the M4a/M4b Jira connector components.
+It includes the current M4 runtime components, the M4a/M4b Jira connector components, and the M5 Codex Jira MCP adapter/gateway components.
 
 ![Component architecture diagram](docs/only_arch.svg)
 
 ### Network segmentation and trust boundaries
 
 The authoritative network diagram is embedded in `docs/architecture.md` and backed by `docs/architecture_diagram.puml`.
-It includes the current M4 networks plus the M4a/M4b `jiratool_edge_net` and `jiratool_app_net` segmentation.
+It includes the current M4 networks, the M4a/M4b Jira segmentation, and the M5 Codex Jira MCP edge/app/upstream boundaries.
 
 ![Network segmentation diagram](docs/architecture_diagram.svg)
 
@@ -140,6 +141,13 @@ It includes the current M4 networks plus the M4a/M4b `jiratool_edge_net` and `ji
  - Agent-facing writes accept only `{"description":"..."}`; `jira-tool` converts the plain text to Jira Cloud REST v3 ADF before upstream use.
  - Read tokens cannot write, NAS write minting is denied by policy, and NAS writes attempted with an IAM write token are denied by `jira-tool` before Jira/mock sees them.
  - The deterministic proof uses `jira-mock`; live smoke proves the same behavior against Jira Cloud and intentionally leaves the allowed issue description changed.
+
+### Milestone 5 — Codex Jira MCP Slice 1
+ - Adds a real Codex-facing MCP adapter with exactly two tools: `read_project_summary` and `create_story`.
+ - Uses a new authority family: `aud=jira-mcp-gateway`, `act=read_project_summary|create_story`, and `res=jira-mcp:/project:IAM`.
+ - Keeps Codex separated from Jira API credentials, capiss bearer tokens, direct Jira URLs, and arbitrary Jira REST operations.
+ - Routes adapter calls through `capability-issuer-envoy` and `jira-mcp-envoy`; `jira-mcp-gateway` is the request-time PEP and the only M5 component that calls `jira-mcp-mock` or live Jira.
+ - Deterministic proof defaults to `jira-mcp-mock`; live smoke is explicit opt-in only.
 
 ## Planned Milestones
  - Note: Milestones 5–8 are exploratory and may evolve as architectural choices are validated.
@@ -204,6 +212,18 @@ JIRA_UPSTREAM_MODE=live docker compose --env-file .env \
 make jira-live-smoke
 ```
 The live smoke first proves the direct Jira API credential can read both the allowed `IAM-*` issue and the non-allowed `NAS-*` issue, then proves the protected `jira-tool` path narrows that authority. The script fails if the running `jira-tool` is not in live mode and intentionally leaves the allowed issue description updated.
+
+Run only the M5 Codex Jira MCP deterministic E2E suite:
+```bash
+docker compose --profile tests -f compose/spiffe.compose.yml run --rm \
+  -e TEST_MILESTONES=m5 rogue-tests
+```
+
+Example local Codex MCP command after the stack is already running:
+```bash
+scripts/codex_jira_mcp.sh
+```
+The launcher only bridges stdio into the running `codex-jira-mcp-adapter` container. It does not start, rebuild, or tear down the Docker/SPIFFE stack.
 
 M4 root mint example (`agent-a` mTLS identity):
 ```bash

@@ -73,6 +73,10 @@ services:
       - capability-issuer-no-opa-envoy
       - jira-tool-envoy
       - jira-mock
+      - codex-jira-mcp-adapter
+      - jira-mcp-envoy
+      - jira-mcp-gateway
+      - jira-mcp-mock
       - agent-a
       - rogue
     volumes:
@@ -89,6 +93,8 @@ services:
       - capiss_edge_net
       - jiratool_edge_net
       - jiratool_upstream_net
+      - jiramcp_edge_net
+      - jiramcp_upstream_net
     profiles:
       - tests
 
@@ -184,6 +190,80 @@ services:
       - jiratool_edge_net
       - jiratool_app_net
 
+  jira-mcp-mock:
+    build:
+      context: ..
+      dockerfile: services/jira-mcp-mock/Dockerfile
+    container_name: spiffe-jira-mcp-mock
+    networks:
+      - jiramcp_app_net
+      - jiramcp_upstream_net
+
+  jira-mcp-gateway:
+    build:
+      context: ..
+      dockerfile: services/jira-mcp-gateway/Dockerfile
+    container_name: spiffe-jira-mcp-gateway
+    labels:
+      spiffe.workload: "jira-mcp-gateway"
+    environment:
+      CAPISS_PUBLIC_KEY_PATH: /var/lib/capiss/keys/root_public_key.b64
+      REDIS_URL: redis://redis:6379/0
+      M4_MAX_DEPTH: "3"
+      M4_RATE_LIMIT: "20"
+      M4_RATE_WINDOW_SECONDS: "10"
+      M4_REQUEST_COST: "1"
+      JIRA_MCP_UPSTREAM_MODE: ${JIRA_MCP_UPSTREAM_MODE:-mock}
+      JIRA_MCP_MOCK_BASE_URL: http://jira-mcp-mock:8080
+      JIRA_BASE_URL: ${JIRA_BASE_URL:-}
+      JIRA_EMAIL: ${JIRA_EMAIL:-}
+      JIRA_API_TOKEN: ${JIRA_API_TOKEN:-}
+    volumes:
+      - ../capiss_keys:/var/lib/capiss/keys:ro
+      - ../spire/agent:/run/spire/agent:ro
+    depends_on:
+      - spire-agent
+      - redis
+      - jira-mcp-mock
+    networks:
+      - jiramcp_app_net
+
+  jira-mcp-envoy:
+    build: ../services/jira-mcp-envoy
+    container_name: spiffe-jira-mcp-envoy
+    labels:
+      spiffe.workload: "jira-mcp-envoy"
+    depends_on:
+      - spire-agent
+      - jira-mcp-gateway
+    ports:
+      - "11443:11443"
+    volumes:
+      - ../spire/agent:/run/spire/agent:ro
+    networks:
+      - jiramcp_edge_net
+      - jiramcp_app_net
+
+  codex-jira-mcp-adapter:
+    build:
+      context: ..
+      dockerfile: services/codex-jira-mcp-adapter/Dockerfile
+    container_name: spiffe-codex-jira-mcp-adapter
+    labels:
+      spiffe.workload: "codex-jira-mcp-adapter"
+    environment:
+      CAPABILITY_ISSUER_URL: https://capability-issuer-envoy:9443
+      JIRA_MCP_GATEWAY_URL: https://jira-mcp-envoy:11443
+    volumes:
+      - ../spire/agent:/run/spire/agent:ro
+    depends_on:
+      - spire-agent
+      - capability-issuer-envoy
+      - jira-mcp-envoy
+    networks:
+      - capiss_edge_net
+      - jiramcp_edge_net
+
   capability-issuer:
     build:
       context: ..
@@ -276,6 +356,7 @@ services:
       - capiss_app_net
       - toolb_app_net
       - jiratool_app_net
+      - jiramcp_app_net
 
   agent-a:
     build: ../agents/agent-a
@@ -313,6 +394,7 @@ services:
     environment:
       TOOL_B_URL: https://tool-b-envoy:8443
       JIRA_TOOL_URL: https://jira-tool-envoy:10443
+      JIRA_MCP_URL: https://jira-mcp-envoy:11443
     command: ["/app/rogue.sh"]
     volumes:
       - ../spire/agent:/run/spire/agent:ro
@@ -321,6 +403,7 @@ services:
       - toolb_edge_net
       - capiss_edge_net
       - jiratool_edge_net
+      - jiramcp_edge_net
     profiles:
       - clients
       - tests
@@ -333,3 +416,6 @@ networks:
   jiratool_edge_net: {}
   jiratool_app_net: {}
   jiratool_upstream_net: {}
+  jiramcp_edge_net: {}
+  jiramcp_app_net: {}
+  jiramcp_upstream_net: {}

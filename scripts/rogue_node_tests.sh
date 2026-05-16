@@ -66,6 +66,7 @@ RUN_M3=1
 RUN_M4=1
 RUN_M4A=1
 RUN_M4B=1
+RUN_M5=1
 
 if [ -n "${TEST_MILESTONES:-}" ]; then
   RUN_M1=0
@@ -75,6 +76,7 @@ if [ -n "${TEST_MILESTONES:-}" ]; then
   RUN_M4=0
   RUN_M4A=0
   RUN_M4B=0
+  RUN_M5=0
   for token in $(printf '%s' "$TEST_MILESTONES" | tr ',' ' '); do
     case "$token" in
       m1|M1) RUN_M1=1 ;;
@@ -84,6 +86,7 @@ if [ -n "${TEST_MILESTONES:-}" ]; then
       m4|M4) RUN_M4=1 ;;
       m4a|M4a|M4A) RUN_M4A=1 ;;
       m4b|M4b|M4B) RUN_M4B=1 ;;
+      m5|M5) RUN_M5=1 ;;
     esac
   done
 fi
@@ -574,6 +577,14 @@ resolve_host_ip() {
         container="spiffe-jira-mock"
         network_suffix="jiratool_upstream_net"
         ;;
+      jira-mcp-envoy)
+        container="spiffe-jira-mcp-envoy"
+        network_suffix="jiramcp_edge_net"
+        ;;
+      jira-mcp-mock)
+        container="spiffe-jira-mcp-mock"
+        network_suffix="jiramcp_upstream_net"
+        ;;
       *)
         container=""
         network_suffix=""
@@ -998,6 +1009,11 @@ CAPISS_AGENT_BUNDLE=""
 CAPISS_ROGUE_CERT=""
 CAPISS_ROGUE_KEY=""
 CAPISS_ROGUE_BUNDLE=""
+JIRAMCP_READY=0
+JIRAMCP_REASON=""
+JIRAMCP_ADAPTER_CERT=""
+JIRAMCP_ADAPTER_KEY=""
+JIRAMCP_ADAPTER_BUNDLE=""
 CAPISS_MINT_URL="https://capability-issuer-envoy:9443/capabilities/mint"
 CAPISS_ROOT_MINT_URL="https://capability-issuer-envoy:9443/capabilities/root-mint"
 CAPISS_RESOURCE_MINT_URL="https://capability-issuer-envoy:9443/capabilities/resource-mint"
@@ -1013,6 +1029,14 @@ JIRA_IAM_MINT_BODY='{"aud":"jira-tool","act":"read","res":"jira-tool:/project:IA
 JIRA_IAM_WRITE_MINT_BODY='{"aud":"jira-tool","act":"write","res":"jira-tool:/project:IAM"}'
 JIRA_NAS_MINT_BODY='{"aud":"jira-tool","act":"read","res":"jira-tool:/project:NAS"}'
 JIRA_NAS_WRITE_MINT_BODY='{"aud":"jira-tool","act":"write","res":"jira-tool:/project:NAS"}'
+JIRA_MCP_URL="https://jira-mcp-envoy:11443"
+JIRA_MCP_SUMMARY_URL="${JIRA_MCP_URL}/mcp/jira/project-summary"
+JIRA_MCP_STORIES_URL="${JIRA_MCP_URL}/mcp/jira/stories"
+JIRA_MCP_MOCK_URL="http://jira-mcp-mock:8080"
+JIRA_MCP_IAM_SUMMARY_MINT_BODY='{"aud":"jira-mcp-gateway","act":"read_project_summary","res":"jira-mcp:/project:IAM"}'
+JIRA_MCP_IAM_CREATE_MINT_BODY='{"aud":"jira-mcp-gateway","act":"create_story","res":"jira-mcp:/project:IAM"}'
+JIRA_MCP_NAS_SUMMARY_MINT_BODY='{"aud":"jira-mcp-gateway","act":"read_project_summary","res":"jira-mcp:/project:NAS"}'
+JIRA_MCP_UNSUPPORTED_MINT_BODY='{"aud":"jira-mcp-gateway","act":"update_story","res":"jira-mcp:/project:IAM"}'
 
 ensure_toolb_material() {
   if [ "$TOOLB_READY" -eq 1 ]; then
@@ -1148,6 +1172,35 @@ ensure_capiss_material() {
   return 0
 }
 
+ensure_jiramcp_material() {
+  if [ "$JIRAMCP_READY" -eq 1 ]; then
+    ev_copy_if_exists "${JIRAMCP_ADAPTER_CERT:-}" "codex-jira-mcp-adapter_svid.pem"
+    return 0
+  fi
+  if [ "$JIRAMCP_READY" -eq -1 ]; then
+    set_reason "$JIRAMCP_REASON"
+    return 1
+  fi
+
+  tmpdir="/tmp/jiramcp_material"
+  rm -rf "$tmpdir"
+  mkdir -p "$tmpdir"
+
+  if ! prepare_client_material "codex-jira-mcp-adapter" "$tmpdir"; then
+    JIRAMCP_READY=-1
+    JIRAMCP_REASON="$FAIL_REASON"
+    set_reason "$FAIL_REASON"
+    return 1
+  fi
+  JIRAMCP_ADAPTER_CERT="$CLIENT_CERT"
+  JIRAMCP_ADAPTER_KEY="$CLIENT_KEY"
+  JIRAMCP_ADAPTER_BUNDLE="$CLIENT_BUNDLE"
+
+  JIRAMCP_READY=1
+  ev_copy_if_exists "${JIRAMCP_ADAPTER_CERT:-}" "codex-jira-mcp-adapter_svid.pem"
+  return 0
+}
+
 ensure_toolb_envoy_ready() {
   if ! wait_dns "tool-b-envoy" 30; then
     return 1
@@ -1214,12 +1267,28 @@ ensure_jira_envoy_ready() {
   return 0
 }
 
+ensure_jira_mcp_envoy_ready() {
+  if ! wait_dns "jira-mcp-envoy" 30; then
+    return 1
+  fi
+  if ! wait_tcp "jira-mcp-envoy" "11443" 30; then
+    return 1
+  fi
+  JIRA_MCP_ENVOY_IP="$(wait_resolve_ip "jira-mcp-envoy" 30 || true)"
+  if [ -z "${JIRA_MCP_ENVOY_IP:-}" ]; then
+    set_reason "failed to resolve jira-mcp-envoy IP"
+    return 1
+  fi
+  return 0
+}
+
 expected_spiffe_for_host() {
   case "$1" in
     capability-issuer-envoy) printf '%s\n' 'spiffe://example.org/capability-issuer-envoy' ;;
     capability-issuer-no-opa-envoy) printf '%s\n' 'spiffe://example.org/capability-issuer-no-opa-envoy' ;;
     tool-b-envoy) printf '%s\n' 'spiffe://example.org/tool-b-envoy' ;;
     jira-tool-envoy) printf '%s\n' 'spiffe://example.org/jira-tool-envoy' ;;
+    jira-mcp-envoy) printf '%s\n' 'spiffe://example.org/jira-mcp-envoy' ;;
     *) return 1 ;;
   esac
 }
@@ -1243,6 +1312,10 @@ record_verified_identity() {
     jira-tool-envoy)
       printf '%s' "$result" >"$EVDIR/verified_jiratool_result.txt" 2>/dev/null || true
       printf '%s' "$spiffe_id" >"$EVDIR/verified_jiratool_spiffe_id.txt" 2>/dev/null || true
+      ;;
+    jira-mcp-envoy)
+      printf '%s' "$result" >"$EVDIR/verified_jiramcp_result.txt" 2>/dev/null || true
+      printf '%s' "$spiffe_id" >"$EVDIR/verified_jiramcp_spiffe_id.txt" 2>/dev/null || true
       ;;
   esac
 }
@@ -1530,6 +1603,82 @@ jira_mock_reset() {
 jira_mock_request_log() {
   out="$1"
   curl -sS "${JIRA_MOCK_URL}/__test__/requests" >"$out"
+}
+
+jira_mcp_mock_reset() {
+  curl -sS -X POST "${JIRA_MCP_MOCK_URL}/__test__/reset" >/dev/null
+}
+
+jira_mcp_mock_request_log() {
+  out="$1"
+  curl -sS "${JIRA_MCP_MOCK_URL}/__test__/requests" >"$out"
+}
+
+jira_mcp_mock_created() {
+  out="$1"
+  curl -sS "${JIRA_MCP_MOCK_URL}/__test__/created" >"$out"
+}
+
+jira_mcp_mock_breadth() {
+  out="$1"
+  curl -sS "${JIRA_MCP_MOCK_URL}/__test__/breadth" >"$out"
+}
+
+jira_mcp_mock_fail_next_create() {
+  curl -sS -X POST "${JIRA_MCP_MOCK_URL}/__test__/fail_next_create" >/dev/null
+}
+
+jira_mcp_mint_with_body_to_file() {
+  body="$1"
+  out="$2"
+  status_file="$3"
+  status="$(verified_https_request "$JIRAMCP_ADAPTER_CERT" "$JIRAMCP_ADAPTER_KEY" "$JIRAMCP_ADAPTER_BUNDLE" \
+    "$CAPISS_ROOT_MINT_URL" "POST" "$body" "" "$out")"
+  printf '%s' "$status" >"$status_file"
+}
+
+jira_mcp_request_to_file() {
+  token="$1"
+  url="$2"
+  body="$3"
+  out="$4"
+  status_file="$5"
+  status="$(verified_https_request "$JIRAMCP_ADAPTER_CERT" "$JIRAMCP_ADAPTER_KEY" "$JIRAMCP_ADAPTER_BUNDLE" \
+    "$url" "POST" "$body" "$token" "$out")"
+  printf '%s' "$status" >"$status_file"
+}
+
+jira_mcp_rogue_request_to_file() {
+  token="$1"
+  url="$2"
+  body="$3"
+  out="$4"
+  status_file="$5"
+  status="$(verified_https_request "$CAPISS_ROGUE_CERT" "$CAPISS_ROGUE_KEY" "$CAPISS_ROGUE_BUNDLE" \
+    "$url" "POST" "$body" "$token" "$out")"
+  printf '%s' "$status" >"$status_file"
+}
+
+mcp_launcher_message() {
+  message="$1"
+  out="$2"
+  err="$3"
+  (cd /repo && printf '%s\n' "$message" | COMPOSE_FILE=compose/spiffe.compose.yml scripts/codex_jira_mcp.sh >"$out" 2>"$err")
+}
+
+mcp_tool_call() {
+  tool="$1"
+  args_json="$2"
+  out="$3"
+  err="$4"
+  msg="$(jq -cn --arg tool "$tool" --argjson args "$args_json" '{jsonrpc:"2.0",id:1,method:"tools/call",params:{name:$tool,arguments:$args}}')"
+  mcp_launcher_message "$msg" "$out" "$err"
+}
+
+mcp_text_json_to_file() {
+  in_file="$1"
+  out_file="$2"
+  jq -r '.result.content[0].text' "$in_file" | jq . >"$out_file"
 }
 
 sanitize_token_response() {
@@ -3241,6 +3390,437 @@ M4B_T6_test() {
   return 0
 }
 
+m5_ready() {
+  ensure_capiss_material &&
+    ensure_jiramcp_material &&
+    ensure_capiss_envoy_ready &&
+    ensure_jira_mcp_envoy_ready
+}
+
+m5_mint_token_file() {
+  body="$1"
+  token_file="$2"
+  prefix="$3"
+  jira_mcp_mint_with_body_to_file "$body" "$EVDIR/${prefix}_mint.json" "$EVDIR/${prefix}_mint_status.txt"
+  assert_file_eq "$EVDIR/${prefix}_mint_status.txt" "200" || return 1
+  jq -r '.token' "$EVDIR/${prefix}_mint.json" >"$token_file"
+}
+
+M5_T1_test() {
+  begin_test_evidence "M5-T1" "mcp_launcher_session"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "adapter container is running" "container_running spiffe-codex-jira-mcp-adapter"
+  premise_guard "launcher uses docker compose exec -T" "grep -Fq 'exec -T' /repo/scripts/codex_jira_mcp.sh && ! grep -Eq 'compose .* up|--build' /repo/scripts/codex_jira_mcp.sh"
+  exercise_guard "list tools through launcher" \
+    "mcp_launcher_message '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}' \"$EVDIR/tools.json\" \"$EVDIR/launcher.err\""
+  outcome_guard "stdout is valid MCP JSON" "jq -e '.jsonrpc==\"2.0\" and .result.tools' \"$EVDIR/tools.json\" >/dev/null"
+  outcome_guard "diagnostics are stderr-only" "! grep -Eq 'codex-jira|adapter|ERROR' \"$EVDIR/tools.json\""
+  return 0
+}
+
+M5_T2_test() {
+  begin_test_evidence "M5-T2" "mcp_tool_surface"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "adapter container is running" "container_running spiffe-codex-jira-mcp-adapter"
+  exercise_guard "list MCP tools" "mcp_launcher_message '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}' \"$EVDIR/tools.json\" \"$EVDIR/launcher.err\""
+  outcome_guard "only approved tools are exposed" \
+    "jq -e '[.result.tools[].name] == [\"read_project_summary\",\"create_story\"]' \"$EVDIR/tools.json\" >/dev/null"
+  return 0
+}
+
+M5_T3_test() {
+  begin_test_evidence "M5-T3" "iam_summary_success"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path and mock ready" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "call IAM project summary through MCP" \
+    "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/summary.json\""
+  exercise_guard "capture mock request log" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "IAM summary succeeds" "jq -e '.ok==true and .project.key==\"IAM\" and (.issues|length)>0 and (.epics|length)>0' \"$EVDIR/summary.json\" >/dev/null"
+  outcome_guard "mock called for summary" "jq -e '.requests[] | select(.path==\"/rest/api/3/project/IAM/summary\" and .gateway_marker==\"jira-mcp-gateway\")' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T4_test() {
+  begin_test_evidence "M5-T4" "summary_allowed_fields"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready" "m5_ready"
+  exercise_guard "call summary" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/summary.json\""
+  outcome_guard "hidden Jira fields omitted" \
+    "! grep -Eiq 'description|comments|assignee|sprint|board|raw_jql|atlassian.net|Bearer|token' \"$EVDIR/summary.json\""
+  return 0
+}
+
+M5_T5_test() {
+  begin_test_evidence "M5-T5" "summary_bounds"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "mock has excess IAM data" "jira_mcp_mock_breadth \"$EVDIR/breadth.json\" && jq -e '.iam_count > 75' \"$EVDIR/breadth.json\" >/dev/null"
+  exercise_guard "call summary" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/summary.json\""
+  outcome_guard "summary counts are bounded" "jq -e '(.issues|length)<=50 and (.epics|length)<=25' \"$EVDIR/summary.json\" >/dev/null"
+  return 0
+}
+
+M5_T6_test() {
+  begin_test_evidence "M5-T6" "nas_summary_mint_denied"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "call NAS summary through adapter" "mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/error.json\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "mint denied locally to Codex" "jq -e '.ok==false and .reason==\"mint_denied\"' \"$EVDIR/error.json\" >/dev/null"
+  outcome_guard "gateway/mock not called" "jq -e '.requests|length==0' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T7_test() {
+  begin_test_evidence "M5-T7" "iam_story_create"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "create IAM story through MCP" \
+    "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"M5 story\",\"description\":\"M5 description\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/create.json\""
+  exercise_guard "capture created stories" "jira_mcp_mock_created \"$EVDIR/created.json\""
+  outcome_guard "create returns bounded metadata" "jq -e '.ok==true and .project_key==\"IAM\" and .issue_type==\"Story\" and (.key|startswith(\"IAM-\")) and (has(\"fields\")|not)' \"$EVDIR/create.json\" >/dev/null"
+  outcome_guard "mock stored one story" "jq -e '.created|length==1' \"$EVDIR/created.json\" >/dev/null"
+  return 0
+}
+
+M5_T8_test() {
+  begin_test_evidence "M5-T8" "iam_story_create_ac"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "create IAM story with acceptance criteria" \
+    "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"M5 AC story\",\"description\":\"M5 description\",\"acceptance_criteria\":[\"AC one\",\"AC two\"]}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/create.json\""
+  exercise_guard "capture created stories" "jira_mcp_mock_created \"$EVDIR/created.json\""
+  outcome_guard "acceptance criteria folded into ADF description" "jq -e '.created[0].fields.description.content[].content[]?.text | select(test(\"Acceptance Criteria|AC one|AC two\"))' \"$EVDIR/created.json\" >/dev/null"
+  return 0
+}
+
+M5_T9_test() {
+  begin_test_evidence "M5-T9" "iam_story_create_epic"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "create IAM story with valid epic" \
+    "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"M5 epic story\",\"description\":\"M5 description\",\"epic_key\":\"IAM-101\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/create.json\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "create linked to epic" "jq -e '.ok==true and .epic_key==\"IAM-101\"' \"$EVDIR/create.json\" >/dev/null"
+  outcome_guard "epic checked before create" "jq -e '[.requests[].path] | index(\"/rest/api/3/issue/IAM-101\") < index(\"/rest/api/3/issue\")' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T10_test() {
+  begin_test_evidence "M5-T10" "invalid_epic_no_create"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "attempt create with non-Epic IAM issue" \
+    "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"bad epic\",\"description\":\"d\",\"epic_key\":\"IAM-900\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/error.json\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "epic invalid returned" "jq -e '.ok==false and .reason==\"epic_invalid\"' \"$EVDIR/error.json\" >/dev/null"
+  outcome_guard "no create request occurred" "jq -e '[.requests[] | select(.method==\"POST\" and .path==\"/rest/api/3/issue\")] | length==0' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T11_test() {
+  begin_test_evidence "M5-T11" "nas_create_mint_denied"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "attempt NAS create through MCP" "mcp_tool_call create_story '{\"project_key\":\"NAS\",\"summary\":\"NAS\",\"description\":\"d\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/error.json\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "mint denied" "jq -e '.ok==false and .reason==\"mint_denied\"' \"$EVDIR/error.json\" >/dev/null"
+  outcome_guard "mock untouched" "jq -e '.requests|length==0' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T12_test() {
+  begin_test_evidence "M5-T12" "iam_token_nas_payload_denied"
+  echo "EVIDENCE_DIR=$EVDIR"
+  token_file="$EVDIR/create_token.txt"
+  premise_guard "M5 path ready and create token minted" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$token_file' create"
+  exercise_guard "call create endpoint with NAS payload" "token=\"\$(cat '$token_file')\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"NAS\",\"summary\":\"x\",\"description\":\"d\"}' \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "gateway denies project mismatch" "assert_file_eq \"$EVDIR/status.txt\" \"403\" && jq -e '.reason==\"project_mismatch\"' \"$EVDIR/response.json\" >/dev/null"
+  outcome_guard "no upstream call" "jq -e '.requests|length==0' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T13_test() {
+  begin_test_evidence "M5-T13" "cross_project_epic_denied"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "attempt create with NAS epic" "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":\"d\",\"epic_key\":\"NAS-101\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/error.json\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "cross-project epic denied" "jq -e '.reason==\"epic_invalid\"' \"$EVDIR/error.json\" >/dev/null"
+  outcome_guard "no upstream call for cross-project epic" "jq -e '.requests|length==0' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T14_test() {
+  begin_test_evidence "M5-T14" "arbitrary_fields_rejected"
+  echo "EVIDENCE_DIR=$EVDIR"
+  token_file="$EVDIR/create_token.txt"
+  premise_guard "M5 path ready and create token minted" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$token_file' create"
+  exercise_guard "send arbitrary assignee field to gateway" "token=\"\$(cat '$token_file')\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":\"d\",\"assignee\":\"bad\"}' \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "payload rejected" "assert_file_eq \"$EVDIR/status.txt\" \"400\" && jq -e '.reason==\"payload_invalid\"' \"$EVDIR/response.json\" >/dev/null"
+  outcome_guard "no upstream call" "jq -e '.requests|length==0' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T15_test() {
+  begin_test_evidence "M5-T15" "raw_adf_rejected"
+  echo "EVIDENCE_DIR=$EVDIR"
+  token_file="$EVDIR/create_token.txt"
+  premise_guard "M5 path ready and create token minted" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$token_file' create"
+  exercise_guard "send raw ADF description" "token=\"\$(cat '$token_file')\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":{\"type\":\"doc\"}}' \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "raw ADF rejected" "assert_file_eq \"$EVDIR/status.txt\" \"400\" && jq -e '.reason==\"payload_invalid\"' \"$EVDIR/response.json\" >/dev/null"
+  outcome_guard "no upstream call" "jq -e '.requests|length==0' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T16_test() {
+  begin_test_evidence "M5-T16" "adapter_forwards_nas_to_capiss"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "call NAS summary through adapter" "mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/error.json\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "adapter reports capiss mint denial" "jq -e '.ok==false and .reason==\"mint_denied\"' \"$EVDIR/error.json\" >/dev/null"
+  outcome_guard "adapter stderr records mint_denied, not local project denial" "grep -Fq 'mint_denied' \"$EVDIR/adapter.err\" && ! grep -Fq 'local_authorization' \"$EVDIR/adapter.err\""
+  outcome_guard "upstream not called" "jq -e '.requests|length==0' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T17_test() {
+  begin_test_evidence "M5-T17" "unsupported_action_denied"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 capiss material ready" "m5_ready"
+  exercise_guard "attempt unsupported M5 action mint" "jira_mcp_mint_with_body_to_file '$JIRA_MCP_UNSUPPORTED_MINT_BODY' \"$EVDIR/mint.json\" \"$EVDIR/status.txt\""
+  outcome_guard "unsupported action denied" "assert_file_eq \"$EVDIR/status.txt\" \"403\" && jq -e '.reason==\"policy\"' \"$EVDIR/mint.json\" >/dev/null"
+  return 0
+}
+
+M5_T18_test() {
+  begin_test_evidence "M5-T18" "old_jira_authority_separated"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "capiss and M5 gateway ready" "m5_ready"
+  exercise_guard "adapter cannot mint old jira-tool resource for M5 subject" "jira_mcp_mint_with_body_to_file '{\"aud\":\"jira-tool\",\"act\":\"read\",\"res\":\"jira-tool:/project:IAM\"}' \"$EVDIR/mint.json\" \"$EVDIR/status.txt\""
+  outcome_guard "old authority denied for adapter" "assert_file_eq \"$EVDIR/status.txt\" \"403\" && jq -e '.reason==\"policy\"' \"$EVDIR/mint.json\" >/dev/null"
+  return 0
+}
+
+M5_T19_test() {
+  begin_test_evidence "M5-T19" "m4_jira_not_disturbed"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M4 Jira policy entries still present" "grep -Fq 'aud == \"jira-tool\"' /repo/services/opa/policy.rego && grep -Fq 'jira-tool:/project:IAM' /repo/services/opa/policy.rego"
+  exercise_guard "M4 jira-tool health remains reachable" "ensure_capiss_material && ensure_jira_envoy_ready"
+  outcome_guard "M4 jira-tool envoy identity verified" "test -n \"${JIRA_ENVOY_IP:-}\""
+  return 0
+}
+
+M5_T20_test() {
+  begin_test_evidence "M5-T20" "endpoint_bound_action"
+  echo "EVIDENCE_DIR=$EVDIR"
+  read_token="$EVDIR/read_token.txt"
+  create_token="$EVDIR/create_token.txt"
+  premise_guard "M5 tokens minted" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_SUMMARY_MINT_BODY' '$read_token' read && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$create_token' create"
+  exercise_guard "use read token on create endpoint" "token=\"\$(cat '$read_token')\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":\"d\"}' \"$EVDIR/read_on_create.json\" \"$EVDIR/read_on_create_status.txt\""
+  exercise_guard "use create token on summary endpoint" "token=\"\$(cat '$create_token')\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_SUMMARY_URL\" '{\"project_key\":\"IAM\"}' \"$EVDIR/create_on_read.json\" \"$EVDIR/create_on_read_status.txt\""
+  outcome_guard "endpoint/action mismatches denied" "jq -e '.reason==\"act_mismatch\"' \"$EVDIR/read_on_create.json\" >/dev/null && jq -e '.reason==\"act_mismatch\"' \"$EVDIR/create_on_read.json\" >/dev/null"
+  return 0
+}
+
+M5_T21_test() {
+  begin_test_evidence "M5-T21" "audience_mismatch_denied"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 capiss material ready" "m5_ready"
+  exercise_guard "attempt wrong-audience M5 resource mint" "jira_mcp_mint_with_body_to_file '{\"aud\":\"jira-tool\",\"act\":\"read_project_summary\",\"res\":\"jira-mcp:/project:IAM\"}' \"$EVDIR/mint.json\" \"$EVDIR/status.txt\""
+  outcome_guard "wrong audience/resource family denied" "assert_file_any \"$EVDIR/status.txt\" \"400\" \"403\""
+  return 0
+}
+
+M5_T22_test() {
+  begin_test_evidence "M5-T22" "stolen_token_subject_mismatch"
+  echo "EVIDENCE_DIR=$EVDIR"
+  token_file="$EVDIR/read_token.txt"
+  premise_guard "M5 read token minted" "m5_ready && ensure_capiss_material && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_SUMMARY_MINT_BODY' '$token_file' read"
+  exercise_guard "rogue presents adapter token to gateway" "token=\"\$(cat '$token_file')\"; jira_mcp_rogue_request_to_file \"\$token\" \"$JIRA_MCP_SUMMARY_URL\" '{\"project_key\":\"IAM\"}' \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
+  outcome_guard "subject mismatch denied" "assert_file_eq \"$EVDIR/status.txt\" \"403\" && jq -e '.reason==\"subject_mismatch\"' \"$EVDIR/response.json\" >/dev/null"
+  return 0
+}
+
+M5_T23_test() {
+  begin_test_evidence "M5-T23" "invalid_token_denied"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 gateway ready" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "call gateway with invalid token" "jira_mcp_request_to_file 'not-a-token' \"$JIRA_MCP_SUMMARY_URL\" '{\"project_key\":\"IAM\"}' \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "invalid token denied" "assert_file_eq \"$EVDIR/status.txt\" \"401\" && jq -e '.reason==\"token_invalid\"' \"$EVDIR/response.json\" >/dev/null"
+  outcome_guard "upstream not called" "jq -e '.requests|length==0' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T24_test() {
+  begin_test_evidence "M5-T24" "direct_app_bypass_unavailable"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 edge path reachable" "m5_ready"
+  exercise_guard "attempt direct gateway app from test harness" "set +e; curl -sS --max-time 2 http://jira-mcp-gateway:8080/health >\"$EVDIR/direct_gateway.out\" 2>&1; rc=\$?; set -e; echo \$rc >\"$EVDIR/direct_gateway_rc.txt\""
+  outcome_guard "direct app path not available from edge/test context" "rc=\$(cat \"$EVDIR/direct_gateway_rc.txt\"); [ \"\$rc\" -ne 0 ] && grep -Eiq '(Could not resolve|timed out|No route|Failed to connect)' \"$EVDIR/direct_gateway.out\""
+  return 0
+}
+
+M5_T25_test() {
+  begin_test_evidence "M5-T25" "only_gateway_calls_mock"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "run allowed and denied MCP calls" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/iam.json\" \"$EVDIR/iam.err\"; mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/nas.json\" \"$EVDIR/nas.err\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "all mock requests carry gateway marker" "jq -e '(.requests|length)>0 and all(.requests[]; .gateway_marker==\"jira-mcp-gateway\")' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T26_test() {
+  begin_test_evidence "M5-T26" "mcp_responses_no_tokens"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready" "m5_ready"
+  exercise_guard "call summary and create" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/summary_mcp.json\" \"$EVDIR/summary.err\"; mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":\"d\"}' \"$EVDIR/create_mcp.json\" \"$EVDIR/create.err\""
+  outcome_guard "Codex-visible stdout contains no bearer token material" "! grep -Eiq 'Bearer |token_type|\"token\"|Biscuit|JIRA_API_TOKEN' \"$EVDIR/summary_mcp.json\" \"$EVDIR/create_mcp.json\""
+  return 0
+}
+
+M5_T27_test() {
+  begin_test_evidence "M5-T27" "adapter_logs_no_tokens"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready" "m5_ready"
+  exercise_guard "call summary and capture adapter stderr" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/summary_mcp.json\" \"$EVDIR/adapter.err\""
+  outcome_guard "adapter stderr contains metadata but no bearer token" "grep -Fq 'adapter_decision' \"$EVDIR/adapter.err\" && ! grep -Eiq 'Bearer |\"token\"|token_type|Biscuit' \"$EVDIR/adapter.err\""
+  return 0
+}
+
+M5_T28_test() {
+  begin_test_evidence "M5-T28" "adapter_env_no_jira_secret"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "adapter container running" "container_running spiffe-codex-jira-mcp-adapter"
+  exercise_guard "capture adapter environment" "docker exec spiffe-codex-jira-mcp-adapter env | sort >\"$EVDIR/adapter_env.txt\""
+  outcome_guard "adapter has no Jira credential env" "! grep -E 'JIRA_API_TOKEN|JIRA_EMAIL|JIRA_BASE_URL' \"$EVDIR/adapter_env.txt\""
+  return 0
+}
+
+M5_T30_test() {
+  begin_test_evidence "M5-T30" "upstream_header_stripping"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "create story through gateway" "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"header\",\"description\":\"d\"}' \"$EVDIR/create_mcp.json\" \"$EVDIR/adapter.err\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "mock did not receive Authorization header in mock mode" "jq -e 'all(.requests[]; .authorization_present==false)' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T31_test() {
+  begin_test_evidence "M5-T31" "summary_budget_governance"
+  echo "EVIDENCE_DIR=$EVDIR"
+  token_file="$EVDIR/read_token.txt"
+  premise_guard "M5 read token minted" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_SUMMARY_MINT_BODY' '$token_file' read"
+  exercise_guard "use same summary token until budget exhausted" "token=\"\$(cat '$token_file')\"; : >\"$EVDIR/statuses.txt\"; i=1; while [ \$i -le 11 ]; do jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_SUMMARY_URL\" '{\"project_key\":\"IAM\"}' \"$EVDIR/resp_\$i.json\" \"$EVDIR/status_\$i.txt\"; cat \"$EVDIR/status_\$i.txt\" >>\"$EVDIR/statuses.txt\"; echo >>\"$EVDIR/statuses.txt\"; i=\$((i+1)); done"
+  outcome_guard "eleventh summary denied by budget" "test \"\$(grep -c '^200$' \"$EVDIR/statuses.txt\")\" -eq 10 && grep -Fxq '403' \"$EVDIR/status_11.txt\" && jq -e '.reason==\"budget_exhausted\"' \"$EVDIR/resp_11.json\" >/dev/null"
+  return 0
+}
+
+M5_T32_test() {
+  begin_test_evidence "M5-T32" "create_budget_before_upstream"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 ready and log baseline captured" "m5_ready && jira_mcp_mock_reset && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
+  exercise_guard "create story" "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"budget\",\"description\":\"d\"}' \"$EVDIR/create_mcp.json\" \"$EVDIR/adapter.err\""
+  exercise_guard "capture gateway logs" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; docker logs --since \"\$since\" spiffe-jira-mcp-gateway >\"$EVDIR/gateway.log\" 2>&1"
+  outcome_guard "gateway allow event has budget remaining and upstream create" "grep -F 'jiramcp_gateway_decision' \"$EVDIR/gateway.log\" | jq -e 'select(.decision==\"allow\" and .upstream_operation==\"story_create\" and (.budget_remaining|type)==\"number\")' >/dev/null"
+  return 0
+}
+
+M5_T33_test() {
+  begin_test_evidence "M5-T33" "budget_exhaustion_denies_create"
+  echo "EVIDENCE_DIR=$EVDIR"
+  token_file="$EVDIR/create_token.txt"
+  premise_guard "M5 create token minted" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$token_file' create"
+  exercise_guard "exhaust create token budget then attempt create" "token=\"\$(cat '$token_file')\"; i=1; while [ \$i -le 10 ]; do jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":\"d\"}' \"$EVDIR/create_\$i.json\" \"$EVDIR/status_\$i.txt\"; i=\$((i+1)); done; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":\"d\"}' \"$EVDIR/denied.json\" \"$EVDIR/denied_status.txt\""
+  outcome_guard "exhausted create denied before upstream" "assert_file_eq \"$EVDIR/denied_status.txt\" \"403\" && jq -e '.reason==\"budget_exhausted\"' \"$EVDIR/denied.json\" >/dev/null"
+  return 0
+}
+
+M5_T34_test() {
+  begin_test_evidence "M5-T34" "prevalidation_no_budget_spend"
+  echo "EVIDENCE_DIR=$EVDIR"
+  token_file="$EVDIR/create_token.txt"
+  premise_guard "M5 create token minted" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$token_file' create"
+  exercise_guard "send invalid payload before valid create" "token=\"\$(cat '$token_file')\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":{\"type\":\"doc\"}}' \"$EVDIR/invalid.json\" \"$EVDIR/invalid_status.txt\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"valid\",\"description\":\"d\"}' \"$EVDIR/valid.json\" \"$EVDIR/valid_status.txt\""
+  outcome_guard "invalid payload did not consume budget needed by valid create" "assert_file_eq \"$EVDIR/invalid_status.txt\" \"400\" && assert_file_eq \"$EVDIR/valid_status.txt\" \"201\""
+  return 0
+}
+
+M5_T35_test() {
+  begin_test_evidence "M5-T35" "upstream_failure_no_refund"
+  echo "EVIDENCE_DIR=$EVDIR"
+  token_file="$EVDIR/create_token.txt"
+  premise_guard "M5 create token minted and mock failure armed" "m5_ready && jira_mcp_mock_reset && jira_mcp_mock_fail_next_create && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$token_file' create"
+  exercise_guard "authorized create hits injected upstream failure" "token=\"\$(cat '$token_file')\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"fail\",\"description\":\"d\"}' \"$EVDIR/fail.json\" \"$EVDIR/fail_status.txt\""
+  outcome_guard "upstream error is standardized after spend" "assert_file_eq \"$EVDIR/fail_status.txt\" \"502\" && jq -e '.reason==\"upstream_error\"' \"$EVDIR/fail.json\" >/dev/null"
+  return 0
+}
+
+M5_T36_test() {
+  begin_test_evidence "M5-T36" "read_audit_correlation"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and log baseline captured" "m5_ready && jira_mcp_mock_reset && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
+  exercise_guard "call summary" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/summary.json\""
+  exercise_guard "capture logs" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; docker logs --since \"\$since\" spiffe-capability-issuer >\"$EVDIR/capiss.log\" 2>&1; docker logs --since \"\$since\" spiffe-jira-mcp-gateway >\"$EVDIR/gateway.log\" 2>&1"
+  outcome_guard "gateway read allow event present" "grep -F 'jiramcp_gateway_decision' \"$EVDIR/gateway.log\" | jq -e 'select(.decision==\"allow\" and .upstream_operation==\"project_summary\" and .aud==\"jira-mcp-gateway\" and .act==\"read_project_summary\")' >/dev/null"
+  outcome_guard "capiss M5 mint event present" "grep -F 'capiss_mint_decision' \"$EVDIR/capiss.log\" | jq -e 'select(.result==\"allow\" and .aud==\"jira-mcp-gateway\" and .act==\"read_project_summary\")' >/dev/null"
+  return 0
+}
+
+M5_T37_test() {
+  begin_test_evidence "M5-T37" "create_audit_correlation"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and log baseline captured" "m5_ready && jira_mcp_mock_reset && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
+  exercise_guard "create story" "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"audit\",\"description\":\"d\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/create.json\""
+  exercise_guard "capture gateway logs" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; docker logs --since \"\$since\" spiffe-jira-mcp-gateway >\"$EVDIR/gateway.log\" 2>&1"
+  outcome_guard "gateway create allow event present" "grep -F 'jiramcp_gateway_decision' \"$EVDIR/gateway.log\" | jq -e 'select(.decision==\"allow\" and .upstream_operation==\"story_create\" and .issue_key)' >/dev/null"
+  return 0
+}
+
+M5_T38_test() {
+  begin_test_evidence "M5-T38" "deny_decision_events"
+  echo "EVIDENCE_DIR=$EVDIR"
+  token_file="$EVDIR/create_token.txt"
+  premise_guard "M5 token and log baseline ready" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$token_file' create && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
+  exercise_guard "trigger payload deny" "token=\"\$(cat '$token_file')\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":{\"type\":\"doc\"}}' \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
+  exercise_guard "capture gateway logs" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; docker logs --since \"\$since\" spiffe-jira-mcp-gateway >\"$EVDIR/gateway.log\" 2>&1"
+  outcome_guard "deny decision event present" "grep -F 'jiramcp_gateway_decision' \"$EVDIR/gateway.log\" | jq -e 'select(.decision==\"deny\" and .reason_code==\"payload_invalid\")' >/dev/null"
+  return 0
+}
+
+M5_T39_test() {
+  begin_test_evidence "M5-T39" "standard_errors_no_existence_leak"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "mock proves NAS exists and M5 path ready" "jira_mcp_mock_breadth \"$EVDIR/breadth.json\" && jq -e '.projects | index(\"NAS\")' \"$EVDIR/breadth.json\" >/dev/null && m5_ready"
+  exercise_guard "attempt NAS summary" "mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/error.json\""
+  outcome_guard "standard local error has no upstream detail" "jq -e '.ok==false and .reason==\"mint_denied\" and (has(\"project\")|not) and (has(\"issues\")|not)' \"$EVDIR/error.json\" >/dev/null"
+  return 0
+}
+
+M5_T40_test() {
+  begin_test_evidence "M5-T40" "mock_breadth"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "jira-mcp-mock reachable" "wait_dns jira-mcp-mock 30"
+  exercise_guard "capture mock breadth" "jira_mcp_mock_breadth \"$EVDIR/breadth.json\""
+  outcome_guard "mock has IAM and NAS data" "jq -e '(.projects|sort)==[\"IAM\",\"NAS\"] and .iam_count>75 and .nas_count>=4' \"$EVDIR/breadth.json\" >/dev/null"
+  return 0
+}
+
+M5_T41_test() {
+  begin_test_evidence "M5-T41" "protected_path_narrows_mock"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "mock breadth and M5 path ready" "jira_mcp_mock_breadth \"$EVDIR/breadth.json\" && m5_ready && jira_mcp_mock_reset"
+  exercise_guard "allowed IAM and denied NAS through MCP" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/iam_mcp.json\" \"$EVDIR/iam.err\" && mcp_text_json_to_file \"$EVDIR/iam_mcp.json\" \"$EVDIR/iam.json\"; mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/nas_mcp.json\" \"$EVDIR/nas.err\" && mcp_text_json_to_file \"$EVDIR/nas_mcp.json\" \"$EVDIR/nas.json\""
+  outcome_guard "protected path allows IAM and denies NAS" "jq -e '.ok==true and .project.key==\"IAM\"' \"$EVDIR/iam.json\" >/dev/null && jq -e '.ok==false and .reason==\"mint_denied\"' \"$EVDIR/nas.json\" >/dev/null"
+  return 0
+}
+
 print_section "Milestone 1 - Server and agent connection and successful entry"
 if [ "$RUN_M1" -eq 1 ]; then
   TEST_PREFIX="M1"
@@ -3346,6 +3926,51 @@ if [ "$RUN_M4B" -eq 1 ]; then
   run_test "T4" "IAM write token cannot update NAS before upstream use" M4B_T4_test
   run_test "T5" "description writes reject malformed or overbroad bodies" M4B_T5_test
   run_test "T6" "Jira write audit trace reconstructs mint and use" M4B_T6_test
+fi
+
+print_section "Milestone 5 — Codex Jira MCP Slice 1"
+if [ "$RUN_M5" -eq 1 ]; then
+  TEST_PREFIX="M5"
+  run_test "T1" "MCP launcher starts adapter session" M5_T1_test
+  run_test "T2" "MCP tool surface is exactly Slice 1" M5_T2_test
+  run_test "T3" "IAM project summary succeeds" M5_T3_test
+  run_test "T4" "Summary response contains only allowed fields" M5_T4_test
+  run_test "T5" "Summary response is bounded" M5_T5_test
+  run_test "T6" "NAS project summary denies at capiss" M5_T6_test
+  run_test "T7" "IAM story creation succeeds" M5_T7_test
+  run_test "T8" "IAM story creation accepts criteria" M5_T8_test
+  run_test "T9" "IAM story creation accepts valid epic" M5_T9_test
+  run_test "T10" "Invalid same-project epic denies" M5_T10_test
+  run_test "T11" "NAS project story creation denies at capiss" M5_T11_test
+  run_test "T12" "IAM token with NAS payload denies" M5_T12_test
+  run_test "T13" "IAM token with NAS epic denies" M5_T13_test
+  run_test "T14" "Arbitrary create fields are rejected" M5_T14_test
+  run_test "T15" "Plain text only and raw ADF rejected" M5_T15_test
+  run_test "T16" "Adapter forwards NAS to capiss" M5_T16_test
+  run_test "T17" "Unsupported action cannot be minted" M5_T17_test
+  run_test "T18" "Old Jira tool authority is separate" M5_T18_test
+  run_test "T19" "M5 does not disturb existing jira-tool path" M5_T19_test
+  run_test "T20" "Endpoint-bound action is enforced" M5_T20_test
+  run_test "T21" "Audience mismatch denies" M5_T21_test
+  run_test "T22" "Stolen token subject mismatch denies" M5_T22_test
+  run_test "T23" "Invalid token denies" M5_T23_test
+  run_test "T24" "Direct app bypass is unavailable" M5_T24_test
+  run_test "T25" "Only gateway calls mock upstream" M5_T25_test
+  run_test "T26" "MCP responses contain no capiss tokens" M5_T26_test
+  run_test "T27" "Adapter logs contain no bearer tokens" M5_T27_test
+  run_test "T28" "Adapter environment has no Jira API key" M5_T28_test
+  run_test "T30" "Client auth headers are stripped upstream" M5_T30_test
+  run_test "T31" "Summary participates in budget governance" M5_T31_test
+  run_test "T32" "Create consumes budget before upstream" M5_T32_test
+  run_test "T33" "Budget exhaustion denies create" M5_T33_test
+  run_test "T34" "Pre-validation denials do not consume budget" M5_T34_test
+  run_test "T35" "Upstream create failure is not refunded" M5_T35_test
+  run_test "T36" "Read audit events correlate" M5_T36_test
+  run_test "T37" "Create audit events correlate" M5_T37_test
+  run_test "T38" "Deny paths produce final decision evidence" M5_T38_test
+  run_test "T39" "Local errors avoid upstream existence leak" M5_T39_test
+  run_test "T40" "Mock upstream breadth precondition" M5_T40_test
+  run_test "T41" "Protected path narrows broad mock" M5_T41_test
 fi
 
 printf '\nTotal: %d  Passed: %d  Failed: %d\n' "$TOTAL" "$PASSED" "$FAILED"

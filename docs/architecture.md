@@ -13,13 +13,13 @@ Scope notes:
 
 ### Component Architecture
 
-This diagram shows the main runtime components and their trust-oriented relationships, including the M4a/M4b Jira components.
+This diagram shows the main runtime components and their trust-oriented relationships, including the M4a/M4b Jira tool path and the M5 Codex Jira MCP path.
 
 ![Component architecture diagram](only_arch.svg)
 
 ### Network Architecture
 
-This diagram shows the current network segmentation and boundary layout used by the stack, including the M4a/M4b Jira networks.
+This diagram shows the current network segmentation and boundary layout used by the stack, including the M4a/M4b Jira networks and the M5 Codex Jira MCP networks.
 Redis is shown in multiple internal networks as the same shared state service attached where needed.
 
 ![Network architecture diagram](architecture_diagram.svg)
@@ -442,3 +442,100 @@ Trust/Responsibility:
 
 Interactions:
 `jira-mock` is reachable by `jira-tool` and by the test harness for precondition and request-log evidence. It is not attached to the Jira edge network and is not host-exposed. Its request-log/reset endpoints are test-only and must not be reachable by agents.
+
+## ARCH-027 M5 Codex Jira MCP Session Boundary
+
+Type: Component
+Satisfies: REQ-M5-CJ1, REQ-M5-CJ2, REQ-M5-CJ4
+
+Status:
+Implemented in M5 Slice 1.
+
+Overview:
+The M5 Codex boundary consists of a local launcher and the `codex-jira-mcp-adapter` workload. Codex is treated as untrusted input. It starts a stdio MCP session through the launcher, which executes into the already-running adapter container. The adapter exposes exactly `read_project_summary` and `create_story`.
+
+Trust/Responsibility:
+The launcher owns only local process bridging and must not mutate stack lifecycle. The adapter owns MCP translation, fixed tool-to-action mapping, fresh token minting per call, correlation propagation, and internal gateway forwarding. It is not a PDP or PEP and must not authorize project allowlists locally.
+
+Interactions:
+The adapter calls `capability-issuer-envoy` over SPIFFE mTLS for `aud=jira-mcp-gateway` tokens and calls `jira-mcp-envoy` over SPIFFE mTLS for protected Jira MCP requests. It has no inbound Envoy in Slice 1 because Codex reaches it through local stdio.
+
+## ARCH-028 M5 Jira MCP Authority Issuance
+
+Type: Logical
+Satisfies: REQ-M5-CJ3, REQ-M5-CJ4, REQ-M5-CJ10
+
+Status:
+Implemented in M5 Slice 1.
+
+Overview:
+M5 adds a distinct Jira MCP authority family to `capiss`: `aud=jira-mcp-gateway`, `act=read_project_summary|create_story`, and `res=jira-mcp:/project:<KEY>`. This authority is separate from the M4a/M4b `jira-tool` audience and resource family.
+
+Trust/Responsibility:
+OPA is the source of truth for allowed M5 project/action tuples. `capiss` validates strict M5 project resource syntax, evaluates policy, initializes shared root budget, signs the token, and emits mint-decision events. Only `spiffe://example.org/codex-jira-mcp-adapter` may mint M5 Slice 1 authority for `IAM`; `NAS`, future actions, old subjects, and mixed M4/M5 authority forms deny.
+
+Interactions:
+The adapter presents its SPIFFE identity to `capability-issuer-envoy`; Envoy injects the verified identity into `capiss`; `capiss` returns a short-lived root token used only inside the adapter-to-gateway request path.
+
+## ARCH-029 jira-mcp-envoy
+
+Type: Component
+Satisfies: REQ-M5-CJ5, REQ-M5-CJ10
+
+Status:
+Implemented in M5 Slice 1.
+
+Overview:
+`jira-mcp-envoy` is the M5 gateway ingress boundary. It terminates mTLS, verifies allowed client workload identities, injects the trusted `x-spiffe-id` header, and forwards to `jira-mcp-gateway`.
+
+Trust/Responsibility:
+The Envoy boundary is responsible for transport authentication and trusted caller identity propagation. It is not the semantic authorization decision point. The gateway still verifies the capiss token and binds token subject to the Envoy-verified caller identity.
+
+Interactions:
+`codex-jira-mcp-adapter` reaches `jira-mcp-envoy` on the M5 edge network. The gateway app is not attached to that edge network. The test harness may use the edge path for black-box proof.
+
+## ARCH-030 jira-mcp-gateway
+
+Type: Component
+Satisfies: REQ-M5-CJ2, REQ-M5-CJ5, REQ-M5-CJ6, REQ-M5-CJ7, REQ-M5-CJ8, REQ-M5-CJ9, REQ-M5-CJ10
+
+Status:
+Implemented in M5 Slice 1.
+
+Overview:
+`jira-mcp-gateway` is the M5 protected Jira request-time PEP. It is an internal HTTP service behind `jira-mcp-envoy`, not an MCP-native gateway in Slice 1.
+
+Trust/Responsibility:
+The gateway verifies capiss-signed tokens, token expiry, token subject, audience, endpoint-bound action, resource syntax, payload project, and Envoy caller identity before upstream use. It validates the bounded summary and story-create contracts, verifies optional same-project epics, strips client-supplied upstream authorization/impersonation headers, consumes Redis budget/rate governance immediately before upstream use, and emits `jiramcp_gateway_decision` audit events.
+
+Interactions:
+`POST /mcp/jira/project-summary` requires `act=read_project_summary`. `POST /mcp/jira/stories` requires `act=create_story`. The gateway calls `jira-mcp-mock` in deterministic mode or Jira Cloud only in explicit live mode. It uses Redis for the existing M4 `m4:budget:<root_token_id>` and request-rate keys.
+
+## ARCH-031 jira-mcp-mock and M5 Live Smoke Proof
+
+Type: Logical
+Satisfies: REQ-M5-CJ6, REQ-M5-CJ7, REQ-M5-CJ8, REQ-M5-CJ10
+
+Status:
+Implemented in M5 Slice 1.
+
+Overview:
+`jira-mcp-mock` is the deterministic upstream Jira Cloud substitute for M5. It is separate from the M4a/M4b `jira-mock` and includes broad `IAM` and `NAS` fixtures to prove protected-path narrowing.
+
+Trust/Responsibility:
+The mock is not an authorization component. It returns broad upstream project data, stores created stories, verifies fixture availability for epic checks, records request logs, supports reset and failure injection endpoints for tests, and captures enough request metadata to prove that only the gateway performs upstream operations.
+
+Interactions:
+`jira-mcp-gateway` calls the mock over the private Jira MCP app network. The mock is also attached to the test-only upstream inspection network so the harness can access mock premise and evidence endpoints without exposing the gateway app listener. Codex, the launcher, the adapter, capiss, and Envoys do not receive live Jira credentials.
+
+Authoritative State:
+| State | Store/System | Writer | Reader | TTL/Lifecycle | Decision Impact | Classification |
+| --- | --- | --- | --- | --- | --- | --- |
+| M5 allowed authority tuple | OPA policy/data | Operator/repo config | OPA during capiss mint | Deployment lifecycle | Determines whether adapter may mint `read_project_summary` or `create_story` for `IAM` | Authoritative |
+| M5 capiss token | Adapter process memory | capiss | Adapter, gateway | Root token TTL; one fresh token per MCP call | Grants one narrow M5 action/resource for gateway use | Authoritative secret |
+| Envoy verified M5 caller | `jira-mcp-envoy` trusted header | Envoy | gateway | Request lifecycle | Must match token subject before upstream use | Authoritative |
+| M5 request budget/rate | Redis `m4:*` keys | capiss initializes; gateway consumes | gateway | Bounded by root expiry/rate window | Denies summary/create when exhausted, missing, invalid, rate-limited, or store unavailable | Authoritative |
+| Jira API credential | gateway live environment only | Operator/live setup | gateway | Live runtime secret lifecycle | Enables live upstream calls only after local enforcement | Sensitive secret |
+| MCP session process | Adapter container process | launcher | Codex stdio | One MCP server session | Transports untrusted MCP requests and bounded responses | Runtime transport |
+| M5 correlation ID | Adapter, capiss, gateway, mock/live logs | adapter or gateway | tests/operators | Request lifecycle | Reconstructs mint, enforcement, upstream, and Codex-visible result | Evidence metadata |
+| jira-mcp-mock request log | mock memory | mock | test harness | Test lifecycle/reset per test | Proves upstream calls happened only after authorization and only from gateway path | Test evidence |

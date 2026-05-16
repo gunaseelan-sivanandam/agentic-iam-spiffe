@@ -689,7 +689,59 @@ When optional live smoke is run, it SHALL perform a protected IAM description wr
 
 ---
 
-# 10. Test contract requirements
+# 10. Milestone 5 requirements
+
+## REQ-M5-CJ1 — Codex-facing MCP boundary
+M5 SHALL expose Jira work to Codex only through a local MCP launcher and the `codex-jira-mcp-adapter` stdio MCP server.
+The launcher SHALL use `docker compose exec -T` into an already-running adapter container, SHALL NOT start or rebuild the stack, and SHALL keep MCP stdout protocol-clean.
+Slice 1 SHALL expose exactly the MCP tools `read_project_summary` and `create_story`.
+
+## REQ-M5-CJ2 — Codex credential and token isolation
+Codex-visible MCP requests, responses, launcher output, adapter output, normal logs, and evidence SHALL NOT contain Jira API credentials or capiss bearer tokens.
+Only token metadata such as audience, action, resource, token identifiers, decisions, reasons, and correlation IDs MAY appear in evidence.
+
+## REQ-M5-CJ3 — Distinct M5 authority family
+M5 SHALL use the authority tuple family `aud=jira-mcp-gateway`, `act=read_project_summary|create_story`, and `res=jira-mcp:/project:<KEY>`.
+`capiss` SHALL allow only `spiffe://example.org/codex-jira-mcp-adapter` to mint Slice 1 authority for `jira-mcp:/project:IAM`.
+`capiss` SHALL deny `NAS`, malformed M5 resources, unsupported M5 actions, wrong subjects, and attempts to mix M5 resources with the older `jira-tool` authority family.
+
+## REQ-M5-CJ4 — Adapter is not the authorization decision point
+`codex-jira-mcp-adapter` SHALL map each MCP tool to exactly one fixed capiss action, construct the requested M5 project resource from `project_key`, request a fresh capiss token per tool call through `capability-issuer-envoy`, and forward the request through `jira-mcp-envoy`.
+The adapter SHALL NOT authorize allowed projects locally, SHALL NOT accept free-form action values from Codex, SHALL NOT cache capiss tokens, and SHALL NOT retry read or create operations automatically.
+
+## REQ-M5-CJ5 — Gateway request-time enforcement
+`jira-mcp-gateway` SHALL be the M5 request-time PEP.
+For every protected endpoint, it SHALL verify the capiss token signature, expiry, subject, audience, endpoint-bound action, resource, payload project, and Envoy-verified caller identity before upstream use.
+The gateway SHALL deny when token `subject_spiffe_id` does not match the Envoy-verified caller identity.
+
+## REQ-M5-CJ6 — Bounded project summary
+`read_project_summary` SHALL return only bounded metadata for the authorized project: project key, project name, issue count, latest non-epic issue metadata, and latest epic metadata.
+The summary SHALL omit descriptions, comments, assignees, sprint data, board data, raw JQL, raw Jira URLs, Jira credentials, and bearer tokens.
+The summary SHALL include at most 50 non-epic issues and at most 25 epics.
+
+## REQ-M5-CJ7 — Narrow story creation
+`create_story` SHALL accept only `project_key`, `summary`, `description`, optional `acceptance_criteria`, and optional `epic_key`.
+The gateway SHALL set issue type `Story` internally, SHALL convert plain text to Jira ADF mechanically, and SHALL reject arbitrary Jira fields, raw Jira `fields`, raw ADF, comments, attachments, transitions, labels, components, priorities, assignees, sprint data, and arbitrary links.
+Slice 1 SHALL NOT enforce story-quality rules beyond defensive type and length bounds.
+
+## REQ-M5-CJ8 — Same-project epic verification
+When `epic_key` is supplied, `jira-mcp-gateway` SHALL require strict `<PROJECT>-<NUMBER>` syntax, require the project to match the token project, verify upstream existence, and verify the upstream issue type is `Epic` before creating the story.
+Invalid, missing, non-Epic, or cross-project epics SHALL fail closed and SHALL NOT create an unlinked story.
+
+## REQ-M5-CJ9 — Governance and failure semantics
+M5 summary reads and story creation SHALL reuse M4 Redis-backed budget and request-rate governance.
+The gateway SHALL consume budget/rate immediately before upstream summary use or story creation, SHALL NOT consume budget on pre-authorization or pre-validation denial, and SHALL NOT refund budget when an authorized upstream create fails after budget consumption.
+Authorization, validation, budget, rate, gateway, and upstream failures SHALL return standardized local errors that do not reveal non-allowed upstream project or issue existence.
+
+## REQ-M5-CJ10 — Upstream and audit proof
+Only `jira-mcp-gateway` SHALL call `jira-mcp-mock` or live Jira in M5.
+The deterministic default proof SHALL use `jira-mcp-mock`, which contains broad `IAM` and `NAS` data and request logs.
+M5 SHALL emit correlated adapter, capiss, gateway, and mock/live evidence using a correlation ID for allow, deny, validation, budget/rate, and upstream failure paths.
+Optional live smoke SHALL be explicit opt-in and SHALL prove broad live credential access plus protected-path narrowing without exposing live credentials.
+
+---
+
+# 11. Test contract requirements
 
 These requirements are mandatory for negative security tests.
 
@@ -719,7 +771,7 @@ Evidence may include, as applicable, TLS transcripts, server-side entry snapshot
 
 ---
 
-# 11. Milestone summaries
+# 12. Milestone summaries
 
 ## Milestone 1 summary
 The system shall allow only explicitly authorized nodes to join the trust domain and obtain node identity.  
@@ -746,9 +798,14 @@ The system shall extend Jira access to project-scoped description replacement on
 `act=write` may read and replace issue descriptions in the OPA-allowed `IAM` project, while `act=read` remains read-only.
 The protected Jira facade shall deny `NAS` writes before upstream use and prove description update behavior through black-box evidence.
 
+## Milestone 5 summary
+The system shall let Codex use Jira through a real MCP adapter while preserving SPIFFE, capiss, Envoy, gateway, and budget/rate boundaries.
+Codex may request bounded IAM project summaries and IAM story creation, but shall not receive Jira credentials, capiss bearer tokens, direct Jira access, arbitrary Jira operations, or NAS authority.
+M5 uses a distinct `jira-mcp-gateway` authority family and a separate `jira-mcp-mock` proof model so M4a/M4b `jira-tool` behavior remains undisturbed.
+
 ---
 
-# 12. Out of scope for these milestones
+# 13. Out of scope for these milestones
 
 The following are intentionally out of scope for the implemented and approved milestones in this document unless a milestone explicitly says otherwise:
 
@@ -759,13 +816,15 @@ The following are intentionally out of scope for the implemented and approved mi
 - Intent-to-mechanics compilation
 - Confluence support in M4a/M4b
 - Jira comments, transitions, attachments, search, delete, arbitrary field update, or issue-level attenuation in M4a/M4b
+- Jira comments, transitions, attachments, search, delete, arbitrary field update, issue details, bugs, subtasks, epics, sprint actions, assignees, or generic Jira proxying in M5 Slice 1
 - Human-user Jira authorization or OAuth 3LO in M4a/M4b
+- Human-user Jira authorization or OAuth 3LO in M5 Slice 1
 
 Future milestones may introduce additional requirements in these areas.
 
 ---
 
-# 13. Completion rule
+# 14. Completion rule
 
 A milestone shall be considered complete only when its requirements are satisfied and supported by sufficient evidence.  
 A working demo alone shall not be treated as proof of milestone completion.
