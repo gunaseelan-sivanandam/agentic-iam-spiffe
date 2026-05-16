@@ -1,0 +1,79 @@
+admin:
+  access_log_path: /tmp/admin_access.log
+  address:
+    socket_address:
+      address: 127.0.0.1
+      port_value: 9901
+
+static_resources:
+  listeners:
+    - name: jiramcp_listener
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 11443
+      filter_chains:
+        - transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              require_client_certificate: true
+              common_tls_context:
+                tls_params:
+                  tls_minimum_protocol_version: TLSv1_2
+                  tls_maximum_protocol_version: TLSv1_2
+                tls_certificates:
+                  - certificate_chain:
+                      filename: /run/spire/svid/svid.pem
+                    private_key:
+                      filename: /run/spire/svid/svid.key
+                validation_context:
+                  trusted_ca:
+                    filename: /run/spire/svid/bundle.pem
+                  trust_chain_verification: VERIFY_TRUST_CHAIN
+                  allow_expired_certificate: false
+                  match_typed_subject_alt_names:
+                    - san_type: URI
+                      matcher:
+                        exact: "spiffe://example.org/codex-jira-mcp-adapter"
+                    - san_type: URI
+                      matcher:
+                        exact: "spiffe://example.org/rogue"
+          filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_http
+                route_config:
+                  name: jiramcp_route
+                  virtual_hosts:
+                    - name: jiramcp_service
+                      domains: ["*"]
+                      request_headers_to_add:
+                        - header:
+                            key: x-spiffe-id
+                            value: "%DOWNSTREAM_PEER_URI_SAN%"
+                          append: false
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: jiramcp_upstream
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+  clusters:
+    - name: jiramcp_upstream
+      connect_timeout: 1s
+      type: strict_dns
+      lb_policy: round_robin
+      load_assignment:
+        cluster_name: jiramcp_upstream
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: jira-mcp-gateway
+                      port_value: 8080
