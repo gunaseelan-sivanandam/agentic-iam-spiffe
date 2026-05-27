@@ -1,0 +1,357 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1540" height="726" viewBox="0 0 1540 726" role="img">
+  <title>Agentic IAM with SPIFFE/SPIRE — System Architecture</title>
+  <desc>Swimlane architecture diagram. Columns show trust zones (Workload Clients, mTLS Edge, Policy Enforcement Points, Governance, Upstream). Rows show milestone paths (SPIRE identity bootstrap, Capability Minting, M3/M4 tool-b, M4a/M4b Jira, M5 Codex Jira MCP).</desc>
+
+  <defs>
+    <style>
+      text { font-family: Arial, sans-serif; }
+      .title  { font: 700 20px Arial; fill: #172033; }
+      .sub    { font: 13px Arial; fill: #58687a; }
+      .col-hd { font: 700 13px Arial; fill: #1e2d40; text-anchor: middle; dominant-baseline: middle; }
+      .row-lbl{ font: 700 12px Arial; fill: #1e2d40; text-anchor: middle; dominant-baseline: middle; }
+      .row-sub{ font: 11px Arial; fill: #4a5a6a; text-anchor: middle; dominant-baseline: middle; }
+      .bname  { font: 700 12px Arial; fill: #172033; text-anchor: middle; dominant-baseline: middle; }
+      .btech  { font: italic 11px Arial; fill: #536174; text-anchor: middle; dominant-baseline: middle; }
+      .albl   { font: 11px Arial; text-anchor: middle; }
+      .note   { font: italic 11px Arial; fill: #6a7a8a; }
+      .lgd    { font: 12px Arial; fill: #333; dominant-baseline: middle; }
+      .lgd-hd { font: 700 12px Arial; fill: #1a2535; }
+    </style>
+    <marker id="ah"        viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10z" fill="#33445c"/></marker>
+    <marker id="ah-blue"   viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10z" fill="#2f66b3"/></marker>
+    <marker id="ah-green"  viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10z" fill="#2b7a3d"/></marker>
+    <marker id="ah-amber"  viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10z" fill="#a07820"/></marker>
+    <marker id="ah-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10z" fill="#6f55b5"/></marker>
+    <marker id="ah-gray"   viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10z" fill="#888"/></marker>
+  </defs>
+
+  <!-- ── Background ── -->
+  <rect width="1540" height="726" fill="#f7f8fa"/>
+
+  <!-- ── Title ── -->
+  <text class="title" x="770" y="26" text-anchor="middle">Agentic IAM with SPIFFE/SPIRE — System Architecture</text>
+  <text class="sub"   x="770" y="48" text-anchor="middle">Columns = trust zones · Rows = milestone paths · Solid arrows = request flow · Dashed arrows = upstream calls</text>
+
+  <!-- ══════════════════════════════════════════════════
+       COLUMN ZONE BACKGROUNDS  (y=106 to y=596)
+       Col x positions: RL=0 C1=130 C2=362 C3=558 C4=822 C5=1040
+  ══════════════════════════════════════════════════ -->
+  <rect x="130"  y="106" width="232" height="490" fill="#eaf1fb" opacity="0.55"/>
+  <rect x="362"  y="106" width="196" height="490" fill="#d6e8ff" opacity="0.55"/>
+  <rect x="558"  y="106" width="264" height="490" fill="#ddf0e0" opacity="0.55"/>
+  <rect x="822"  y="106" width="218" height="490" fill="#ede8ff" opacity="0.55"/>
+  <rect x="1040" y="106" width="460" height="490" fill="#ebebeb" opacity="0.55"/>
+
+  <!-- ── Column header row (y=60 h=46) ── -->
+  <rect x="0"    y="60" width="130" height="46" fill="#dde2ea" stroke="#b8c0cc" stroke-width="1"/>
+  <rect x="130"  y="60" width="232" height="46" fill="#c8dcf5" stroke="#4976b8" stroke-width="1"/>
+  <rect x="362"  y="60" width="196" height="46" fill="#bad4f8" stroke="#2f66b3" stroke-width="1"/>
+  <rect x="558"  y="60" width="264" height="46" fill="#bbdfc1" stroke="#2b7a3d" stroke-width="1"/>
+  <rect x="822"  y="60" width="218" height="46" fill="#d8d0f8" stroke="#6f55b5" stroke-width="1"/>
+  <rect x="1040" y="60" width="460" height="46" fill="#d8d8d8" stroke="#888"    stroke-width="1"/>
+
+  <text class="col-hd" x="246"  y="83">Workload Clients</text>
+  <text class="col-hd" x="460"  y="83">mTLS Edge — Envoy</text>
+  <text class="col-hd" x="690"  y="83">Policy Enforcement Points</text>
+  <text class="col-hd" x="931"  y="83">Governance</text>
+  <text class="col-hd" x="1270" y="83">Upstream</text>
+
+  <!-- ── Grid lines ── -->
+  <!-- Vertical column dividers -->
+  <line x1="130"  y1="60" x2="130"  y2="596" stroke="#b8c2d0" stroke-width="1.4"/>
+  <line x1="362"  y1="60" x2="362"  y2="596" stroke="#b8c2d0" stroke-width="1.4"/>
+  <line x1="558"  y1="60" x2="558"  y2="596" stroke="#b8c2d0" stroke-width="1.4"/>
+  <line x1="822"  y1="60" x2="822"  y2="596" stroke="#b8c2d0" stroke-width="1.4"/>
+  <line x1="1040" y1="60" x2="1040" y2="596" stroke="#b8c2d0" stroke-width="1.4"/>
+  <line x1="1500" y1="60" x2="1500" y2="596" stroke="#b8c2d0" stroke-width="1.4"/>
+  <!-- Horizontal row dividers -->
+  <line x1="0" y1="106" x2="1540" y2="106" stroke="#b8c2d0" stroke-width="1.4"/>
+  <line x1="0" y1="190" x2="1540" y2="190" stroke="#ccd4de" stroke-width="1"/>
+  <line x1="0" y1="298" x2="1540" y2="298" stroke="#ccd4de" stroke-width="1"/>
+  <line x1="0" y1="386" x2="1540" y2="386" stroke="#ccd4de" stroke-width="1"/>
+  <line x1="0" y1="486" x2="1540" y2="486" stroke="#ccd4de" stroke-width="1"/>
+  <line x1="0" y1="596" x2="1540" y2="596" stroke="#b8c2d0" stroke-width="1.4"/>
+
+  <!-- ══════════════════════════════════════════════════
+       ROW 1 — SPIRE  (y=106  h=84)
+  ══════════════════════════════════════════════════ -->
+  <!-- Row label -->
+  <rect x="0" y="106" width="130" height="84" fill="#eff0f2" stroke="#b8c2d0" stroke-width="1"/>
+  <text class="row-lbl" x="65" y="142">SPIRE</text>
+  <text class="row-sub" x="65" y="162">Identity bootstrap</text>
+
+  <!-- spire-token-init  C1 -->
+  <rect x="152" y="122" width="150" height="52" rx="5" fill="white" stroke="#6a7e96" stroke-width="1.5"/>
+  <text class="bname" x="227" y="144">spire-token-init</text>
+  <text class="btech" x="227" y="161">Shell</text>
+
+  <!-- spire-agent  C2 -->
+  <rect x="375" y="122" width="148" height="52" rx="5" fill="white" stroke="#2f66b3" stroke-width="1.5"/>
+  <text class="bname" x="449" y="144">spire-agent</text>
+  <text class="btech" x="449" y="161">SPIRE Agent</text>
+
+  <!-- spire-server  C3 -->
+  <rect x="580" y="122" width="148" height="52" rx="5" fill="white" stroke="#2b7a3d" stroke-width="1.5"/>
+  <text class="bname" x="654" y="144">spire-server</text>
+  <text class="btech" x="654" y="161">SPIRE Server</text>
+
+  <!-- Note in C4+C5 -->
+  <text class="note" x="838" y="143">Admits nodes; issues X.509 SVIDs only to registered workloads.</text>
+  <text class="note" x="838" y="160">SVIDs are short-lived and automatically rotated.</text>
+  <text class="note" x="838" y="177">Unregistered workloads receive no identity and cannot enter the stack.</text>
+
+  <!-- Arrows R1 -->
+  <line x1="302" y1="148" x2="373" y2="148" stroke="#555" stroke-width="1.5" marker-end="url(#ah)"/>
+  <text class="albl" fill="#444" x="338" y="141">registers entries</text>
+
+  <line x1="523" y1="148" x2="578" y2="148" stroke="#555" stroke-width="1.5" marker-end="url(#ah)"/>
+  <text class="albl" fill="#444" x="551" y="141">SVID CA</text>
+
+  <!-- ══════════════════════════════════════════════════
+       ROW 2 — Capability Minting  (y=190  h=108)
+  ══════════════════════════════════════════════════ -->
+  <rect x="0" y="190" width="130" height="108" fill="#eef3ff" stroke="#b8c2d0" stroke-width="1"/>
+  <text class="row-lbl" x="65" y="228" fill="#2f66b3">Capability</text>
+  <text class="row-lbl" x="65" y="246" fill="#2f66b3">Minting</text>
+  <text class="row-sub" x="65" y="265">(all paths)</text>
+
+  <!-- agent-a / adapter  C1 -->
+  <rect x="145" y="218" width="192" height="52" rx="5" fill="white" stroke="#4976b8" stroke-width="1.5"/>
+  <text class="bname" x="241" y="240">agent-a / adapter</text>
+  <text class="btech" x="241" y="257">Shell / Python MCP</text>
+
+  <!-- capiss-envoy  C2 -->
+  <rect x="372" y="218" width="170" height="52" rx="5" fill="white" stroke="#2f66b3" stroke-width="1.5"/>
+  <text class="bname" x="457" y="240">capiss-envoy</text>
+  <text class="btech" x="457" y="257">Envoy + SPIRE SDS</text>
+
+  <!-- capability-issuer  C3 -->
+  <rect x="572" y="218" width="158" height="52" rx="5" fill="white" stroke="#2b7a3d" stroke-width="1.5"/>
+  <text class="bname" x="651" y="240">capability-issuer</text>
+  <text class="btech" x="651" y="257">Python / Flask</text>
+
+  <!-- C4: OPA + capiss-keys + Redis -->
+  <rect x="832" y="204" width="80" height="36" rx="4" fill="white" stroke="#6f55b5" stroke-width="1.4"/>
+  <text class="bname" x="872" y="219">OPA</text>
+  <text class="btech" x="872" y="232">Rego</text>
+
+  <rect x="930" y="204" width="96" height="36" rx="4" fill="white" stroke="#6f55b5" stroke-width="1.4"/>
+  <text class="bname" x="978" y="219">capiss-keys</text>
+  <text class="btech" x="978" y="232">Biscuit root key</text>
+
+  <rect x="878" y="254" width="82" height="34" rx="4" fill="white" stroke="#6f55b5" stroke-width="1.4"/>
+  <text class="bname" x="919" y="268">Redis</text>
+  <text class="btech" x="919" y="280">mint-rate</text>
+
+  <!-- Arrows R2 -->
+  <line x1="337" y1="244" x2="370" y2="244" stroke="#2f66b3" stroke-width="1.5" marker-end="url(#ah-blue)"/>
+  <text class="albl" fill="#2f66b3" x="354" y="237">mTLS</text>
+
+  <line x1="542" y1="244" x2="570" y2="244" stroke="#2f66b3" stroke-width="1.5" marker-end="url(#ah-blue)"/>
+  <text class="albl" fill="#2f66b3" x="556" y="237">✓ identity</text>
+
+  <!-- capability-issuer → OPA -->
+  <path d="M 730,235 L 830,222" fill="none" stroke="#6f55b5" stroke-width="1.3" marker-end="url(#ah-purple)"/>
+  <text class="albl" fill="#6f55b5" x="780" y="222">policy query</text>
+
+  <!-- capability-issuer → capiss-keys -->
+  <path d="M 730,244 L 928,222" fill="none" stroke="#6f55b5" stroke-width="1.3" marker-end="url(#ah-purple)"/>
+
+  <!-- capability-issuer → Redis (dashed) -->
+  <path d="M 730,255 L 876,265" fill="none" stroke="#6f55b5" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#ah-purple)"/>
+  <text class="albl" fill="#6f55b5" x="806" y="272">mint markers</text>
+
+  <!-- ══════════════════════════════════════════════════
+       ROW 3 — M3/M4 tool-b  (y=298  h=88)
+  ══════════════════════════════════════════════════ -->
+  <rect x="0" y="298" width="130" height="88" fill="#f2fbf3" stroke="#b8c2d0" stroke-width="1"/>
+  <text class="row-lbl" x="65" y="333" fill="#2b7a3d">M3 / M4</text>
+  <text class="row-lbl" x="65" y="351" fill="#2b7a3d">tool-b</text>
+
+  <!-- agent-a  C1 -->
+  <rect x="168" y="318" width="125" height="46" rx="5" fill="white" stroke="#4976b8" stroke-width="1.5"/>
+  <text class="bname" x="231" y="338">agent-a</text>
+  <text class="btech" x="231" y="353">Shell</text>
+
+  <!-- tool-b-envoy  C2 -->
+  <rect x="374" y="318" width="168" height="46" rx="5" fill="white" stroke="#2f66b3" stroke-width="1.5"/>
+  <text class="bname" x="458" y="338">tool-b-envoy</text>
+  <text class="btech" x="458" y="353">Envoy + SPIRE SDS</text>
+
+  <!-- tool-b  C3 -->
+  <rect x="590" y="318" width="125" height="46" rx="5" fill="white" stroke="#2b7a3d" stroke-width="1.5"/>
+  <text class="bname" x="652" y="338">tool-b</text>
+  <text class="btech" x="652" y="353">Python / Flask</text>
+
+  <!-- Redis  C4 -->
+  <rect x="878" y="318" width="100" height="46" rx="5" fill="white" stroke="#6f55b5" stroke-width="1.5"/>
+  <text class="bname" x="928" y="338">Redis</text>
+  <text class="btech" x="928" y="353">budget / rate</text>
+
+  <!-- C5: note - no upstream -->
+  <text class="note" x="1060" y="337">Reference enforcement tool.</text>
+  <text class="note" x="1060" y="355">No upstream system.</text>
+
+  <!-- Arrows R3 -->
+  <line x1="293" y1="341" x2="372" y2="341" stroke="#2b7a3d" stroke-width="1.5" marker-end="url(#ah-green)"/>
+  <text class="albl" fill="#2b7a3d" x="333" y="334">mTLS + token</text>
+
+  <line x1="542" y1="341" x2="588" y2="341" stroke="#2b7a3d" stroke-width="1.5" marker-end="url(#ah-green)"/>
+  <text class="albl" fill="#2b7a3d" x="565" y="334">✓ identity</text>
+
+  <line x1="715" y1="341" x2="876" y2="341" stroke="#6f55b5" stroke-width="1.3" marker-end="url(#ah-purple)"/>
+  <text class="albl" fill="#6f55b5" x="796" y="334">budget / rate / discovery</text>
+
+  <!-- ══════════════════════════════════════════════════
+       ROW 4 — M4a/M4b Jira  (y=386  h=100)
+  ══════════════════════════════════════════════════ -->
+  <rect x="0" y="386" width="130" height="100" fill="#fffcf0" stroke="#b8c2d0" stroke-width="1"/>
+  <text class="row-lbl" x="65" y="424" fill="#a07820">M4a / M4b</text>
+  <text class="row-lbl" x="65" y="442" fill="#a07820">Jira tool</text>
+
+  <!-- agent-a  C1 -->
+  <rect x="168" y="408" width="125" height="48" rx="5" fill="white" stroke="#4976b8" stroke-width="1.5"/>
+  <text class="bname" x="231" y="429">agent-a</text>
+  <text class="btech" x="231" y="445">Shell</text>
+
+  <!-- jira-tool-envoy  C2 -->
+  <rect x="372" y="408" width="168" height="48" rx="5" fill="white" stroke="#2f66b3" stroke-width="1.5"/>
+  <text class="bname" x="456" y="429">jira-tool-envoy</text>
+  <text class="btech" x="456" y="445">Envoy + SPIRE SDS</text>
+
+  <!-- jira-tool  C3 -->
+  <rect x="584" y="408" width="130" height="48" rx="5" fill="white" stroke="#2b7a3d" stroke-width="1.5"/>
+  <text class="bname" x="649" y="429">jira-tool</text>
+  <text class="btech" x="649" y="445">Python / Flask</text>
+
+  <!-- Redis  C4 -->
+  <rect x="878" y="408" width="100" height="48" rx="5" fill="white" stroke="#6f55b5" stroke-width="1.5"/>
+  <text class="bname" x="928" y="429">Redis</text>
+  <text class="btech" x="928" y="445">budget</text>
+
+  <!-- jira-mock  C5 -->
+  <rect x="1058" y="406" width="118" height="40" rx="5" fill="white" stroke="#888" stroke-width="1.5"/>
+  <text class="bname" x="1117" y="423">jira-mock</text>
+  <text class="btech" x="1117" y="437">mock default</text>
+
+  <!-- Jira Cloud  C5 -->
+  <rect x="1198" y="406" width="120" height="40" rx="5" fill="#f5f5f5" stroke="#888" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text class="bname" x="1258" y="423">Jira Cloud</text>
+  <text class="btech" x="1258" y="437">live mode only</text>
+
+  <!-- Arrows R4 -->
+  <line x1="293" y1="432" x2="370" y2="432" stroke="#a07820" stroke-width="1.5" marker-end="url(#ah-amber)"/>
+  <text class="albl" fill="#a07820" x="332" y="425">mTLS + token</text>
+
+  <line x1="540" y1="432" x2="582" y2="432" stroke="#a07820" stroke-width="1.5" marker-end="url(#ah-amber)"/>
+  <text class="albl" fill="#a07820" x="561" y="425">✓ identity</text>
+
+  <line x1="714" y1="432" x2="876" y2="432" stroke="#6f55b5" stroke-width="1.3" marker-end="url(#ah-purple)"/>
+  <text class="albl" fill="#6f55b5" x="795" y="425">budget check</text>
+
+  <!-- jira-tool → jira-mock (dashed, goes past governance col) -->
+  <path d="M 714,442 L 1056,426" fill="none" stroke="#888" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#ah-gray)"/>
+  <text class="albl" fill="#777" x="885" y="448">upstream call</text>
+
+  <!-- jira-mock → Jira Cloud -->
+  <line x1="1176" y1="426" x2="1196" y2="426" stroke="#888" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ah-gray)"/>
+
+  <!-- ══════════════════════════════════════════════════
+       ROW 5 — M5 Codex Jira MCP  (y=486  h=110)
+  ══════════════════════════════════════════════════ -->
+  <rect x="0" y="486" width="130" height="110" fill="#f8f5ff" stroke="#b8c2d0" stroke-width="1"/>
+  <text class="row-lbl" x="65" y="526" fill="#6f55b5">M5 Codex</text>
+  <text class="row-lbl" x="65" y="544" fill="#6f55b5">Jira MCP</text>
+
+  <!-- Codex (external, dashed border)  C1 top -->
+  <rect x="155" y="494" width="110" height="30" rx="4" fill="#e8e8e8" stroke="#999" stroke-width="1.2" stroke-dasharray="4 2"/>
+  <text class="bname" x="210" y="506">Codex</text>
+  <text class="btech" x="210" y="518">MCP client (external)</text>
+
+  <!-- codex-jira-mcp-adapter  C1 bottom -->
+  <rect x="145" y="534" width="190" height="52" rx="5" fill="white" stroke="#4976b8" stroke-width="1.5"/>
+  <text class="bname" x="240" y="556">codex-jira-mcp-adapter</text>
+  <text class="btech" x="240" y="571">Python / MCP</text>
+
+  <!-- jira-mcp-envoy  C2 -->
+  <rect x="370" y="532" width="175" height="52" rx="5" fill="white" stroke="#2f66b3" stroke-width="1.5"/>
+  <text class="bname" x="457" y="554">jira-mcp-envoy</text>
+  <text class="btech" x="457" y="569">Envoy + SPIRE SDS</text>
+
+  <!-- jira-mcp-gateway  C3 -->
+  <rect x="566" y="532" width="168" height="52" rx="5" fill="white" stroke="#2b7a3d" stroke-width="1.5"/>
+  <text class="bname" x="650" y="554">jira-mcp-gateway</text>
+  <text class="btech" x="650" y="569">Python / Flask</text>
+
+  <!-- Redis  C4 -->
+  <rect x="866" y="528" width="105" height="52" rx="5" fill="white" stroke="#6f55b5" stroke-width="1.5"/>
+  <text class="bname" x="918" y="550">Redis</text>
+  <text class="btech" x="918" y="565">budget / rate / audit</text>
+
+  <!-- jira-mcp-mock  C5 -->
+  <rect x="1052" y="524" width="130" height="42" rx="5" fill="white" stroke="#888" stroke-width="1.5"/>
+  <text class="bname" x="1117" y="541">jira-mcp-mock</text>
+  <text class="btech" x="1117" y="557">mock default (M5)</text>
+
+  <!-- Jira Cloud  C5 -->
+  <rect x="1202" y="524" width="120" height="42" rx="5" fill="#f5f5f5" stroke="#888" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text class="bname" x="1262" y="541">Jira Cloud</text>
+  <text class="btech" x="1262" y="557">live mode only</text>
+
+  <!-- Arrows R5 -->
+  <!-- Codex → adapter -->
+  <line x1="210" y1="524" x2="210" y2="532" stroke="#888" stroke-width="1.2" marker-end="url(#ah-gray)"/>
+
+  <!-- adapter → jira-mcp-envoy -->
+  <line x1="335" y1="560" x2="368" y2="558" stroke="#6f55b5" stroke-width="1.5" marker-end="url(#ah-purple)"/>
+  <text class="albl" fill="#6f55b5" x="352" y="550">mTLS + token</text>
+
+  <!-- jira-mcp-envoy → jira-mcp-gateway -->
+  <line x1="545" y1="558" x2="564" y2="558" stroke="#6f55b5" stroke-width="1.5" marker-end="url(#ah-purple)"/>
+  <text class="albl" fill="#6f55b5" x="555" y="550">✓ identity</text>
+
+  <!-- jira-mcp-gateway → Redis -->
+  <line x1="734" y1="558" x2="864" y2="554" stroke="#6f55b5" stroke-width="1.3" marker-end="url(#ah-purple)"/>
+  <text class="albl" fill="#6f55b5" x="799" y="550">budget / rate</text>
+
+  <!-- jira-mcp-gateway → jira-mcp-mock (dashed) -->
+  <path d="M 734,567 L 1050,545" fill="none" stroke="#888" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#ah-gray)"/>
+  <text class="albl" fill="#777" x="893" y="568">upstream call</text>
+
+  <!-- jira-mcp-mock → Jira Cloud -->
+  <line x1="1182" y1="545" x2="1200" y2="545" stroke="#888" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ah-gray)"/>
+
+  <!-- ══════════════════════════════════════════════════
+       FOOTER / LEGEND  (y=596  h=130)
+  ══════════════════════════════════════════════════ -->
+  <rect x="0" y="596" width="1540" height="130" fill="#edf0f5"/>
+  <line x1="0" y1="596" x2="1540" y2="596" stroke="#b8c2d0" stroke-width="1.4"/>
+
+  <text class="lgd-hd" x="24" y="622">Trust zone key</text>
+
+  <!-- Zone swatches -->
+  <rect x="24"  y="632" width="14" height="12" fill="#eaf1fb" stroke="#4976b8"/>
+  <text class="lgd" x="44" y="643">Workload Clients — hold SPIFFE identity, no upstream credentials</text>
+
+  <rect x="24"  y="650" width="14" height="12" fill="#d6e8ff" stroke="#2f66b3"/>
+  <text class="lgd" x="44" y="661">mTLS Edge — Envoy proxies terminate mTLS and inject verified SPIFFE identity header</text>
+
+  <rect x="24"  y="668" width="14" height="12" fill="#ddf0e0" stroke="#2b7a3d"/>
+  <text class="lgd" x="44" y="679">Policy Enforcement Points — verify token + identity + action + resource + budget before every upstream call</text>
+
+  <rect x="24"  y="686" width="14" height="12" fill="#ede8ff" stroke="#6f55b5"/>
+  <text class="lgd" x="44" y="697">Governance — trusted runtime state, unreachable by callers</text>
+
+  <rect x="24"  y="704" width="14" height="12" fill="#ebebeb" stroke="#888"/>
+  <text class="lgd" x="44" y="715">Upstream — Jira systems, reachable only via explicit live mode or deterministic mocks</text>
+
+  <!-- Arrow legend -->
+  <text class="lgd-hd" x="800" y="622">Arrow key</text>
+  <line x1="800" y1="643" x2="838" y2="643" stroke="#33445c" stroke-width="1.5" marker-end="url(#ah)"/>
+  <text class="lgd" x="846" y="648">Normal request flow (mTLS, verified identity forwarding, governance checks)</text>
+  <line x1="800" y1="665" x2="838" y2="665" stroke="#888" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#ah-gray)"/>
+  <text class="lgd" x="846" y="670">Upstream call — mock (test default) or Jira Cloud (explicit live mode opt-in)</text>
+  <rect x="800" y="682" width="38" height="12" fill="#f5f5f5" stroke="#888" stroke-width="1.2" stroke-dasharray="5 3"/>
+  <text class="lgd" x="846" y="692">Dashed border — external system (Jira Cloud)</text>
+
+</svg>
