@@ -5,6 +5,7 @@ import re
 import time
 import uuid
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from urllib import request
 from urllib.error import URLError
 
@@ -48,6 +49,7 @@ M4_REDIS_SOCKET_TIMEOUT = float(os.getenv("REDIS_SOCKET_TIMEOUT", "0.5"))
 CAPISS_KEY_DIR = os.getenv("CAPISS_KEY_DIR", "/var/lib/capiss/keys")
 CAPISS_KEY_FILE = os.path.join(CAPISS_KEY_DIR, "root_key.b64")
 CAPISS_PUBLIC_KEY_FILE = os.path.join(CAPISS_KEY_DIR, "root_public_key.b64")
+VARAMBU_TZ = os.getenv("VARAMBU_TZ", "UTC").strip() or "UTC"
 
 FACT_RE = re.compile(r"^([a-zA-Z_][a-zA-Z0-9_]*)\((.*)\)$")
 JIRA_PROJECT_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]{1,9}$")
@@ -84,6 +86,38 @@ return {1, 'ok', new_count}
 # Title: iso_utc_now capability issuer audit timestamp helper
 def iso_utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _audit_timezone() -> tuple[ZoneInfo, str]:
+    try:
+        return ZoneInfo(VARAMBU_TZ), VARAMBU_TZ
+    except ZoneInfoNotFoundError:
+        return ZoneInfo("UTC"), "UTC"
+
+
+def utc_audit_time(epoch_seconds: int) -> str:
+    return datetime.fromtimestamp(epoch_seconds, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def local_audit_time(epoch_seconds: int) -> str:
+    zone, zone_name = _audit_timezone()
+    local_dt = datetime.fromtimestamp(epoch_seconds, timezone.utc).astimezone(zone)
+    return f"{local_dt:%Y-%m-%d %H:%M:%S} {zone_name}"
+
+
+def resource_attrs_for(res: str | None) -> dict[str, str] | None:
+    if not isinstance(res, str):
+        return None
+    for prefix in ("jira-tool:/project:", "jira-mcp:/project:"):
+        if res.startswith(prefix):
+            project_key = res.removeprefix(prefix)
+            if JIRA_PROJECT_KEY_RE.fullmatch(project_key):
+                return {"kind": "jira_project", "project_key": project_key}
+    return None
+
+
+def optional_header_value(value: object) -> str | None:
+    return value if isinstance(value, str) and value.strip() else None
 
 
 # DD: DD-109
@@ -467,8 +501,9 @@ def consume_mint_rate(root_token_id: str, root_exp: int, root_token_lifetime_sec
 # DD: DD-123
 # Implements: ARCH-004, ARCH-012
 # Title: mint_root_biscuit capability issuer root biscuit mint helper
-def mint_root_biscuit(sub: str, aud: str, act: str, res: str) -> tuple[str, int, str, str]:
-    expires_at = int(time.time()) + M4_ROOT_TTL_SECONDS
+def mint_root_biscuit(sub: str, aud: str, act: str, res: str) -> tuple[str, int, int, str, str]:
+    issued_at = int(time.time())
+    expires_at = issued_at + M4_ROOT_TTL_SECONDS
     root_token_id = str(uuid.uuid4())
     token_id = str(uuid.uuid4())
 
@@ -485,7 +520,7 @@ def mint_root_biscuit(sub: str, aud: str, act: str, res: str) -> tuple[str, int,
 
     token = builder.build(ROOT_PRIVATE_KEY)
     token_value = token.to_base64()
-    return token_value, expires_at, root_token_id, token_id
+    return token_value, issued_at, expires_at, root_token_id, token_id
 
 
 # DD: DD-124
@@ -498,9 +533,10 @@ def append_resource_token(
     aud: str,
     act: str,
     res: str,
-) -> tuple[str, int, str]:
+) -> tuple[str, int, int, str]:
     parent_exp = int(parent_claims["exp"])
-    expires_at = min(parent_exp, int(time.time()) + CAPABILITY_TTL_SECONDS)
+    issued_at = int(time.time())
+    expires_at = min(parent_exp, issued_at + CAPABILITY_TTL_SECONDS)
     token_id = str(uuid.uuid4())
 
     block = BlockBuilder()
@@ -518,7 +554,7 @@ def append_resource_token(
     block.add_fact(Fact(f"delegation_depth({next_depth})"))
 
     delegated = parent.append(block)
-    return delegated.to_base64(), expires_at, token_id
+    return delegated.to_base64(), issued_at, expires_at, token_id
 
 
 # DD: DD-125
@@ -567,25 +603,41 @@ def log_mint_decision(
     parent_token_id: str | None = None,
     delegation_depth: int | None = None,
     registry_hit: bool | None = None,
+    correlation_id: str | None = None,
+    issued_at: int | None = None,
+    expires_at: int | None = None,
     error: str | None = None,
 ) -> None:
     payload_aud = payload.get("aud") if isinstance(payload, dict) else None
     payload_act = payload.get("act") if isinstance(payload, dict) else None
     payload_res = payload.get("res") if isinstance(payload, dict) else None
+    logged_at = int(time.time())
+    effective_res = res if res is not None else payload_res if isinstance(payload_res, str) and payload_res.strip() else None
+    _, zone_name = _audit_timezone()
     fields = {
         "result": result,
         "reason_code": reason_code,
         "decision_type": decision_type,
+        "correlation_id": correlation_id if correlation_id else None,
         "subject_spiffe_id": subject_spiffe_id,
         "delegator_spiffe_id": delegator_spiffe_id,
         "aud": aud if aud is not None else payload_aud if isinstance(payload_aud, str) and payload_aud.strip() else None,
         "act": act if act is not None else payload_act if isinstance(payload_act, str) and payload_act.strip() else None,
-        "res": res if res is not None else payload_res if isinstance(payload_res, str) and payload_res.strip() else None,
+        "res": effective_res,
+        "resource_attrs": resource_attrs_for(effective_res),
         "root_token_id": root_token_id,
         "token_id": token_id,
         "parent_token_id": parent_token_id,
         "delegation_depth": delegation_depth,
         "registry_hit": registry_hit,
+        "issued_at_utc": utc_audit_time(issued_at) if issued_at is not None else None,
+        "issued_at_local": local_audit_time(issued_at) if issued_at is not None else None,
+        "expires_at_utc": utc_audit_time(expires_at) if expires_at is not None else None,
+        "expires_at_local": local_audit_time(expires_at) if expires_at is not None else None,
+        "timestamp_utc": utc_audit_time(logged_at),
+        "timestamp_local": local_audit_time(logged_at),
+        "timezone": zone_name,
+        "ttl_seconds": expires_at - issued_at if issued_at is not None and expires_at is not None else None,
         "error": error if error else None,
         "policy_id": CAPISS_POLICY_ID,
         "policy_hash": CAPISS_POLICY_HASH,
@@ -633,13 +685,16 @@ def run_policy_or_fail(policy_input: dict[str, object]) -> tuple[bool, JSONRespo
 def root_mint(
     payload: dict | None = None,
     x_spiffe_id: str | None = Header(default=None, alias="x-spiffe-id"),
+    x_correlation_id: str | None = Header(default=None, alias="x-correlation-id"),
 ):
+    x_correlation_id = optional_header_value(x_correlation_id)
     if not x_spiffe_id:
         log_mint_decision(
             result="deny",
             reason_code="missing_spiffe_id",
             decision_type="root_mint",
             payload=payload,
+            correlation_id=x_correlation_id,
         )
         raise HTTPException(status_code=401, detail="missing x-spiffe-id")
     if not x_spiffe_id.startswith("spiffe://"):
@@ -648,6 +703,7 @@ def root_mint(
             reason_code="invalid_spiffe_id",
             decision_type="root_mint",
             payload=payload,
+            correlation_id=x_correlation_id,
         )
         raise HTTPException(status_code=400, detail="invalid x-spiffe-id")
 
@@ -660,6 +716,7 @@ def root_mint(
             decision_type="root_mint",
             subject_spiffe_id=x_spiffe_id,
             payload=payload,
+            correlation_id=x_correlation_id,
         )
         return error_response
 
@@ -673,6 +730,7 @@ def root_mint(
             aud=cleaned["aud"],
             act=cleaned["act"],
             res=cleaned["res"],
+            correlation_id=x_correlation_id,
         )
         return JSONResponse(
             status_code=400,
@@ -697,10 +755,11 @@ def root_mint(
             aud=cleaned["aud"],
             act=cleaned["act"],
             res=canonical_res,
+            correlation_id=x_correlation_id,
         )
         return fail_response
 
-    token_value, expires_at, root_token_id, token_id = mint_root_biscuit(
+    token_value, issued_at, expires_at, root_token_id, token_id = mint_root_biscuit(
         x_spiffe_id,
         cleaned["aud"],
         cleaned["act"],
@@ -719,6 +778,7 @@ def root_mint(
             aud=cleaned["aud"],
             act=cleaned["act"],
             res=canonical_res,
+            correlation_id=x_correlation_id,
             error=redis_err,
         )
         return JSONResponse(
@@ -738,6 +798,7 @@ def root_mint(
             aud=cleaned["aud"],
             act=cleaned["act"],
             res=canonical_res,
+            correlation_id=x_correlation_id,
             error=mark_err,
         )
         return JSONResponse(
@@ -757,11 +818,15 @@ def root_mint(
         aud=cleaned["aud"],
         act=cleaned["act"],
         res=canonical_res,
+        correlation_id=x_correlation_id,
+        issued_at=issued_at,
+        expires_at=expires_at,
     )
 
     return {
         "token_type": "biscuit",
         "token": token_value,
+        "issued_at": issued_at,
         "expires_at": expires_at,
         "issued_to": x_spiffe_id,
         "aud": cleaned["aud"],
@@ -782,13 +847,16 @@ def resource_mint(
     payload: dict | None = None,
     x_spiffe_id: str | None = Header(default=None, alias="x-spiffe-id"),
     authorization: str | None = Header(default=None, alias="authorization"),
+    x_correlation_id: str | None = Header(default=None, alias="x-correlation-id"),
 ):
+    x_correlation_id = optional_header_value(x_correlation_id)
     if not x_spiffe_id:
         log_mint_decision(
             result="deny",
             reason_code="missing_spiffe_id",
             decision_type="resource_mint",
             payload=payload,
+            correlation_id=x_correlation_id,
         )
         raise HTTPException(status_code=401, detail="missing x-spiffe-id")
     if not x_spiffe_id.startswith("spiffe://"):
@@ -797,6 +865,7 @@ def resource_mint(
             reason_code="invalid_spiffe_id",
             decision_type="resource_mint",
             payload=payload,
+            correlation_id=x_correlation_id,
         )
         raise HTTPException(status_code=400, detail="invalid x-spiffe-id")
 
@@ -804,6 +873,7 @@ def resource_mint(
         log_mint_decision(
             decision_type="resource_mint",
             delegator_spiffe_id=x_spiffe_id,
+            correlation_id=x_correlation_id,
             **fields,
         )
 
@@ -1015,7 +1085,7 @@ def resource_mint(
         )
         return fail_response
 
-    token_value, expires_at, token_id = append_resource_token(
+    token_value, issued_at, expires_at, token_id = append_resource_token(
         parent_biscuit,
         parent_claims,
         x_spiffe_id,
@@ -1033,6 +1103,7 @@ def resource_mint(
             root_token_id=str(parent_claims["root_token_id"]),
             token_id=token_id,
             parent_token_id=str(parent_claims["token_id"]),
+            delegation_depth=int(parent_claims["effective_depth"]) + 1,
             aud=cleaned["aud"],
             act=cleaned["act"],
             res=canonical_res,
@@ -1056,11 +1127,14 @@ def resource_mint(
         act=cleaned["act"],
         res=canonical_res,
         registry_hit=registry_hit,
+        issued_at=issued_at,
+        expires_at=expires_at,
     )
 
     return {
         "token_type": "biscuit",
         "token": token_value,
+        "issued_at": issued_at,
         "expires_at": expires_at,
         "issued_to": x_spiffe_id,
         "aud": cleaned["aud"],
@@ -1081,5 +1155,7 @@ def resource_mint(
 def mint(
     payload: dict | None = None,
     x_spiffe_id: str | None = Header(default=None, alias="x-spiffe-id"),
+    x_correlation_id: str | None = Header(default=None, alias="x-correlation-id"),
 ):
-    return root_mint(payload=payload, x_spiffe_id=x_spiffe_id)
+    x_correlation_id = optional_header_value(x_correlation_id)
+    return root_mint(payload=payload, x_spiffe_id=x_spiffe_id, x_correlation_id=x_correlation_id)

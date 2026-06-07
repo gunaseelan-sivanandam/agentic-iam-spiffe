@@ -13,7 +13,7 @@ def _premise_modules_loaded(guard, toolb_module, signed_secret_token):
 
 @pytest.fixture()
 def signed_secret_token(capiss_module):
-    token, exp, *_ = capiss_module.mint_root_biscuit(
+    token, _, exp, *_ = capiss_module.mint_root_biscuit(
         SPIFFE_ID,
         "tool-b",
         "read",

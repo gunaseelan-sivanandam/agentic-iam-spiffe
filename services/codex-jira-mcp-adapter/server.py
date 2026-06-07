@@ -120,7 +120,7 @@ def mint_token(action: str, project_key: str, correlation_id: str) -> tuple[str 
     token = body.get("token")
     if not isinstance(token, str) or not token:
         return None, {"ok": False, "reason": "mint_denied", "correlation_id": correlation_id}
-    metadata = {key: body.get(key) for key in ("aud", "act", "res", "root_token_id", "token_id", "expires_at")}
+    metadata = {key: body.get(key) for key in ("aud", "act", "res", "root_token_id", "token_id", "issued_at", "expires_at")}
     metadata["correlation_id"] = correlation_id
     return token, metadata
 

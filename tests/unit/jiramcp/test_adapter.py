@@ -156,3 +156,65 @@ def test_adapter_http_mint_gateway_and_invoke_paths(codex_jira_mcp_adapter_modul
     guard.outcome("gateway call returned success", gateway_status == 200 and gateway_body["ok"] is True)
     guard.outcome("invoke strips raw token", invoked == {"ok": True, "key": "IAM-1"})
     guard.outcome("invoke denial normalized", denied["reason"] == "project_mismatch")
+
+
+# UT: UT-238
+# Test Description: Verifies adapter HTTP and mint helpers fail closed for upstream error branches.
+# Precondition: adapter HTTP dependencies are stubbed to return HTTP errors, transport errors, and missing token bodies.
+# Expected Output: The SUT normalizes each branch without exposing token material or raising.
+# Covers DD: DD-704
+@pytest.mark.boundary
+def test_adapter_http_and_mint_fail_closed_branches(codex_jira_mcp_adapter_module, monkeypatch, guard):
+    mod = codex_jira_mcp_adapter_module
+    guard.premise("adapter module loaded", mod is not None)
+
+    def http_error_with_json(*_args, **_kwargs):
+        raise mod.error.HTTPError("https://example/path", 403, "forbidden", {}, io.BytesIO(b'{"reason":"policy"}'))
+
+    def http_error_with_bad_json(*_args, **_kwargs):
+        raise mod.error.HTTPError("https://example/path", 502, "bad gateway", {}, io.BytesIO(b"not-json"))
+
+    guard.exercise("stub ssl context", lambda: monkeypatch.setattr(mod, "_ssl_context", lambda: None))
+    guard.exercise("stub http error json", lambda: monkeypatch.setattr(mod.request, "urlopen", http_error_with_json))
+    denied_status, denied_body = guard.exercise("request with json http error", lambda: mod._json_request("https://example/path", {}, "corr"))
+    guard.exercise("stub http error bad json", lambda: monkeypatch.setattr(mod.request, "urlopen", http_error_with_bad_json))
+    bad_status, bad_body = guard.exercise("request with bad json http error", lambda: mod._json_request("https://example/path", {}, "corr"))
+    guard.exercise("stub transport error", lambda: monkeypatch.setattr(mod.request, "urlopen", lambda *_args, **_kwargs: (_ for _ in ()).throw(mod.error.URLError("down"))))
+    unavailable_status, unavailable_body = guard.exercise("request with transport error", lambda: mod._json_request("https://example/path", {}, "corr"))
+    guard.exercise("stub missing token response", lambda: monkeypatch.setattr(mod, "_json_request", lambda *_args, **_kwargs: (200, {"ok": True})))
+    token, metadata = guard.exercise("mint with missing token", lambda: mod.mint_token("read_project_summary", "IAM", "corr"))
+
+    guard.outcome("json http error preserved", denied_status == 403 and denied_body == {"reason": "policy"})
+    guard.outcome("bad json http error normalized", bad_status == 502 and bad_body == {"error": "gateway_unavailable"})
+    guard.outcome("transport error normalized", unavailable_status == 503 and unavailable_body["reason"] == "gateway_unavailable")
+    guard.outcome("missing token denied", token is None and metadata == {"ok": False, "reason": "mint_denied", "correlation_id": "corr"})
+
+
+# UT: UT-239
+# Test Description: Verifies adapter argument validation rejects malformed create-story and MCP tool-name inputs.
+# Precondition: adapter module is loaded and caller-supplied arguments cover each invalid branch.
+# Expected Output: The SUT returns protocol-safe errors before any mint or gateway call.
+# Covers DD: DD-706, DD-707
+@pytest.mark.negative_control
+def test_adapter_validation_rejects_malformed_create_story_inputs(codex_jira_mcp_adapter_module, guard):
+    mod = codex_jira_mcp_adapter_module
+    guard.premise("adapter module loaded", mod is not None)
+    non_dict = guard.exercise("validate non-dict", lambda: mod.validate_tool_arguments("create_story", []))
+    missing_project = guard.exercise("validate missing project", lambda: mod.validate_tool_arguments("create_story", {"summary": "s", "description": "d"}))
+    extra_field = guard.exercise(
+        "validate extra field",
+        lambda: mod.validate_tool_arguments("create_story", {"project_key": "IAM", "summary": "s", "description": "d", "act": "forged"}),
+    )
+    missing_summary = guard.exercise("validate missing summary", lambda: mod.validate_tool_arguments("create_story", {"project_key": "IAM", "description": "d"}))
+    unknown = guard.exercise("invoke unknown tool", lambda: mod.invoke_tool("delete_story", {"project_key": "IAM"}, "corr"))
+    bad_mcp_name = guard.exercise(
+        "handle non-string tool name",
+        lambda: mod.handle_mcp_message({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": 7, "arguments": {}}}),
+    )
+
+    guard.outcome("non-dict rejected", non_dict == (None, "payload_invalid"))
+    guard.outcome("missing project rejected", missing_project == (None, "payload_invalid"))
+    guard.outcome("extra field rejected", extra_field == (None, "payload_invalid"))
+    guard.outcome("missing summary rejected", missing_summary == (None, "payload_invalid"))
+    guard.outcome("unknown tool rejected", unknown == {"ok": False, "reason": "unknown_tool", "correlation_id": "corr"})
+    guard.outcome("non-string MCP tool name is error result", bad_mcp_name["result"]["isError"] is True)

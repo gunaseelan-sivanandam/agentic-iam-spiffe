@@ -1,0 +1,532 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+COMPOSE_FILE="${COMPOSE_FILE:-$ROOT_DIR/compose/spiffe.compose.yml}"
+ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env}"
+MODE="live"
+BUILD_FLAG="--build"
+CONFIGURE_CODEX=1
+MCP_NAME="${MCP_NAME:-jira-mcp}"
+SESSION_START_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+LOG_DIR="$ROOT_DIR/artifacts/varambu-demo/$STAMP"
+LOG_FILE="$LOG_DIR/start.log"
+STACK_LOG_FILE="$LOG_DIR/stack.log"
+MCP_TOOLS_FILE="$LOG_DIR/mcp_tools.json"
+MCP_ERR_FILE="$LOG_DIR/mcp_tools.err"
+CURRENT_LINK="$ROOT_DIR/artifacts/varambu-demo/current"
+AUDIT_JSONL_FILE="$LOG_DIR/capiss_audit.jsonl"
+AUDIT_HUMAN_FILE="$LOG_DIR/capiss_audit.log"
+AUDIT_TAILER_PID_FILE="$LOG_DIR/audit_tailer.pid"
+AUDIT_TAILER_ERR_FILE="$LOG_DIR/audit_tailer.err"
+TIMEZONE_OVERRIDE=""
+SVID_DIR="${SPIRE_SVID_DIR:-/run/spire/svid}"
+DEMO_SVID_CONTAINERS=(
+  spiffe-tool-b
+  spiffe-tool-b-envoy
+  spiffe-jira-tool
+  spiffe-jira-tool-envoy
+  spiffe-capability-issuer-envoy
+  spiffe-jira-mcp-gateway
+  spiffe-jira-mcp-envoy
+  spiffe-codex-jira-mcp-adapter
+)
+
+usage() {
+  cat <<EOF
+Usage:
+  varambu start [--live|--mock] [--timezone ZONE] [--no-build] [--no-codex-config]
+  varambu audit [--all] [--json] [--follow] [--strict]
+  varambu show-audit-logs [--all] [--json] [--follow] [--strict]
+  varambu audit-file [--all] [--json|--human]
+
+Starts the Varambu demo stack from a clean state and prepares the Codex MCP
+stdio bridge.
+
+Options:
+  --live             Start jira-mcp-gateway in live Jira mode. Default.
+  --mock             Start jira-mcp-gateway against deterministic mock Jira.
+  --timezone ZONE    Override host timezone used for local audit timestamps.
+  --no-build         Do not rebuild images during compose up.
+  --no-codex-config  Do not register the Codex MCP server.
+  -h, --help         Show this help.
+EOF
+}
+
+current_session_dir() {
+  if [ -L "$CURRENT_LINK" ] || [ -d "$CURRENT_LINK" ]; then
+    (cd "$ROOT_DIR" && readlink -f "$CURRENT_LINK") 2>/dev/null && return 0
+  fi
+  find "$ROOT_DIR/artifacts/varambu-demo" -maxdepth 1 -mindepth 1 -type d ! -name current 2>/dev/null | sort | tail -n 1
+}
+
+tailer_alive() {
+  session_dir="$1"
+  pid_file="$session_dir/audit_tailer.pid"
+  [ -s "$pid_file" ] || return 1
+  pid="$(cat "$pid_file" 2>/dev/null || true)"
+  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+}
+
+warn_dead_tailer() {
+  session_dir="$1"
+  strict="$2"
+  if [ -s "$session_dir/audit_tailer.pid" ] && ! tailer_alive "$session_dir"; then
+    echo "WARNING: audit tailer is not running; audit file may be stale." >&2
+    [ "$strict" -eq 0 ] || return 1
+  fi
+}
+
+show_audit() {
+  all=0
+  json=0
+  follow=0
+  strict=0
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --all) all=1 ;;
+      --json) json=1 ;;
+      --follow) follow=1 ;;
+      --strict) strict=1 ;;
+      -h|--help) usage; return 0 ;;
+      *) echo "ERROR: unknown audit option: $1" >&2; return 2 ;;
+    esac
+    shift
+  done
+  if [ "$all" -eq 1 ]; then
+    [ "$follow" -eq 0 ] || { echo "ERROR: --follow is only supported for the current session" >&2; return 2; }
+    find "$ROOT_DIR/artifacts/varambu-demo" -maxdepth 1 -mindepth 1 -type d ! -name current | sort | while read -r session_dir; do
+      file="$session_dir/capiss_audit.log"
+      [ "$json" -eq 0 ] || file="$session_dir/capiss_audit.jsonl"
+      [ -f "$file" ] || continue
+      echo "== $(basename "$session_dir") =="
+      cat "$file"
+    done
+    return 0
+  fi
+  session_dir="$(current_session_dir)"
+  [ -n "$session_dir" ] || { echo "No Varambu session found. Run: varambu start" >&2; return 1; }
+  warn_dead_tailer "$session_dir" "$strict" || return 1
+  file="$session_dir/capiss_audit.log"
+  [ "$json" -eq 0 ] || file="$session_dir/capiss_audit.jsonl"
+  "$ROOT_DIR/scripts/varambu_audit.py" show --file "$file" ${follow:+--follow}
+}
+
+show_audit_file() {
+  all=0
+  mode="both"
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --all) all=1 ;;
+      --json) mode="json" ;;
+      --human) mode="human" ;;
+      -h|--help) usage; return 0 ;;
+      *) echo "ERROR: unknown audit-file option: $1" >&2; return 2 ;;
+    esac
+    shift
+  done
+  if [ "$all" -eq 1 ]; then
+    find "$ROOT_DIR/artifacts/varambu-demo" -maxdepth 1 -mindepth 1 -type d ! -name current | sort | while read -r session_dir; do
+      print_audit_paths "$session_dir" "$mode"
+    done
+    return 0
+  fi
+  session_dir="$(current_session_dir)"
+  [ -n "$session_dir" ] || { echo "No Varambu session found. Run: varambu start" >&2; return 1; }
+  print_audit_paths "$session_dir" "$mode"
+}
+
+print_audit_paths() {
+  session_dir="$1"
+  mode="$2"
+  case "$mode" in
+    json) echo "$session_dir/capiss_audit.jsonl" ;;
+    human) echo "$session_dir/capiss_audit.log" ;;
+    *) echo "json=$session_dir/capiss_audit.jsonl"; echo "human=$session_dir/capiss_audit.log" ;;
+  esac
+}
+
+detect_timezone() {
+  if [ -n "$TIMEZONE_OVERRIDE" ]; then
+    printf '%s\n' "$TIMEZONE_OVERRIDE"
+  elif [ -n "${TZ:-}" ]; then
+    printf '%s\n' "$TZ"
+  elif [ -r /etc/timezone ]; then
+    sed -n '1p' /etc/timezone
+  else
+    printf 'UTC\n'
+  fi
+}
+
+ensure_user_varambu_command() {
+  target_dir="$HOME/.local/bin"
+  target="$target_dir/varambu"
+  mkdir -p "$target_dir"
+  if [ -e "$target" ] && [ ! -L "$target" ]; then
+    say "WARNING: $target exists and is not a symlink; bare varambu command not updated"
+    return 0
+  fi
+  ln -sfn "$ROOT_DIR/varambu" "$target"
+  case ":$PATH:" in
+    *":$target_dir:"*) say "varambu_cmd=$target" ;;
+    *) say "WARNING: $target_dir is not on PATH; use ./varambu or add it to PATH" ;;
+  esac
+}
+
+stop_previous_audit_tailer() {
+  previous_dir="$(current_session_dir || true)"
+  [ -n "$previous_dir" ] || return 0
+  pid_file="$previous_dir/audit_tailer.pid"
+  [ -s "$pid_file" ] || return 0
+  pid="$(cat "$pid_file" 2>/dev/null || true)"
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+    kill "$pid" 2>/dev/null || true
+    say "stopped_previous_audit_tailer=$pid"
+  fi
+}
+
+start_audit_tailer() {
+  docker inspect spiffe-capability-issuer >/dev/null 2>&1 || {
+    echo "ERROR: spiffe-capability-issuer container is not inspectable" | tee -a "$LOG_FILE" >&2
+    return 1
+  }
+  : >"$AUDIT_JSONL_FILE"
+  : >"$AUDIT_HUMAN_FILE"
+  : >"$AUDIT_TAILER_ERR_FILE"
+  attempt=1
+  while [ "$attempt" -le 3 ]; do
+    "$ROOT_DIR/scripts/varambu_audit.py" tail \
+      --since "$SESSION_START_UTC" \
+      --jsonl "$AUDIT_JSONL_FILE" \
+      --human "$AUDIT_HUMAN_FILE" \
+      --err "$AUDIT_TAILER_ERR_FILE" \
+      >/dev/null 2>>"$AUDIT_TAILER_ERR_FILE" &
+    pid="$!"
+    echo "$pid" >"$AUDIT_TAILER_PID_FILE"
+    sleep 2
+    if kill -0 "$pid" 2>/dev/null; then
+      say "audit_tailer_pid=$pid"
+      say "audit_jsonl=$AUDIT_JSONL_FILE"
+      say "audit_log=$AUDIT_HUMAN_FILE"
+      return 0
+    fi
+    echo "tailer attempt $attempt failed" >>"$AUDIT_TAILER_ERR_FILE"
+    attempt=$((attempt + 1))
+  done
+  echo "VARAMBU_ERROR audit_tailer_failed" | tee -a "$LOG_FILE" >&2
+  return 1
+}
+
+if [ "$#" -eq 0 ]; then
+  usage
+  exit 0
+fi
+
+case "$1" in
+  start)
+    shift
+    ;;
+  audit|show-audit-logs|show-audit-log)
+    shift
+    show_audit "$@"
+    exit $?
+    ;;
+  audit-file)
+    shift
+    show_audit_file "$@"
+    exit $?
+    ;;
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  --*)
+    ;;
+  *)
+    echo "ERROR: unknown command: $1" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --live)
+      MODE="live"
+      ;;
+    --mock)
+      MODE="mock"
+      ;;
+    --timezone)
+      [ "$#" -ge 2 ] || { echo "ERROR: --timezone requires a value" >&2; exit 2; }
+      TIMEZONE_OVERRIDE="$2"
+      shift
+      ;;
+    --no-build)
+      BUILD_FLAG=""
+      ;;
+    --no-codex-config)
+      CONFIGURE_CODEX=0
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "ERROR: unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
+
+mkdir -p "$LOG_DIR"
+touch "$LOG_FILE"
+
+on_error() {
+  code="$?"
+  {
+    echo
+    echo "VARAMBU_ERROR code=$code"
+    echo "log_file=$LOG_FILE"
+  } | tee -a "$LOG_FILE"
+  if command -v docker >/dev/null 2>&1; then
+    docker compose -f "$COMPOSE_FILE" logs --no-color \
+      spire-server spire-agent capability-issuer capability-issuer-envoy \
+      jira-mcp-gateway jira-mcp-envoy codex-jira-mcp-adapter \
+      >"$STACK_LOG_FILE" 2>/dev/null || true
+    if [ -s "$STACK_LOG_FILE" ]; then
+      echo "stack_log=$STACK_LOG_FILE" | tee -a "$LOG_FILE"
+    fi
+  fi
+  exit "$code"
+}
+trap on_error ERR
+
+say() {
+  printf '%s\n' "$*" | tee -a "$LOG_FILE"
+}
+
+log_step() {
+  say ""
+  say "[$(date -u +%H:%M:%SZ)] $*"
+}
+
+run() {
+  {
+    printf '+'
+    printf ' %q' "$@"
+    printf '\n'
+  } >>"$LOG_FILE"
+  "$@" >>"$LOG_FILE" 2>&1
+}
+
+load_env_file() {
+  if [ -f "$ENV_FILE" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$ENV_FILE"
+    set +a
+  fi
+}
+
+require_live_env() {
+  if [ ! -f "$ENV_FILE" ]; then
+    echo "ERROR: live mode requires $ENV_FILE" >&2
+    echo "ERROR: live mode requires $ENV_FILE" >>"$LOG_FILE"
+    exit 2
+  fi
+
+  load_env_file
+  missing=()
+  for name in JIRA_BASE_URL JIRA_EMAIL JIRA_API_TOKEN; do
+    if [ -z "${!name:-}" ]; then
+      missing+=("$name")
+    fi
+  done
+
+  if [ "${#missing[@]}" -gt 0 ]; then
+    {
+      echo "ERROR: live mode missing required Jira env: ${missing[*]}"
+      echo "Set them in $ENV_FILE. Values are not logged."
+    } | tee -a "$LOG_FILE" >&2
+    exit 2
+  fi
+}
+
+container_running() {
+  docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null | grep -Fxq true
+}
+
+wait_for_container() {
+  name="$1"
+  for _ in $(seq 1 60); do
+    if container_running "$name"; then
+      echo "ready: $name"
+      echo "ready: $name" >>"$LOG_FILE"
+      return 0
+    fi
+    sleep 1
+  done
+  echo "ERROR: container did not become ready: $name" | tee -a "$LOG_FILE" >&2
+  return 1
+}
+
+container_has_svid() {
+  name="$1"
+  docker exec "$name" /bin/sh -c \
+    "test -s '$SVID_DIR/svid.pem' && test -s '$SVID_DIR/svid.key' && test -s '$SVID_DIR/bundle.pem'" \
+    >/dev/null 2>&1
+}
+
+wait_for_container_svid() {
+  name="$1"
+  for _ in $(seq 1 60); do
+    if container_running "$name" && container_has_svid "$name"; then
+      echo "svid_ready: $name"
+      echo "svid_ready: $name" >>"$LOG_FILE"
+      return 0
+    fi
+    sleep 1
+  done
+
+  {
+    echo "ERROR: SVID files did not become ready for: $name"
+    echo "Expected non-empty files:"
+    echo "  $SVID_DIR/svid.pem"
+    echo "  $SVID_DIR/svid.key"
+    echo "  $SVID_DIR/bundle.pem"
+    echo "Current $SVID_DIR listing:"
+  } | tee -a "$LOG_FILE" >&2
+  docker exec "$name" ls -l "$SVID_DIR" 2>&1 | tee -a "$LOG_FILE" >&2 || true
+  {
+    echo "Recent $name logs:"
+    docker logs --tail=80 "$name" 2>&1 || true
+    echo "Recent spiffe-spire-agent logs:"
+    docker logs --tail=80 spiffe-spire-agent 2>&1 || true
+  } >>"$LOG_FILE"
+  return 1
+}
+
+wait_for_workload_svids() {
+  for name in "${DEMO_SVID_CONTAINERS[@]}"; do
+    wait_for_container_svid "$name"
+  done
+}
+
+compose_cmd() {
+  if [ -f "$ENV_FILE" ]; then
+    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
+  else
+    docker compose -f "$COMPOSE_FILE" "$@"
+  fi
+}
+
+configure_codex_mcp() {
+  if [ "$CONFIGURE_CODEX" -ne 1 ]; then
+    say "Codex MCP config skipped by --no-codex-config"
+    return 0
+  fi
+  if ! command -v codex >/dev/null 2>&1; then
+    say "WARNING: codex CLI not found; MCP launcher is still available at scripts/codex_jira_mcp.sh"
+    return 0
+  fi
+
+  codex mcp remove "$MCP_NAME" >/dev/null 2>&1 || true
+  run codex mcp add \
+    --env "COMPOSE_FILE=$COMPOSE_FILE" \
+    "$MCP_NAME" -- \
+    "$ROOT_DIR/scripts/codex_jira_mcp.sh"
+}
+
+log_step "Varambu demo startup"
+say "repo_root=$ROOT_DIR"
+say "mode=$MODE"
+say "log_file=$LOG_FILE"
+export VARAMBU_TZ="$(detect_timezone)"
+say "timezone=$VARAMBU_TZ"
+
+log_step "Prepare Varambu command"
+ensure_user_varambu_command
+
+log_step "Preflight"
+run docker info
+run docker compose version
+run docker context ls
+run "$ROOT_DIR/scripts/clean_stack.sh" --check
+
+if [ "$MODE" = "live" ]; then
+  require_live_env
+  export JIRA_MCP_UPSTREAM_MODE=live
+else
+  export JIRA_MCP_UPSTREAM_MODE=mock
+fi
+say "jira_mcp_upstream_mode=$JIRA_MCP_UPSTREAM_MODE"
+
+log_step "Stop previous audit tailer"
+stop_previous_audit_tailer
+
+log_step "Clean stack"
+run "$ROOT_DIR/scripts/clean_stack.sh"
+
+log_step "Start stack"
+if [ -n "$BUILD_FLAG" ]; then
+  compose_cmd up -d "$BUILD_FLAG" >>"$LOG_FILE" 2>&1
+else
+  compose_cmd up -d >>"$LOG_FILE" 2>&1
+fi
+
+log_step "Wait for demo containers"
+wait_for_container spiffe-spire-server
+wait_for_container spiffe-spire-agent
+wait_for_container spiffe-redis
+wait_for_container spiffe-capability-issuer
+wait_for_container spiffe-capability-issuer-envoy
+wait_for_container spiffe-jira-mcp-gateway
+wait_for_container spiffe-jira-mcp-envoy
+wait_for_container spiffe-codex-jira-mcp-adapter
+
+log_step "Wait for workload SVIDs"
+wait_for_workload_svids
+
+log_step "Start capiss audit tailer"
+start_audit_tailer
+ln -sfn "$LOG_DIR" "$CURRENT_LINK"
+say "current_session=$CURRENT_LINK"
+
+log_step "Validate MCP stdio bridge"
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
+  | COMPOSE_FILE="$COMPOSE_FILE" "$ROOT_DIR/scripts/codex_jira_mcp.sh" \
+  >"$MCP_TOOLS_FILE" 2>"$MCP_ERR_FILE"
+if [ -s "$MCP_ERR_FILE" ]; then
+  say "MCP launcher stderr:"
+  sed -n '1,80p' "$MCP_ERR_FILE" | tee -a "$LOG_FILE"
+fi
+if ! grep -Fq '"read_project_summary"' "$MCP_TOOLS_FILE" \
+  || ! grep -Fq '"create_story"' "$MCP_TOOLS_FILE"; then
+  echo "ERROR: MCP tool discovery did not return the expected Jira MCP tools" | tee -a "$LOG_FILE" >&2
+  echo "mcp_tools=$MCP_TOOLS_FILE" | tee -a "$LOG_FILE" >&2
+  exit 1
+fi
+say "mcp_tools=$MCP_TOOLS_FILE"
+
+log_step "Configure Codex MCP"
+configure_codex_mcp
+
+log_step "Capture startup stack log"
+docker compose -f "$COMPOSE_FILE" logs --no-color \
+  spire-server spire-agent capability-issuer capability-issuer-envoy \
+  jira-mcp-gateway jira-mcp-envoy codex-jira-mcp-adapter \
+  >"$STACK_LOG_FILE" 2>/dev/null || true
+say "stack_log=$STACK_LOG_FILE"
+
+log_step "Varambu started"
+say "VARAMBU_STARTED"
+say "mode=$MODE"
+say "mcp_server=$MCP_NAME"
+say "log_file=$LOG_FILE"
+say "next_new_session=codex -C $ROOT_DIR"
+say "next_resume=codex -C $ROOT_DIR resume"
+say "demo_prompt=Use the Jira MCP tools to read project summary for IAM."

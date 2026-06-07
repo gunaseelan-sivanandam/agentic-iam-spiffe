@@ -543,3 +543,95 @@ tests:
   evidence_prefixes:
   - M5-T26
   status: active
+- id: E2E-M5-VA1-SUITE
+  type: e2e_suite
+  source_requirements:
+  - REQ-M5-VA1
+  - REQ-M4-O2
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: TEST_PREFIX="M5"
+  evidence_prefixes:
+  - M5-T42
+  - M5-T43
+  - M5-T44
+  - M5-T45
+  - M5-T46
+  - M5-T47
+  - M5-T48
+  status: active
+- id: E2E-M5-T42-VARAMBU-AUDIT-FILES
+  type: e2e_case
+  source_requirements:
+  - REQ-M5-VA1
+  - REQ-M4-O2
+  - REQ-M5-CJ10
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M5_T42_test
+  evidence_prefixes:
+  - M5-T42
+  status: active
+- id: E2E-M5-T43-VARAMBU-ACTIVE-APPEND
+  type: e2e_case
+  source_requirements:
+  - REQ-M5-VA1
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M5_T43_test
+  evidence_prefixes:
+  - M5-T43
+  status: active
+- id: E2E-M5-T44-VARAMBU-SESSION-HISTORY
+  type: e2e_case
+  source_requirements:
+  - REQ-M5-VA1
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M5_T44_test
+  evidence_prefixes:
+  - M5-T44
+  status: active
+- id: E2E-M5-T45-VARAMBU-SECRET-EXCLUSION
+  type: e2e_case
+  source_requirements:
+  - REQ-M5-VA1
+  - REQ-M4-O2
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M5_T45_test
+  evidence_prefixes:
+  - M5-T45
+  status: active
+- id: E2E-M5-T46-VARAMBU-STALE-TAILER
+  type: e2e_case
+  source_requirements:
+  - REQ-M5-VA1
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M5_T46_test
+  evidence_prefixes:
+  - M5-T46
+  status: active
+- id: E2E-M5-T47-VARAMBU-TIMING-SEMANTICS
+  type: e2e_case
+  source_requirements:
+  - REQ-M5-VA1
+  - REQ-M4-O2
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M5_T47_test
+  evidence_prefixes:
+  - M5-T47
+  status: active
+- id: E2E-M5-T48-VARAMBU-UNIFORM-ENRICHMENT
+  type: e2e_case
+  source_requirements:
+  - REQ-M5-VA1
+  - REQ-M4-O2
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M5_T48_test
+  evidence_prefixes:
+  - M5-T48
+  status: active

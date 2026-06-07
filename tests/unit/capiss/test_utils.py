@@ -69,7 +69,7 @@ def test_parse_fact_helpers(capiss_module, guard):
 # Covers DD: DD-119, DD-123
 def test_mint_and_parse_token_round_trip(capiss_module, guard):
     _premise_module_loaded(guard, capiss_module)
-    token, _, root_token_id, token_id = guard.exercise(
+    token, _, _, root_token_id, token_id = guard.exercise(
         "mint root biscuit",
         lambda: capiss_module.mint_root_biscuit(
             "spiffe://example.org/agent-a",
@@ -94,7 +94,7 @@ def test_mint_and_parse_token_round_trip(capiss_module, guard):
 # Covers DD: DD-119, DD-124
 def test_append_resource_token_round_trip(capiss_module, guard):
     _premise_module_loaded(guard, capiss_module)
-    token, _, _, _ = guard.exercise(
+    token, _, _, _, _ = guard.exercise(
         "mint root biscuit",
         lambda: capiss_module.mint_root_biscuit(
             "spiffe://example.org/agent-a",
@@ -108,7 +108,7 @@ def test_append_resource_token_round_trip(capiss_module, guard):
     guard.outcome("parent biscuit returned", parent_biscuit is not None)
     guard.outcome("parent claims returned", parent_claims is not None)
 
-    delegated, _, child_token_id = guard.exercise(
+    delegated, _, _, child_token_id = guard.exercise(
         "append delegated token",
         lambda: capiss_module.append_resource_token(
             parent_biscuit,
@@ -321,6 +321,236 @@ def test_log_event_emits_exact_structured_json(capiss_module, monkeypatch, guard
     )
 
 
+# UT: UT-223
+# Test Description: Verifies enriched capiss mint-decision audit schema for successful issued tokens.
+# Precondition: Module fixtures are loaded, audit time is deterministic, and a full allow decision is emitted through the mint audit helper.
+# Expected Output: The SUT emits local and UTC validity fields, correlation, resource attributes, policy metadata, and no bearer token value.
+# Covers DD: DD-222
+@pytest.mark.invariant
+def test_log_mint_decision_success_includes_validity_and_no_token_secret(capiss_module, monkeypatch, guard):
+    _premise_module_loaded(guard, capiss_module)
+    events: list[tuple[str, dict[str, object]]] = []
+    guard.exercise("set demo timezone", lambda: setattr(capiss_module, "VARAMBU_TZ", "Europe/Berlin"))
+    guard.exercise("freeze audit log time", lambda: monkeypatch.setattr(capiss_module.time, "time", lambda: 1_800_000_030))
+    guard.exercise("capture audit event", lambda: monkeypatch.setattr(capiss_module, "log_event", lambda event_type, **fields: events.append((event_type, fields))))
+    guard.exercise(
+        "emit allow mint decision",
+        lambda: capiss_module.log_mint_decision(
+            result="allow",
+            reason_code="ok",
+            decision_type="root_mint",
+            subject_spiffe_id="spiffe://example.org/codex-jira-mcp-adapter",
+            aud="jira-mcp-gateway",
+            act="create_story",
+            res="jira-mcp:/project:IAM",
+            root_token_id="root-1",
+            token_id="token-1",
+            delegation_depth=0,
+            correlation_id="corr-1",
+            issued_at=1_800_000_000,
+            expires_at=1_800_000_060,
+        ),
+    )
+    event_type, fields = guard.exercise("read captured event", lambda: events[0])
+    serialized = guard.exercise("serialize event", lambda: json.dumps(fields, sort_keys=True))
+    guard.outcome("event type preserved", event_type == "capiss_mint_decision")
+    guard.outcome("correlation logged", fields["correlation_id"] == "corr-1")
+    guard.outcome("issued utc logged", fields["issued_at_utc"] == "2027-01-15T08:00:00Z")
+    guard.outcome("expires utc logged", fields["expires_at_utc"] == "2027-01-15T08:01:00Z")
+    guard.outcome("logged utc differs from issued when later", fields["timestamp_utc"] == "2027-01-15T08:00:30Z")
+    guard.outcome("local timezone label present", fields["timezone"] == "Europe/Berlin")
+    guard.outcome("local issued time present", fields["issued_at_local"] == "2027-01-15 09:00:00 Europe/Berlin")
+    guard.outcome("actual ttl computed", fields["ttl_seconds"] == 60)
+    guard.outcome("resource attrs derived by capiss", fields["resource_attrs"] == {"kind": "jira_project", "project_key": "IAM"})
+    guard.outcome("bearer token value not logged", "token" not in fields and "Bearer" not in serialized and "token-secret" not in serialized)
+
+
+# UT: UT-224
+# Test Description: Verifies enriched capiss mint-decision audit schema for denied mint requests.
+# Precondition: Module fixtures are loaded and a denied Jira MCP decision is emitted without token issuance fields.
+# Expected Output: The SUT emits denial context, local and UTC logged time, resource attributes, and omits token validity fields.
+# Covers DD: DD-222
+@pytest.mark.invariant
+def test_log_mint_decision_deny_omits_validity_but_keeps_context(capiss_module, monkeypatch, guard):
+    _premise_module_loaded(guard, capiss_module)
+    events: list[tuple[str, dict[str, object]]] = []
+    guard.exercise("set demo timezone", lambda: setattr(capiss_module, "VARAMBU_TZ", "Europe/Berlin"))
+    guard.exercise("freeze audit log time", lambda: monkeypatch.setattr(capiss_module.time, "time", lambda: 1_800_000_030))
+    guard.exercise("capture audit event", lambda: monkeypatch.setattr(capiss_module, "log_event", lambda event_type, **fields: events.append((event_type, fields))))
+    guard.exercise(
+        "emit deny mint decision",
+        lambda: capiss_module.log_mint_decision(
+            result="deny",
+            reason_code="policy",
+            decision_type="root_mint",
+            subject_spiffe_id="spiffe://example.org/codex-jira-mcp-adapter",
+            aud="jira-mcp-gateway",
+            act="read_project_summary",
+            res="jira-mcp:/project:NAS",
+            correlation_id="corr-deny",
+        ),
+    )
+    _, fields = guard.exercise("read captured event", lambda: events[0])
+    guard.outcome("deny result logged", fields["result"] == "deny" and fields["reason_code"] == "policy")
+    guard.outcome("context retained", fields["subject_spiffe_id"] == "spiffe://example.org/codex-jira-mcp-adapter")
+    guard.outcome("resource attrs derived for denied canonical resource", fields["resource_attrs"] == {"kind": "jira_project", "project_key": "NAS"})
+    guard.outcome("logged local time present", fields["timestamp_local"] == "2027-01-15 09:00:30 Europe/Berlin")
+    guard.outcome("validity fields omitted", "issued_at_utc" not in fields and "expires_at_utc" not in fields and "ttl_seconds" not in fields)
+
+
+# UT: UT-225
+# Test Description: Verifies capiss audit timestamp formatting falls back to UTC when the configured Varambu timezone is invalid.
+# Precondition: Module fixtures are loaded and the Varambu timezone setting is an invalid zone name.
+# Expected Output: The SUT emits UTC-labeled local display fields instead of failing audit emission.
+# Covers DD: DD-222
+@pytest.mark.invariant
+def test_log_mint_decision_invalid_timezone_falls_back_to_utc(capiss_module, monkeypatch, guard):
+    _premise_module_loaded(guard, capiss_module)
+    events: list[tuple[str, dict[str, object]]] = []
+    guard.exercise("set invalid demo timezone", lambda: setattr(capiss_module, "VARAMBU_TZ", "Bad/Zone"))
+    guard.exercise("freeze audit log time", lambda: monkeypatch.setattr(capiss_module.time, "time", lambda: 1_800_000_000))
+    guard.exercise("capture audit event", lambda: monkeypatch.setattr(capiss_module, "log_event", lambda event_type, **fields: events.append((event_type, fields))))
+    guard.exercise(
+        "emit audit decision",
+        lambda: capiss_module.log_mint_decision(
+            result="deny",
+            reason_code="policy",
+            decision_type="root_mint",
+            subject_spiffe_id="spiffe://example.org/agent-a",
+            aud="tool-b",
+            act="read",
+            res="tool-b:/search",
+        ),
+    )
+    _, fields = guard.exercise("read captured event", lambda: events[0])
+    guard.outcome("timezone fell back to utc", fields["timezone"] == "UTC")
+    guard.outcome("local display uses utc", fields["timestamp_local"] == "2027-01-15 08:00:00 UTC")
+
+
+# UT: UT-234
+# Test Description: Verifies capiss derives resource attributes only for known canonical Jira resources.
+# Precondition: Module fixtures are loaded and resource strings cover Jira Tool, Jira MCP, unknown, malformed, and non-string inputs.
+# Expected Output: The SUT returns Jira project attributes only when they are safely derivable.
+# Covers DD: DD-222
+@pytest.mark.boundary
+def test_resource_attrs_for_known_and_unknown_resources(capiss_module, guard):
+    _premise_module_loaded(guard, capiss_module)
+    results = guard.exercise(
+        "derive resource attrs",
+        lambda: {
+            "jira_tool": capiss_module.resource_attrs_for("jira-tool:/project:IAM"),
+            "jira_mcp": capiss_module.resource_attrs_for("jira-mcp:/project:NAS"),
+            "unknown": capiss_module.resource_attrs_for("tool-b:/search"),
+            "malformed": capiss_module.resource_attrs_for("jira-mcp:/project:bad"),
+            "none": capiss_module.resource_attrs_for(None),
+        },
+    )
+    guard.outcome("jira tool attrs derived", results["jira_tool"] == {"kind": "jira_project", "project_key": "IAM"})
+    guard.outcome("jira mcp attrs derived", results["jira_mcp"] == {"kind": "jira_project", "project_key": "NAS"})
+    guard.outcome("unknown omitted", results["unknown"] is None)
+    guard.outcome("malformed omitted", results["malformed"] is None)
+    guard.outcome("non-string omitted", results["none"] is None)
+
+
+# UT: UT-235
+# Test Description: Verifies optional audit header normalization keeps only non-empty strings.
+# Precondition: Module fixtures are loaded and header candidates include a value, empty string, and non-string object.
+# Expected Output: The SUT preserves the real header value and normalizes absent or framework-default values to None.
+# Covers DD: DD-222
+@pytest.mark.boundary
+def test_optional_header_value_normalizes_non_strings(capiss_module, guard):
+    _premise_module_loaded(guard, capiss_module)
+    results = guard.exercise(
+        "normalize header values",
+        lambda: {
+            "value": capiss_module.optional_header_value("corr-1"),
+            "empty": capiss_module.optional_header_value("   "),
+            "object": capiss_module.optional_header_value(object()),
+        },
+    )
+    guard.outcome("string kept", results["value"] == "corr-1")
+    guard.outcome("empty omitted", results["empty"] is None)
+    guard.outcome("object omitted", results["object"] is None)
+
+
+# UT: UT-236
+# Test Description: Verifies root key creation handles a concurrent creator by loading the existing file.
+# Precondition: The key file already contains a valid private key and os.open is stubbed to raise FileExistsError.
+# Expected Output: The SUT loads the existing key and reports that it did not create a new key.
+# Covers DD: DD-111
+@pytest.mark.invariant
+def test_load_or_create_root_private_key_handles_file_exists_race(capiss_module, monkeypatch, tmp_path, guard):
+    _premise_module_loaded(guard, capiss_module)
+    guard.exercise("set key file paths", lambda: _set_key_paths(capiss_module, tmp_path))
+    first_key, _ = guard.exercise("create initial key", capiss_module.load_or_create_root_private_key)
+    guard.exercise("remove cached key to force create path", lambda: monkeypatch.setattr(capiss_module, "ROOT_PRIVATE_KEY", first_key))
+    guard.exercise("stub os.path.exists false", lambda: monkeypatch.setattr(capiss_module.os.path, "exists", lambda path: False if path == capiss_module.CAPISS_KEY_FILE else Path(path).exists()))
+    guard.exercise("stub os.open race", lambda: monkeypatch.setattr(capiss_module.os, "open", lambda *_args, **_kwargs: (_ for _ in ()).throw(FileExistsError())))
+    loaded_key, created = guard.exercise("load key after race", capiss_module.load_or_create_root_private_key)
+    guard.outcome("not created", created is False)
+    guard.outcome("existing key loaded", loaded_key.to_bytes() == first_key.to_bytes())
+
+
+# UT: UT-237
+# Test Description: Verifies mint-rate parsing handles malformed allowed flags and byte reasons.
+# Precondition: Redis eval replies are controlled and current time is deterministic.
+# Expected Output: The SUT fails closed for a non-integer flag and recognizes a byte-encoded mint-rate denial.
+# Covers DD: DD-221
+@pytest.mark.boundary
+def test_consume_mint_rate_parses_edge_replies(capiss_module, monkeypatch, guard):
+    _premise_module_loaded(guard, capiss_module)
+
+    class SequenceClient:
+        def __init__(self):
+            self.replies = [["bad", "ok"], [0, b"mint_rate_exceeded"]]
+
+        def eval(self, *_args):
+            return self.replies.pop(0)
+
+    client = SequenceClient()
+    guard.exercise("mock redis sequence", lambda: monkeypatch.setattr(capiss_module, "get_redis", lambda: client))
+    guard.exercise("freeze current time", lambda: monkeypatch.setattr(capiss_module.time, "time", lambda: 1_000))
+    malformed = guard.exercise("consume with malformed flag", lambda: capiss_module.consume_mint_rate("root-1", 1_060, 60))
+    exceeded = guard.exercise("consume with byte reason", lambda: capiss_module.consume_mint_rate("root-1", 1_060, 60))
+    guard.outcome("malformed fails closed", malformed == (False, "store_unavailable"))
+    guard.outcome("byte reason decoded", exceeded == (False, "mint_rate_exceeded"))
+
+
+# UT: UT-240
+# Test Description: Verifies capiss parser and payload validators fail closed on boundary inputs.
+# Precondition: Module fixtures are loaded and input values cover unknown facts, empty lines, bad payload types, and wildcard resources.
+# Expected Output: The SUT ignores non-facts and rejects malformed mint payload or non-canonical resources.
+# Covers DD: DD-101, DD-115, DD-116, DD-117
+@pytest.mark.boundary
+def test_parser_payload_and_resource_rejection_branches(capiss_module, guard):
+    _premise_module_loaded(guard, capiss_module)
+    raw_arg = guard.exercise("parse raw nonnumeric arg", lambda: capiss_module.parse_fact_arg("plain"))
+    claims = guard.exercise(
+        "parse block source with ignored lines",
+        lambda: capiss_module.parse_block_source('\nignored line\nact("read");\n'),
+    )
+    missing_body = guard.exercise("validate missing body", lambda: capiss_module.validate_mint_payload(None))
+    non_string = guard.exercise("validate non-string field", lambda: capiss_module.validate_mint_payload({"aud": 7, "act": "read", "res": "tool-b:/search"}))
+    empty_value = guard.exercise("validate empty field", lambda: capiss_module.validate_mint_payload({"aud": "tool-b", "act": " ", "res": "tool-b:/search"}))
+    rejected_resources = guard.exercise(
+        "canonicalize rejected resources",
+        lambda: [
+            capiss_module.canonicalize_jira_project_resource("tool-b:/search"),
+            capiss_module.canonicalize_jira_project_resource("jira-tool:/project:BAD:*"),
+            capiss_module.canonicalize_jira_mcp_project_resource("tool-b:/search"),
+            capiss_module.canonicalize_jira_mcp_project_resource("jira-mcp:/project:BAD/KEY"),
+            capiss_module.canonicalize_resource("tool-b", "tool-b:/regex"),
+        ],
+    )
+
+    guard.outcome("raw arg preserved", raw_arg == "plain")
+    guard.outcome("invalid source line ignored", claims == {"act": "read"})
+    guard.outcome("missing body rejected", missing_body[0] is None and missing_body[1].status_code == 400)
+    guard.outcome("non-string field rejected", non_string[0] is None and non_string[1].status_code == 400)
+    guard.outcome("empty field rejected", empty_value[0] is None and empty_value[1].status_code == 400)
+    guard.outcome("unsafe resources rejected", rejected_resources == [None, None, None, None, None])
+
+
 # UT: UT-111
 # Test Description: Verifies that get_redis constructs the Redis client once with exact module configuration and then reuses the cached instance.
 # Precondition: Module fixtures are loaded, the module cache is empty, and the Redis factory is replaced with a recording stub.
@@ -521,7 +751,7 @@ def test_decision_input_preserves_false_registry_hit(capiss_module, guard):
 @pytest.mark.boundary
 def test_extract_chain_claims_defaults_depth_when_missing(capiss_module, guard):
     _premise_module_loaded(guard, capiss_module)
-    token, _, _, _ = guard.exercise(
+    token, _, _, _, _ = guard.exercise(
         "mint root biscuit",
         lambda: capiss_module.mint_root_biscuit(
             "spiffe://example.org/agent-a",
@@ -660,3 +890,69 @@ def test_consume_mint_rate_fails_closed_on_store_error(capiss_module, monkeypatc
     ok, err = guard.exercise("consume mint rate with store error", lambda: capiss_module.consume_mint_rate("root-1", int(time.time()) + 10, 60))
     guard.outcome("consume denied", ok is False)
     guard.outcome("reason store_unavailable", err == "store_unavailable")
+
+
+# UT: UT-246
+# Test Description: Verifies enriched capiss mint-decision audit schema for a delegated resource mint with parent context and token validity fields.
+# Precondition: Module fixtures are loaded and a resource mint allow decision is emitted with parent_token_id, delegation_depth, and issued/expires timestamps.
+# Expected Output: The SUT emits parent_token_id, delegation_depth, root_token_id, token_id, issued/expires UTC fields, and computed ttl_seconds.
+# Covers DD: DD-222
+@pytest.mark.invariant
+def test_log_mint_decision_resource_mint_includes_parent_context_and_validity(capiss_module, monkeypatch, guard):
+    _premise_module_loaded(guard, capiss_module)
+    events: list[tuple[str, dict]] = []
+    guard.exercise("freeze audit log time", lambda: monkeypatch.setattr(capiss_module.time, "time", lambda: 1_800_000_030))
+    guard.exercise("capture audit event", lambda: monkeypatch.setattr(capiss_module, "log_event", lambda event_type, **fields: events.append((event_type, fields))))
+    guard.exercise(
+        "emit resource mint allow decision",
+        lambda: capiss_module.log_mint_decision(
+            result="allow",
+            reason_code="ok",
+            decision_type="resource_mint",
+            subject_spiffe_id="spiffe://example.org/codex-jira-mcp-adapter",
+            aud="jira-mcp-gateway",
+            act="create_story",
+            res="jira-mcp:/project:IAM",
+            root_token_id="root-1",
+            parent_token_id="parent-1",
+            token_id="resource-1",
+            delegation_depth=1,
+            issued_at=1_800_000_000,
+            expires_at=1_800_000_060,
+        ),
+    )
+    _, fields = guard.exercise("read captured event", lambda: events[0])
+    guard.outcome("decision type is resource_mint", fields["decision_type"] == "resource_mint")
+    guard.outcome("parent_token_id included", fields["parent_token_id"] == "parent-1")
+    guard.outcome("delegation_depth included", fields["delegation_depth"] == 1)
+    guard.outcome("token_id included", fields["token_id"] == "resource-1")
+    guard.outcome("root_token_id included", fields["root_token_id"] == "root-1")
+    guard.outcome("issued_at_utc present", "issued_at_utc" in fields)
+    guard.outcome("expires_at_utc present", "expires_at_utc" in fields)
+    guard.outcome("actual ttl computed", fields["ttl_seconds"] == 60)
+
+
+# UT: UT-247
+# Test Description: Verifies capiss audit omits the correlation_id field entirely when the caller does not supply one.
+# Precondition: Module fixtures are loaded and a mint decision is emitted without a correlation_id argument.
+# Expected Output: The SUT emits a capiss_mint_decision event that does not contain a correlation_id key.
+# Covers DD: DD-222
+@pytest.mark.invariant
+def test_log_mint_decision_omits_correlation_id_when_absent(capiss_module, monkeypatch, guard):
+    _premise_module_loaded(guard, capiss_module)
+    events: list[tuple[str, dict]] = []
+    guard.exercise("capture audit event", lambda: monkeypatch.setattr(capiss_module, "log_event", lambda event_type, **fields: events.append((event_type, fields))))
+    guard.exercise(
+        "emit decision without correlation",
+        lambda: capiss_module.log_mint_decision(
+            result="deny",
+            reason_code="policy",
+            decision_type="root_mint",
+            subject_spiffe_id="spiffe://example.org/agent-a",
+            aud="tool-b",
+            act="read",
+            res="tool-b:/search",
+        ),
+    )
+    _, fields = guard.exercise("read captured event", lambda: events[0])
+    guard.outcome("correlation_id absent when not provided", "correlation_id" not in fields)

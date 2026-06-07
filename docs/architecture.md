@@ -190,10 +190,10 @@ Overview:
 The capability issuer is the central authority that mints root and resource-scoped capability tokens. It translates allowed policy outcomes into explicit signed authority artifacts and enforces the current M4 new-resource mint-rate rule.
 
 Trust/Responsibility:
-It owns mint-time validation, required token fields, delegated token metadata, current M4 registry-gated resource minting, and current M4 new-resource mint-rate enforcement. It is also the current source for mint-decision logging and must emit one final mint-decision event for every mint exit path. In the canonical-resource cleanup slice it is responsible for rejecting non-canonical mint requests instead of silently preserving compatibility aliases.
+It owns mint-time validation, required token fields, delegated token metadata, current M4 registry-gated resource minting, and current M4 new-resource mint-rate enforcement. It is also the authoritative source for mint-decision logging and must emit one final `capiss_mint_decision` event for every mint exit path. The final event includes allow/deny result, reason, subject, action/resource/audience, token identifiers when available, parent context when available, local and UTC decision timestamps, issued/expires timestamps and actual TTL for issued tokens, optional caller-supplied correlation ID, policy metadata, and `capiss`-derived resource attributes for known resource families. It must not log bearer token values or other secret material. In the canonical-resource cleanup slice it is responsible for rejecting non-canonical mint requests instead of silently preserving compatibility aliases.
 
 Interactions:
-It receives verified identity from Envoy, queries OPA for mint policy, reads and writes shared state where needed, enforces the new-resource mint-rate against Redis-backed state, emits structured JSON mint-decision events to stdout for container-log capture, and returns signed tokens to callers.
+It receives verified identity from Envoy, queries OPA for mint policy, reads and writes shared state where needed, enforces the new-resource mint-rate against Redis-backed state, emits structured JSON mint-decision events to stdout for container-log capture and Varambu session copying, and returns signed tokens to callers.
 
 ## ARCH-013 OPA
 
@@ -528,6 +528,23 @@ The mock is not an authorization component. It returns broad upstream project da
 Interactions:
 `jira-mcp-gateway` calls the mock over the private Jira MCP app network. The mock is also attached to the test-only upstream inspection network so the harness can access mock premise and evidence endpoints without exposing the gateway app listener. Codex, the launcher, the adapter, capiss, and Envoys do not receive live Jira credentials.
 
+## ARCH-032 Varambu Demo Audit Session
+
+Type: Component
+Satisfies: REQ-M5-VA1, REQ-M4-O2
+
+Status:
+Target state for the Varambu audit demo slice. Implementation proof is not accepted until the slice completes the approved tests-first workflow.
+
+Overview:
+The Varambu operator interface provides the demo lifecycle commands `varambu start`, `varambu audit`/`varambu show-audit-logs`, and `varambu audit-file`. Each `varambu start` creates a new timestamped session directory under `artifacts/varambu-demo/`, starts the Docker/SPIFFE stack, passes the selected local audit timezone to `capiss`, starts a host-side capiss audit tailer, and updates `artifacts/varambu-demo/current` to the active session after audit capture is alive.
+
+Trust/Responsibility:
+Container stdout remains the authoritative audit source. The Varambu audit tailer is a session evidence copier: it reads `spiffe-capability-issuer` logs from the session start time, filters `capiss_mint_decision` events, allowlists the approved audit schema, drops forbidden or unknown fields, and appends secret-free records to `capiss_audit.jsonl` and `capiss_audit.log`. It adds a session-local sequence number for display only. It does not deduplicate because each `varambu start` creates a new session and stops the previous tailer. It never persists bearer capability token values, authorization header values, upstream credentials, cookies, or other secret-bearing fields.
+
+Interactions:
+`varambu audit` reads the current session's persisted human log and does not scrape Docker logs. `varambu audit --json` prints the persisted JSONL exactly as written. `varambu audit --all` reads historical session files in timestamp order. `varambu audit --follow` follows the current persisted file. `varambu audit-file` prints direct paths to the current or historical audit artifacts. If the current session has a tailer PID file and the process is no longer alive, the audit command warns that the file may be stale; strict mode fails instead of presenting stale files as fresh proof.
+
 Authoritative State:
 | State | Store/System | Writer | Reader | TTL/Lifecycle | Decision Impact | Classification |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -538,4 +555,8 @@ Authoritative State:
 | Jira API credential | gateway live environment only | Operator/live setup | gateway | Live runtime secret lifecycle | Enables live upstream calls only after local enforcement | Sensitive secret |
 | MCP session process | Adapter container process | launcher | Codex stdio | One MCP server session | Transports untrusted MCP requests and bounded responses | Runtime transport |
 | M5 correlation ID | Adapter, capiss, gateway, mock/live logs | adapter or gateway | tests/operators | Request lifecycle | Reconstructs mint, enforcement, upstream, and Codex-visible result | Evidence metadata |
+| Varambu current session pointer | `artifacts/varambu-demo/current` symlink | `varambu start` | `varambu audit`, `varambu audit-file` | Replaced on each successful start | Selects the default operator-visible audit files | Evidence metadata |
+| Varambu audit tailer PID | `artifacts/varambu-demo/<timestamp>/audit_tailer.pid` | `varambu start` | `varambu audit`, operator | Session lifecycle | Warns when persisted audit files may be stale | Advisory |
+| Varambu session audit files | `artifacts/varambu-demo/<timestamp>/capiss_audit.jsonl` and `.log` | Varambu audit tailer | operator/tests | Per-session, append-only during tailer lifetime | Human/demo evidence copied from authoritative capiss stdout | Evidence copy |
+| Varambu audit timezone | `VARAMBU_TZ` environment | `varambu start` | capiss | Runtime config | Determines local display timestamps only; UTC remains available in JSONL | Evidence metadata |
 | jira-mcp-mock request log | mock memory | mock | test harness | Test lifecycle/reset per test | Proves upstream calls happened only after authorization and only from gateway path | Test evidence |

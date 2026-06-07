@@ -485,13 +485,19 @@ For every mint request (root token mint or resource token mint), `capiss` MUST e
 - allow/deny
 - `policy_id` and `policy_hash`
 - structured `reason_code`
+- `timestamp_utc`, `timestamp_local`, and `timezone` for the final audit decision
+- optional `correlation_id` when supplied by the caller
 - `subject_spiffe_id` when known from the request
 - requested `aud`, `act`, `res` when truthfully known from the request
+- `resource_attrs` derived by `capiss` from canonical `res` when a known resource family has safe display attributes
 - `root_token_id` when a root token context exists for that decision
 - `token_id` when a token was successfully created before a later fail-closed step
 - `parent_token_id` and `delegation_depth` for delegated/resource mint decisions when those values are available
+- `issued_at_utc`, `issued_at_local`, `expires_at_utc`, `expires_at_local`, and actual `ttl_seconds` for successfully issued tokens
 - `registry_hit` yes/no for resource mint decisions governed by the Discovery Registry
 - `error` for fail-closed/store-transport cases when implementation detail is available
+
+Mint-decision audit events MUST NOT include bearer capability token values, upstream credentials, authorization header values, cookies, or other secret material. Denied decisions MUST omit token-validity fields when no token is issued.
 
 ### REQ-M4-O3 — Chain reconstruction is always possible
 From audit events + DA logs, it MUST be possible to reconstruct:
@@ -738,6 +744,17 @@ Only `jira-mcp-gateway` SHALL call `jira-mcp-mock` or live Jira in M5.
 The deterministic default proof SHALL use `jira-mcp-mock`, which contains broad `IAM` and `NAS` data and request logs.
 M5 SHALL emit correlated adapter, capiss, gateway, and mock/live evidence using a correlation ID for allow, deny, validation, budget/rate, and upstream failure paths.
 Optional live smoke SHALL be explicit opt-in and SHALL prove broad live credential access plus protected-path narrowing without exposing live credentials.
+
+## REQ-M5-VA1 — Varambu demo audit view
+The Varambu operator interface SHALL provide a coherent command-line demo flow with `varambu start`, `varambu audit`/`varambu show-audit-logs`, and `varambu audit-file`.
+Each `varambu start` SHALL create a new timestamped demo session, pass an explicit audit timezone to `capiss`, stop any previous Varambu audit tailer, start one active capiss audit tailer for the new session, and maintain a current-session pointer.
+The active tailer SHALL append normalized, secret-free capiss mint-decision records to both a structured JSONL file and a human-readable log file as mint allow/deny decisions occur.
+`varambu audit` SHALL read persisted session files only; it SHALL NOT scrape Docker logs or synthesize missing audit entries at display time.
+The default audit view SHALL show only the current session, SHALL support `--all` for historical sessions, `--json` for persisted JSONL, and `--follow` for live viewing of persisted files.
+`varambu audit-file` SHALL print direct paths for the JSONL and human-readable audit files so operators can inspect the files without the Varambu CLI.
+The audit command SHALL warn when the current-session tailer is no longer running and SHALL provide a strict mode that fails instead of presenting stale evidence as fresh proof.
+The human-readable audit log SHALL show local time first while preserving UTC fields in the structured JSONL evidence.
+Varambu audit artifacts and CLI output SHALL NOT include bearer capability token values, upstream credentials, authorization header values, cookies, or other secret material.
 
 ---
 

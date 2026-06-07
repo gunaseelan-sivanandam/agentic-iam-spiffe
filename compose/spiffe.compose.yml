@@ -277,6 +277,7 @@ services:
       M4_MAX_DEPTH: "3"
       M4_DEFAULT_BUDGET: "10"
       M4_ROOT_TTL_SECONDS: "60"
+      VARAMBU_TZ: ${VARAMBU_TZ:-UTC}
     networks:
       - capiss_app_net
     depends_on:
@@ -315,6 +316,7 @@ services:
       M4_MAX_DEPTH: "3"
       M4_DEFAULT_BUDGET: "10"
       M4_ROOT_TTL_SECONDS: "60"
+      VARAMBU_TZ: ${VARAMBU_TZ:-UTC}
     networks:
       - capiss_app_net
     profiles:

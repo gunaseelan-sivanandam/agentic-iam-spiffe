@@ -139,6 +139,20 @@ scripts/codex_jira_mcp.sh
 The launcher bridges stdio into the running `codex-jira-mcp-adapter` container.
 It does not start, rebuild, or tear down the Docker stack.
 
+**Varambu audit demo flow**
+
+The Varambu audit demo slice is authored under
+`docs/slices/m5-varambu-audit-demo/`. Its target operator story is:
+
+```bash
+varambu start --mock
+varambu audit
+varambu audit-file
+```
+
+This flow is not accepted as implemented until the slice completes the
+tests-first workflow and records final verification.
+
 **Run the M4a/M4b Jira demo**
 
 ```bash

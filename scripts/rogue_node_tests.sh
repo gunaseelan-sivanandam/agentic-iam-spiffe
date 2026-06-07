@@ -3821,6 +3821,112 @@ M5_T41_test() {
   return 0
 }
 
+M5_T42_test() {
+  begin_test_evidence "M5-T42" "varambu_capiss_audit_files"
+  echo "EVIDENCE_DIR=$EVDIR"
+  session_dir="/repo/artifacts/varambu-demo/e2e-M5-T42"
+  premise_guard "M5 path ready and audit session prepared" "m5_ready && jira_mcp_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
+  exercise_guard "start Varambu capiss audit tailer" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; : >\"$session_dir/capiss_audit.jsonl\"; : >\"$session_dir/capiss_audit.log\"; python3 /repo/scripts/varambu_audit.py tail --since \"\$since\" --jsonl \"$session_dir/capiss_audit.jsonl\" --human \"$session_dir/capiss_audit.log\" --err \"$session_dir/audit_tailer.err\" >/dev/null 2>>\"$session_dir/audit_tailer.err\" & echo \$! >\"$session_dir/audit_tailer.pid\"; sleep 2; kill -0 \"\$(cat \"$session_dir/audit_tailer.pid\")\""
+  exercise_guard "perform allowed and denied MCP requests" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/iam_read_mcp.json\" \"$EVDIR/iam_read.err\" && mcp_text_json_to_file \"$EVDIR/iam_read_mcp.json\" \"$EVDIR/iam_read.json\"; mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"audit e2e\",\"description\":\"d\"}' \"$EVDIR/iam_create_mcp.json\" \"$EVDIR/iam_create.err\" && mcp_text_json_to_file \"$EVDIR/iam_create_mcp.json\" \"$EVDIR/iam_create.json\"; mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/nas_read_mcp.json\" \"$EVDIR/nas_read.err\" && mcp_text_json_to_file \"$EVDIR/nas_read_mcp.json\" \"$EVDIR/nas_read.json\"; mcp_tool_call create_story '{\"project_key\":\"NAS\",\"summary\":\"denied\",\"description\":\"d\"}' \"$EVDIR/nas_create_mcp.json\" \"$EVDIR/nas_create.err\" && mcp_text_json_to_file \"$EVDIR/nas_create_mcp.json\" \"$EVDIR/nas_create.json\""
+  exercise_guard "wait for audit entries and stop tailer" "i=1; while [ \$i -le 30 ]; do [ \"\$(wc -l <\"$session_dir/capiss_audit.jsonl\")\" -ge 4 ] && break; sleep 1; i=\$((i+1)); done; kill \"\$(cat \"$session_dir/audit_tailer.pid\")\" 2>/dev/null || true; cp \"$session_dir/capiss_audit.jsonl\" \"$EVDIR/capiss_audit.jsonl\"; cp \"$session_dir/capiss_audit.log\" \"$EVDIR/capiss_audit.log\""
+  exercise_guard "render persisted audit through varambu cli" "bash /repo/varambu audit --json >\"$EVDIR/varambu_audit_json.out\""
+  outcome_guard "audit file contains two minted and two denied entries in append order" "jq -s 'length>=4 and .[0].result==\"allow\" and .[0].act==\"read_project_summary\" and .[1].result==\"allow\" and .[1].act==\"create_story\" and .[2].result==\"deny\" and .[2].res==\"jira-mcp:/project:NAS\" and .[3].result==\"deny\" and .[3].res==\"jira-mcp:/project:NAS\"' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
+  outcome_guard "minted rows include subject token validity local utc and correlation metadata" "jq -s '.[0].subject_spiffe_id==\"spiffe://example.org/codex-jira-mcp-adapter\" and (.[0].token_id|type)==\"string\" and (.[0].root_token_id|type)==\"string\" and (.[0].issued_at_local|type)==\"string\" and (.[0].expires_at_local|type)==\"string\" and (.[0].issued_at_utc|type)==\"string\" and (.[0].expires_at_utc|type)==\"string\" and (.[0].timestamp_local|type)==\"string\" and (.[0].ttl_seconds|type)==\"number\" and (.[0].correlation_id|type)==\"string\"' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
+  outcome_guard "denied rows include reason and omit token validity" "jq -s '.[2].reason_code==\"policy\" and (.[2]|has(\"token_id\")|not) and (.[2]|has(\"issued_at_utc\")|not) and (.[2]|has(\"expires_at_utc\")|not) and (.[2].resource_attrs.project_key)==\"NAS\"' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
+  outcome_guard "audit artifacts do not expose bearer token values or upstream secrets" "! grep -E '\"token\"|Bearer |Basic |JIRA_API_TOKEN' \"$EVDIR/capiss_audit.jsonl\" \"$EVDIR/capiss_audit.log\" \"$EVDIR/varambu_audit_json.out\""
+  outcome_guard "human log is readable and includes logged time" "grep -Fq 'MINTED ok' \"$EVDIR/capiss_audit.log\" && grep -Fq 'DENIED policy' \"$EVDIR/capiss_audit.log\" && grep -Fq 'Logged At:' \"$EVDIR/capiss_audit.log\""
+  return 0
+}
+
+M5_T43_test() {
+  begin_test_evidence "M5-T43" "varambu_audit_active_append"
+  session_dir="/repo/artifacts/varambu-demo/e2e-M5-T43"
+  premise_guard "M5 path ready and empty audit session prepared" "m5_ready && jira_mcp_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
+  exercise_guard "start audit tailer" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; : >\"$session_dir/capiss_audit.jsonl\"; : >\"$session_dir/capiss_audit.log\"; python3 /repo/scripts/varambu_audit.py tail --since \"\$since\" --jsonl \"$session_dir/capiss_audit.jsonl\" --human \"$session_dir/capiss_audit.log\" --err \"$session_dir/audit_tailer.err\" >/dev/null 2>>\"$session_dir/audit_tailer.err\" & echo \$! >\"$session_dir/audit_tailer.pid\"; sleep 2; kill -0 \"\$(cat \"$session_dir/audit_tailer.pid\")\""
+  exercise_guard "perform one allowed mint request" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/iam_mcp.json\" \"$EVDIR/iam.err\""
+  exercise_guard "wait for first entry and snapshot jsonl line count" "i=1; while [ \$i -le 15 ]; do [ \"\$(wc -l <\"$session_dir/capiss_audit.jsonl\")\" -ge 1 ] && break; sleep 1; i=\$((i+1)); done; cp \"$session_dir/capiss_audit.jsonl\" \"$EVDIR/after_first.jsonl\""
+  exercise_guard "render audit through varambu cli after first request" "bash /repo/varambu audit --json >\"$EVDIR/varambu_after_first.out\""
+  exercise_guard "perform one denied mint request" "mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/nas_mcp.json\" \"$EVDIR/nas.err\""
+  exercise_guard "wait for second entry and stop tailer" "i=1; while [ \$i -le 15 ]; do [ \"\$(wc -l <\"$session_dir/capiss_audit.jsonl\")\" -ge 2 ] && break; sleep 1; i=\$((i+1)); done; kill \"\$(cat \"$session_dir/audit_tailer.pid\")\" 2>/dev/null || true; cp \"$session_dir/capiss_audit.jsonl\" \"$EVDIR/after_second.jsonl\""
+  outcome_guard "first snapshot has exactly one entry" "[ \"\$(wc -l <\"$EVDIR/after_first.jsonl\")\" -eq 1 ]"
+  outcome_guard "varambu cli output matches persisted first entry without synthesis" "diff -q \"$EVDIR/after_first.jsonl\" \"$EVDIR/varambu_after_first.out\" >/dev/null"
+  outcome_guard "second entry appended after first in request order" "[ \"\$(wc -l <\"$EVDIR/after_second.jsonl\")\" -eq 2 ] && jq -rn '[inputs] | .[0].result' \"$EVDIR/after_second.jsonl\" | grep -q allow && jq -rn '[inputs] | .[1].result' \"$EVDIR/after_second.jsonl\" | grep -q deny"
+  return 0
+}
+
+M5_T44_test() {
+  begin_test_evidence "M5-T44" "varambu_audit_session_and_history"
+  session1="/repo/artifacts/varambu-demo/e2e-M5-T44-s1"
+  session2="/repo/artifacts/varambu-demo/e2e-M5-T44-s2"
+  premise_guard "two synthetic sessions exist with distinct records and current points to session 2" "rm -rf \"$session1\" \"$session2\" && mkdir -p \"$session1\" \"$session2\" && printf '{\"sequence\":1,\"result\":\"allow\",\"reason_code\":\"ok\"}\n' >\"$session1/capiss_audit.jsonl\" && printf '#1 MINTED ok  -\n' >\"$session1/capiss_audit.log\" && printf '{\"sequence\":1,\"result\":\"deny\",\"reason_code\":\"policy\"}\n' >\"$session2/capiss_audit.jsonl\" && printf '#1 DENIED policy  -\n' >\"$session2/capiss_audit.log\" && ln -sfn \"$session2\" /repo/artifacts/varambu-demo/current"
+  exercise_guard "show default current session audit" "bash /repo/varambu audit >\"$EVDIR/current.out\" 2>\"$EVDIR/current.err\""
+  exercise_guard "show all sessions audit" "bash /repo/varambu audit --all >\"$EVDIR/all.out\" 2>\"$EVDIR/all.err\""
+  exercise_guard "get current session audit file paths" "bash /repo/varambu audit-file >\"$EVDIR/paths.out\" 2>\"$EVDIR/paths.err\""
+  exercise_guard "get all sessions audit file paths" "bash /repo/varambu audit-file --all >\"$EVDIR/paths_all.out\" 2>\"$EVDIR/paths_all.err\""
+  outcome_guard "default audit shows only current session denied record" "grep -q 'DENIED' \"$EVDIR/current.out\" && ! grep -q 'MINTED' \"$EVDIR/current.out\""
+  outcome_guard "all sessions audit shows both minted and denied records" "grep -q 'MINTED' \"$EVDIR/all.out\" && grep -q 'DENIED' \"$EVDIR/all.out\""
+  outcome_guard "no cross-session deduplification" "[ \"\$(grep -c 'MINTED\|DENIED' \"$EVDIR/all.out\")\" -eq 2 ]"
+  outcome_guard "audit-file paths point to existing readable files" "while IFS= read -r p; do [ -f \"\$p\" ] || { echo \"missing: \$p\"; exit 1; }; done <\"$EVDIR/paths.out\""
+  outcome_guard "audit-file --all exposes paths for both sessions" "grep -c 'capiss_audit' \"$EVDIR/paths_all.out\" | grep -q '[2-9]'"
+  return 0
+}
+
+M5_T45_test() {
+  begin_test_evidence "M5-T45" "varambu_audit_secret_exclusion"
+  session_dir="/repo/artifacts/varambu-demo/e2e-M5-T45"
+  premise_guard "M5 path ready and audit session prepared" "m5_ready && jira_mcp_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
+  exercise_guard "start audit tailer" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; : >\"$session_dir/capiss_audit.jsonl\"; : >\"$session_dir/capiss_audit.log\"; python3 /repo/scripts/varambu_audit.py tail --since \"\$since\" --jsonl \"$session_dir/capiss_audit.jsonl\" --human \"$session_dir/capiss_audit.log\" --err \"$session_dir/audit_tailer.err\" >/dev/null 2>>\"$session_dir/audit_tailer.err\" & echo \$! >\"$session_dir/audit_tailer.pid\"; sleep 2; kill -0 \"\$(cat \"$session_dir/audit_tailer.pid\")\""
+  exercise_guard "perform allowed and denied MCP requests" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/iam_mcp.json\" \"$EVDIR/iam.err\"; mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"t45\",\"description\":\"d\"}' \"$EVDIR/iam_create_mcp.json\" \"$EVDIR/iam_create.err\"; mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/nas_mcp.json\" \"$EVDIR/nas.err\""
+  exercise_guard "wait for entries and stop tailer" "i=1; while [ \$i -le 30 ]; do [ \"\$(wc -l <\"$session_dir/capiss_audit.jsonl\")\" -ge 3 ] && break; sleep 1; i=\$((i+1)); done; kill \"\$(cat \"$session_dir/audit_tailer.pid\")\" 2>/dev/null || true; cp \"$session_dir/capiss_audit.jsonl\" \"$EVDIR/capiss_audit.jsonl\"; cp \"$session_dir/capiss_audit.log\" \"$EVDIR/capiss_audit.log\"; cp \"$session_dir/audit_tailer.err\" \"$EVDIR/audit_tailer.err\""
+  exercise_guard "render audit through varambu cli" "bash /repo/varambu audit --json >\"$EVDIR/varambu_audit.out\""
+  outcome_guard "no bearer token values in jsonl evidence" "! grep -E 'Bearer |\"token\":\s*\"[A-Za-z0-9+/]{20,}' \"$EVDIR/capiss_audit.jsonl\""
+  outcome_guard "no bearer token values in human log evidence" "! grep -E 'Bearer |Basic ' \"$EVDIR/capiss_audit.log\""
+  outcome_guard "no upstream credentials in tailer diagnostics" "! grep -E 'Bearer |Basic |JIRA_API_TOKEN' \"$EVDIR/audit_tailer.err\""
+  outcome_guard "no bearer token values in varambu cli output" "! grep -E 'Bearer |Basic ' \"$EVDIR/varambu_audit.out\""
+  outcome_guard "token identifiers are present but contain only identifier chars" "jq -e 'select(.token_id != null) | .token_id | test(\"^[a-f0-9-]+$\")' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
+  return 0
+}
+
+M5_T46_test() {
+  begin_test_evidence "M5-T46" "varambu_audit_stale_tailer_warning"
+  session_dir="/repo/artifacts/varambu-demo/e2e-M5-T46"
+  premise_guard "session with dead tailer PID prepared" "rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && printf '#1 MINTED ok  -\nLogged At:    -\n\n' >\"$session_dir/capiss_audit.log\" && printf '{\"sequence\":1,\"result\":\"allow\",\"reason_code\":\"ok\"}\n' >\"$session_dir/capiss_audit.jsonl\" && echo 99999999 >\"$session_dir/audit_tailer.pid\""
+  exercise_guard "run non-strict audit with dead tailer" "bash /repo/varambu audit >\"$EVDIR/audit_warn.out\" 2>\"$EVDIR/audit_warn.err\""
+  exercise_guard "capture strict audit exit code" "bash /repo/varambu audit --strict >\"$EVDIR/audit_strict.out\" 2>\"$EVDIR/audit_strict.err\"; echo \$? >\"$EVDIR/strict_rc.txt\""
+  outcome_guard "non-strict audit emits stale tailer warning to stderr" "grep -qi 'WARNING.*tailer' \"$EVDIR/audit_warn.err\""
+  outcome_guard "non-strict audit still prints persisted evidence" "grep -q 'MINTED' \"$EVDIR/audit_warn.out\""
+  outcome_guard "strict audit exits with non-zero code" "[ \"\$(cat \"$EVDIR/strict_rc.txt\")\" != \"0\" ]"
+  return 0
+}
+
+M5_T47_test() {
+  begin_test_evidence "M5-T47" "varambu_audit_timing_semantics"
+  session_dir="/repo/artifacts/varambu-demo/e2e-M5-T47"
+  premise_guard "M5 path ready and audit session prepared" "m5_ready && jira_mcp_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
+  exercise_guard "start audit tailer" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; : >\"$session_dir/capiss_audit.jsonl\"; : >\"$session_dir/capiss_audit.log\"; python3 /repo/scripts/varambu_audit.py tail --since \"\$since\" --jsonl \"$session_dir/capiss_audit.jsonl\" --human \"$session_dir/capiss_audit.log\" --err \"$session_dir/audit_tailer.err\" >/dev/null 2>>\"$session_dir/audit_tailer.err\" & echo \$! >\"$session_dir/audit_tailer.pid\"; sleep 2; kill -0 \"\$(cat \"$session_dir/audit_tailer.pid\")\""
+  exercise_guard "perform allowed and denied mint requests" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/iam_mcp.json\" \"$EVDIR/iam.err\"; mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/nas_mcp.json\" \"$EVDIR/nas.err\""
+  exercise_guard "wait for entries and stop tailer" "i=1; while [ \$i -le 20 ]; do [ \"\$(wc -l <\"$session_dir/capiss_audit.jsonl\")\" -ge 2 ] && break; sleep 1; i=\$((i+1)); done; kill \"\$(cat \"$session_dir/audit_tailer.pid\")\" 2>/dev/null || true; cp \"$session_dir/capiss_audit.jsonl\" \"$EVDIR/capiss_audit.jsonl\""
+  outcome_guard "minted record includes utc and local timestamps and timezone" "jq -e 'select(.result==\"allow\") | (.timestamp_utc | endswith(\"Z\")) and (.timestamp_local | test(\" [A-Za-z]\")) and (.timezone | type)==\"string\"' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
+  outcome_guard "minted record includes issued expires and actual ttl" "jq -e 'select(.result==\"allow\") | (.issued_at_utc | endswith(\"Z\")) and (.expires_at_utc | endswith(\"Z\")) and (.ttl_seconds | type)==\"number\" and .ttl_seconds > 0' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
+  outcome_guard "denied record includes logged timestamps and omits token validity" "jq -e 'select(.result==\"deny\") | (.timestamp_utc | endswith(\"Z\")) and (.timezone | type)==\"string\" and (has(\"issued_at_utc\") | not) and (has(\"expires_at_utc\") | not) and (has(\"ttl_seconds\") | not)' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
+  outcome_guard "human log shows local time in header" "grep -E '^#[0-9]+ (MINTED|DENIED) [^ ]+ +[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}' \"$session_dir/capiss_audit.log\" >/dev/null"
+  return 0
+}
+
+M5_T48_test() {
+  begin_test_evidence "M5-T48" "varambu_audit_uniform_enrichment"
+  session_dir="/repo/artifacts/varambu-demo/e2e-M5-T48"
+  premise_guard "M5 path ready and audit session prepared" "m5_ready && jira_mcp_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
+  exercise_guard "start audit tailer" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; : >\"$session_dir/capiss_audit.jsonl\"; : >\"$session_dir/capiss_audit.log\"; python3 /repo/scripts/varambu_audit.py tail --since \"\$since\" --jsonl \"$session_dir/capiss_audit.jsonl\" --human \"$session_dir/capiss_audit.log\" --err \"$session_dir/audit_tailer.err\" >/dev/null 2>>\"$session_dir/audit_tailer.err\" & echo \$! >\"$session_dir/audit_tailer.pid\"; sleep 2; kill -0 \"\$(cat \"$session_dir/audit_tailer.pid\")\""
+  exercise_guard "perform M5 read and create requests and a denied request" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/iam_read_mcp.json\" \"$EVDIR/iam_read.err\"; mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"t48\",\"description\":\"d\"}' \"$EVDIR/iam_create_mcp.json\" \"$EVDIR/iam_create.err\"; mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/nas_mcp.json\" \"$EVDIR/nas.err\""
+  exercise_guard "wait for entries and stop tailer" "i=1; while [ \$i -le 30 ]; do [ \"\$(wc -l <\"$session_dir/capiss_audit.jsonl\")\" -ge 3 ] && break; sleep 1; i=\$((i+1)); done; kill \"\$(cat \"$session_dir/audit_tailer.pid\")\" 2>/dev/null || true; cp \"$session_dir/capiss_audit.jsonl\" \"$EVDIR/capiss_audit.jsonl\""
+  outcome_guard "all records share the same enriched schema fields" "jq -e '[inputs] | all(has(\"result\") and has(\"reason_code\") and has(\"timestamp_utc\") and has(\"timestamp_local\") and has(\"timezone\") and has(\"policy_id\") and has(\"policy_hash\"))' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
+  outcome_guard "all minted records include token validity and no bearer values" "jq -e '[inputs] | map(select(.result==\"allow\")) | all(has(\"token_id\") and has(\"issued_at_utc\") and has(\"expires_at_utc\") and has(\"ttl_seconds\"))' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
+  outcome_guard "all denied records omit token validity fields" "jq -e '[inputs] | map(select(.result==\"deny\")) | all((has(\"issued_at_utc\") | not) and (has(\"expires_at_utc\") | not) and (has(\"ttl_seconds\") | not))' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
+  outcome_guard "no bearer token values in any audit record" "! grep -E 'Bearer |Basic ' \"$EVDIR/capiss_audit.jsonl\""
+  return 0
+}
+
 print_section "Milestone 1 - Server and agent connection and successful entry"
 if [ "$RUN_M1" -eq 1 ]; then
   TEST_PREFIX="M1"
@@ -3971,6 +4077,13 @@ if [ "$RUN_M5" -eq 1 ]; then
   run_test "T39" "Local errors avoid upstream existence leak" M5_T39_test
   run_test "T40" "Mock upstream breadth precondition" M5_T40_test
   run_test "T41" "Protected path narrows broad mock" M5_T41_test
+  run_test "T42" "Varambu capiss audit files" M5_T42_test
+  run_test "T43" "Varambu audit active append without post-processing" M5_T43_test
+  run_test "T44" "Varambu audit current session history and file access" M5_T44_test
+  run_test "T45" "Varambu audit secret exclusion in persisted evidence" M5_T45_test
+  run_test "T46" "Varambu audit stale tailer warning and strict failure" M5_T46_test
+  run_test "T47" "Varambu audit local and UTC timing semantics" M5_T47_test
+  run_test "T48" "Varambu audit uniform capiss enrichment" M5_T48_test
 fi
 
 printf '\nTotal: %d  Passed: %d  Failed: %d\n' "$TOTAL" "$PASSED" "$FAILED"

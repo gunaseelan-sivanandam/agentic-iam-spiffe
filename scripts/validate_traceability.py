@@ -39,7 +39,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--requirements-doc", default="docs/requirements.md")
     parser.add_argument("--architecture-doc", default="docs/architecture.md")
-    parser.add_argument("--source-root", action="append", default=["services"])
+    parser.add_argument("--source-root", action="append", default=["services", "scripts"])
     parser.add_argument("--unit-root", action="append", default=["tests/unit"])
     parser.add_argument("--tests", default="trace/tests.yaml")
     parser.add_argument("--report-json", default="artifacts/quality/traceability_report.json")
