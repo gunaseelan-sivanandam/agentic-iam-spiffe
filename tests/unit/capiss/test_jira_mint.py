@@ -36,7 +36,7 @@ def test_root_mint_jira_allowed_full_tuple(capiss_module, monkeypatch, guard):
     guard.exercise("stub mint marker", lambda: monkeypatch.setattr(capiss_module, "mark_capiss_minted_token", lambda *_: (True, "")))
     out = guard.exercise(
         "mint Jira IAM root token",
-        lambda: capiss_module.root_mint(payload=JIRA_IAM_BODY, x_spiffe_id="spiffe://example.org/agent-a"),
+        lambda: capiss_module.root_mint(payload=JIRA_IAM_BODY, x_spiffe_id="spiffe://varambu.org/agent-a"),
     )
     guard.outcome("mint returned dict response", isinstance(out, dict))
     guard.outcome("issued Jira audience", out["aud"] == "jira-tool")
@@ -48,8 +48,8 @@ def test_root_mint_jira_allowed_full_tuple(capiss_module, monkeypatch, guard):
         == [
             {
                 "decision_type": "root_mint",
-                "sub": "spiffe://example.org/agent-a",
-                "subject_spiffe_id": "spiffe://example.org/agent-a",
+                "sub": "spiffe://varambu.org/agent-a",
+                "subject_spiffe_id": "spiffe://varambu.org/agent-a",
                 "aud": "jira-tool",
                 "act": "read",
                 "res": "jira-tool:/project:IAM",
@@ -76,7 +76,7 @@ def test_root_mint_jira_unsupported_action_denied_by_policy(capiss_module, monke
     guard.exercise("stub opa deny", lambda: monkeypatch.setattr(capiss_module, "check_opa_allow", fake_opa))
     response = guard.exercise(
         "attempt unsupported-action Jira mint",
-        lambda: capiss_module.root_mint(payload=body, x_spiffe_id="spiffe://example.org/agent-a"),
+        lambda: capiss_module.root_mint(payload=body, x_spiffe_id="spiffe://varambu.org/agent-a"),
     )
     guard.outcome("policy denial status", response.status_code == 403)
     guard.outcome("policy denial reason", _json_response_body(response)["reason"] == "policy")
@@ -102,7 +102,7 @@ def test_root_mint_jira_write_allowed_full_tuple(capiss_module, monkeypatch, gua
     guard.exercise("stub mint marker", lambda: monkeypatch.setattr(capiss_module, "mark_capiss_minted_token", lambda *_: (True, "")))
     out = guard.exercise(
         "mint Jira IAM write root token",
-        lambda: capiss_module.root_mint(payload=JIRA_IAM_WRITE_BODY, x_spiffe_id="spiffe://example.org/agent-a"),
+        lambda: capiss_module.root_mint(payload=JIRA_IAM_WRITE_BODY, x_spiffe_id="spiffe://varambu.org/agent-a"),
     )
     guard.outcome("mint returned dict response", isinstance(out, dict))
     guard.outcome("issued Jira audience", out["aud"] == "jira-tool")
@@ -114,8 +114,8 @@ def test_root_mint_jira_write_allowed_full_tuple(capiss_module, monkeypatch, gua
         == [
             {
                 "decision_type": "root_mint",
-                "sub": "spiffe://example.org/agent-a",
-                "subject_spiffe_id": "spiffe://example.org/agent-a",
+                "sub": "spiffe://varambu.org/agent-a",
+                "subject_spiffe_id": "spiffe://varambu.org/agent-a",
                 "aud": "jira-tool",
                 "act": "write",
                 "res": "jira-tool:/project:IAM",
@@ -142,7 +142,7 @@ def test_root_mint_jira_non_allowed_project_denied_by_policy(capiss_module, monk
     guard.exercise("stub opa deny", lambda: monkeypatch.setattr(capiss_module, "check_opa_allow", fake_opa))
     response = guard.exercise(
         "attempt NAS project Jira mint",
-        lambda: capiss_module.root_mint(payload=body, x_spiffe_id="spiffe://example.org/agent-a"),
+        lambda: capiss_module.root_mint(payload=body, x_spiffe_id="spiffe://varambu.org/agent-a"),
     )
     guard.outcome("policy denial status", response.status_code == 403)
     guard.outcome("policy denial reason", _json_response_body(response)["reason"] == "policy")
@@ -166,8 +166,8 @@ def test_root_mint_jira_rogue_caller_denied_by_policy(capiss_module, monkeypatch
     guard.exercise("stub opa deny", lambda: monkeypatch.setattr(capiss_module, "check_opa_allow", fake_opa))
     response = guard.exercise(
         "attempt rogue Jira mint",
-        lambda: capiss_module.root_mint(payload=JIRA_IAM_BODY, x_spiffe_id="spiffe://example.org/rogue"),
+        lambda: capiss_module.root_mint(payload=JIRA_IAM_BODY, x_spiffe_id="spiffe://varambu.org/rogue"),
     )
     guard.outcome("policy denial status", response.status_code == 403)
     guard.outcome("policy denial reason", _json_response_body(response)["reason"] == "policy")
-    guard.outcome("rogue caller reached policy tuple", captured[0]["sub"] == "spiffe://example.org/rogue")
+    guard.outcome("rogue caller reached policy tuple", captured[0]["sub"] == "spiffe://varambu.org/rogue")

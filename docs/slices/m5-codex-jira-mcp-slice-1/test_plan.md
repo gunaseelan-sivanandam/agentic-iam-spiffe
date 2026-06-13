@@ -62,12 +62,12 @@ Expected traceability:
 ### Capiss and Policy Unit Tests
 Capiss/policy tests prove the new M5 authority family is distinct from M4a/M4b.
 
-- Allows `spiffe://example.org/codex-jira-mcp-adapter` to mint `aud=jira-mcp-gateway`, `act=read_project_summary`, `res=jira-mcp:/project:IAM`.
-- Allows `spiffe://example.org/codex-jira-mcp-adapter` to mint `aud=jira-mcp-gateway`, `act=create_story`, `res=jira-mcp:/project:IAM`.
+- Allows `spiffe://varambu.org/codex-jira-mcp-adapter` to mint `aud=jira-mcp-gateway`, `act=read_project_summary`, `res=jira-mcp:/project:IAM`.
+- Allows `spiffe://varambu.org/codex-jira-mcp-adapter` to mint `aud=jira-mcp-gateway`, `act=create_story`, `res=jira-mcp:/project:IAM`.
 - Denies `res=jira-mcp:/project:NAS`.
 - Denies unsupported M5 actions such as `read_issue_details`, `search_issues`, `update_story`, `comment`, `create_epic`, `create_subtask`, `create_bug`, `assign_issue`, `move_to_sprint`, and `create_sprint`.
-- Denies old `spiffe://example.org/agent-a` for the M5 audience/resource.
-- Denies `spiffe://example.org/codex-jira-mcp-adapter` for old `aud=jira-tool` when requesting M5 resources.
+- Denies old `spiffe://varambu.org/agent-a` for the M5 audience/resource.
+- Denies `spiffe://varambu.org/codex-jira-mcp-adapter` for old `aud=jira-tool` when requesting M5 resources.
 - Denies `aud=jira-tool` with `res=jira-mcp:/project:IAM`.
 - Denies `aud=jira-mcp-gateway` with `res=jira-tool:/project:IAM`.
 - Denies malformed resources.

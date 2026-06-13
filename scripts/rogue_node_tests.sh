@@ -1284,11 +1284,11 @@ ensure_jira_mcp_envoy_ready() {
 
 expected_spiffe_for_host() {
   case "$1" in
-    capability-issuer-envoy) printf '%s\n' 'spiffe://example.org/capability-issuer-envoy' ;;
-    capability-issuer-no-opa-envoy) printf '%s\n' 'spiffe://example.org/capability-issuer-no-opa-envoy' ;;
-    tool-b-envoy) printf '%s\n' 'spiffe://example.org/tool-b-envoy' ;;
-    jira-tool-envoy) printf '%s\n' 'spiffe://example.org/jira-tool-envoy' ;;
-    jira-mcp-envoy) printf '%s\n' 'spiffe://example.org/jira-mcp-envoy' ;;
+    capability-issuer-envoy) printf '%s\n' 'spiffe://varambu.org/capability-issuer-envoy' ;;
+    capability-issuer-no-opa-envoy) printf '%s\n' 'spiffe://varambu.org/capability-issuer-no-opa-envoy' ;;
+    tool-b-envoy) printf '%s\n' 'spiffe://varambu.org/tool-b-envoy' ;;
+    jira-tool-envoy) printf '%s\n' 'spiffe://varambu.org/jira-tool-envoy' ;;
+    jira-mcp-envoy) printf '%s\n' 'spiffe://varambu.org/jira-mcp-envoy' ;;
     *) return 1 ;;
   esac
 }
@@ -1956,7 +1956,7 @@ T9_test() {
   premise_guard "tool-b-envoy tcp reachable" "wait_tcp \"\$toolb_ip\" 8443 30"
   ev_note "target tool-b-envoy ${toolb_ip}:8443"
 
-  spiffe_id="spiffe://example.org/rogue-socket-shortttl"
+  spiffe_id="spiffe://varambu.org/rogue-socket-shortttl"
   selector="docker:label:com.docker.compose.service:rogue-socket"
   tmpdir="/tmp/toolb_material"
   short_dir="/tmp/short_svid"
@@ -1970,7 +1970,7 @@ T9_test() {
   fi
 
   entry_json="$(docker exec spiffe-spire-server /opt/spire/bin/spire-server entry create \
-    -parentID spiffe://example.org/agent/spire-agent \
+    -parentID spiffe://varambu.org/agent/spire-agent \
     -spiffeID "$spiffe_id" \
     -selector "$selector" \
     -x509SVIDTTL 20 \
@@ -1998,7 +1998,7 @@ T9_test() {
 
   if [ "$status_code" = "6" ] && [ -z "$entry_id" ]; then
     entry_json="$(docker exec spiffe-spire-server /opt/spire/bin/spire-server entry create \
-      -parentID spiffe://example.org/agent/spire-agent \
+      -parentID spiffe://varambu.org/agent/spire-agent \
       -spiffeID "$spiffe_id" \
       -selector "$selector" \
       -x509SVIDTTL 20 \
@@ -2142,7 +2142,7 @@ T6_test() {
   premise_guard "workload socket present" \
     "docker exec spiffe-rogue-socket test -S /run/spire/agent/private/api.sock 2>/dev/null"
   exercise_guard "attempt fetch without entry" \
-    "set +e; docker exec spiffe-rogue-socket /bin/sh -lc 'printf \"%s\\n\" \"agent {\" \"  trust_domain = \\\"example.org\\\"\" \"  socket_path = \\\"/run/spire/agent/private/api.sock\\\"\" \"}\" > /tmp/rogue_socket_min.conf; SPIRE_AGENT_CONFIG=/tmp/rogue_socket_min.conf /opt/spire/bin/spire-agent api fetch x509 -socketPath /run/spire/agent/private/api.sock -write /tmp/rogue_socket_svid' >/tmp/rogue_socket_fetch 2>&1; rc=\$?; set -e; echo \$rc >\"$EVDIR/rc.txt\"; cat /tmp/rogue_socket_fetch >\"$EVDIR/rogue_socket_fetch.txt\" 2>/dev/null || true"
+    "set +e; docker exec spiffe-rogue-socket /bin/sh -lc 'printf \"%s\\n\" \"agent {\" \"  trust_domain = \\\"varambu.org\\\"\" \"  socket_path = \\\"/run/spire/agent/private/api.sock\\\"\" \"}\" > /tmp/rogue_socket_min.conf; SPIRE_AGENT_CONFIG=/tmp/rogue_socket_min.conf /opt/spire/bin/spire-agent api fetch x509 -socketPath /run/spire/agent/private/api.sock -write /tmp/rogue_socket_svid' >/tmp/rogue_socket_fetch 2>&1; rc=\$?; set -e; echo \$rc >\"$EVDIR/rc.txt\"; cat /tmp/rogue_socket_fetch >\"$EVDIR/rogue_socket_fetch.txt\" 2>/dev/null || true"
   outcome_guard "fetch denied without entry" \
     "rc=\$(cat \"$EVDIR/rc.txt\" 2>/dev/null || echo 0); [ \"\$rc\" -ne 0 ] && ! docker exec spiffe-rogue-socket test -e /tmp/rogue_socket_svid/svid.pem 2>/dev/null && assert_text_matches \"$EVDIR/rogue_socket_fetch.txt\" '(No identity issued|no identity|permission denied|unauthorized|not authorized|denied)'"
   return 0
@@ -2269,9 +2269,9 @@ M3S2_T1_test() {
   outcome_guard "token non-empty" \
     "assert_json_present \"$out\" '.token' && jq -r '.token' \"$out\" >\"$EVDIR/token.txt\""
   outcome_guard "mint fields correct" \
-    "assert_json_eq \"$out\" '.token_type' 'biscuit' && assert_json_present \"$out\" '.expires_at' && assert_json_eq \"$out\" '.issued_to' 'spiffe://example.org/agent-a' && assert_json_eq \"$out\" '.aud' 'tool-b' && assert_json_eq \"$out\" '.act' 'read' && assert_json_eq \"$out\" '.res' 'tool-b:/secret'"
+    "assert_json_eq \"$out\" '.token_type' 'biscuit' && assert_json_present \"$out\" '.expires_at' && assert_json_eq \"$out\" '.issued_to' 'spiffe://varambu.org/agent-a' && assert_json_eq \"$out\" '.aud' 'tool-b' && assert_json_eq \"$out\" '.act' 'read' && assert_json_eq \"$out\" '.res' 'tool-b:/secret'"
   outcome_guard "verified issuer identity recorded" \
-    "assert_file_eq \"$EVDIR/verified_capiss_spiffe_id.txt\" \"spiffe://example.org/capability-issuer-envoy\" && assert_file_eq \"$EVDIR/verified_capiss_result.txt\" \"ok\""
+    "assert_file_eq \"$EVDIR/verified_capiss_spiffe_id.txt\" \"spiffe://varambu.org/capability-issuer-envoy\" && assert_file_eq \"$EVDIR/verified_capiss_result.txt\" \"ok\""
   return 0
 }
 
@@ -2479,7 +2479,7 @@ M3S4_T2_test() {
   outcome_guard "secret value correct" \
     "assert_json_eq \"$out\" '.secret' 'super sensitive demo secret'"
   outcome_guard "verified tool-b identity recorded" \
-    "assert_file_eq \"$EVDIR/verified_toolb_spiffe_id.txt\" \"spiffe://example.org/tool-b-envoy\" && assert_file_eq \"$EVDIR/verified_toolb_result.txt\" \"ok\""
+    "assert_file_eq \"$EVDIR/verified_toolb_spiffe_id.txt\" \"spiffe://varambu.org/tool-b-envoy\" && assert_file_eq \"$EVDIR/verified_toolb_result.txt\" \"ok\""
   return 0
 }
 
@@ -2891,13 +2891,13 @@ M4_T9_test() {
   exercise_guard "capture capiss and tool-b logs since flow start" \
     "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; docker logs --since \"\$since\" spiffe-capability-issuer >\"$EVDIR/capiss_container.log\" 2>&1; docker logs --since \"\$since\" spiffe-tool-b >\"$EVDIR/toolb_container.log\" 2>&1; grep -F '\"event_type\"' \"$EVDIR/capiss_container.log\" >\"$EVDIR/capiss_events.jsonl\" || :; grep -F '\"event_type\"' \"$EVDIR/toolb_container.log\" >\"$EVDIR/toolb_events.jsonl\" || :"
   outcome_guard "capiss root mint event correlated" \
-    "jq -e --arg root \"\$root_id\" --arg token \"\$root_claim_token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"root_mint\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .res==\"tool-b:/search\")' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
+    "jq -e --arg root \"\$root_id\" --arg token \"\$root_claim_token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"root_mint\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://varambu.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .res==\"tool-b:/search\")' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
   outcome_guard "capiss delegated mint event correlated" \
-    "jq -e --arg root \"\$root_id\" --arg token \"\$child_token_id\" --arg parent \"\$parent_token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"resource_mint\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .delegator_spiffe_id==\"spiffe://example.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .parent_token_id==\$parent and .res==\"tool-b:/read-file:fileA\")' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
+    "jq -e --arg root \"\$root_id\" --arg token \"\$child_token_id\" --arg parent \"\$parent_token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"resource_mint\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://varambu.org/agent-a\" and .delegator_spiffe_id==\"spiffe://varambu.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .parent_token_id==\$parent and .res==\"tool-b:/read-file:fileA\")' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
   outcome_guard "discovery registry write correlated" \
-    "jq -e --arg root \"\$root_id\" 'select(.event_type==\"discovery_registry_write\" and .root_token_id==\$root and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .discovery_endpoint==\"tool-b:/search\" and (.res_count >= 1))' \"$EVDIR/toolb_events.jsonl\" >/dev/null"
+    "jq -e --arg root \"\$root_id\" 'select(.event_type==\"discovery_registry_write\" and .root_token_id==\$root and .subject_spiffe_id==\"spiffe://varambu.org/agent-a\" and .discovery_endpoint==\"tool-b:/search\" and (.res_count >= 1))' \"$EVDIR/toolb_events.jsonl\" >/dev/null"
   outcome_guard "tool-b allow event correlated" \
-    "jq -e --arg root \"\$root_id\" --arg token \"\$child_token_id\" --arg parent \"\$parent_token_id\" 'select(.event_type==\"toolb_enforcement_decision\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .delegator_spiffe_id==\"spiffe://example.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .parent_token_id==\$parent and .res==\"tool-b:/read-file:fileA\" and .path==\"/read-file/fileA\")' \"$EVDIR/toolb_events.jsonl\" >/dev/null"
+    "jq -e --arg root \"\$root_id\" --arg token \"\$child_token_id\" --arg parent \"\$parent_token_id\" 'select(.event_type==\"toolb_enforcement_decision\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://varambu.org/agent-a\" and .delegator_spiffe_id==\"spiffe://varambu.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .parent_token_id==\$parent and .res==\"tool-b:/read-file:fileA\" and .path==\"/read-file/fileA\")' \"$EVDIR/toolb_events.jsonl\" >/dev/null"
   return 0
 }
 
@@ -2940,7 +2940,7 @@ M4_T10_test() {
   exercise_guard "capture capiss logs since flow start" \
     "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; docker logs --since \"\$since\" spiffe-capability-issuer >\"$EVDIR/capiss_container.log\" 2>&1; grep -F '\"event_type\"' \"$EVDIR/capiss_container.log\" >\"$EVDIR/capiss_events.jsonl\" || :"
   outcome_guard "capiss mint-rate deny event correlated" \
-    "jq -e --arg root \"\$root_id\" --arg parent \"\$root_claim_token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"resource_mint\" and .result==\"deny\" and .reason_code==\"mint_rate_exceeded\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .delegator_spiffe_id==\"spiffe://example.org/agent-a\" and .root_token_id==\$root and .parent_token_id==\$parent and .res==\"tool-b:/read-file:fileA\" and .registry_hit==true)' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
+    "jq -e --arg root \"\$root_id\" --arg parent \"\$root_claim_token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"resource_mint\" and .result==\"deny\" and .reason_code==\"mint_rate_exceeded\" and .subject_spiffe_id==\"spiffe://varambu.org/agent-a\" and .delegator_spiffe_id==\"spiffe://varambu.org/agent-a\" and .root_token_id==\$root and .parent_token_id==\$parent and .res==\"tool-b:/read-file:fileA\" and .registry_hit==true)' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
   return 0
 }
 
@@ -3079,7 +3079,7 @@ M4A_T2_test() {
   outcome_guard "IAM-1 read allowed" \
     "assert_file_eq \"$EVDIR/status.txt\" \"200\" && assert_json_eq \"$EVDIR/response.json\" '.fields.project.key' 'IAM'"
   outcome_guard "verified jira-tool identity recorded" \
-    "assert_file_eq \"$EVDIR/verified_jiratool_spiffe_id.txt\" \"spiffe://example.org/jira-tool-envoy\" && assert_file_eq \"$EVDIR/verified_jiratool_result.txt\" \"ok\""
+    "assert_file_eq \"$EVDIR/verified_jiratool_spiffe_id.txt\" \"spiffe://varambu.org/jira-tool-envoy\" && assert_file_eq \"$EVDIR/verified_jiratool_result.txt\" \"ok\""
   return 0
 }
 
@@ -3241,9 +3241,9 @@ M4A_T10_test() {
   exercise_guard "capture capiss and jira-tool logs since flow start" \
     "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; docker logs --since \"\$since\" spiffe-capability-issuer >\"$EVDIR/capiss_container.log\" 2>&1; docker logs --since \"\$since\" spiffe-jira-tool >\"$EVDIR/jiratool_container.log\" 2>&1; grep -F '\"event_type\"' \"$EVDIR/capiss_container.log\" >\"$EVDIR/capiss_events.jsonl\" || :; grep -F '\"event_type\"' \"$EVDIR/jiratool_container.log\" >\"$EVDIR/jiratool_events.jsonl\" || :"
   outcome_guard "capiss Jira root mint event correlated" \
-    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"root_mint\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .aud==\"jira-tool\" and .act==\"read\" and .res==\"jira-tool:/project:IAM\" and .root_token_id==\$root and .token_id==\$token and .policy_id==\"capiss.allow.v3\")' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
+    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"root_mint\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://varambu.org/agent-a\" and .aud==\"jira-tool\" and .act==\"read\" and .res==\"jira-tool:/project:IAM\" and .root_token_id==\$root and .token_id==\$token and .policy_id==\"capiss.allow.v3\")' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
   outcome_guard "jira-tool allow event correlated" \
-    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"jiratool_enforcement_decision\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .aud==\"jira-tool\" and .act==\"read\" and .res==\"jira-tool:/project:IAM\" and .jira_operation==\"issue_read\" and .requested_project==\"IAM\" and .token_project==\"IAM\" and .issue_key==\"IAM-1\" and .upstream_called==true and .upstream_status==200 and (.budget_remaining|type)==\"number\")' \"$EVDIR/jiratool_events.jsonl\" >/dev/null"
+    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"jiratool_enforcement_decision\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://varambu.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .aud==\"jira-tool\" and .act==\"read\" and .res==\"jira-tool:/project:IAM\" and .jira_operation==\"issue_read\" and .requested_project==\"IAM\" and .token_project==\"IAM\" and .issue_key==\"IAM-1\" and .upstream_called==true and .upstream_status==200 and (.budget_remaining|type)==\"number\")' \"$EVDIR/jiratool_events.jsonl\" >/dev/null"
   return 0
 }
 
@@ -3382,11 +3382,11 @@ M4B_T6_test() {
   exercise_guard "capture capiss and jira-tool logs since flow start" \
     "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; docker logs --since \"\$since\" spiffe-capability-issuer >\"$EVDIR/capiss_container.log\" 2>&1; docker logs --since \"\$since\" spiffe-jira-tool >\"$EVDIR/jiratool_container.log\" 2>&1; grep -F '\"event_type\"' \"$EVDIR/capiss_container.log\" >\"$EVDIR/capiss_events.jsonl\" || :; grep -F '\"event_type\"' \"$EVDIR/jiratool_container.log\" >\"$EVDIR/jiratool_events.jsonl\" || :"
   outcome_guard "capiss Jira write root mint event correlated" \
-    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"root_mint\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .aud==\"jira-tool\" and .act==\"write\" and .res==\"jira-tool:/project:IAM\" and .root_token_id==\$root and .token_id==\$token and .policy_id==\"capiss.allow.v3\")' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
+    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"root_mint\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://varambu.org/agent-a\" and .aud==\"jira-tool\" and .act==\"write\" and .res==\"jira-tool:/project:IAM\" and .root_token_id==\$root and .token_id==\$token and .policy_id==\"capiss.allow.v3\")' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
   outcome_guard "jira-tool write allow event correlated" \
-    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"jiratool_enforcement_decision\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .aud==\"jira-tool\" and .act==\"write\" and .res==\"jira-tool:/project:IAM\" and .jira_operation==\"issue_description_write\" and .requested_project==\"IAM\" and .token_project==\"IAM\" and .issue_key==\"IAM-2\" and .upstream_called==true and .upstream_status==204 and (.budget_remaining|type)==\"number\")' \"$EVDIR/jiratool_events.jsonl\" >/dev/null"
+    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"jiratool_enforcement_decision\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://varambu.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .aud==\"jira-tool\" and .act==\"write\" and .res==\"jira-tool:/project:IAM\" and .jira_operation==\"issue_description_write\" and .requested_project==\"IAM\" and .token_project==\"IAM\" and .issue_key==\"IAM-2\" and .upstream_called==true and .upstream_status==204 and (.budget_remaining|type)==\"number\")' \"$EVDIR/jiratool_events.jsonl\" >/dev/null"
   outcome_guard "jira-tool read allow event with write token correlated" \
-    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"jiratool_enforcement_decision\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .aud==\"jira-tool\" and .act==\"write\" and .res==\"jira-tool:/project:IAM\" and .jira_operation==\"issue_read\" and .requested_project==\"IAM\" and .token_project==\"IAM\" and .issue_key==\"IAM-2\" and .upstream_called==true and .upstream_status==200 and (.budget_remaining|type)==\"number\")' \"$EVDIR/jiratool_events.jsonl\" >/dev/null"
+    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"jiratool_enforcement_decision\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://varambu.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .aud==\"jira-tool\" and .act==\"write\" and .res==\"jira-tool:/project:IAM\" and .jira_operation==\"issue_read\" and .requested_project==\"IAM\" and .token_project==\"IAM\" and .issue_key==\"IAM-2\" and .upstream_called==true and .upstream_status==200 and (.budget_remaining|type)==\"number\")' \"$EVDIR/jiratool_events.jsonl\" >/dev/null"
   return 0
 }
 
@@ -3831,17 +3831,17 @@ M5_T42_test() {
   exercise_guard "wait for audit entries and stop tailer" "i=1; while [ \$i -le 30 ]; do [ \"\$(wc -l <\"$session_dir/capiss_audit.jsonl\")\" -ge 4 ] && break; sleep 1; i=\$((i+1)); done; kill \"\$(cat \"$session_dir/audit_tailer.pid\")\" 2>/dev/null || true; cp \"$session_dir/capiss_audit.jsonl\" \"$EVDIR/capiss_audit.jsonl\"; cp \"$session_dir/capiss_audit.log\" \"$EVDIR/capiss_audit.log\""
   exercise_guard "render persisted audit through varambu cli" "bash /repo/varambu audit --json >\"$EVDIR/varambu_audit_json.out\""
   outcome_guard "audit file contains two minted and two denied entries in append order" "jq -s 'length>=4 and .[0].result==\"allow\" and .[0].act==\"read_project_summary\" and .[1].result==\"allow\" and .[1].act==\"create_story\" and .[2].result==\"deny\" and .[2].res==\"jira-mcp:/project:NAS\" and .[3].result==\"deny\" and .[3].res==\"jira-mcp:/project:NAS\"' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
-  outcome_guard "minted rows include subject token validity local utc and correlation metadata" "jq -s '.[0].subject_spiffe_id==\"spiffe://example.org/codex-jira-mcp-adapter\" and (.[0].token_id|type)==\"string\" and (.[0].root_token_id|type)==\"string\" and (.[0].issued_at_local|type)==\"string\" and (.[0].expires_at_local|type)==\"string\" and (.[0].issued_at_utc|type)==\"string\" and (.[0].expires_at_utc|type)==\"string\" and (.[0].timestamp_local|type)==\"string\" and (.[0].ttl_seconds|type)==\"number\" and (.[0].correlation_id|type)==\"string\"' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
+  outcome_guard "minted rows include subject token validity local utc and correlation metadata" "jq -s '.[0].subject_spiffe_id==\"spiffe://varambu.org/codex-jira-mcp-adapter\" and (.[0].token_id|type)==\"string\" and (.[0].root_token_id|type)==\"string\" and (.[0].issued_at_local|type)==\"string\" and (.[0].expires_at_local|type)==\"string\" and (.[0].issued_at_utc|type)==\"string\" and (.[0].expires_at_utc|type)==\"string\" and (.[0].timestamp_local|type)==\"string\" and (.[0].ttl_seconds|type)==\"number\" and (.[0].correlation_id|type)==\"string\"' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
   outcome_guard "denied rows include reason and omit token validity" "jq -s '.[2].reason_code==\"policy\" and (.[2]|has(\"token_id\")|not) and (.[2]|has(\"issued_at_utc\")|not) and (.[2]|has(\"expires_at_utc\")|not) and (.[2].resource_attrs.project_key)==\"NAS\"' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
   outcome_guard "audit artifacts do not expose bearer token values or upstream secrets" "! grep -E '\"token\"|Bearer |Basic |JIRA_API_TOKEN' \"$EVDIR/capiss_audit.jsonl\" \"$EVDIR/capiss_audit.log\" \"$EVDIR/varambu_audit_json.out\""
-  outcome_guard "human log is readable and includes logged time" "grep -Fq 'MINTED ok' \"$EVDIR/capiss_audit.log\" && grep -Fq 'DENIED policy' \"$EVDIR/capiss_audit.log\" && grep -Fq 'Logged At:' \"$EVDIR/capiss_audit.log\""
+  outcome_guard "human log is readable and includes logged time" "grep -Fq 'MINTED OK' \"$EVDIR/capiss_audit.log\" && grep -Fq 'DENIED: Reason Policy' \"$EVDIR/capiss_audit.log\" && grep -Fq 'Logged At:' \"$EVDIR/capiss_audit.log\""
   return 0
 }
 
 M5_T43_test() {
   begin_test_evidence "M5-T43" "varambu_audit_active_append"
   session_dir="/repo/artifacts/varambu-demo/e2e-M5-T43"
-  premise_guard "M5 path ready and empty audit session prepared" "m5_ready && jira_mcp_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
+  premise_guard "M5 path ready and empty audit session prepared" "m5_ready && jira_mcp_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && sleep 2 && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
   exercise_guard "start audit tailer" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; : >\"$session_dir/capiss_audit.jsonl\"; : >\"$session_dir/capiss_audit.log\"; python3 /repo/scripts/varambu_audit.py tail --since \"\$since\" --jsonl \"$session_dir/capiss_audit.jsonl\" --human \"$session_dir/capiss_audit.log\" --err \"$session_dir/audit_tailer.err\" >/dev/null 2>>\"$session_dir/audit_tailer.err\" & echo \$! >\"$session_dir/audit_tailer.pid\"; sleep 2; kill -0 \"\$(cat \"$session_dir/audit_tailer.pid\")\""
   exercise_guard "perform one allowed mint request" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/iam_mcp.json\" \"$EVDIR/iam.err\""
   exercise_guard "wait for first entry and snapshot jsonl line count" "i=1; while [ \$i -le 15 ]; do [ \"\$(wc -l <\"$session_dir/capiss_audit.jsonl\")\" -ge 1 ] && break; sleep 1; i=\$((i+1)); done; cp \"$session_dir/capiss_audit.jsonl\" \"$EVDIR/after_first.jsonl\""
@@ -3858,7 +3858,7 @@ M5_T44_test() {
   begin_test_evidence "M5-T44" "varambu_audit_session_and_history"
   session1="/repo/artifacts/varambu-demo/e2e-M5-T44-s1"
   session2="/repo/artifacts/varambu-demo/e2e-M5-T44-s2"
-  premise_guard "two synthetic sessions exist with distinct records and current points to session 2" "rm -rf \"$session1\" \"$session2\" && mkdir -p \"$session1\" \"$session2\" && printf '{\"sequence\":1,\"result\":\"allow\",\"reason_code\":\"ok\"}\n' >\"$session1/capiss_audit.jsonl\" && printf '#1 MINTED ok  -\n' >\"$session1/capiss_audit.log\" && printf '{\"sequence\":1,\"result\":\"deny\",\"reason_code\":\"policy\"}\n' >\"$session2/capiss_audit.jsonl\" && printf '#1 DENIED policy  -\n' >\"$session2/capiss_audit.log\" && ln -sfn \"$session2\" /repo/artifacts/varambu-demo/current"
+  premise_guard "two synthetic sessions exist with distinct records and current points to session 2" "mkdir -p /repo/artifacts/varambu-demo && find /repo/artifacts/varambu-demo -mindepth 1 -maxdepth 1 -exec rm -rf {} + && mkdir -p \"$session1\" \"$session2\" && printf '{\"sequence\":1,\"result\":\"allow\",\"reason_code\":\"ok\"}\n' >\"$session1/capiss_audit.jsonl\" && printf '#1 MINTED OK  -\n' >\"$session1/capiss_audit.log\" && printf '{\"sequence\":1,\"result\":\"deny\",\"reason_code\":\"policy\"}\n' >\"$session2/capiss_audit.jsonl\" && printf '#1 DENIED: Reason Policy  -\n' >\"$session2/capiss_audit.log\" && ln -sfn \"$session2\" /repo/artifacts/varambu-demo/current"
   exercise_guard "show default current session audit" "bash /repo/varambu audit >\"$EVDIR/current.out\" 2>\"$EVDIR/current.err\""
   exercise_guard "show all sessions audit" "bash /repo/varambu audit --all >\"$EVDIR/all.out\" 2>\"$EVDIR/all.err\""
   exercise_guard "get current session audit file paths" "bash /repo/varambu audit-file >\"$EVDIR/paths.out\" 2>\"$EVDIR/paths.err\""
@@ -3866,7 +3866,7 @@ M5_T44_test() {
   outcome_guard "default audit shows only current session denied record" "grep -q 'DENIED' \"$EVDIR/current.out\" && ! grep -q 'MINTED' \"$EVDIR/current.out\""
   outcome_guard "all sessions audit shows both minted and denied records" "grep -q 'MINTED' \"$EVDIR/all.out\" && grep -q 'DENIED' \"$EVDIR/all.out\""
   outcome_guard "no cross-session deduplification" "[ \"\$(grep -c 'MINTED\|DENIED' \"$EVDIR/all.out\")\" -eq 2 ]"
-  outcome_guard "audit-file paths point to existing readable files" "while IFS= read -r p; do [ -f \"\$p\" ] || { echo \"missing: \$p\"; exit 1; }; done <\"$EVDIR/paths.out\""
+  outcome_guard "audit-file paths point to existing readable files" "paths_ok=1; while IFS= read -r p; do p=\"\${p#*=}\"; [ -f \"\$p\" ] || { echo \"missing: \$p\"; paths_ok=0; }; done <\"$EVDIR/paths.out\"; [ \"\$paths_ok\" -eq 1 ]"
   outcome_guard "audit-file --all exposes paths for both sessions" "grep -c 'capiss_audit' \"$EVDIR/paths_all.out\" | grep -q '[2-9]'"
   return 0
 }
@@ -3890,7 +3890,7 @@ M5_T45_test() {
 M5_T46_test() {
   begin_test_evidence "M5-T46" "varambu_audit_stale_tailer_warning"
   session_dir="/repo/artifacts/varambu-demo/e2e-M5-T46"
-  premise_guard "session with dead tailer PID prepared" "rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && printf '#1 MINTED ok  -\nLogged At:    -\n\n' >\"$session_dir/capiss_audit.log\" && printf '{\"sequence\":1,\"result\":\"allow\",\"reason_code\":\"ok\"}\n' >\"$session_dir/capiss_audit.jsonl\" && echo 99999999 >\"$session_dir/audit_tailer.pid\""
+  premise_guard "session with dead tailer PID prepared" "rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && printf '#1 MINTED OK  -\nLogged At:    -\n\n' >\"$session_dir/capiss_audit.log\" && printf '{\"sequence\":1,\"result\":\"allow\",\"reason_code\":\"ok\"}\n' >\"$session_dir/capiss_audit.jsonl\" && echo 99999999 >\"$session_dir/audit_tailer.pid\""
   exercise_guard "run non-strict audit with dead tailer" "bash /repo/varambu audit >\"$EVDIR/audit_warn.out\" 2>\"$EVDIR/audit_warn.err\""
   exercise_guard "capture strict audit exit code" "bash /repo/varambu audit --strict >\"$EVDIR/audit_strict.out\" 2>\"$EVDIR/audit_strict.err\"; echo \$? >\"$EVDIR/strict_rc.txt\""
   outcome_guard "non-strict audit emits stale tailer warning to stderr" "grep -qi 'WARNING.*tailer' \"$EVDIR/audit_warn.err\""
@@ -3909,7 +3909,7 @@ M5_T47_test() {
   outcome_guard "minted record includes utc and local timestamps and timezone" "jq -e 'select(.result==\"allow\") | (.timestamp_utc | endswith(\"Z\")) and (.timestamp_local | test(\" [A-Za-z]\")) and (.timezone | type)==\"string\"' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
   outcome_guard "minted record includes issued expires and actual ttl" "jq -e 'select(.result==\"allow\") | (.issued_at_utc | endswith(\"Z\")) and (.expires_at_utc | endswith(\"Z\")) and (.ttl_seconds | type)==\"number\" and .ttl_seconds > 0' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
   outcome_guard "denied record includes logged timestamps and omits token validity" "jq -e 'select(.result==\"deny\") | (.timestamp_utc | endswith(\"Z\")) and (.timezone | type)==\"string\" and (has(\"issued_at_utc\") | not) and (has(\"expires_at_utc\") | not) and (has(\"ttl_seconds\") | not)' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
-  outcome_guard "human log shows local time in header" "grep -E '^#[0-9]+ (MINTED|DENIED) [^ ]+ +[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}' \"$session_dir/capiss_audit.log\" >/dev/null"
+  outcome_guard "human log shows local time in header" "grep -E '^#[0-9]+ (MINTED|DENIED).* [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}' \"$session_dir/capiss_audit.log\" >/dev/null"
   return 0
 }
 

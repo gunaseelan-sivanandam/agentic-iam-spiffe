@@ -118,6 +118,13 @@ else
 fi
 rm -rf /tmp/rogue-tests >/dev/null 2>&1 || true
 
+echo "Restoring ownership of demo artifacts (rogue-tests runs as root)..."
+if [ -d "$ROOT_DIR/artifacts/varambu-demo" ]; then
+  docker run --rm -v "$ROOT_DIR/artifacts:/a" alpine:3.19 \
+    chown -R "$(id -u):$(id -g)" /a/varambu-demo >/dev/null 2>&1 \
+    || WARNINGS+=("failed to restore artifacts/varambu-demo ownership")
+fi
+
 echo "Summary:"
 echo "  stopped_stack=$STOPPED_STACK started_spire_cleanup=$STARTED_SPIRE cleaned_spire_data=$CLEANED_SPIDATA cleaned_tmp_svid=$CLEANED_TMP"
 if [ "${#WARNINGS[@]}" -gt 0 ]; then

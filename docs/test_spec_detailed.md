@@ -832,11 +832,11 @@ Outcome guards
 4. token present  
    - Confirms a token is present.
 5. issued_to is agent-a  
-   - Confirms `issued_to == spiffe://example.org/agent-a`.
+   - Confirms `issued_to == spiffe://varambu.org/agent-a`.
 6. aud/act/res correct  
    - Confirms `aud == tool-b`, `act == read`, `res == tool-b:/secret`.
 7. verified issuer identity recorded
-   - Confirms the evidence records `spiffe://example.org/capability-issuer-envoy` and an `ok` verification result.
+   - Confirms the evidence records `spiffe://varambu.org/capability-issuer-envoy` and an `ok` verification result.
 
 ### Evidence produced
 
@@ -1240,7 +1240,7 @@ Outcome guards
 6. secret value correct  
    - Confirms the response body contains the expected secret value.
 7. verified tool-b identity recorded
-   - Confirms the evidence records `spiffe://example.org/tool-b-envoy` and an `ok` verification result.
+   - Confirms the evidence records `spiffe://varambu.org/tool-b-envoy` and an `ok` verification result.
 
 ### Evidence produced
 

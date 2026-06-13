@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 
-SPIFFE_ID = "spiffe://example.org/agent-a"
+SPIFFE_ID = "spiffe://varambu.org/agent-a"
 
 
 def _premise_modules_loaded(guard, toolb_module, capiss_module):

@@ -103,7 +103,7 @@ def test_opa_jira_allow_rule_contains_full_tuple(guard):
     policy_path = Path(REPO_ROOT, "services", "opa", "policy.rego")
     guard.premise("opa policy exists", policy_path.exists())
     policy = guard.exercise("read opa policy", lambda: policy_path.read_text(encoding="utf-8"))
-    guard.outcome("policy constrains caller", 'input.sub == "spiffe://example.org/agent-a"' in policy)
+    guard.outcome("policy constrains caller", 'input.sub == "spiffe://varambu.org/agent-a"' in policy)
     guard.outcome("policy constrains jira audience", 'input.aud == "jira-tool"' in policy)
     guard.outcome("policy constrains read action", 'input.act == "read"' in policy)
     guard.outcome("policy constrains write action", 'input.act == "write"' in policy)

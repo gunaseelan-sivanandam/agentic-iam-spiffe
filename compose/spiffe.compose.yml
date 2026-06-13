@@ -63,22 +63,38 @@ services:
       dockerfile: spire/rogue-tests/Dockerfile
     container_name: spiffe-rogue-tests
     depends_on:
-      - spire-server
-      - spire-token-init
-      - spire-agent
-      - spire-rogue-agent
-      - rogue-socket
-      - tool-b-envoy
-      - capability-issuer-envoy
-      - capability-issuer-no-opa-envoy
-      - jira-tool-envoy
-      - jira-mock
-      - codex-jira-mcp-adapter
-      - jira-mcp-envoy
-      - jira-mcp-gateway
-      - jira-mcp-mock
-      - agent-a
-      - rogue
+      spire-server:
+        condition: service_started
+      spire-token-init:
+        condition: service_started
+      spire-agent:
+        condition: service_started
+      spire-rogue-agent:
+        condition: service_started
+      rogue-socket:
+        condition: service_started
+      tool-b-envoy:
+        condition: service_healthy
+      capability-issuer-envoy:
+        condition: service_healthy
+      capability-issuer-no-opa-envoy:
+        condition: service_healthy
+      jira-tool-envoy:
+        condition: service_healthy
+      jira-mock:
+        condition: service_started
+      codex-jira-mcp-adapter:
+        condition: service_healthy
+      jira-mcp-envoy:
+        condition: service_healthy
+      jira-mcp-gateway:
+        condition: service_healthy
+      jira-mcp-mock:
+        condition: service_started
+      agent-a:
+        condition: service_started
+      rogue:
+        condition: service_started
     volumes:
       - ../spire/rogue:/run/spire/rogue
       - ../spire/shared:/run/spire/shared:ro
@@ -125,6 +141,12 @@ services:
     container_name: spiffe-tool-b-envoy
     labels:
       spiffe.workload: "tool-b-envoy"
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /run/spire/svid/svid.pem && test -s /run/spire/svid/svid.key"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 90s
     depends_on:
       - spire-agent
       - tool-b
@@ -179,6 +201,12 @@ services:
     container_name: spiffe-jira-tool-envoy
     labels:
       spiffe.workload: "jira-tool-envoy"
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /run/spire/svid/svid.pem && test -s /run/spire/svid/svid.key"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 90s
     depends_on:
       - spire-agent
       - jira-tool
@@ -206,6 +234,12 @@ services:
     container_name: spiffe-jira-mcp-gateway
     labels:
       spiffe.workload: "jira-mcp-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /run/spire/svid/svid.pem && test -s /run/spire/svid/svid.key"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 90s
     environment:
       CAPISS_PUBLIC_KEY_PATH: /var/lib/capiss/keys/root_public_key.b64
       REDIS_URL: redis://redis:6379/0
@@ -233,6 +267,12 @@ services:
     container_name: spiffe-jira-mcp-envoy
     labels:
       spiffe.workload: "jira-mcp-envoy"
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /run/spire/svid/svid.pem && test -s /run/spire/svid/svid.key"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 90s
     depends_on:
       - spire-agent
       - jira-mcp-gateway
@@ -251,6 +291,12 @@ services:
     container_name: spiffe-codex-jira-mcp-adapter
     labels:
       spiffe.workload: "codex-jira-mcp-adapter"
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /run/spire/svid/svid.pem && test -s /run/spire/svid/svid.key"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 90s
     environment:
       CAPABILITY_ISSUER_URL: https://capability-issuer-envoy:9443
       JIRA_MCP_GATEWAY_URL: https://jira-mcp-envoy:11443
@@ -291,6 +337,12 @@ services:
     container_name: spiffe-capability-issuer-envoy
     labels:
       spiffe.workload: "capability-issuer-envoy"
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /run/spire/svid/svid.pem && test -s /run/spire/svid/svid.key"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 90s
     depends_on:
       - spire-agent
       - capability-issuer
@@ -329,6 +381,12 @@ services:
     container_name: spiffe-capability-issuer-no-opa-envoy
     labels:
       spiffe.workload: "capability-issuer-no-opa-envoy"
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /run/spire/svid/svid.pem && test -s /run/spire/svid/svid.key"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 90s
     depends_on:
       - spire-agent
       - capability-issuer-no-opa

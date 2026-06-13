@@ -556,7 +556,7 @@ The system MUST provide enough data to detect boundary erosion patterns, includi
 Apply the M4 capability and governance model to a real Jira-shaped use case: a trusted Jira connector may hold an upstream Jira API credential with access to multiple projects, but the agent shall only read issues from the project explicitly authorized by OPA and minted by `capiss`.
 
 ## Concrete M4a scope
-- Authorization subject: workload identity, specifically `spiffe://example.org/agent-a`.
+- Authorization subject: workload identity, specifically `spiffe://varambu.org/agent-a`.
 - Allowed Jira space/project: `agentic-iam-spiffe`, project key `IAM`.
 - Allowed issue examples: `IAM-1`, `IAM-2`.
 - Non-allowed test/demo space/project: `No-Agent-Space`, project key `NAS`.
@@ -576,7 +576,7 @@ The agent SHALL NOT receive, forward, log, store, or embed the Jira API credenti
 
 ## REQ-M4A-J3 — OPA allowed-project minting
 `capiss` SHALL mint Jira project authority only when OPA explicitly allows the authenticated workload identity for the requested Jira project.
-For M4a, `spiffe://example.org/agent-a` may be allowed for project `IAM`; all other Jira project mint requests SHALL deny by default.
+For M4a, `spiffe://varambu.org/agent-a` may be allowed for project `IAM`; all other Jira project mint requests SHALL deny by default.
 
 ## REQ-M4A-J4 — Jira canonical project resource
 Jira project authority SHALL use a deterministic canonical resource:
@@ -641,7 +641,7 @@ When optional live smoke is run, it SHALL first prove that the same live Jira AP
 Extend the Jira facade from M4a read-only access to a deliberately narrow project-scoped description write. The upstream Jira API credential may be broad, but the agent may write only the description field for issues in the OPA-allowed project through `capiss` and `jira-tool`.
 
 ## Concrete M4b scope
-- Authorization subject: workload identity, specifically `spiffe://example.org/agent-a`.
+- Authorization subject: workload identity, specifically `spiffe://varambu.org/agent-a`.
 - Allowed Jira project key: `IAM`.
 - Non-allowed test/demo project key: `NAS`.
 - Supported read operation: `GET /jira/rest/api/3/issue/<ISSUE_KEY>`.
@@ -657,7 +657,7 @@ Agent write authority SHALL come from authenticated workload identity plus a cap
 
 ## REQ-M4B-W2 — OPA allowed-project write minting
 `capiss` SHALL mint Jira project write authority only when OPA explicitly allows the authenticated workload identity for the requested Jira project and action.
-For M4b, `spiffe://example.org/agent-a` may mint `aud=jira-tool`, `act=write`, `res=jira-tool:/project:IAM`; other Jira project write mint requests SHALL deny by default.
+For M4b, `spiffe://varambu.org/agent-a` may mint `aud=jira-tool`, `act=write`, `res=jira-tool:/project:IAM`; other Jira project write mint requests SHALL deny by default.
 
 ## REQ-M4B-W3 — Jira read/write action semantics
 `jira-tool` SHALL allow `GET /jira/rest/api/3/issue/<ISSUE_KEY>` with either `act=read` or `act=write` for the matching project.
@@ -708,7 +708,7 @@ Only token metadata such as audience, action, resource, token identifiers, decis
 
 ## REQ-M5-CJ3 — Distinct M5 authority family
 M5 SHALL use the authority tuple family `aud=jira-mcp-gateway`, `act=read_project_summary|create_story`, and `res=jira-mcp:/project:<KEY>`.
-`capiss` SHALL allow only `spiffe://example.org/codex-jira-mcp-adapter` to mint Slice 1 authority for `jira-mcp:/project:IAM`.
+`capiss` SHALL allow only `spiffe://varambu.org/codex-jira-mcp-adapter` to mint Slice 1 authority for `jira-mcp:/project:IAM`.
 `capiss` SHALL deny `NAS`, malformed M5 resources, unsupported M5 actions, wrong subjects, and attempts to mix M5 resources with the older `jira-tool` authority family.
 
 ## REQ-M5-CJ4 — Adapter is not the authorization decision point

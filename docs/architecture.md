@@ -341,7 +341,7 @@ Overview:
 This subsystem extends the existing capability issuance model to Jira project authority. It keeps Jira access and description-write authority as explicit authority minted by `capiss` under OPA policy rather than as a side effect of a broad upstream Jira API credential.
 
 Trust/Responsibility:
-OPA is the source of truth for allowed Jira projects and actions. For M4a, `spiffe://example.org/agent-a` may mint `aud=jira-tool`, `act=read`, `res=jira-tool:/project:IAM`. For M4b, the same workload may also mint `aud=jira-tool`, `act=write`, `res=jira-tool:/project:IAM`. Other Jira project/action mint requests deny by default. `capiss` remains responsible for required authority fields, canonical Jira resource validation, policy evaluation, root token issuance, root budget initialization, and mint-decision audit events.
+OPA is the source of truth for allowed Jira projects and actions. For M4a, `spiffe://varambu.org/agent-a` may mint `aud=jira-tool`, `act=read`, `res=jira-tool:/project:IAM`. For M4b, the same workload may also mint `aud=jira-tool`, `act=write`, `res=jira-tool:/project:IAM`. Other Jira project/action mint requests deny by default. `capiss` remains responsible for required authority fields, canonical Jira resource validation, policy evaluation, root token issuance, root budget initialization, and mint-decision audit events.
 
 Interactions:
 The agent calls `capability-issuer-envoy` over mTLS. The Envoy boundary injects verified caller identity into `capiss`. `capiss` sends the requested Jira authority tuple to OPA, and on allow returns a signed root capability token that `jira-tool` can verify locally.
@@ -472,7 +472,7 @@ Overview:
 M5 adds a distinct Jira MCP authority family to `capiss`: `aud=jira-mcp-gateway`, `act=read_project_summary|create_story`, and `res=jira-mcp:/project:<KEY>`. This authority is separate from the M4a/M4b `jira-tool` audience and resource family.
 
 Trust/Responsibility:
-OPA is the source of truth for allowed M5 project/action tuples. `capiss` validates strict M5 project resource syntax, evaluates policy, initializes shared root budget, signs the token, and emits mint-decision events. Only `spiffe://example.org/codex-jira-mcp-adapter` may mint M5 Slice 1 authority for `IAM`; `NAS`, future actions, old subjects, and mixed M4/M5 authority forms deny.
+OPA is the source of truth for allowed M5 project/action tuples. `capiss` validates strict M5 project resource syntax, evaluates policy, initializes shared root budget, signs the token, and emits mint-decision events. Only `spiffe://varambu.org/codex-jira-mcp-adapter` may mint M5 Slice 1 authority for `IAM`; `NAS`, future actions, old subjects, and mixed M4/M5 authority forms deny.
 
 Interactions:
 The adapter presents its SPIFFE identity to `capability-issuer-envoy`; Envoy injects the verified identity into `capiss`; `capiss` returns a short-lived root token used only inside the adapter-to-gateway request path.

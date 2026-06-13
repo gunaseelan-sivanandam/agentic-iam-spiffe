@@ -53,12 +53,12 @@ def test_parse_fact_helpers(capiss_module, guard):
     parsed_number = guard.exercise("parse numeric arg", lambda: capiss_module.parse_fact_arg("123"))
     claims = guard.exercise(
         "parse block source",
-        lambda: capiss_module.parse_block_source('sub("spiffe://example.org/agent-a");\nexp(10);\n'),
+        lambda: capiss_module.parse_block_source('sub("spiffe://varambu.org/agent-a");\nexp(10);\n'),
     )
     guard.outcome("quoted arg parsed", parsed_string == "abc")
     guard.outcome("numeric arg parsed", parsed_number == 123)
-    guard.outcome("sub extracted", claims.get("sub") == "spiffe://example.org/agent-a")
-    guard.outcome("subject_spiffe_id extracted", claims.get("subject_spiffe_id") == "spiffe://example.org/agent-a")
+    guard.outcome("sub extracted", claims.get("sub") == "spiffe://varambu.org/agent-a")
+    guard.outcome("subject_spiffe_id extracted", claims.get("subject_spiffe_id") == "spiffe://varambu.org/agent-a")
     guard.outcome("exp extracted", claims.get("exp") == 10)
 
 
@@ -72,7 +72,7 @@ def test_mint_and_parse_token_round_trip(capiss_module, guard):
     token, _, _, root_token_id, token_id = guard.exercise(
         "mint root biscuit",
         lambda: capiss_module.mint_root_biscuit(
-            "spiffe://example.org/agent-a",
+            "spiffe://varambu.org/agent-a",
             "tool-b",
             "read",
             "tool-b:/search",
@@ -97,7 +97,7 @@ def test_append_resource_token_round_trip(capiss_module, guard):
     token, _, _, _, _ = guard.exercise(
         "mint root biscuit",
         lambda: capiss_module.mint_root_biscuit(
-            "spiffe://example.org/agent-a",
+            "spiffe://varambu.org/agent-a",
             "tool-b",
             "read",
             "tool-b:/search",
@@ -113,7 +113,7 @@ def test_append_resource_token_round_trip(capiss_module, guard):
         lambda: capiss_module.append_resource_token(
             parent_biscuit,
             parent_claims,
-            "spiffe://example.org/agent-a",
+            "spiffe://varambu.org/agent-a",
             "tool-b",
             "read",
             "tool-b:/search",
@@ -339,7 +339,7 @@ def test_log_mint_decision_success_includes_validity_and_no_token_secret(capiss_
             result="allow",
             reason_code="ok",
             decision_type="root_mint",
-            subject_spiffe_id="spiffe://example.org/codex-jira-mcp-adapter",
+            subject_spiffe_id="spiffe://varambu.org/codex-jira-mcp-adapter",
             aud="jira-mcp-gateway",
             act="create_story",
             res="jira-mcp:/project:IAM",
@@ -383,7 +383,7 @@ def test_log_mint_decision_deny_omits_validity_but_keeps_context(capiss_module, 
             result="deny",
             reason_code="policy",
             decision_type="root_mint",
-            subject_spiffe_id="spiffe://example.org/codex-jira-mcp-adapter",
+            subject_spiffe_id="spiffe://varambu.org/codex-jira-mcp-adapter",
             aud="jira-mcp-gateway",
             act="read_project_summary",
             res="jira-mcp:/project:NAS",
@@ -392,7 +392,7 @@ def test_log_mint_decision_deny_omits_validity_but_keeps_context(capiss_module, 
     )
     _, fields = guard.exercise("read captured event", lambda: events[0])
     guard.outcome("deny result logged", fields["result"] == "deny" and fields["reason_code"] == "policy")
-    guard.outcome("context retained", fields["subject_spiffe_id"] == "spiffe://example.org/codex-jira-mcp-adapter")
+    guard.outcome("context retained", fields["subject_spiffe_id"] == "spiffe://varambu.org/codex-jira-mcp-adapter")
     guard.outcome("resource attrs derived for denied canonical resource", fields["resource_attrs"] == {"kind": "jira_project", "project_key": "NAS"})
     guard.outcome("logged local time present", fields["timestamp_local"] == "2027-01-15 09:00:30 Europe/Berlin")
     guard.outcome("validity fields omitted", "issued_at_utc" not in fields and "expires_at_utc" not in fields and "ttl_seconds" not in fields)
@@ -416,7 +416,7 @@ def test_log_mint_decision_invalid_timezone_falls_back_to_utc(capiss_module, mon
             result="deny",
             reason_code="policy",
             decision_type="root_mint",
-            subject_spiffe_id="spiffe://example.org/agent-a",
+            subject_spiffe_id="spiffe://varambu.org/agent-a",
             aud="tool-b",
             act="read",
             res="tool-b:/search",
@@ -602,7 +602,7 @@ def test_decision_input_contains_optional_fields(capiss_module, guard):
         "build decision input",
         lambda: capiss_module.decision_input(
             "resource_mint",
-            "spiffe://example.org/agent-a",
+            "spiffe://varambu.org/agent-a",
             "tool-b",
             "read",
             "tool-b:/search",
@@ -615,8 +615,8 @@ def test_decision_input_contains_optional_fields(capiss_module, guard):
         payload
         == {
             "decision_type": "resource_mint",
-            "sub": "spiffe://example.org/agent-a",
-            "subject_spiffe_id": "spiffe://example.org/agent-a",
+            "sub": "spiffe://varambu.org/agent-a",
+            "subject_spiffe_id": "spiffe://varambu.org/agent-a",
             "aud": "tool-b",
             "act": "read",
             "res": "tool-b:/search",
@@ -638,7 +638,7 @@ def test_decision_input_returns_exact_base_payload(capiss_module, guard):
         "build base decision input",
         lambda: capiss_module.decision_input(
             "root_mint",
-            "spiffe://example.org/agent-a",
+            "spiffe://varambu.org/agent-a",
             "tool-b",
             "read",
             "tool-b:/search",
@@ -649,8 +649,8 @@ def test_decision_input_returns_exact_base_payload(capiss_module, guard):
         payload
         == {
             "decision_type": "root_mint",
-            "sub": "spiffe://example.org/agent-a",
-            "subject_spiffe_id": "spiffe://example.org/agent-a",
+            "sub": "spiffe://varambu.org/agent-a",
+            "subject_spiffe_id": "spiffe://varambu.org/agent-a",
             "aud": "tool-b",
             "act": "read",
             "res": "tool-b:/search",
@@ -670,7 +670,7 @@ def test_decision_input_omits_root_token_id_when_none(capiss_module, guard):
         "build decision input without root token",
         lambda: capiss_module.decision_input(
             "resource_mint",
-            "spiffe://example.org/agent-a",
+            "spiffe://varambu.org/agent-a",
             "tool-b",
             "read",
             "tool-b:/search",
@@ -680,8 +680,8 @@ def test_decision_input_omits_root_token_id_when_none(capiss_module, guard):
     guard.outcome("root_token_id omitted", "root_token_id" not in payload)
     guard.outcome("registry_hit included", payload == {
         "decision_type": "resource_mint",
-        "sub": "spiffe://example.org/agent-a",
-        "subject_spiffe_id": "spiffe://example.org/agent-a",
+        "sub": "spiffe://varambu.org/agent-a",
+        "subject_spiffe_id": "spiffe://varambu.org/agent-a",
         "aud": "tool-b",
         "act": "read",
         "res": "tool-b:/search",
@@ -701,7 +701,7 @@ def test_decision_input_omits_registry_hit_when_none(capiss_module, guard):
         "build decision input without registry flag",
         lambda: capiss_module.decision_input(
             "resource_mint",
-            "spiffe://example.org/agent-a",
+            "spiffe://varambu.org/agent-a",
             "tool-b",
             "read",
             "tool-b:/search",
@@ -711,8 +711,8 @@ def test_decision_input_omits_registry_hit_when_none(capiss_module, guard):
     guard.outcome("registry_hit omitted", "registry_hit" not in payload)
     guard.outcome("root_token_id included", payload == {
         "decision_type": "resource_mint",
-        "sub": "spiffe://example.org/agent-a",
-        "subject_spiffe_id": "spiffe://example.org/agent-a",
+        "sub": "spiffe://varambu.org/agent-a",
+        "subject_spiffe_id": "spiffe://varambu.org/agent-a",
         "aud": "tool-b",
         "act": "read",
         "res": "tool-b:/search",
@@ -732,7 +732,7 @@ def test_decision_input_preserves_false_registry_hit(capiss_module, guard):
         "build decision input with false registry flag",
         lambda: capiss_module.decision_input(
             "resource_mint",
-            "spiffe://example.org/agent-a",
+            "spiffe://varambu.org/agent-a",
             "tool-b",
             "read",
             "tool-b:/search",
@@ -740,7 +740,7 @@ def test_decision_input_preserves_false_registry_hit(capiss_module, guard):
         ),
     )
     guard.outcome("registry_hit explicitly false", payload.get("registry_hit") is False)
-    guard.outcome("subject fields match", payload.get("sub") == payload.get("subject_spiffe_id") == "spiffe://example.org/agent-a")
+    guard.outcome("subject fields match", payload.get("sub") == payload.get("subject_spiffe_id") == "spiffe://varambu.org/agent-a")
 
 
 # UT: UT-043
@@ -754,7 +754,7 @@ def test_extract_chain_claims_defaults_depth_when_missing(capiss_module, guard):
     token, _, _, _, _ = guard.exercise(
         "mint root biscuit",
         lambda: capiss_module.mint_root_biscuit(
-            "spiffe://example.org/agent-a",
+            "spiffe://varambu.org/agent-a",
             "tool-b",
             "read",
             "tool-b:/search",
@@ -909,7 +909,7 @@ def test_log_mint_decision_resource_mint_includes_parent_context_and_validity(ca
             result="allow",
             reason_code="ok",
             decision_type="resource_mint",
-            subject_spiffe_id="spiffe://example.org/codex-jira-mcp-adapter",
+            subject_spiffe_id="spiffe://varambu.org/codex-jira-mcp-adapter",
             aud="jira-mcp-gateway",
             act="create_story",
             res="jira-mcp:/project:IAM",
@@ -948,7 +948,7 @@ def test_log_mint_decision_omits_correlation_id_when_absent(capiss_module, monke
             result="deny",
             reason_code="policy",
             decision_type="root_mint",
-            subject_spiffe_id="spiffe://example.org/agent-a",
+            subject_spiffe_id="spiffe://varambu.org/agent-a",
             aud="tool-b",
             act="read",
             res="tool-b:/search",

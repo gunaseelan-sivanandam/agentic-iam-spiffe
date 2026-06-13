@@ -30,7 +30,7 @@ Usage:
 
 ### Evidence
 - In a failing `M3.S2-T4` full milestone run:
-  - `verified_capiss_spiffe_id.txt` contained `spiffe://example.org/capability-issuer-no-opa-envoy`
+  - `verified_capiss_spiffe_id.txt` contained `spiffe://varambu.org/capability-issuer-no-opa-envoy`
   - `verified_capiss_result.txt` contained `fail`
   - `status.txt` and `mint_body.json` were empty because TLS verification failed before a valid HTTP response was accepted
 - Header capture from the same run showed the server certificate expiry had already passed:

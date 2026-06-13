@@ -43,7 +43,7 @@ The larger direction is powerful Codex-assisted Jira work through MCP, but this 
 - M5 shall require `jira-mcp-gateway` to verify both the capiss token and the Envoy-verified caller identity.
 - M5 shall deny when token `subject_spiffe_id` does not match the Envoy-verified caller identity.
 - M5 shall add a distinct capiss policy branch for `aud=jira-mcp-gateway`, `res=jira-mcp:/project:<KEY>`, and the Slice 1 actions.
-- M5 shall allow only `spiffe://example.org/codex-jira-mcp-adapter` to mint Slice 1 tokens.
+- M5 shall allow only `spiffe://varambu.org/codex-jira-mcp-adapter` to mint Slice 1 tokens.
 - M5 shall allow only `res=jira-mcp:/project:IAM` for Slice 1.
 - M5 shall deny `jira-mcp:/project:NAS` at capiss mint time.
 - M5 shall enforce strict project-key syntax for `jira-mcp:/project:<KEY>` and request `project_key`. No wildcards, lists, aliases, lowercase normalization, URLs, spaces, or slashes are allowed.
@@ -170,7 +170,7 @@ The larger direction is powerful Codex-assisted Jira work through MCP, but this 
 5. Codex calls `read_project_summary` or `create_story`.
 6. The adapter performs minimal type/schema validation and derives the fixed capiss action for the selected MCP tool.
 7. The adapter calls `capability-issuer-envoy` over mTLS and requests a fresh token for the requested action and `jira-mcp:/project:<project_key>`.
-8. Capiss allows only the configured M5 authority tuple for `spiffe://example.org/codex-jira-mcp-adapter`; otherwise it denies.
+8. Capiss allows only the configured M5 authority tuple for `spiffe://varambu.org/codex-jira-mcp-adapter`; otherwise it denies.
 9. The adapter sends an internal HTTPS/JSON request through `jira-mcp-envoy` with the capiss token.
 10. `jira-mcp-gateway` verifies token signature, expiry, subject, audience, endpoint-bound action, resource, project, and Envoy caller identity.
 11. The gateway validates allowed payload fields and defensive type/length bounds.

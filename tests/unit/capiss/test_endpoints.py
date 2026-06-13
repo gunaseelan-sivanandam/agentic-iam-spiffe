@@ -6,7 +6,7 @@ import pytest
 from fastapi.responses import JSONResponse
 
 
-SPIFFE_ID = "spiffe://example.org/agent-a"
+SPIFFE_ID = "spiffe://varambu.org/agent-a"
 
 
 def decode_body(resp: JSONResponse) -> dict:
@@ -649,7 +649,7 @@ def test_resource_mint_rejects_subject_mismatch(capiss_module, monkeypatch, guar
         lambda: monkeypatch.setattr(
             capiss_module,
             "parse_token",
-            lambda *_: (object(), base_parent_claims(subject_spiffe_id="spiffe://example.org/rogue"), None),
+            lambda *_: (object(), base_parent_claims(subject_spiffe_id="spiffe://varambu.org/rogue"), None),
         ),
     )
     resp = guard.exercise(

@@ -1,7 +1,7 @@
 # Implementation Contract
 
 ## Runtime Behavior
-- OPA allows IAM write minting only for `spiffe://example.org/agent-a`.
+- OPA allows IAM write minting only for `spiffe://varambu.org/agent-a`.
 - `capiss` canonicalizes Jira project resources exactly as in M4a and sends the full write tuple to OPA.
 - `jira-tool` accepts write tokens for GET and PUT, but read tokens only for GET.
 - `jira-tool` validates description update bodies before upstream calls.

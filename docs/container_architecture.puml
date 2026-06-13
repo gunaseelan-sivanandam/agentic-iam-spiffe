@@ -10,7 +10,7 @@ Person_Ext(user, "User / Codex", "No Jira credentials or tokens. Talks to the ad
 System_Ext(jira_upstream, "Jira", "jira-mcp-mock (tests) or Jira Cloud (explicit live mode).")
 
 ' ── SPIFFE trust domain ───────────────────────────────────────────────────────
-Boundary(domain, "SPIFFE Trust Domain — spiffe://example.org") {
+Boundary(domain, "SPIFFE Trust Domain — spiffe://varambu.org") {
 
   Boundary(spire_b, "SPIRE Control Plane") {
     Container(spire_server, "spire-server", "SPIRE Server", "Node admission and SVID CA. Only registered workloads receive identities.")

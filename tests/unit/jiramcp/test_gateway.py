@@ -10,7 +10,7 @@ def _claims(**overrides):
     data = {
         "root_token_id": "root-1",
         "token_id": "token-root",
-        "subject_spiffe_id": "spiffe://example.org/codex-jira-mcp-adapter",
+        "subject_spiffe_id": "spiffe://varambu.org/codex-jira-mcp-adapter",
         "aud": "jira-mcp-gateway",
         "act": "read_project_summary",
         "res": "jira-mcp:/project:IAM",
@@ -74,10 +74,10 @@ def test_project_from_resource_requires_jira_mcp_prefix(jiramcp_gateway_module, 
 @pytest.mark.parametrize(
     ("overrides", "spiffe_id", "expected_act", "requested_project", "expected_reason"),
     [
-        ({}, "spiffe://example.org/rogue", "read_project_summary", "IAM", "subject_mismatch"),
-        ({"aud": "jira-tool"}, "spiffe://example.org/codex-jira-mcp-adapter", "read_project_summary", "IAM", "aud_mismatch"),
-        ({"act": "create_story"}, "spiffe://example.org/codex-jira-mcp-adapter", "read_project_summary", "IAM", "act_mismatch"),
-        ({"res": "jira-mcp:/project:NAS"}, "spiffe://example.org/codex-jira-mcp-adapter", "read_project_summary", "IAM", "project_mismatch"),
+        ({}, "spiffe://varambu.org/rogue", "read_project_summary", "IAM", "subject_mismatch"),
+        ({"aud": "jira-tool"}, "spiffe://varambu.org/codex-jira-mcp-adapter", "read_project_summary", "IAM", "aud_mismatch"),
+        ({"act": "create_story"}, "spiffe://varambu.org/codex-jira-mcp-adapter", "read_project_summary", "IAM", "act_mismatch"),
+        ({"res": "jira-mcp:/project:NAS"}, "spiffe://varambu.org/codex-jira-mcp-adapter", "read_project_summary", "IAM", "project_mismatch"),
     ],
 )
 # UT: UT-198
@@ -240,7 +240,7 @@ def test_gateway_summary_handler_happy_path(jiramcp_gateway_module, monkeypatch,
     guard.premise("gateway module loaded", mod is not None)
     events: list[tuple[str, dict]] = []
     claims = _claims()
-    guard.exercise("stub authorization", lambda: monkeypatch.setattr(mod.JiraMcpGatewayHandler, "_authorize", lambda self, *_: ("spiffe://example.org/codex-jira-mcp-adapter", dict(claims))))
+    guard.exercise("stub authorization", lambda: monkeypatch.setattr(mod.JiraMcpGatewayHandler, "_authorize", lambda self, *_: ("spiffe://varambu.org/codex-jira-mcp-adapter", dict(claims))))
     guard.exercise("stub budget", lambda: monkeypatch.setattr(mod.JiraMcpGatewayHandler, "_consume_or_deny", lambda self, *_: True))
     guard.exercise(
         "stub upstream summary",
@@ -279,7 +279,7 @@ def test_gateway_create_handler_happy_path_with_epic(jiramcp_gateway_module, mon
     mod = jiramcp_gateway_module
     guard.premise("gateway module loaded", mod is not None)
     upstream_bodies: list[dict] = []
-    guard.exercise("stub authorization", lambda: monkeypatch.setattr(mod.JiraMcpGatewayHandler, "_authorize", lambda self, *_: ("spiffe://example.org/codex-jira-mcp-adapter", _claims(act="create_story"))))
+    guard.exercise("stub authorization", lambda: monkeypatch.setattr(mod.JiraMcpGatewayHandler, "_authorize", lambda self, *_: ("spiffe://varambu.org/codex-jira-mcp-adapter", _claims(act="create_story"))))
     guard.exercise("stub budget", lambda: monkeypatch.setattr(mod.JiraMcpGatewayHandler, "_consume_or_deny", lambda self, *_: True))
     guard.exercise("stub epic verification", lambda: monkeypatch.setattr(mod, "verify_epic", lambda epic, project, corr: epic == "IAM-101" and project == "IAM"))
 
@@ -324,7 +324,7 @@ def test_gateway_handler_standard_denials(jiramcp_gateway_module, monkeypatch, g
     missing_subject = _HandlerHarness(mod, "/mcp/jira/project-summary", {"project_key": "IAM"})
     guard.exercise("call missing subject", missing_subject.handler.do_POST)
 
-    guard.exercise("stub authorization", lambda: monkeypatch.setattr(mod.JiraMcpGatewayHandler, "_authorize", lambda self, *_: ("spiffe://example.org/codex-jira-mcp-adapter", _claims())))
+    guard.exercise("stub authorization", lambda: monkeypatch.setattr(mod.JiraMcpGatewayHandler, "_authorize", lambda self, *_: ("spiffe://varambu.org/codex-jira-mcp-adapter", _claims())))
     guard.exercise("stub budget", lambda: monkeypatch.setattr(mod.JiraMcpGatewayHandler, "_consume_or_deny", lambda self, *_: True))
     guard.exercise("stub upstream failure", lambda: monkeypatch.setattr(mod, "call_upstream", lambda *_args, **_kwargs: (503, {"secret": "raw"})))
     upstream_fail = _HandlerHarness(mod, "/mcp/jira/project-summary", {"project_key": "IAM"})
@@ -346,11 +346,11 @@ def test_gateway_verifier_budget_transport_and_get_helpers(jiramcp_gateway_modul
     mod = jiramcp_gateway_module
     guard.premise("gateway module loaded", mod is not None)
     _stub_token_parse(mod, monkeypatch, _claims(exp=2_000_000_000))
-    verified = guard.exercise("verify valid token", lambda: mod.verify_token("token", "spiffe://example.org/codex-jira-mcp-adapter", "read_project_summary", "IAM"))
+    verified = guard.exercise("verify valid token", lambda: mod.verify_token("token", "spiffe://varambu.org/codex-jira-mcp-adapter", "read_project_summary", "IAM"))
     _stub_token_parse(mod, monkeypatch, _claims(exp=1))
-    expired = guard.exercise("verify expired token", lambda: mod.verify_token("token", "spiffe://example.org/codex-jira-mcp-adapter", "read_project_summary", "IAM"))
+    expired = guard.exercise("verify expired token", lambda: mod.verify_token("token", "spiffe://varambu.org/codex-jira-mcp-adapter", "read_project_summary", "IAM"))
     guard.exercise("stub biscuit parse failure", lambda: monkeypatch.setattr(mod.Biscuit, "from_base64", lambda *_: (_ for _ in ()).throw(mod.BiscuitValidationError("bad"))))
-    invalid = guard.exercise("verify invalid token", lambda: mod.verify_token("token", "spiffe://example.org/codex-jira-mcp-adapter", "read_project_summary", "IAM"))
+    invalid = guard.exercise("verify invalid token", lambda: mod.verify_token("token", "spiffe://varambu.org/codex-jira-mcp-adapter", "read_project_summary", "IAM"))
 
     class RedisResults:
         def __init__(self):

@@ -60,11 +60,11 @@ def test_root_mint_jira_mcp_allowed_tuples(capiss_module, monkeypatch, guard):
     guard.exercise("stub mint marker", lambda: monkeypatch.setattr(capiss_module, "mark_capiss_minted_token", lambda *_: (True, "")))
     summary = guard.exercise(
         "mint M5 summary token",
-        lambda: capiss_module.root_mint(payload=M5_SUMMARY_BODY, x_spiffe_id="spiffe://example.org/codex-jira-mcp-adapter"),
+        lambda: capiss_module.root_mint(payload=M5_SUMMARY_BODY, x_spiffe_id="spiffe://varambu.org/codex-jira-mcp-adapter"),
     )
     create = guard.exercise(
         "mint M5 create token",
-        lambda: capiss_module.root_mint(payload=M5_CREATE_BODY, x_spiffe_id="spiffe://example.org/codex-jira-mcp-adapter"),
+        lambda: capiss_module.root_mint(payload=M5_CREATE_BODY, x_spiffe_id="spiffe://varambu.org/codex-jira-mcp-adapter"),
     )
     guard.outcome("summary mint uses M5 audience", summary["aud"] == "jira-mcp-gateway")
     guard.outcome("summary mint uses M5 action", summary["act"] == "read_project_summary")
@@ -85,11 +85,11 @@ def test_root_mint_jira_mcp_denies_nas_and_old_subject(capiss_module, monkeypatc
     nas_body = {**M5_SUMMARY_BODY, "res": "jira-mcp:/project:NAS"}
     nas = guard.exercise(
         "attempt NAS M5 mint",
-        lambda: capiss_module.root_mint(payload=nas_body, x_spiffe_id="spiffe://example.org/codex-jira-mcp-adapter"),
+        lambda: capiss_module.root_mint(payload=nas_body, x_spiffe_id="spiffe://varambu.org/codex-jira-mcp-adapter"),
     )
     old_subject = guard.exercise(
         "attempt agent-a M5 mint",
-        lambda: capiss_module.root_mint(payload=M5_SUMMARY_BODY, x_spiffe_id="spiffe://example.org/agent-a"),
+        lambda: capiss_module.root_mint(payload=M5_SUMMARY_BODY, x_spiffe_id="spiffe://varambu.org/agent-a"),
     )
     guard.outcome("NAS denied by policy", nas.status_code == 403 and _json_body(nas)["reason"] == "policy")
     guard.outcome("old subject denied by policy", old_subject.status_code == 403 and _json_body(old_subject)["reason"] == "policy")

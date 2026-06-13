@@ -26,7 +26,7 @@ def test_varambu_audit_normalize_allowlist_drops_forbidden_fields(guard):
         "event_type": "capiss_mint_decision",
         "result": "allow",
         "reason_code": "ok",
-        "subject_spiffe_id": "spiffe://example.org/codex-jira-mcp-adapter",
+        "subject_spiffe_id": "spiffe://varambu.org/codex-jira-mcp-adapter",
         "act": "create_story",
         "res": "jira-mcp:/project:IAM",
         "resource_attrs": {"kind": "jira_project", "project_key": "IAM"},
@@ -96,7 +96,7 @@ def test_varambu_audit_render_minted_record_order(guard):
         "sequence": 1,
         "result": "allow",
         "reason_code": "ok",
-        "subject_spiffe_id": "spiffe://example.org/codex-jira-mcp-adapter",
+        "subject_spiffe_id": "spiffe://varambu.org/codex-jira-mcp-adapter",
         "act": "read_project_summary",
         "res": "jira-mcp:/project:IAM",
         "aud": "jira-mcp-gateway",
@@ -118,8 +118,8 @@ def test_varambu_audit_render_minted_record_order(guard):
     }
     rendered = guard.exercise("render minted record", lambda: mod.render_record(record))
     lines = guard.exercise("split rendered lines", lambda: rendered.splitlines())
-    guard.outcome("header is first with local time", lines[0] == "#1 MINTED ok  2026-06-05 11:43:40 Europe/Berlin")
-    guard.outcome("subject precedes action", lines.index("Subject:      spiffe://example.org/codex-jira-mcp-adapter") < lines.index("Action:       read_project_summary"))
+    guard.outcome("header is first with local time", lines[0] == "#1 MINTED OK  2026-06-05 11:43:40 Europe/Berlin")
+    guard.outcome("subject precedes action", lines.index("Subject:      spiffe://varambu.org/codex-jira-mcp-adapter") < lines.index("Action:       read_project_summary"))
     guard.outcome("logged at line present", "Logged At:    2026-06-05 11:43:40 Europe/Berlin" in lines)
     guard.outcome("utc summary line present", "UTC:          issued=2026-06-05T09:43:39Z expires=2026-06-05T09:44:39Z logged=2026-06-05T09:43:40Z" in lines)
     guard.outcome("policy line present", "Policy:       capiss.allow.v3 sha256:capiss-policy-v3" in lines)
@@ -137,7 +137,7 @@ def test_varambu_audit_render_denied_record_uses_dash_placeholders(guard):
         "sequence": 2,
         "result": "deny",
         "reason_code": "policy",
-        "subject_spiffe_id": "spiffe://example.org/codex-jira-mcp-adapter",
+        "subject_spiffe_id": "spiffe://varambu.org/codex-jira-mcp-adapter",
         "act": "create_story",
         "res": "jira-mcp:/project:NAS",
         "aud": "jira-mcp-gateway",
@@ -148,7 +148,7 @@ def test_varambu_audit_render_denied_record_uses_dash_placeholders(guard):
         "policy_hash": "sha256:capiss-policy-v3",
     }
     rendered = guard.exercise("render denied record", lambda: mod.render_record(record))
-    guard.outcome("denied header rendered", rendered.startswith("#2 DENIED policy  2026-06-05 11:46:38 Europe/Berlin"))
+    guard.outcome("denied header rendered", rendered.startswith("#2 DENIED: Reason Policy  2026-06-05 11:46:38 Europe/Berlin"))
     guard.outcome("token id placeholder rendered", "Token ID:     -\n" in rendered)
     guard.outcome("issued placeholder rendered", "Issued At:    -\n" in rendered)
     guard.outcome("ttl placeholder rendered", "TTL:          -\n" in rendered)
@@ -196,7 +196,7 @@ def test_varambu_audit_tail_writes_jsonl_and_human_files(monkeypatch, tmp_path, 
                 "event_type": "capiss_mint_decision",
                 "result": "allow",
                 "reason_code": "ok",
-                "subject_spiffe_id": "spiffe://example.org/codex-jira-mcp-adapter",
+                "subject_spiffe_id": "spiffe://varambu.org/codex-jira-mcp-adapter",
                 "act": "read_project_summary",
                 "res": "jira-mcp:/project:IAM",
                 "timestamp_local": "2026-06-05 11:43:40 Europe/Berlin",
@@ -236,7 +236,7 @@ def test_varambu_audit_tail_writes_jsonl_and_human_files(monkeypatch, tmp_path, 
     guard.outcome("tail returned subprocess exit code", rc == 0)
     guard.outcome("invalid json and unrelated events ignored", len(records) == 1)
     guard.outcome("persisted record has sequence 1", records[0]["sequence"] == 1)
-    guard.outcome("human record contains minted header", "#1 MINTED ok  2026-06-05 11:43:40 Europe/Berlin" in human)
+    guard.outcome("human record contains minted header", "#1 MINTED OK  2026-06-05 11:43:40 Europe/Berlin" in human)
     guard.outcome("tailer stderr copied to err file", err == "docker stderr\n")
 
 

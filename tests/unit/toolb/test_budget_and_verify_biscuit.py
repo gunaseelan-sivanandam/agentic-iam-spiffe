@@ -187,7 +187,7 @@ def test_record_discovery_fails_closed_on_store_error(toolb_module, monkeypatch,
         "record discovery",
         lambda: toolb_module.record_discovery(
             "root-1",
-            "spiffe://example.org/agent-a",
+            "spiffe://varambu.org/agent-a",
             ["tool-b:/read-file:fileA"],
             int(time.time()) + 30,
         ),
@@ -197,7 +197,7 @@ def test_record_discovery_fails_closed_on_store_error(toolb_module, monkeypatch,
 
 def base_claims(**overrides):
     claims = {
-        "subject_spiffe_id": "spiffe://example.org/agent-a",
+        "subject_spiffe_id": "spiffe://varambu.org/agent-a",
         "aud": "tool-b",
         "act": "read",
         "res": "tool-b:/search",
@@ -230,7 +230,7 @@ def test_verify_biscuit_rejects_subject_mismatch(toolb_module, monkeypatch, guar
         "verify biscuit with wrong subject",
         lambda: toolb_module.verify_biscuit(
             "token",
-            "spiffe://example.org/rogue",
+            "spiffe://varambu.org/rogue",
             "read",
             "tool-b:/search",
         ),
@@ -256,7 +256,7 @@ def test_verify_biscuit_rejects_expired_token(toolb_module, monkeypatch, guard):
         "verify expired token",
         lambda: toolb_module.verify_biscuit(
             "token",
-            "spiffe://example.org/agent-a",
+            "spiffe://varambu.org/agent-a",
             "read",
             "tool-b:/search",
         ),
@@ -294,7 +294,7 @@ def test_verify_biscuit_budget_reason_mapping(toolb_module, monkeypatch, budget_
         "verify biscuit with budget mapping",
         lambda: toolb_module.verify_biscuit(
             "token",
-            "spiffe://example.org/agent-a",
+            "spiffe://varambu.org/agent-a",
             "read",
             "tool-b:/search",
         ),
@@ -318,7 +318,7 @@ def test_verify_biscuit_allows_valid_token(toolb_module, monkeypatch, guard):
         "verify valid biscuit",
         lambda: toolb_module.verify_biscuit(
             "token",
-            "spiffe://example.org/agent-a",
+            "spiffe://varambu.org/agent-a",
             "read",
             "tool-b:/search",
         ),

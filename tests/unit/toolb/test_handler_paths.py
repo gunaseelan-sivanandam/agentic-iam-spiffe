@@ -6,7 +6,7 @@ import json
 import pytest
 
 
-SPIFFE_ID = "spiffe://example.org/agent-a"
+SPIFFE_ID = "spiffe://varambu.org/agent-a"
 
 
 def make_handler(toolb_module, path: str = "/", headers: dict | None = None):
@@ -297,7 +297,7 @@ def test_deny_logs_exact_final_enforcement_event_schema(toolb_module, monkeypatc
         "token_id": "token-child",
         "parent_token_id": "token-root",
         "effective_depth": 1,
-        "delegator_spiffe_id": "spiffe://example.org/delegator",
+        "delegator_spiffe_id": "spiffe://varambu.org/delegator",
         "aud": "tool-b",
         "act": "read",
         "res": "tool-b:/read-file:fileA",
@@ -320,7 +320,7 @@ def test_deny_logs_exact_final_enforcement_event_schema(toolb_module, monkeypatc
                 "token_id": "token-child",
                 "parent_token_id": "token-root",
                 "delegation_depth": 1,
-                "delegator_spiffe_id": "spiffe://example.org/delegator",
+                "delegator_spiffe_id": "spiffe://varambu.org/delegator",
                 "aud": "tool-b",
                 "act": "read",
                 "res": "tool-b:/read-file:fileA",
@@ -497,7 +497,7 @@ def test_authorize_logs_exact_final_allow_event_schema(toolb_module, monkeypatch
         "parent_token_id": "token-root",
         "subject_spiffe_id": SPIFFE_ID,
         "effective_depth": 1,
-        "delegator_spiffe_id": "spiffe://example.org/delegator",
+        "delegator_spiffe_id": "spiffe://varambu.org/delegator",
         "aud": "tool-b",
         "act": "read",
         "res": "tool-b:/read-file:fileA",
@@ -519,7 +519,7 @@ def test_authorize_logs_exact_final_allow_event_schema(toolb_module, monkeypatch
                 "token_id": "token-child",
                 "parent_token_id": "token-root",
                 "delegation_depth": 1,
-                "delegator_spiffe_id": "spiffe://example.org/delegator",
+                "delegator_spiffe_id": "spiffe://varambu.org/delegator",
                 "aud": "tool-b",
                 "act": "read",
                 "res": "tool-b:/read-file:fileA",

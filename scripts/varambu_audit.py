@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -101,13 +102,46 @@ def _display(value: Any) -> str:
     return str(value)
 
 
+def _humanize_reason(reason_code: str) -> str:
+    """Render a snake_case reason_code as Title Case words (policy -> Policy)."""
+    return " ".join(word.capitalize() for word in reason_code.split("_"))
+
+
+_GREEN = "\033[32m"
+_RED = "\033[1;31m"
+_RESET = "\033[0m"
+_HEADER_RE = re.compile(r"^#\d+ (MINTED|DENIED)\b")
+
+
+def _colorize_line(line: str) -> str:
+    """Color a MINTED/DENIED header line for display only (TTY). The persisted
+    file is written by render_record without color; color is applied here at
+    print time so the evidence file and any pipe stay plain."""
+    if not sys.stdout.isatty():
+        return line
+    match = _HEADER_RE.match(line)
+    if not match:
+        return line
+    color = _GREEN if match.group(1) == "MINTED" else _RED
+    body = line.rstrip("\n")
+    newline = "\n" if line.endswith("\n") else ""
+    return f"{color}{body}{_RESET}{newline}"
+
+
 # DD: DD-902
 # Implements: ARCH-032
 # Title: render_record Varambu human-readable capiss audit renderer
 def render_record(record: dict[str, Any], *, verbose: bool = False) -> str:
     result = str(record.get("result", "")).upper()
-    label = "MINTED" if result == "ALLOW" else "DENIED" if result == "DENY" else result or "-"
-    header = f"#{record.get('sequence', '-')} {label} {record.get('reason_code', '-')}  {_display(record.get('timestamp_local'))}"
+    reason_code = str(record.get("reason_code", "-"))
+    timestamp = _display(record.get("timestamp_local"))
+    sequence = record.get("sequence", "-")
+    if result == "ALLOW":
+        header = f"#{sequence} MINTED {reason_code.upper()}  {timestamp}"
+    elif result == "DENY":
+        header = f"#{sequence} DENIED: Reason {_humanize_reason(reason_code)}  {timestamp}"
+    else:
+        header = f"#{sequence} {result or '-'} {reason_code}  {timestamp}"
     lines = [
         header,
         f"Subject:      {_display(record.get('subject_spiffe_id'))}",
@@ -177,18 +211,22 @@ def _read_file(path: Path, *, follow: bool) -> int:
     if path.exists() and path.stat().st_size > 0:
         with path.open("r", encoding="utf-8") as handle:
             for line in handle:
-                print(line, end="")
+                print(_colorize_line(line), end="")
     else:
         print(f"No capiss audit events recorded for the current Varambu session yet.\nAudit file: {path}")
     if follow:
-        with path.open("r", encoding="utf-8") as handle:
-            handle.seek(0, 2)
-            while True:
-                line = handle.readline()
-                if line:
-                    print(line, end="", flush=True)
-                else:
-                    time.sleep(0.5)
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                handle.seek(0, 2)
+                while True:
+                    line = handle.readline()
+                    if line:
+                        print(_colorize_line(line), end="", flush=True)
+                    else:
+                        time.sleep(0.5)
+        except KeyboardInterrupt:
+            print()  # finish the current line so the shell prompt starts clean
+            return 0
     return 0
 
 

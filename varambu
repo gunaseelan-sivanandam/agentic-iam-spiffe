@@ -1,12 +1,22 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+while [ -L "$SCRIPT_PATH" ]; do
+  SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" >/dev/null 2>&1 && pwd)"
+  LINK_TARGET="$(readlink "$SCRIPT_PATH")"
+  case "$LINK_TARGET" in
+    /*) SCRIPT_PATH="$LINK_TARGET" ;;
+    *) SCRIPT_PATH="$SCRIPT_DIR/$LINK_TARGET" ;;
+  esac
+done
+ROOT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" >/dev/null 2>&1 && pwd)"
 COMPOSE_FILE="${COMPOSE_FILE:-$ROOT_DIR/compose/spiffe.compose.yml}"
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env}"
 MODE="live"
 BUILD_FLAG="--build"
 CONFIGURE_CODEX=1
+VERBOSE=0
 MCP_NAME="${MCP_NAME:-jira-mcp}"
 SESSION_START_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -36,7 +46,7 @@ DEMO_SVID_CONTAINERS=(
 usage() {
   cat <<EOF
 Usage:
-  varambu start [--live|--mock] [--timezone ZONE] [--no-build] [--no-codex-config]
+  varambu start [--live|--mock] [--timezone ZONE] [--verbose] [--no-build] [--no-codex-config]
   varambu audit [--all] [--json] [--follow] [--strict]
   varambu show-audit-logs [--all] [--json] [--follow] [--strict]
   varambu audit-file [--all] [--json|--human]
@@ -48,6 +58,7 @@ Options:
   --live             Start jira-mcp-gateway in live Jira mode. Default.
   --mock             Start jira-mcp-gateway against deterministic mock Jira.
   --timezone ZONE    Override host timezone used for local audit timestamps.
+  --verbose          Show detailed startup output (default is a crisp checklist).
   --no-build         Do not rebuild images during compose up.
   --no-codex-config  Do not register the Codex MCP server.
   -h, --help         Show this help.
@@ -110,7 +121,9 @@ show_audit() {
   warn_dead_tailer "$session_dir" "$strict" || return 1
   file="$session_dir/capiss_audit.log"
   [ "$json" -eq 0 ] || file="$session_dir/capiss_audit.jsonl"
-  "$ROOT_DIR/scripts/varambu_audit.py" show --file "$file" ${follow:+--follow}
+  follow_arg=""
+  [ "$follow" -eq 1 ] && follow_arg="--follow"
+  "$ROOT_DIR/scripts/varambu_audit.py" show --file "$file" $follow_arg
 }
 
 show_audit_file() {
@@ -188,7 +201,8 @@ stop_previous_audit_tailer() {
 
 start_audit_tailer() {
   docker inspect spiffe-capability-issuer >/dev/null 2>&1 || {
-    echo "ERROR: spiffe-capability-issuer container is not inspectable" | tee -a "$LOG_FILE" >&2
+    PHASE_FAIL_REASON="capiss container unavailable for audit tailer"
+    vb_detail "ERROR: spiffe-capability-issuer container is not inspectable"
     return 1
   }
   : >"$AUDIT_JSONL_FILE"
@@ -214,7 +228,8 @@ start_audit_tailer() {
     echo "tailer attempt $attempt failed" >>"$AUDIT_TAILER_ERR_FILE"
     attempt=$((attempt + 1))
   done
-  echo "VARAMBU_ERROR audit_tailer_failed" | tee -a "$LOG_FILE" >&2
+  PHASE_FAIL_REASON="audit tailer did not stay up"
+  vb_detail "VARAMBU_ERROR audit_tailer_failed"
   return 1
 }
 
@@ -263,6 +278,9 @@ while [ "$#" -gt 0 ]; do
       TIMEZONE_OVERRIDE="$2"
       shift
       ;;
+    --verbose)
+      VERBOSE=1
+      ;;
     --no-build)
       BUILD_FLAG=""
       ;;
@@ -285,33 +303,48 @@ done
 mkdir -p "$LOG_DIR"
 touch "$LOG_FILE"
 
+VARAMBU_VERBOSE="$VERBOSE"
+VARAMBU_LOG_FILE="$LOG_FILE"
+VARAMBU_STACK_LOG_FILE="$STACK_LOG_FILE"
+export VARAMBU_VERBOSE VARAMBU_LOG_FILE VARAMBU_STACK_LOG_FILE
+# shellcheck source=scripts/varambu_output.sh
+. "$ROOT_DIR/scripts/varambu_output.sh"
+
+PHASE_FAIL_REASON=""
+
+# say: full-detail line (log always; stdout only with --verbose).
+say() { vb_detail "$@"; }
+
+capture_stack_log() {
+  command -v docker >/dev/null 2>&1 || return 0
+  docker compose -f "$COMPOSE_FILE" logs --no-color \
+    spire-server spire-agent capability-issuer capability-issuer-envoy \
+    jira-mcp-gateway jira-mcp-envoy codex-jira-mcp-adapter \
+    >"$STACK_LOG_FILE" 2>/dev/null || true
+  [ -s "$STACK_LOG_FILE" ] && vb_detail "stack_log=$STACK_LOG_FILE"
+  return 0
+}
+
+_render_fail() {
+  vb_log_marker_code="$1"
+  _vb_log "VARAMBU_ERROR code=$vb_log_marker_code phase=${_VB_PHASE:-} reason=${PHASE_FAIL_REASON:-}"
+  vb_phase_fail "${PHASE_FAIL_REASON:-failed}"
+  capture_stack_log
+  vb_fail_footer "$vb_log_marker_code"
+}
+
 on_error() {
   code="$?"
-  {
-    echo
-    echo "VARAMBU_ERROR code=$code"
-    echo "log_file=$LOG_FILE"
-  } | tee -a "$LOG_FILE"
-  if command -v docker >/dev/null 2>&1; then
-    docker compose -f "$COMPOSE_FILE" logs --no-color \
-      spire-server spire-agent capability-issuer capability-issuer-envoy \
-      jira-mcp-gateway jira-mcp-envoy codex-jira-mcp-adapter \
-      >"$STACK_LOG_FILE" 2>/dev/null || true
-    if [ -s "$STACK_LOG_FILE" ]; then
-      echo "stack_log=$STACK_LOG_FILE" | tee -a "$LOG_FILE"
-    fi
-  fi
+  _render_fail "$code"
   exit "$code"
 }
 trap on_error ERR
 
-say() {
-  printf '%s\n' "$*" | tee -a "$LOG_FILE"
-}
-
-log_step() {
-  say ""
-  say "[$(date -u +%H:%M:%SZ)] $*"
+# die <reason> [code]: fail the current phase with a one-line reason and exit.
+die() {
+  PHASE_FAIL_REASON="$1"
+  _render_fail "${2:-1}"
+  exit "${2:-1}"
 }
 
 run() {
@@ -334,9 +367,8 @@ load_env_file() {
 
 require_live_env() {
   if [ ! -f "$ENV_FILE" ]; then
-    echo "ERROR: live mode requires $ENV_FILE" >&2
-    echo "ERROR: live mode requires $ENV_FILE" >>"$LOG_FILE"
-    exit 2
+    vb_detail "live mode requires $ENV_FILE (set Jira env there; values are not logged)"
+    die "live mode requires $ENV_FILE" 2
   fi
 
   load_env_file
@@ -348,11 +380,8 @@ require_live_env() {
   done
 
   if [ "${#missing[@]}" -gt 0 ]; then
-    {
-      echo "ERROR: live mode missing required Jira env: ${missing[*]}"
-      echo "Set them in $ENV_FILE. Values are not logged."
-    } | tee -a "$LOG_FILE" >&2
-    exit 2
+    vb_detail "Set the missing Jira env in $ENV_FILE. Values are not logged."
+    die "live mode missing Jira env: ${missing[*]}" 2
   fi
 }
 
@@ -364,13 +393,13 @@ wait_for_container() {
   name="$1"
   for _ in $(seq 1 60); do
     if container_running "$name"; then
-      echo "ready: $name"
-      echo "ready: $name" >>"$LOG_FILE"
+      say "ready: $name"
       return 0
     fi
     sleep 1
   done
-  echo "ERROR: container did not become ready: $name" | tee -a "$LOG_FILE" >&2
+  PHASE_FAIL_REASON="container did not start: $name"
+  vb_detail "ERROR: container did not become ready: $name"
   return 1
 }
 
@@ -385,13 +414,13 @@ wait_for_container_svid() {
   name="$1"
   for _ in $(seq 1 60); do
     if container_running "$name" && container_has_svid "$name"; then
-      echo "svid_ready: $name"
-      echo "svid_ready: $name" >>"$LOG_FILE"
+      say "svid_ready: $name"
       return 0
     fi
     sleep 1
   done
 
+  PHASE_FAIL_REASON="no SVID issued to $name"
   {
     echo "ERROR: SVID files did not become ready for: $name"
     echo "Expected non-empty files:"
@@ -399,9 +428,7 @@ wait_for_container_svid() {
     echo "  $SVID_DIR/svid.key"
     echo "  $SVID_DIR/bundle.pem"
     echo "Current $SVID_DIR listing:"
-  } | tee -a "$LOG_FILE" >&2
-  docker exec "$name" ls -l "$SVID_DIR" 2>&1 | tee -a "$LOG_FILE" >&2 || true
-  {
+    docker exec "$name" ls -l "$SVID_DIR" 2>&1 || true
     echo "Recent $name logs:"
     docker logs --tail=80 "$name" 2>&1 || true
     echo "Recent spiffe-spire-agent logs:"
@@ -441,22 +468,19 @@ configure_codex_mcp() {
     "$ROOT_DIR/scripts/codex_jira_mcp.sh"
 }
 
-log_step "Varambu demo startup"
+vb_title "$MODE"
 say "repo_root=$ROOT_DIR"
 say "mode=$MODE"
 say "log_file=$LOG_FILE"
 export VARAMBU_TZ="$(detect_timezone)"
 say "timezone=$VARAMBU_TZ"
 
-log_step "Prepare Varambu command"
+vb_phase "Preflight"
 ensure_user_varambu_command
-
-log_step "Preflight"
 run docker info
 run docker compose version
 run docker context ls
 run "$ROOT_DIR/scripts/clean_stack.sh" --check
-
 if [ "$MODE" = "live" ]; then
   require_live_env
   export JIRA_MCP_UPSTREAM_MODE=live
@@ -464,21 +488,19 @@ else
   export JIRA_MCP_UPSTREAM_MODE=mock
 fi
 say "jira_mcp_upstream_mode=$JIRA_MCP_UPSTREAM_MODE"
+vb_phase_ok
 
-log_step "Stop previous audit tailer"
+vb_phase "Reset environment"
 stop_previous_audit_tailer
-
-log_step "Clean stack"
 run "$ROOT_DIR/scripts/clean_stack.sh"
+vb_phase_ok
 
-log_step "Start stack"
+vb_phase "Start SPIFFE/SPIRE stack"
 if [ -n "$BUILD_FLAG" ]; then
   compose_cmd up -d "$BUILD_FLAG" >>"$LOG_FILE" 2>&1
 else
   compose_cmd up -d >>"$LOG_FILE" 2>&1
 fi
-
-log_step "Wait for demo containers"
 wait_for_container spiffe-spire-server
 wait_for_container spiffe-spire-agent
 wait_for_container spiffe-redis
@@ -487,46 +509,48 @@ wait_for_container spiffe-capability-issuer-envoy
 wait_for_container spiffe-jira-mcp-gateway
 wait_for_container spiffe-jira-mcp-envoy
 wait_for_container spiffe-codex-jira-mcp-adapter
+vb_phase_ok
 
-log_step "Wait for workload SVIDs"
+vb_phase "Issue workload identities"
 wait_for_workload_svids
+vb_phase_ok "(${#DEMO_SVID_CONTAINERS[@]} SVIDs)"
 
-log_step "Start capiss audit tailer"
+vb_phase "Start audit capture"
 start_audit_tailer
 ln -sfn "$LOG_DIR" "$CURRENT_LINK"
 say "current_session=$CURRENT_LINK"
+vb_phase_ok
 
-log_step "Validate MCP stdio bridge"
+vb_phase "Verify MCP tools"
 printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
   | COMPOSE_FILE="$COMPOSE_FILE" "$ROOT_DIR/scripts/codex_jira_mcp.sh" \
   >"$MCP_TOOLS_FILE" 2>"$MCP_ERR_FILE"
 if [ -s "$MCP_ERR_FILE" ]; then
   say "MCP launcher stderr:"
-  sed -n '1,80p' "$MCP_ERR_FILE" | tee -a "$LOG_FILE"
+  say "$(sed -n '1,80p' "$MCP_ERR_FILE")"
 fi
 if ! grep -Fq '"read_project_summary"' "$MCP_TOOLS_FILE" \
   || ! grep -Fq '"create_story"' "$MCP_TOOLS_FILE"; then
-  echo "ERROR: MCP tool discovery did not return the expected Jira MCP tools" | tee -a "$LOG_FILE" >&2
-  echo "mcp_tools=$MCP_TOOLS_FILE" | tee -a "$LOG_FILE" >&2
-  exit 1
+  say "mcp_tools=$MCP_TOOLS_FILE"
+  die "expected Jira MCP tools not returned" 1
 fi
 say "mcp_tools=$MCP_TOOLS_FILE"
+vb_phase_ok
 
-log_step "Configure Codex MCP"
-configure_codex_mcp
+if [ "$CONFIGURE_CODEX" -eq 1 ]; then
+  vb_phase "Configure Codex"
+  configure_codex_mcp
+  vb_phase_ok
+else
+  configure_codex_mcp
+fi
 
-log_step "Capture startup stack log"
-docker compose -f "$COMPOSE_FILE" logs --no-color \
-  spire-server spire-agent capability-issuer capability-issuer-envoy \
-  jira-mcp-gateway jira-mcp-envoy codex-jira-mcp-adapter \
-  >"$STACK_LOG_FILE" 2>/dev/null || true
-say "stack_log=$STACK_LOG_FILE"
+capture_stack_log
 
-log_step "Varambu started"
-say "VARAMBU_STARTED"
 say "mode=$MODE"
 say "mcp_server=$MCP_NAME"
 say "log_file=$LOG_FILE"
 say "next_new_session=codex -C $ROOT_DIR"
 say "next_resume=codex -C $ROOT_DIR resume"
 say "demo_prompt=Use the Jira MCP tools to read project summary for IAM."
+vb_banner

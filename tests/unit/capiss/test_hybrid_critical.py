@@ -5,7 +5,7 @@ from collections import defaultdict
 import pytest
 
 
-SPIFFE_ID = "spiffe://example.org/agent-a"
+SPIFFE_ID = "spiffe://varambu.org/agent-a"
 
 
 class FakePipeline:

@@ -26,7 +26,7 @@ and enforces each independently.
 Every container in the stack is a registered workload. At startup, SPIRE
 issues each workload an X.509 SVID — a short-lived, automatically rotated
 certificate whose URI SAN is a `spiffe://` identifier such as
-`spiffe://example.org/codex-jira-mcp-adapter`. Every service-to-service call
+`spiffe://varambu.org/codex-jira-mcp-adapter`. Every service-to-service call
 uses mutual TLS: both sides present their SVID and verify the other's. A
 workload that is not explicitly registered cannot obtain an SVID and cannot
 authenticate into the stack.
