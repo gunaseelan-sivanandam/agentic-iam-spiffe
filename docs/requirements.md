@@ -756,6 +756,63 @@ The audit command SHALL warn when the current-session tailer is no longer runnin
 The human-readable audit log SHALL show local time first while preserving UTC fields in the structured JSONL evidence.
 Varambu audit artifacts and CLI output SHALL NOT include bearer capability token values, upstream credentials, authorization header values, cookies, or other secret material.
 
+## REQ-M5-FT1 — Full-chain audit trace reconstruction and command
+The Varambu operator interface SHALL provide a `varambu trace` command that reconstructs, for each completed M5 Codex→Jira request, a single ordered chain joined by one shared correlation ID.
+The chain SHALL present the following legs in fixed causal order: verbatim user intent, model action, adapter request, capiss mint decision, gateway verification and upstream call, and adapter decision.
+`varambu trace` SHALL default to the current demo session, SHALL support `--cid <id>` to select one chain by correlation ID, `--all` to include historical sessions, and `--json` for machine-readable output.
+`varambu trace` SHALL assemble chains at read time from persisted per-source evidence, SHALL NOT depend on a live stream, and SHALL NOT provide a follow mode.
+Introducing `varambu trace` SHALL NOT change the behavior or output of `varambu audit`, `varambu audit --all`, `varambu audit --json`, `varambu audit --follow`, or `varambu audit-file`.
+
+## REQ-M5-FT2 — Verbatim user intent leg
+The user-intent leg SHALL be the operator's verbatim prompt as recorded by the Codex agent, and SHALL NOT be a model paraphrase, summary, or reconstructed intent.
+The intent SHALL be joined to the rest of the chain solely by the correlation ID that the adapter returns in its tool result and that the agent records in its session log.
+Intent association SHALL select the model tool call bound to the chain's correlation ID, restricted to the M5 MCP tools `read_project_summary` and `create_story`, and SHALL attribute the nearest preceding recorded operator prompt; non-M5 agent tool calls SHALL be ignored when associating intent.
+When a single operator prompt triggers more than one M5 tool call, each resulting chain SHALL attribute that same verbatim prompt.
+
+## REQ-M5-FT3 — Independent in-boundary evidence and trust minimization
+Each in-boundary component contributing to a chain — adapter, capiss, and gateway — SHALL record its own leg from within the trust boundary, independent of any agent-produced record.
+The adapter SHALL record both an entry event, capturing that the call was received with its mapped action and resource and that minting was initiated, and a terminal decision event capturing the outcome.
+The system SHALL trust the agent only for the verbatim user-intent leg, because no in-boundary component observes the operator's prompt; every other leg SHALL derive from an in-boundary source.
+An agent that misreports a tool outcome SHALL be detectable by comparing the agent-visible result against the independent in-boundary legs that share the same correlation ID.
+
+## REQ-M5-FT4 — Partial chains and re-runnable assembly
+`varambu trace` SHALL render whatever legs are available and SHALL mark missing legs explicitly as not-yet-available, rather than failing, blocking, or waiting.
+When the agent has not yet recorded the intent at trace time, the in-boundary legs SHALL still render, and a subsequent `varambu trace` SHALL incorporate the intent once it becomes available.
+A request denied before later legs occur, such as a denied mint, SHALL render as a partial chain that ends at the denial, with subsequent legs shown as absent and not as errors.
+
+## REQ-M5-FT5 — Controlled intent-capture destination
+`varambu start` SHALL provision a per-session, Varambu-owned destination for the agent's session records and SHALL register the M5 MCP server into that destination, so intent capture is confined to a deterministic, session-scoped location rather than a shared agent home.
+`varambu start` SHALL print the exact launch line the operator uses to start the agent against that destination, and the operator interface SHALL provide a command that launches the agent against the current session destination without requiring the operator to set the destination by hand.
+Because the per-session destination is freshly provisioned, the operator interface SHALL make the operator's existing agent credential available to that destination by reference, so launching the agent against it does not force re-authentication; the credential SHALL remain in its original location and SHALL NOT be copied into the session evidence bundle, and `varambu trace` SHALL NOT read it.
+`varambu trace` SHALL read intent only from the current session's destination by default, and from each historical session's destination when `--all` is used.
+
+## REQ-M5-FT6 — Secret-free and bounded trace evidence
+Persisted trace evidence and `varambu trace` output SHALL NOT contain bearer capability token values, Basic authentication values, Jira API credentials, cookies, or other secret material; token identifiers and non-secret metadata MAY appear.
+The trace SHALL persist only the minimal intent record per correlation ID — the verbatim prompt, the M5 tool name, its arguments, and the bounded result fields of outcome, reason, created issue key, and status — and SHALL NOT persist agent reasoning, unrelated agent tool calls, or any whole agent session record.
+Operator-supplied content SHALL be size-bounded: the persisted prompt SHALL NOT exceed 2048 bytes, and persisted `summary` and `description` SHALL NOT each exceed 1024 bytes, with any truncation explicitly marked.
+Every source SHALL be re-screened against the forbidden-field and forbidden-value rules at read time, regardless of origin.
+
+## REQ-M5-FT7 — Honest, mode-consistent upstream leg
+The upstream call SHALL be presented as a leg distinct from the gateway's own enforcement decision, so that a request the gateway authorized but the upstream rejected is attributed to the upstream and not reported as a gateway denial.
+The upstream leg SHALL be represented identically in deterministic mock mode and in live mode.
+Because the live upstream cannot emit Varambu evidence, the upstream leg SHALL be attested solely by the gateway's own upstream-call record — whether the upstream was invoked, the operation, and the returned status — and SHALL be labeled as gateway-attested.
+The system SHALL NOT manufacture an independent upstream evidence voice that exists only in mock mode and that the live path cannot produce.
+When the upstream call fails, the gateway SHALL relay the upstream error as faithfully as possible into its upstream-call record so an operator can determine the cause and the remediation, redacting only credential-bearing material and bounding the relayed text. The Varambu trace SHALL surface this relayed detail on the upstream leg and SHALL re-screen it for secret markers at read time. Because providers such as Jira Cloud return an HTTP status (for example 404) that does not by itself distinguish a missing resource from an unauthorized or expired credential, the upstream-leg presentation SHALL NOT assert a single cause from the status code alone where that code is ambiguous.
+
+## REQ-M5-FT8 — Capture model, ordering, and scope of surfaced chains
+In-boundary evidence SHALL be captured per source in arrival order and SHALL NOT be reordered, because arrival order is itself evidence.
+`varambu trace` SHALL be an assembled view over that captured evidence: it SHALL group events by correlation ID, render legs in the fixed causal order independent of wall-clock timestamps, and list multiple chains in request-start order.
+A correlation ID SHALL be surfaced as an M5 chain only when it appears in an M5-specific in-boundary source — the adapter or gateway evidence. Because the agent session record is untrusted, an M5 model tool call that appears only in that record, with no corresponding adapter or gateway evidence, SHALL NOT by itself surface a chain; the verbatim intent is attached to an already-anchored chain rather than anchoring one. A decision that appears only in the shared capiss audit stream, such as a non-M5 authority mint, SHALL NOT be surfaced as an M5 chain.
+M5 full-chain trace SHALL cover only the M5 Codex→Jira path and SHALL NOT require correlation plumbing in non-M5 milestones.
+
+## REQ-M5-FT9 — Trace presentation and timing
+`varambu trace` SHALL present the full audit detail of each leg rather than an abbreviated view, rendering each chain as a single detailed record in which every leg shares a common, aligned structure (a fixed leg identifier, local time, and status) with its grouped per-leg fields.
+The capiss mint leg SHALL present the same fields as the corresponding `varambu audit` record for that decision; it need not reproduce that record byte-for-byte, and `varambu audit` itself SHALL remain unchanged.
+Identifiers that exist for correlation — including the correlation ID, token identifiers, and policy identifier — SHALL be shown in full and SHALL NOT be truncated; only secret material SHALL be withheld.
+Each leg SHALL display local time first, consistent with the audit view, while the structured `--json` output SHALL preserve UTC and a per-source sequence for each leg.
+The structured `--json` output MAY carry an advisory elapsed offset from the chain start per leg; such an offset SHALL be marked advisory and SHALL NOT be used to order legs.
+Leg order SHALL always be the fixed causal order and SHALL NEVER be a wall-clock sort.
+
 ---
 
 # 11. Test contract requirements

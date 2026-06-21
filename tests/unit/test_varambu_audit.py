@@ -260,3 +260,43 @@ def test_varambu_audit_show_reads_persisted_files_and_empty_message(tmp_path, ca
     guard.outcome("empty show returns 0", second_rc == 0)
     guard.outcome("empty message contains session notice", "No capiss audit events recorded" in second)
     guard.outcome("empty message contains file path", str(empty) in second)
+
+
+# UT: UT-330
+# Test Description: Verifies the audit tailer with --source gateway keeps only jiramcp_gateway_decision events and writes the JSONL human line for the gateway leg.
+# Precondition: The audit helper module is loaded and docker-log output contains a capiss event and a gateway decision event.
+# Expected Output: Only the gateway decision is persisted, sequenced, and the human file carries its compact JSON (no capiss render).
+# Covers DD: DD-903
+def test_varambu_audit_tail_gateway_source_filters_gateway_events(monkeypatch, tmp_path, guard):
+    mod = guard.premise("varambu audit module loaded", _load_varambu_audit)
+    jsonl_path = tmp_path / "gateway_audit.jsonl"
+    human_path = tmp_path / "gateway_audit.log"
+    err_path = tmp_path / "gateway_audit.err"
+
+    class FakeProcess:
+        stdout = [
+            json.dumps({"event_type": "capiss_mint_decision", "result": "allow"}) + "\n",
+            json.dumps({
+                "event_type": "jiramcp_gateway_decision",
+                "decision": "allow",
+                "reason_code": "ok",
+                "correlation_id": "corr-9",
+                "upstream_called": True,
+                "upstream_status": 201,
+                "timestamp": "2026-06-19T10:00:03Z",
+            }) + "\n",
+        ]
+        stderr = io.StringIO("")
+
+        def wait(self):
+            return 0
+
+    guard.exercise("stub docker logs", lambda: monkeypatch.setattr(mod.subprocess, "Popen", lambda cmd, **_k: FakeProcess()))
+    args = argparse.Namespace(jsonl=jsonl_path, human=human_path, err=err_path, since="x", container="spiffe-jira-mcp-gateway", source="gateway", verbose=False)
+    rc = guard.exercise("tail gateway", lambda: mod.tail(args))
+    records = guard.exercise("read jsonl", lambda: [json.loads(line) for line in jsonl_path.read_text(encoding="utf-8").splitlines()])
+    human = guard.exercise("read human", lambda: human_path.read_text(encoding="utf-8"))
+    guard.outcome("tail returns exit code", rc == 0)
+    guard.outcome("only gateway event kept", len(records) == 1 and records[0]["decision"] == "allow")
+    guard.outcome("gateway event sequenced", records[0]["sequence"] == 1)
+    guard.outcome("human line is compact json not capiss render", '"event_type":"jiramcp_gateway_decision"' in human and "MINTED" not in human)

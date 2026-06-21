@@ -46,6 +46,9 @@ JIRA_BASE_URL = os.getenv("JIRA_BASE_URL", "")
 JIRA_EMAIL = os.getenv("JIRA_EMAIL", "")
 JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN", "")
 UPSTREAM_TIMEOUT_SECONDS = float(os.getenv("JIRA_UPSTREAM_TIMEOUT_SECONDS", "3.0"))
+UPSTREAM_ERROR_DETAIL_MAX = 512
+UPSTREAM_TRUNCATION_MARKER = "…[truncated]"
+_CREDENTIAL_RE = re.compile(r"(?i)\b(?:basic|bearer)\s+[A-Za-z0-9+/_=.\-]+")
 
 CONSUME_BUDGET_RATE_LUA = """
 local budget_key = KEYS[1]
@@ -346,6 +349,43 @@ def call_upstream(path: str, correlation_id: str, method: str = "GET", body: dic
         return 502, {"error": "upstream_unavailable"}
 
 
+def _first_str_field(payload: dict, keys: tuple[str, ...]) -> str:
+    for key in keys:
+        value = payload.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return ""
+
+
+def _extract_upstream_message(payload: object) -> str:
+    if not isinstance(payload, dict):
+        return str(payload)
+    messages = payload.get("errorMessages")
+    if isinstance(messages, list) and messages:
+        return "; ".join(str(item) for item in messages)
+    errors = payload.get("errors")
+    if isinstance(errors, dict) and errors:
+        return "; ".join(f"{key}: {value}" for key, value in errors.items())
+    return _first_str_field(payload, ("message", "error", "detail")) or json.dumps(payload, separators=(",", ":"))
+
+
+# DD: DD-517
+# Implements: ARCH-030, ARCH-033
+# Title: summarize_upstream_error jira-mcp-gateway bounded, secret-scrubbed upstream error relay
+def summarize_upstream_error(payload: object, *, limit: int = UPSTREAM_ERROR_DETAIL_MAX) -> str | None:
+    """Relay the upstream (Jira) error body as faithfully as possible for the
+    audit trail, redacting credential-shaped material and bounding the length.
+    The Varambu trace re-screens this value at read time as defense in depth."""
+    message = _CREDENTIAL_RE.sub("[redacted-credential]", _extract_upstream_message(payload)).strip()
+    if not message:
+        return None
+    encoded = message.encode("utf-8")
+    if len(encoded) >= limit:
+        budget = max(0, limit - len(UPSTREAM_TRUNCATION_MARKER.encode("utf-8")))
+        message = encoded[:budget].decode("utf-8", errors="ignore") + UPSTREAM_TRUNCATION_MARKER
+    return message
+
+
 def live_project_summary(project_key: str, correlation_id: str) -> tuple[int, dict]:
     project_status, project_payload = call_upstream(
         f"/rest/api/3/project/{quote(project_key)}",
@@ -474,6 +514,7 @@ def _event_fields(
     correlation_id: str,
     upstream_operation: str | None = None,
     upstream_status: int | None = None,
+    upstream_error_detail: str | None = None,
     issue_key: str | None = None,
     epic_key: str | None = None,
 ) -> dict[str, object]:
@@ -486,6 +527,7 @@ def _event_fields(
         "upstream_called": upstream_called,
         "upstream_operation": upstream_operation,
         "upstream_status": upstream_status,
+        "upstream_error_detail": upstream_error_detail,
         "issue_key": issue_key,
         "epic_key": epic_key,
         "correlation_id": correlation_id,
@@ -551,6 +593,7 @@ class JiraMcpGatewayHandler(BaseHTTPRequestHandler):
         upstream_called: bool = False,
         upstream_operation: str | None = None,
         upstream_status: int | None = None,
+        upstream_error_detail: str | None = None,
         epic_key: str | None = None,
     ):
         log_event(
@@ -565,6 +608,7 @@ class JiraMcpGatewayHandler(BaseHTTPRequestHandler):
                 upstream_called=upstream_called,
                 upstream_operation=upstream_operation,
                 upstream_status=upstream_status,
+                upstream_error_detail=upstream_error_detail,
                 correlation_id=correlation_id,
                 epic_key=epic_key,
             ),
@@ -628,7 +672,7 @@ class JiraMcpGatewayHandler(BaseHTTPRequestHandler):
             else:
                 status, upstream_payload = call_upstream(f"/rest/api/3/project/{quote(project_key)}/summary", correlation_id)
             if status != 200:
-                self._deny(502, "upstream_error", spiffe_id=spiffe_id, claims=claims, project_key=project_key, endpoint=self.path, correlation_id=correlation_id, upstream_called=True, upstream_operation="project_summary", upstream_status=status)
+                self._deny(502, "upstream_error", spiffe_id=spiffe_id, claims=claims, project_key=project_key, endpoint=self.path, correlation_id=correlation_id, upstream_called=True, upstream_operation="project_summary", upstream_status=status, upstream_error_detail=summarize_upstream_error(upstream_payload))
                 return
             shaped = shape_project_summary(upstream_payload)
             log_event(
@@ -679,7 +723,7 @@ class JiraMcpGatewayHandler(BaseHTTPRequestHandler):
             body["fields"]["parent"] = {"key": epic_key}
         status, upstream_payload = call_upstream("/rest/api/3/issue", correlation_id, method="POST", body=body)
         if status not in {200, 201}:
-            self._deny(502, "upstream_error", spiffe_id=spiffe_id, claims=claims, project_key=project_key, endpoint=self.path, correlation_id=correlation_id, upstream_called=True, upstream_operation="story_create", upstream_status=status, epic_key=epic_key if isinstance(epic_key, str) else None)
+            self._deny(502, "upstream_error", spiffe_id=spiffe_id, claims=claims, project_key=project_key, endpoint=self.path, correlation_id=correlation_id, upstream_called=True, upstream_operation="story_create", upstream_status=status, upstream_error_detail=summarize_upstream_error(upstream_payload), epic_key=epic_key if isinstance(epic_key, str) else None)
             return
         issue_key = str(upstream_payload.get("key", ""))
         response = {

@@ -3,8 +3,25 @@ from __future__ import annotations
 import io
 import json
 import sys
+from pathlib import Path
 
 import pytest
+
+
+# ---------------------------------------------------------------------------
+# DD-919 helpers: read the bind-mounted adapter audit file the adapter writes.
+# ---------------------------------------------------------------------------
+def _adapter_audit_lines(session_dir: Path) -> list[dict]:
+    path = session_dir / "adapter_audit.jsonl"
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def _wire_session_env(mod, monkeypatch, tmp_path, rel: str = "20260619-1") -> Path:
+    monkeypatch.setenv("VARAMBU_AUDIT_ROOT", str(tmp_path))
+    monkeypatch.setenv("VARAMBU_SESSION_REL", rel)
+    return tmp_path / rel
 
 
 # UT: UT-193
@@ -218,3 +235,114 @@ def test_adapter_validation_rejects_malformed_create_story_inputs(codex_jira_mcp
     guard.outcome("missing summary rejected", missing_summary == (None, "payload_invalid"))
     guard.outcome("unknown tool rejected", unknown == {"ok": False, "reason": "unknown_tool", "correlation_id": "corr"})
     guard.outcome("non-string MCP tool name is error result", bad_mcp_name["result"]["isError"] is True)
+
+
+# UT: UT-325
+# Test Description: Verifies the adapter writes adapter_request before the mint and adapter_decision after the gateway call.
+# Precondition: adapter module is loaded; session env wired to a temp dir; mint and gateway are stubbed to observe the audit file at call time.
+# Expected Output: adapter_request is persisted before mint runs; adapter_decision is persisted only after the gateway call returns.
+# Covers DD: DD-919
+@pytest.mark.invariant
+def test_adapter_emit_ordering_request_before_mint_decision_after_gateway(codex_jira_mcp_adapter_module, monkeypatch, tmp_path, guard):
+    mod = codex_jira_mcp_adapter_module
+    guard.premise("adapter module loaded", mod is not None)
+    session = _wire_session_env(mod, monkeypatch, tmp_path)
+    observed: list = []
+
+    def fake_mint(action, project_key, correlation_id):
+        types = [r["event_type"] for r in _adapter_audit_lines(session)]
+        observed.append(("mint", "adapter_request" in types, "adapter_decision" in types))
+        return "tok-secret", {"correlation_id": correlation_id, "token_id": "tok-1", "root_token_id": "root-1"}
+
+    def fake_gateway(tool_name, token, payload, correlation_id):
+        types = [r["event_type"] for r in _adapter_audit_lines(session)]
+        observed.append(("gateway", "adapter_decision" in types))
+        return 201, {"ok": True, "key": "IAM-5"}
+
+    guard.exercise("stub mint", lambda: monkeypatch.setattr(mod, "mint_token", fake_mint))
+    guard.exercise("stub gateway", lambda: monkeypatch.setattr(mod, "call_gateway", fake_gateway))
+    guard.exercise("invoke allowed", lambda: mod.invoke_tool("create_story", {"project_key": "IAM", "summary": "s", "description": "d"}, "corr-1"))
+    lines = guard.exercise("read audit file", lambda: _adapter_audit_lines(session))
+    types = [r["event_type"] for r in lines]
+    guard.outcome("request before mint", observed[0] == ("mint", True, False))
+    guard.outcome("decision not written before gateway returns", observed[1] == ("gateway", False))
+    guard.outcome("both legs persisted in order", types == ["adapter_request", "adapter_decision"])
+
+
+# UT: UT-326
+# Test Description: Verifies an exception between mint and gateway leaves adapter_request persisted with no paired adapter_decision.
+# Precondition: adapter module is loaded; session env wired; mint succeeds and the gateway call raises.
+# Expected Output: adapter_request is present; no adapter_decision is written (crash visibility).
+# Covers DD: DD-919
+@pytest.mark.negative_control
+def test_adapter_emit_crash_visibility_request_without_decision(codex_jira_mcp_adapter_module, monkeypatch, tmp_path, guard):
+    mod = codex_jira_mcp_adapter_module
+    guard.premise("adapter module loaded", mod is not None)
+    session = _wire_session_env(mod, monkeypatch, tmp_path)
+    guard.exercise("stub mint", lambda: monkeypatch.setattr(mod, "mint_token", lambda *_: ("tok-secret", {"correlation_id": "corr-1", "token_id": "tok-1"})))
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("gateway exploded")
+
+    guard.exercise("stub gateway crash", lambda: monkeypatch.setattr(mod, "call_gateway", boom))
+    with pytest.raises(RuntimeError):
+        mod.invoke_tool("create_story", {"project_key": "IAM", "summary": "s", "description": "d"}, "corr-1")
+    types = guard.exercise("read audit types", lambda: [r["event_type"] for r in _adapter_audit_lines(session)])
+    guard.outcome("request persisted", "adapter_request" in types)
+    guard.outcome("no paired decision", "adapter_decision" not in types)
+
+
+# UT: UT-327
+# Test Description: Verifies adapter emit writes under the session dir when VARAMBU_SESSION_REL is set and is a safe no-op when unset.
+# Precondition: adapter module is loaded; emit is invoked once with the session env set and once with it cleared.
+# Expected Output: With the env set a file line is written; with it unset no file is created and no exception is raised.
+# Covers DD: DD-919
+@pytest.mark.boundary
+def test_adapter_emit_path_wiring_set_and_unset(codex_jira_mcp_adapter_module, monkeypatch, tmp_path, guard):
+    mod = codex_jira_mcp_adapter_module
+    guard.premise("adapter module loaded", mod is not None)
+    session = _wire_session_env(mod, monkeypatch, tmp_path)
+    guard.exercise("emit with env set", lambda: mod.emit_adapter_event("adapter_request", {"correlation_id": "corr-1", "tool_name": "create_story"}))
+    set_lines = guard.exercise("read set", lambda: _adapter_audit_lines(session))
+    guard.exercise("clear session env", lambda: monkeypatch.delenv("VARAMBU_SESSION_REL", raising=False))
+    noop = guard.exercise("emit with env unset", lambda: mod.emit_adapter_event("adapter_request", {"correlation_id": "corr-2"}))
+    other = tmp_path / "should-not-exist"
+    guard.outcome("written when set", len(set_lines) == 1 and set_lines[0]["correlation_id"] == "corr-1")
+    guard.outcome("no-op returns cleanly when unset", noop is None)
+    guard.outcome("no stray file when unset", not other.exists())
+
+
+# UT: UT-328
+# Test Description: Verifies the adapter audit file carries token identifier metadata only and never the raw biscuit.
+# Precondition: adapter module is loaded; session env wired; mint returns a secret biscuit plus token_id metadata.
+# Expected Output: The persisted decision carries token_id but the raw biscuit value never appears in the file.
+# Covers DD: DD-919
+@pytest.mark.invariant
+def test_adapter_emit_secret_discipline_metadata_only(codex_jira_mcp_adapter_module, monkeypatch, tmp_path, guard):
+    mod = codex_jira_mcp_adapter_module
+    guard.premise("adapter module loaded", mod is not None)
+    session = _wire_session_env(mod, monkeypatch, tmp_path)
+    guard.exercise("stub mint secret", lambda: monkeypatch.setattr(mod, "mint_token", lambda *_: ("super-secret-biscuit-value", {"correlation_id": "corr-1", "token_id": "tok-1", "root_token_id": "root-1"})))
+    guard.exercise("stub gateway", lambda: monkeypatch.setattr(mod, "call_gateway", lambda *_: (201, {"ok": True, "key": "IAM-5"})))
+    guard.exercise("invoke allowed", lambda: mod.invoke_tool("create_story", {"project_key": "IAM", "summary": "s", "description": "d"}, "corr-1"))
+    content = guard.exercise("read raw file", lambda: (session / "adapter_audit.jsonl").read_text(encoding="utf-8"))
+    decision = guard.exercise("find decision", lambda: [r for r in _adapter_audit_lines(session) if r["event_type"] == "adapter_decision"][0])
+    guard.outcome("token_id metadata present", decision.get("token_id") == "tok-1")
+    guard.outcome("raw biscuit never persisted", "super-secret-biscuit-value" not in content)
+
+
+# UT: UT-329
+# Test Description: Verifies every adapter event stamps the same correlation id as the originating request.
+# Precondition: adapter module is loaded; session env wired; an allowed call runs with a known correlation id.
+# Expected Output: Both adapter_request and adapter_decision carry that correlation id.
+# Covers DD: DD-919
+@pytest.mark.invariant
+def test_adapter_emit_correlation_stamping(codex_jira_mcp_adapter_module, monkeypatch, tmp_path, guard):
+    mod = codex_jira_mcp_adapter_module
+    guard.premise("adapter module loaded", mod is not None)
+    session = _wire_session_env(mod, monkeypatch, tmp_path)
+    guard.exercise("stub mint", lambda: monkeypatch.setattr(mod, "mint_token", lambda *_: ("tok-secret", {"correlation_id": "corr-77", "token_id": "tok-1"})))
+    guard.exercise("stub gateway", lambda: monkeypatch.setattr(mod, "call_gateway", lambda *_: (201, {"ok": True, "key": "IAM-5"})))
+    guard.exercise("invoke allowed", lambda: mod.invoke_tool("create_story", {"project_key": "IAM", "summary": "s", "description": "d"}, "corr-77"))
+    lines = guard.exercise("read audit", lambda: _adapter_audit_lines(session))
+    guard.outcome("all events carry correlation id", all(r["correlation_id"] == "corr-77" for r in lines) and len(lines) == 2)

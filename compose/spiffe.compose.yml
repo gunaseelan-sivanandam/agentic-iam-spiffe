@@ -300,8 +300,13 @@ services:
     environment:
       CAPABILITY_ISSUER_URL: https://capability-issuer-envoy:9443
       JIRA_MCP_GATEWAY_URL: https://jira-mcp-envoy:11443
+      # ARCH-033: adapter writes its own in-boundary audit leg to the per-session
+      # bind-mounted path; VARAMBU_SESSION_REL selects the active session dir.
+      VARAMBU_AUDIT_ROOT: /var/audit
+      VARAMBU_SESSION_REL: ${VARAMBU_SESSION_REL:-}
     volumes:
       - ../spire/agent:/run/spire/agent:ro
+      - ../artifacts/varambu-demo:/var/audit
     depends_on:
       - spire-agent
       - capability-issuer-envoy

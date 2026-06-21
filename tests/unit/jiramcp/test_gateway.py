@@ -400,3 +400,38 @@ def test_gateway_verifier_budget_transport_and_get_helpers(jiramcp_gateway_modul
     guard.outcome("budget variants normalized", budget_results == [(True, "ok", 8), (False, "rate_limited", 8), (False, "budget_exhausted", -1), (False, "gateway_unavailable", -1)])
     guard.outcome("upstream transport variants normalized", upstream_ok == (200, {"ok": True}) and upstream_http == (400, {"error": "bad"}) and upstream_down == (502, {"error": "upstream_unavailable"}))
     guard.outcome("GET health and 404 routes work", health.status == 200 and missing.status == 404)
+
+
+# UT: UT-343
+# Test Description: summarize_upstream_error relays the Jira error for common body shapes, redacts credential-shaped material, and bounds length (limit exclusive).
+# Precondition: gateway module loaded; representative Jira error bodies, a credential-bearing string, and B-1/B/B+1 length inputs are summarized.
+# Expected Output: errorMessages/errors/message/error shapes yield their text; Basic/Bearer blobs become [redacted-credential]; len<512 kept whole, len>=512 truncated with the marker.
+# Covers DD: DD-517
+@pytest.mark.boundary
+def test_summarize_upstream_error_relays_scrubs_and_bounds(jiramcp_gateway_module, guard):
+    mod = jiramcp_gateway_module
+    guard.premise("gateway module loaded", mod is not None)
+    shapes = guard.exercise("summarize shapes", lambda: {
+        "errorMessages": mod.summarize_upstream_error({"errorMessages": ["Issue does not exist or you do not have permission to see it."], "errors": {}}),
+        "errors": mod.summarize_upstream_error({"errors": {"project_key": "project is required"}}),
+        "message": mod.summarize_upstream_error({"message": "Unauthorized"}),
+        "error": mod.summarize_upstream_error({"error": "upstream_unavailable"}),
+        "nonjson": mod.summarize_upstream_error("plain text error"),
+        "empty": mod.summarize_upstream_error({}),
+    })
+    guard.outcome("errorMessages relayed", shapes["errorMessages"] == "Issue does not exist or you do not have permission to see it.")
+    guard.outcome("errors dict relayed", shapes["errors"] == "project_key: project is required")
+    guard.outcome("message relayed", shapes["message"] == "Unauthorized")
+    guard.outcome("error relayed", shapes["error"] == "upstream_unavailable")
+    guard.outcome("non-dict relayed as text", shapes["nonjson"] == "plain text error")
+    guard.outcome("empty dict relayed as json", shapes["empty"] == "{}")
+    redacted = guard.exercise("redact basic credential", lambda: mod.summarize_upstream_error({"message": "auth header Basic YWxpY2U6c2VjcmV0 rejected"}))
+    guard.outcome("basic credential redacted", "YWxpY2U6c2VjcmV0" not in redacted and "[redacted-credential]" in redacted)
+    bearer = guard.exercise("redact bearer credential", lambda: mod.summarize_upstream_error({"message": "Bearer abc.def.ghi expired"}))
+    guard.outcome("bearer credential redacted", "abc.def.ghi" not in bearer and "[redacted-credential]" in bearer)
+    below = guard.exercise("limit minus one", lambda: mod.summarize_upstream_error({"message": "a" * 511}))
+    at = guard.exercise("at limit", lambda: mod.summarize_upstream_error({"message": "a" * 512}))
+    above = guard.exercise("limit plus one", lambda: mod.summarize_upstream_error({"message": "a" * 513}))
+    guard.outcome("below limit kept whole", below == "a" * 511)
+    guard.outcome("at limit truncated and marked", at.endswith("…[truncated]") and len(at.encode("utf-8")) <= 512)
+    guard.outcome("above limit truncated and marked", above.endswith("…[truncated]") and len(above.encode("utf-8")) <= 512)

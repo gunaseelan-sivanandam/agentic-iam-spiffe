@@ -1681,6 +1681,114 @@ mcp_text_json_to_file() {
   jq -r '.result.content[0].text' "$in_file" | jq . >"$out_file"
 }
 
+# --- M5 full-chain trace (ARCH-033) E2E helpers ---------------------------
+# Invoke an MCP tool through the adapter while injecting the per-session audit
+# destination, so the adapter writes its independent adapter_request/decision
+# legs into <session>/adapter_audit.jsonl (bind-mounted /var/audit/<rel>).
+mcp_tool_call_traced() {
+  tool="$1"
+  args_json="$2"
+  out="$3"
+  err="$4"
+  sess_rel="$5"
+  msg="$(jq -cn --arg tool "$tool" --argjson args "$args_json" '{jsonrpc:"2.0",id:1,method:"tools/call",params:{name:$tool,arguments:$args}}')"
+  (cd /repo && printf '%s\n' "$msg" \
+    | docker compose -f compose/spiffe.compose.yml exec -T \
+        -e VARAMBU_AUDIT_ROOT=/var/audit -e VARAMBU_SESSION_REL="$sess_rel" \
+        codex-jira-mcp-adapter python /app/server.py >"$out" 2>"$err")
+}
+
+# Correlation id the adapter returned in the MCP tool result.
+mcp_cid() {
+  jq -r '.result.content[0].text | fromjson | .correlation_id' "$1"
+}
+
+# Reset the mock with a short retry: m5_ready performs an in-band `docker run`
+# (SVID fetch) that can transiently flush the harness container's embedded DNS,
+# so the immediately-following jira-mcp-mock resolution may need a moment.
+trace_mock_reset() {
+  i=1
+  while [ "$i" -le 8 ]; do
+    if curl -sS -X POST "${JIRA_MCP_MOCK_URL}/__test__/reset" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+    i=$((i + 1))
+  done
+  return 1
+}
+
+# Start the capiss + gateway docker-logs tailers for one session.
+trace_start_tailers() {
+  sess="$1"
+  since="$2"
+  : >"$sess/capiss_audit.jsonl"; : >"$sess/capiss_audit.log"
+  python3 /repo/scripts/varambu_audit.py tail --since "$since" \
+    --jsonl "$sess/capiss_audit.jsonl" --human "$sess/capiss_audit.log" \
+    --err "$sess/audit_tailer.err" >/dev/null 2>>"$sess/audit_tailer.err" &
+  echo $! >"$sess/audit_tailer.pid"
+  : >"$sess/gateway_audit.jsonl"; : >"$sess/gateway_audit.log"
+  python3 /repo/scripts/varambu_audit.py tail --since "$since" \
+    --jsonl "$sess/gateway_audit.jsonl" --human "$sess/gateway_audit.log" \
+    --err "$sess/gateway_tailer.err" --container spiffe-jira-mcp-gateway --source gateway \
+    >/dev/null 2>>"$sess/gateway_tailer.err" &
+  echo $! >"$sess/gateway_tailer.pid"
+  sleep 2
+  kill -0 "$(cat "$sess/audit_tailer.pid")" && kill -0 "$(cat "$sess/gateway_tailer.pid")"
+}
+
+trace_stop_tailers() {
+  sess="$1"
+  kill "$(cat "$sess/audit_tailer.pid")" 2>/dev/null || true
+  kill "$(cat "$sess/gateway_tailer.pid")" 2>/dev/null || true
+}
+
+# Synthetic codex-cli rollout records (validated 0.139.0 shape). The correlation
+# id is templated from the live call so the agent-attested intent joins the real
+# in-boundary legs by correlation_id.
+rollout_user() {
+  jq -cn --arg m "$1" '{type:"event_msg",timestamp:"2026-06-19T10:00:00.000Z",payload:{type:"user_message",message:$m}}'
+}
+rollout_call() {
+  jq -cn --arg n "$1" --arg c "$2" --argjson a "$3" \
+    '{type:"response_item",timestamp:"2026-06-19T10:00:01.000Z",payload:{type:"function_call",name:$n,call_id:$c,arguments:($a|tojson),namespace:"jira-mcp"}}'
+}
+rollout_output() {
+  jq -cn --arg c "$1" --arg cid "$2" --argjson ok "$3" \
+    '{type:"response_item",timestamp:"2026-06-19T10:00:02.000Z",payload:{type:"function_call_output",call_id:$c,output:({ok:$ok,correlation_id:$cid}|tojson)}}'
+}
+
+# Build a fully populated, isolated synthetic trace session (no shared docker
+# log streams) for deterministic CLI-surface assertions. Mirrors the synthetic
+# fixture approach used by the varambu audit CLI tests (M5-T44).
+write_synth_trace_session() {
+  sess="$1"
+  cid="$2"
+  prompt="$3"
+  mkdir -p "$sess/codex-home/sessions/2026/06/19"
+  jq -cn --arg c "$cid" '{event_type:"capiss_mint_decision",result:"allow",reason_code:"ok",subject_spiffe_id:"spiffe://varambu.org/codex-jira-mcp-adapter",act:"create_story",res:"jira-mcp:/project:IAM",aud:"jira-mcp-gateway",decision_type:"root_mint",token_id:"tok-1",root_token_id:"root-1",delegation_depth:0,issued_at_local:"2026-06-19 12:00:02 UTC",expires_at_local:"2026-06-19 12:01:02 UTC",timestamp_local:"2026-06-19 12:00:02 UTC",ttl_seconds:60,issued_at_utc:"2026-06-19T10:00:02Z",expires_at_utc:"2026-06-19T10:01:02Z",timestamp_utc:"2026-06-19T10:00:02Z",correlation_id:$c,policy_id:"capiss.allow.v3",policy_hash:"sha256:capiss-policy-v3"}' >"$sess/capiss_audit.jsonl"
+  printf '#1 MINTED OK  2026-06-19 12:00:02 UTC\nCorrelation:  %s\n\n' "$cid" >"$sess/capiss_audit.log"
+  jq -cn --arg c "$cid" '{event_type:"jiramcp_gateway_decision",decision:"allow",reason_code:"ok",correlation_id:$c,act:"create_story",res:"jira-mcp:/project:IAM",upstream_called:true,upstream_operation:"story_create",upstream_status:201,timestamp:"2026-06-19T10:00:03Z"}' >"$sess/gateway_audit.jsonl"
+  { jq -cn --arg c "$cid" '{event_type:"adapter_request",correlation_id:$c,tool_name:"create_story",act:"create_story",res:"jira-mcp:/project:IAM",project_key:"IAM",timestamp:"2026-06-19T10:00:01Z"}'; jq -cn --arg c "$cid" '{event_type:"adapter_decision",correlation_id:$c,ok:true,token_id:"tok-1",root_token_id:"root-1",key:"IAM-9",timestamp:"2026-06-19T10:00:04Z"}'; } >"$sess/adapter_audit.jsonl"
+  { rollout_user "$prompt"; rollout_call create_story call-X '{"project_key":"IAM","summary":"s","description":"d"}'; rollout_output call-X "$cid" true; } >"$sess/codex-home/sessions/2026/06/19/rollout-1.jsonl"
+}
+
+# Wait until both in-boundary capture files have at least one line (or timeout).
+trace_wait_inboundary() {
+  sess="$1"
+  need_gateway="${2:-1}"
+  i=1
+  while [ $i -le 30 ]; do
+    if [ -s "$sess/capiss_audit.jsonl" ]; then
+      if [ "$need_gateway" -eq 0 ] || [ -s "$sess/gateway_audit.jsonl" ]; then
+        break
+      fi
+    fi
+    sleep 1
+    i=$((i + 1))
+  done
+}
+
 sanitize_token_response() {
   raw="$1"
   dest="$2"
@@ -3927,6 +4035,321 @@ M5_T48_test() {
   return 0
 }
 
+M5_T49_test() {
+  begin_test_evidence "M5-T49" "trace_full_chain_allowed"
+  echo "EVIDENCE_DIR=$EVDIR"
+  sess_rel="e2e-M5-T49"
+  session_dir="/repo/artifacts/varambu-demo/$sess_rel"
+  prompt="Use the Jira MCP tools to create a story in IAM."
+  premise_guard "M5 path and mock ready; session prepared" \
+    "m5_ready && trace_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir/codex-home/sessions/2026/06/19\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/since.txt\""
+  exercise_guard "start capiss and gateway tailers" \
+    "trace_start_tailers \"$session_dir\" \"\$(cat \"$EVDIR/since.txt\")\""
+  exercise_guard "allowed create_story for IAM with adapter audit" \
+    "mcp_tool_call_traced create_story '{\"project_key\":\"IAM\",\"summary\":\"trace e2e\",\"description\":\"full chain\"}' \"$EVDIR/mcp.json\" \"$EVDIR/adapter.err\" \"$sess_rel\""
+  exercise_guard "extract correlation id" \
+    "mcp_cid \"$EVDIR/mcp.json\" >\"$EVDIR/cid.txt\"; grep -Eq '^[0-9a-f-]{36}$' \"$EVDIR/cid.txt\""
+  exercise_guard "synthesize codex rollout carrying verbatim intent" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; { rollout_user '$prompt'; rollout_call create_story call-X '{\"project_key\":\"IAM\",\"summary\":\"trace e2e\",\"description\":\"full chain\"}'; rollout_output call-X \"\$cid\" true; } >\"$session_dir/codex-home/sessions/2026/06/19/rollout-1.jsonl\""
+  exercise_guard "wait for in-boundary legs and stop tailers" \
+    "trace_wait_inboundary \"$session_dir\" 1; trace_stop_tailers \"$session_dir\"; cp \"$session_dir/capiss_audit.jsonl\" \"$EVDIR/capiss_audit.jsonl\"; cp \"$session_dir/gateway_audit.jsonl\" \"$EVDIR/gateway_audit.jsonl\"; cp \"$session_dir/adapter_audit.jsonl\" \"$EVDIR/adapter_audit.jsonl\""
+  exercise_guard "render trace json and human" \
+    "python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock >\"$EVDIR/trace.txt\" 2>>\"$EVDIR/trace.err\"; cp \"$session_dir/trace.jsonl\" \"$EVDIR/trace.jsonl\""
+  outcome_guard "exactly one chain for the correlation id" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '[.[] | select(.correlation_id==\$c)] | length==1' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "legs render in fixed seven-leg canonical order" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '.[] | select(.correlation_id==\$c) | [.legs[].leg] == [\"intent\",\"action\",\"adapter_request\",\"mint\",\"gateway\",\"upstream\",\"adapter_decision\"]' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "all seven legs present including a distinct upstream leg" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '.[] | select(.correlation_id==\$c) | .legs | all(.[]; .present==true)' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "gateway leg is enforcement allow and upstream leg carries the upstream status" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '.[] | select(.correlation_id==\$c) | (.legs[]|select(.leg==\"gateway\")|.fields.leg_status==\"allow\") and (.legs[]|select(.leg==\"upstream\")|.fields.upstream_status==201)' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "intent leg equals the verbatim prompt" \
+    "jq -e --arg p '$prompt' 'first(.[]) | .legs[] | select(.leg==\"intent\") | .fields.user_message==\$p' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "mint, gateway, and upstream legs carry the same correlation id" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '.[] | select(.correlation_id==\$c) | (.legs[]|select(.leg==\"mint\")|.fields.correlation_id==\$c) and (.legs[]|select(.leg==\"gateway\")|.fields.correlation_id==\$c) and (.legs[]|select(.leg==\"upstream\")|.fields.correlation_id==\$c)' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "human render shows the redesigned labels and verbatim intent" \
+    "grep -Eq '[0-9]  ADAPTER ' \"$EVDIR/trace.txt\" && grep -Fq 'RETURN TO CODEX' \"$EVDIR/trace.txt\" && grep -Fq 'MINT' \"$EVDIR/trace.txt\" && tr '\n' ' ' < \"$EVDIR/trace.txt\" | tr -s ' ' | grep -Fq '$prompt'"
+  return 0
+}
+
+M5_T50_test() {
+  begin_test_evidence "M5-T50" "trace_denied_mint_partial"
+  echo "EVIDENCE_DIR=$EVDIR"
+  sess_rel="e2e-M5-T50"
+  session_dir="/repo/artifacts/varambu-demo/$sess_rel"
+  premise_guard "M5 path and mock ready; session prepared" \
+    "m5_ready && trace_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir/codex-home/sessions/2026/06/19\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/since.txt\""
+  exercise_guard "start capiss and gateway tailers" \
+    "trace_start_tailers \"$session_dir\" \"\$(cat \"$EVDIR/since.txt\")\""
+  exercise_guard "denied read_project_summary for NAS with adapter audit" \
+    "mcp_tool_call_traced read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/mcp.json\" \"$EVDIR/adapter.err\" \"$sess_rel\""
+  exercise_guard "extract correlation id" \
+    "mcp_cid \"$EVDIR/mcp.json\" >\"$EVDIR/cid.txt\"; grep -Eq '^[0-9a-f-]{36}$' \"$EVDIR/cid.txt\""
+  exercise_guard "synthesize codex rollout for the denied request" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; { rollout_user 'Read the NAS project summary.'; rollout_call read_project_summary call-X '{\"project_key\":\"NAS\"}'; rollout_output call-X \"\$cid\" false; } >\"$session_dir/codex-home/sessions/2026/06/19/rollout-1.jsonl\""
+  exercise_guard "wait for capiss deny and stop tailers" \
+    "trace_wait_inboundary \"$session_dir\" 0; trace_stop_tailers \"$session_dir\"; cp \"$session_dir/capiss_audit.jsonl\" \"$EVDIR/capiss_audit.jsonl\"; cp \"$session_dir/adapter_audit.jsonl\" \"$EVDIR/adapter_audit.jsonl\""
+  exercise_guard "render trace json and human" \
+    "python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock >\"$EVDIR/trace.txt\" 2>>\"$EVDIR/trace.err\""
+  outcome_guard "trace renders without error" \
+    "test ! -s \"$EVDIR/trace.err\""
+  outcome_guard "mint leg present and denied" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '.[] | select(.correlation_id==\$c) | .legs[] | select(.leg==\"mint\") | .present==true and .fields.result==\"deny\"' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "gateway and upstream legs shown absent (partial chain ends at deny)" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '.[] | select(.correlation_id==\$c) | (.legs[]|select(.leg==\"gateway\")|.present==false) and (.legs[]|select(.leg==\"upstream\")|.present==false)' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "adapter_request leg still present" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '.[] | select(.correlation_id==\$c) | .legs[] | select(.leg==\"adapter_request\") | .present==true' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "missing leg rendered as not yet available not an error" \
+    "grep -Fq 'not yet available' \"$EVDIR/trace.txt\""
+  return 0
+}
+
+M5_T51_test() {
+  begin_test_evidence "M5-T51" "trace_intent_pending_converge"
+  echo "EVIDENCE_DIR=$EVDIR"
+  sess_rel="e2e-M5-T51"
+  session_dir="/repo/artifacts/varambu-demo/$sess_rel"
+  prompt="Create a story in IAM after the in-boundary legs are captured."
+  premise_guard "M5 path and mock ready; session prepared" \
+    "m5_ready && trace_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir/codex-home/sessions/2026/06/19\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/since.txt\""
+  exercise_guard "start capiss and gateway tailers" \
+    "trace_start_tailers \"$session_dir\" \"\$(cat \"$EVDIR/since.txt\")\""
+  exercise_guard "allowed create_story for IAM with adapter audit" \
+    "mcp_tool_call_traced create_story '{\"project_key\":\"IAM\",\"summary\":\"converge\",\"description\":\"d\"}' \"$EVDIR/mcp.json\" \"$EVDIR/adapter.err\" \"$sess_rel\""
+  exercise_guard "extract correlation id and capture in-boundary legs" \
+    "mcp_cid \"$EVDIR/mcp.json\" >\"$EVDIR/cid.txt\"; grep -Eq '^[0-9a-f-]{36}$' \"$EVDIR/cid.txt\"; trace_wait_inboundary \"$session_dir\" 1; trace_stop_tailers \"$session_dir\""
+  exercise_guard "render trace before rollout exists (intent pending)" \
+    "python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --json >\"$EVDIR/trace_before.json\" 2>\"$EVDIR/trace_before.err\""
+  exercise_guard "make the rollout available then re-render" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; { rollout_user '$prompt'; rollout_call create_story call-X '{\"project_key\":\"IAM\",\"summary\":\"converge\",\"description\":\"d\"}'; rollout_output call-X \"\$cid\" true; } >\"$session_dir/codex-home/sessions/2026/06/19/rollout-1.jsonl\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --json >\"$EVDIR/trace_after.json\" 2>\"$EVDIR/trace_after.err\""
+  outcome_guard "first run shows in-boundary legs with intent not yet available" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '.[] | select(.correlation_id==\$c) | (.legs[]|select(.leg==\"intent\")|.present==false) and (.legs[]|select(.leg==\"adapter_request\")|.present==true)' \"$EVDIR/trace_before.json\" >/dev/null"
+  outcome_guard "second run incorporates the verbatim intent" \
+    "jq -e --arg p '$prompt' 'first(.[]) | .legs[] | select(.leg==\"intent\") | .present==true and .fields.user_message==\$p' \"$EVDIR/trace_after.json\" >/dev/null"
+  return 0
+}
+
+M5_T52_test() {
+  begin_test_evidence "M5-T52" "trace_multi_tool_attribution"
+  echo "EVIDENCE_DIR=$EVDIR"
+  sess_rel="e2e-M5-T52"
+  session_dir="/repo/artifacts/varambu-demo/$sess_rel"
+  prompt="Use the Jira MCP tools to read IAM and then create a story in IAM."
+  premise_guard "M5 path and mock ready; session prepared" \
+    "m5_ready && trace_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir/codex-home/sessions/2026/06/19\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/since.txt\""
+  exercise_guard "start capiss and gateway tailers" \
+    "trace_start_tailers \"$session_dir\" \"\$(cat \"$EVDIR/since.txt\")\""
+  exercise_guard "allowed read then create for IAM with adapter audit" \
+    "mcp_tool_call_traced read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/read.json\" \"$EVDIR/read.err\" \"$sess_rel\"; mcp_tool_call_traced create_story '{\"project_key\":\"IAM\",\"summary\":\"two tools\",\"description\":\"d\"}' \"$EVDIR/create.json\" \"$EVDIR/create.err\" \"$sess_rel\""
+  exercise_guard "extract both correlation ids" \
+    "mcp_cid \"$EVDIR/read.json\" >\"$EVDIR/cid_a.txt\"; mcp_cid \"$EVDIR/create.json\" >\"$EVDIR/cid_b.txt\"; grep -Eq '^[0-9a-f-]{36}$' \"$EVDIR/cid_a.txt\" && grep -Eq '^[0-9a-f-]{36}$' \"$EVDIR/cid_b.txt\""
+  exercise_guard "synthesize one-turn rollout driving both tool calls" \
+    "cida=\"\$(cat \"$EVDIR/cid_a.txt\")\"; cidb=\"\$(cat \"$EVDIR/cid_b.txt\")\"; { rollout_user '$prompt'; rollout_call read_project_summary call-A '{\"project_key\":\"IAM\"}'; rollout_output call-A \"\$cida\" true; rollout_call create_story call-B '{\"project_key\":\"IAM\",\"summary\":\"two tools\",\"description\":\"d\"}'; rollout_output call-B \"\$cidb\" true; } >\"$session_dir/codex-home/sessions/2026/06/19/rollout-1.jsonl\""
+  exercise_guard "wait then render trace" \
+    "trace_wait_inboundary \"$session_dir\" 1; trace_stop_tailers \"$session_dir\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\"; cp \"$session_dir/trace.jsonl\" \"$EVDIR/trace.jsonl\""
+  outcome_guard "two distinct chains surfaced" \
+    "cida=\"\$(cat \"$EVDIR/cid_a.txt\")\"; cidb=\"\$(cat \"$EVDIR/cid_b.txt\")\"; jq -e --arg a \"\$cida\" --arg b \"\$cidb\" '([.[]|select(.correlation_id==\$a)]|length==1) and ([.[]|select(.correlation_id==\$b)]|length==1) and (\$a!=\$b)' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "both chains attribute the same verbatim prompt" \
+    "cida=\"\$(cat \"$EVDIR/cid_a.txt\")\"; cidb=\"\$(cat \"$EVDIR/cid_b.txt\")\"; jq -e --arg a \"\$cida\" --arg b \"\$cidb\" --arg p '$prompt' '(.[]|select(.correlation_id==\$a)|.legs[]|select(.leg==\"intent\")|.fields.user_message==\$p) and (.[]|select(.correlation_id==\$b)|.legs[]|select(.leg==\"intent\")|.fields.user_message==\$p)' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "each chain keeps its own M5 tool action" \
+    "cida=\"\$(cat \"$EVDIR/cid_a.txt\")\"; cidb=\"\$(cat \"$EVDIR/cid_b.txt\")\"; jq -e --arg a \"\$cida\" --arg b \"\$cidb\" '(.[]|select(.correlation_id==\$a)|.legs[]|select(.leg==\"action\")|.fields.tool_name==\"read_project_summary\") and (.[]|select(.correlation_id==\$b)|.legs[]|select(.leg==\"action\")|.fields.tool_name==\"create_story\")' \"$EVDIR/trace.json\" >/dev/null"
+  return 0
+}
+
+M5_T53_test() {
+  begin_test_evidence "M5-T53" "trace_secret_hygiene_bounds"
+  echo "EVIDENCE_DIR=$EVDIR"
+  sess_rel="e2e-M5-T53"
+  session_dir="/repo/artifacts/varambu-demo/$sess_rel"
+  premise_guard "M5 path and mock ready; session prepared" \
+    "m5_ready && trace_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir/codex-home/sessions/2026/06/19\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/since.txt\""
+  exercise_guard "start capiss and gateway tailers" \
+    "trace_start_tailers \"$session_dir\" \"\$(cat \"$EVDIR/since.txt\")\""
+  exercise_guard "allowed create_story for IAM with adapter audit" \
+    "mcp_tool_call_traced create_story '{\"project_key\":\"IAM\",\"summary\":\"hygiene\",\"description\":\"d\"}' \"$EVDIR/mcp.json\" \"$EVDIR/adapter.err\" \"$sess_rel\""
+  exercise_guard "extract correlation id" \
+    "mcp_cid \"$EVDIR/mcp.json\" >\"$EVDIR/cid.txt\"; grep -Eq '^[0-9a-f-]{36}$' \"$EVDIR/cid.txt\""
+  exercise_guard "synthesize rollout with secrets, over-limit text, reasoning, and exec noise" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; bigmsg=\"\$(python3 -c \"print('U'*3000)\")\"; bigsum=\"\$(python3 -c \"print('S'*1500)\")\"; args=\"\$(jq -cn --arg s \"\$bigsum\" '{project_key:\"IAM\",summary:\$s,description:\"d\",token:\"biscuit-leak-value\",authorization:\"Bearer sk-leaked-secret\"}')\"; { rollout_user \"\$bigmsg\"; jq -cn '{type:\"response_item\",timestamp:\"2026-06-19T10:00:00.500Z\",payload:{type:\"reasoning\",text:\"SECRET model chain-of-thought reasoning\"}}'; rollout_call create_story call-X \"\$args\"; jq -cn '{type:\"response_item\",timestamp:\"2026-06-19T10:00:01.500Z\",payload:{type:\"function_call\",name:\"exec_command\",call_id:\"call-E\",arguments:\"{\\\"command\\\":\\\"cat /etc/shadow\\\"}\"}}'; rollout_output call-X \"\$cid\" true; } >\"$session_dir/codex-home/sessions/2026/06/19/rollout-1.jsonl\""
+  exercise_guard "wait then render trace" \
+    "trace_wait_inboundary \"$session_dir\" 1; trace_stop_tailers \"$session_dir\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock >\"$EVDIR/trace.txt\" 2>>\"$EVDIR/trace.err\"; cp \"$session_dir/trace.jsonl\" \"$EVDIR/trace.jsonl\""
+  outcome_guard "no bearer/basic/biscuit/cookie/jira secret values anywhere" \
+    "! grep -E 'Bearer |Basic |biscuit|sk-leaked-secret|JIRA_API_TOKEN|[Cc]ookie:' \"$EVDIR/trace.jsonl\" \"$EVDIR/trace.txt\" \"$session_dir/capiss_audit.jsonl\" \"$session_dir/gateway_audit.jsonl\" \"$session_dir/adapter_audit.jsonl\""
+  outcome_guard "forbidden field names dropped from persisted arguments" \
+    "jq -e '(has(\"token\")|not) and (.arguments | (has(\"token\")|not) and (has(\"authorization\")|not))' \"$EVDIR/trace.jsonl\" >/dev/null"
+  outcome_guard "over-limit user_message truncated with marker" \
+    "jq -r '.user_message' \"$EVDIR/trace.jsonl\" | grep -Fq '[truncated]' && [ \"\$(jq -r '.user_message' \"$EVDIR/trace.jsonl\" | wc -c)\" -le 2049 ]"
+  outcome_guard "over-limit summary truncated with marker" \
+    "jq -r '.arguments.summary' \"$EVDIR/trace.jsonl\" | grep -Fq '[truncated]'"
+  outcome_guard "no reasoning or exec_command content persisted in trace evidence" \
+    "! grep -E 'chain-of-thought|exec_command|/etc/shadow' \"$EVDIR/trace.jsonl\""
+  return 0
+}
+
+M5_T54_test() {
+  begin_test_evidence "M5-T54" "trace_agent_tamper_detection"
+  echo "EVIDENCE_DIR=$EVDIR"
+  sess_rel="e2e-M5-T54"
+  session_dir="/repo/artifacts/varambu-demo/$sess_rel"
+  premise_guard "M5 path and mock ready; session prepared" \
+    "m5_ready && trace_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir/codex-home/sessions/2026/06/19\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/since.txt\""
+  exercise_guard "start capiss and gateway tailers" \
+    "trace_start_tailers \"$session_dir\" \"\$(cat \"$EVDIR/since.txt\")\""
+  exercise_guard "denied read_project_summary for NAS with adapter audit" \
+    "mcp_tool_call_traced read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/mcp.json\" \"$EVDIR/adapter.err\" \"$sess_rel\""
+  exercise_guard "extract correlation id" \
+    "mcp_cid \"$EVDIR/mcp.json\" >\"$EVDIR/cid.txt\"; grep -Eq '^[0-9a-f-]{36}$' \"$EVDIR/cid.txt\""
+  exercise_guard "forge a rollout output claiming success for the denied request" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; { rollout_user 'Read the NAS project summary.'; rollout_call read_project_summary call-X '{\"project_key\":\"NAS\"}'; rollout_output call-X \"\$cid\" true; } >\"$session_dir/codex-home/sessions/2026/06/19/rollout-1.jsonl\""
+  exercise_guard "wait then render trace" \
+    "trace_wait_inboundary \"$session_dir\" 0; trace_stop_tailers \"$session_dir\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock >\"$EVDIR/trace.txt\" 2>>\"$EVDIR/trace.err\""
+  outcome_guard "forged success claim is present in the agent rollout" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -r 'select(.payload.type==\"function_call_output\") | .payload.output' \"$session_dir/codex-home/sessions/2026/06/19/rollout-1.jsonl\" | jq -e --arg c \"\$cid\" '.ok==true and .correlation_id==\$c' >/dev/null"
+  outcome_guard "in-boundary mint leg reflects the true denial" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '.[] | select(.correlation_id==\$c) | .legs[] | select(.leg==\"mint\") | .fields.result==\"deny\"' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "in-boundary adapter decision reflects failure not the forged success" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '.[] | select(.correlation_id==\$c) | .legs[] | select(.leg==\"adapter_decision\") | .fields.ok==false' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "human trace presents the in-boundary truth (denied)" \
+    "grep -Eq 'DENIED' \"$EVDIR/trace.txt\""
+  return 0
+}
+
+M5_T55_test() {
+  begin_test_evidence "M5-T55" "trace_live_upstream_attested"
+  echo "EVIDENCE_DIR=$EVDIR"
+  sess_rel="e2e-M5-T55"
+  session_dir="/repo/artifacts/varambu-demo/$sess_rel"
+  upstream_mode="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' spiffe-jira-mcp-gateway 2>/dev/null | sed -n 's/^JIRA_MCP_UPSTREAM_MODE=//p')"
+  if [ "${upstream_mode:-mock}" != "live" ]; then
+    add_warning "M5-T55 skipped: gateway not in live Jira mode (JIRA_MCP_UPSTREAM_MODE=${upstream_mode:-unset}); live upstream leg not exercised"
+    return 0
+  fi
+  premise_guard "M5 live path ready; session prepared" \
+    "m5_ready && rm -rf \"$session_dir\" && mkdir -p \"$session_dir/codex-home/sessions/2026/06/19\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/since.txt\""
+  exercise_guard "start capiss and gateway tailers" \
+    "trace_start_tailers \"$session_dir\" \"\$(cat \"$EVDIR/since.txt\")\""
+  exercise_guard "allowed create_story against live Jira with adapter audit" \
+    "mcp_tool_call_traced create_story '{\"project_key\":\"IAM\",\"summary\":\"live trace\",\"description\":\"d\"}' \"$EVDIR/mcp.json\" \"$EVDIR/adapter.err\" \"$sess_rel\""
+  exercise_guard "extract correlation id and synthesize rollout" \
+    "mcp_cid \"$EVDIR/mcp.json\" >\"$EVDIR/cid.txt\"; cid=\"\$(cat \"$EVDIR/cid.txt\")\"; { rollout_user 'Create a story in IAM.'; rollout_call create_story call-X '{\"project_key\":\"IAM\",\"summary\":\"live trace\",\"description\":\"d\"}'; rollout_output call-X \"\$cid\" true; } >\"$session_dir/codex-home/sessions/2026/06/19/rollout-1.jsonl\""
+  exercise_guard "wait then render trace in live mode" \
+    "trace_wait_inboundary \"$session_dir\" 1; trace_stop_tailers \"$session_dir\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode live >\"$EVDIR/trace.txt\" 2>\"$EVDIR/trace.err\""
+  outcome_guard "upstream leg is gateway-attested and explicitly labeled live" \
+    "grep -Fq 'gateway-attested, live' \"$EVDIR/trace.txt\""
+  outcome_guard "no fabricated independent upstream voice present" \
+    "! grep -Eq 'jiramcp_upstream_request|mock_upstream' \"$EVDIR/trace.txt\""
+  return 0
+}
+
+M5_T56_test() {
+  begin_test_evidence "M5-T56" "trace_cli_surface_and_audit_nonregression"
+  echo "EVIDENCE_DIR=$EVDIR"
+  root="/repo/artifacts/varambu-demo"
+  s1="$root/e2e-M5-T56-s1"
+  s2="$root/e2e-M5-T56-s2"
+  cid1="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+  cid2="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+  echo "$cid1" >"$EVDIR/cid1.txt"
+  echo "$cid2" >"$EVDIR/cid2.txt"
+  premise_guard "two isolated synthetic trace sessions; current points to session two" \
+    "rm -rf \"$s1\" \"$s2\" && write_synth_trace_session \"$s1\" \"$cid1\" 'First session prompt.' && write_synth_trace_session \"$s2\" \"$cid2\" 'Second session prompt.' && ln -sfn \"$s2\" \"$root/current\""
+  exercise_guard "run trace default, cid, all, json" \
+    "bash /repo/varambu trace >\"$EVDIR/trace_default.out\" 2>\"$EVDIR/trace_default.err\"; bash /repo/varambu trace --cid \"$cid2\" >\"$EVDIR/trace_cid.out\" 2>>\"$EVDIR/trace_default.err\"; bash /repo/varambu trace --all >\"$EVDIR/trace_all.out\" 2>>\"$EVDIR/trace_default.err\"; bash /repo/varambu trace --json >\"$EVDIR/trace_json.out\" 2>>\"$EVDIR/trace_default.err\""
+  exercise_guard "run audit surfaces (non-regression)" \
+    "bash /repo/varambu audit >\"$EVDIR/audit.out\" 2>\"$EVDIR/audit.err\"; bash /repo/varambu audit --all >\"$EVDIR/audit_all.out\" 2>>\"$EVDIR/audit.err\"; bash /repo/varambu audit --json >\"$EVDIR/audit_json.out\" 2>>\"$EVDIR/audit.err\"; bash /repo/varambu audit-file >\"$EVDIR/audit_file.out\" 2>>\"$EVDIR/audit.err\""
+  outcome_guard "default trace shows the current session chain and not the other session" \
+    "grep -Fq \"$cid2\" \"$EVDIR/trace_default.out\" && ! grep -Fq \"$cid1\" \"$EVDIR/trace_default.out\""
+  outcome_guard "trace --cid selects exactly the requested chain" \
+    "grep -Fq \"$cid2\" \"$EVDIR/trace_cid.out\""
+  outcome_guard "trace --all shows both sessions" \
+    "grep -Fq \"$cid1\" \"$EVDIR/trace_all.out\" && grep -Fq \"$cid2\" \"$EVDIR/trace_all.out\""
+  outcome_guard "trace --json is machine readable" \
+    "jq -e 'type==\"array\"' \"$EVDIR/trace_json.out\" >/dev/null"
+  outcome_guard "audit current session shows only its record (non-regression)" \
+    "grep -Fq 'MINTED OK' \"$EVDIR/audit.out\" && grep -Fq \"$cid2\" \"$EVDIR/audit.out\" && ! grep -Fq \"$cid1\" \"$EVDIR/audit.out\""
+  outcome_guard "audit --json parses and audit-file resolves capiss paths (non-regression)" \
+    "jq -e '.result==\"allow\"' \"$EVDIR/audit_json.out\" >/dev/null && grep -Eq 'capiss_audit' \"$EVDIR/audit_file.out\""
+  return 0
+}
+
+M5_T57_test() {
+  begin_test_evidence "M5-T57" "trace_canonical_join_integrity"
+  echo "EVIDENCE_DIR=$EVDIR"
+  sess_rel="e2e-M5-T57"
+  session_dir="/repo/artifacts/varambu-demo/$sess_rel"
+  premise_guard "M5 path and mock ready; session prepared" \
+    "m5_ready && trace_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir/codex-home/sessions/2026/06/19\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/since.txt\""
+  exercise_guard "start capiss and gateway tailers" \
+    "trace_start_tailers \"$session_dir\" \"\$(cat \"$EVDIR/since.txt\")\""
+  exercise_guard "two allowed create_story calls with adapter audit" \
+    "mcp_tool_call_traced create_story '{\"project_key\":\"IAM\",\"summary\":\"first\",\"description\":\"d\"}' \"$EVDIR/a.json\" \"$EVDIR/a.err\" \"$sess_rel\"; mcp_tool_call_traced create_story '{\"project_key\":\"IAM\",\"summary\":\"second\",\"description\":\"d\"}' \"$EVDIR/b.json\" \"$EVDIR/b.err\" \"$sess_rel\""
+  exercise_guard "extract correlation ids and synthesize two rollout turns" \
+    "mcp_cid \"$EVDIR/a.json\" >\"$EVDIR/cid_a.txt\"; mcp_cid \"$EVDIR/b.json\" >\"$EVDIR/cid_b.txt\"; cida=\"\$(cat \"$EVDIR/cid_a.txt\")\"; cidb=\"\$(cat \"$EVDIR/cid_b.txt\")\"; { rollout_user 'First create.'; rollout_call create_story call-A '{\"project_key\":\"IAM\",\"summary\":\"first\",\"description\":\"d\"}'; rollout_output call-A \"\$cida\" true; rollout_user 'Second create.'; rollout_call create_story call-B '{\"project_key\":\"IAM\",\"summary\":\"second\",\"description\":\"d\"}'; rollout_output call-B \"\$cidb\" true; } >\"$session_dir/codex-home/sessions/2026/06/19/rollout-1.jsonl\""
+  exercise_guard "wait then render trace json" \
+    "trace_wait_inboundary \"$session_dir\" 1; trace_stop_tailers \"$session_dir\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\""
+  outcome_guard "every chain renders legs in fixed canonical order" \
+    "jq -e 'all(.[]; [.legs[].leg] == [\"intent\",\"action\",\"adapter_request\",\"mint\",\"gateway\",\"upstream\",\"adapter_decision\"])' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "join is by correlation id with no cross-chain leg leakage" \
+    "jq -e 'all(.[]; .correlation_id as \$c | (.legs[] | select(.leg==\"mint\" and .present) | .fields.correlation_id==\$c) and (.legs[] | select(.leg==\"gateway\" and .present) | .fields.correlation_id==\$c) and (.legs[] | select(.leg==\"adapter_request\" and .present) | .fields.correlation_id==\$c))' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "two chains present with distinct correlation ids" \
+    "cida=\"\$(cat \"$EVDIR/cid_a.txt\")\"; cidb=\"\$(cat \"$EVDIR/cid_b.txt\")\"; jq -e --arg a \"\$cida\" --arg b \"\$cidb\" '([.[]|select(.correlation_id==\$a)]|length==1) and ([.[]|select(.correlation_id==\$b)]|length==1)' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "each present leg preserves its own utc timestamp and sequence" \
+    "jq -e 'all(.[]; all(.legs[] | select(.present); has(\"timestamp_utc\") and has(\"sequence\")))' \"$EVDIR/trace.json\" >/dev/null"
+  return 0
+}
+
+M5_T58_test() {
+  begin_test_evidence "M5-T58" "trace_anchor_mint_reuse_timestamps"
+  echo "EVIDENCE_DIR=$EVDIR"
+  sess_rel="e2e-M5-T58"
+  session_dir="/repo/artifacts/varambu-demo/$sess_rel"
+  fakecid="00000000-0000-4000-8000-0000000000ff"
+  premise_guard "M5 path and mock ready; session prepared" \
+    "m5_ready && trace_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir/codex-home/sessions/2026/06/19\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/since.txt\""
+  exercise_guard "start capiss and gateway tailers" \
+    "trace_start_tailers \"$session_dir\" \"\$(cat \"$EVDIR/since.txt\")\""
+  exercise_guard "allowed create_story for IAM with adapter audit" \
+    "mcp_tool_call_traced create_story '{\"project_key\":\"IAM\",\"summary\":\"anchor\",\"description\":\"d\"}' \"$EVDIR/mcp.json\" \"$EVDIR/adapter.err\" \"$sess_rel\""
+  exercise_guard "extract correlation id and synthesize rollout" \
+    "mcp_cid \"$EVDIR/mcp.json\" >\"$EVDIR/cid.txt\"; cid=\"\$(cat \"$EVDIR/cid.txt\")\"; { rollout_user 'Create a story in IAM.'; rollout_call create_story call-X '{\"project_key\":\"IAM\",\"summary\":\"anchor\",\"description\":\"d\"}'; rollout_output call-X \"\$cid\" true; } >\"$session_dir/codex-home/sessions/2026/06/19/rollout-1.jsonl\""
+  exercise_guard "wait, stop tailers, then inject a non-M5 capiss-only mint" \
+    "trace_wait_inboundary \"$session_dir\" 1; trace_stop_tailers \"$session_dir\"; jq -cn --arg c '$fakecid' '{event_type:\"capiss_mint_decision\",result:\"allow\",reason_code:\"ok\",subject_spiffe_id:\"spiffe://varambu.org/agent-a\",aud:\"tool-b\",act:\"read\",res:\"tool-b:/secret\",correlation_id:\$c,timestamp_utc:\"2026-06-19T09:00:00Z\",timestamp_local:\"2026-06-19 11:00:00 Europe/Berlin\",timezone:\"Europe/Berlin\"}' >>\"$session_dir/capiss_audit.jsonl\""
+  exercise_guard "render trace json and human in a non-UTC zone" \
+    "python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz Europe/Berlin --mode mock --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz Europe/Berlin --mode mock >\"$EVDIR/trace.txt\" 2>>\"$EVDIR/trace.err\""
+  outcome_guard "the M5 request is surfaced as a chain" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '[.[]|select(.correlation_id==\$c)]|length==1' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "the capiss-only non-M5 mint is NOT surfaced (anchor rule)" \
+    "jq -e --arg c '$fakecid' '[.[]|select(.correlation_id==\$c)]|length==0' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "mint leg presents the same capiss fields (full token id and grant) as the audit record" \
+    "tid=\"\$(jq -r 'select(.result==\"allow\") | .token_id' \"$session_dir/capiss_audit.jsonl\" | head -n1)\"; test -n \"\$tid\" && grep -Fq \"\$tid\" \"$EVDIR/trace.txt\" && grep -Fq 'MINT' \"$EVDIR/trace.txt\" && grep -Fq 'create_story' \"$EVDIR/trace.txt\""
+  outcome_guard "json legs carry utc, local time, and sequence per leg" \
+    "jq -e 'first(.[]) | all(.legs[] | select(.present); has(\"timestamp_utc\") and has(\"timestamp_local\") and has(\"sequence\"))' \"$EVDIR/trace.json\" >/dev/null"
+  return 0
+}
+
+M5_T59_test() {
+  begin_test_evidence "M5-T59" "trace_gateway_allow_upstream_deny"
+  echo "EVIDENCE_DIR=$EVDIR"
+  sess_rel="e2e-M5-T59"
+  session_dir="/repo/artifacts/varambu-demo/$sess_rel"
+  cid="cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+  premise_guard "session with a gateway-allow / upstream-deny fixture prepared" \
+    "rm -rf \"$session_dir\" && mkdir -p \"$session_dir/codex-home/sessions/2026/06/19\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && jq -cn --arg c \"$cid\" '{event_type:\"capiss_mint_decision\",result:\"allow\",reason_code:\"ok\",subject_spiffe_id:\"spiffe://varambu.org/codex-jira-mcp-adapter\",act:\"create_story\",res:\"jira-mcp:/project:IAM\",aud:\"jira-mcp-gateway\",token_id:\"tok-1\",root_token_id:\"root-1\",timestamp_utc:\"2026-06-19T10:00:02Z\",correlation_id:\$c}' >\"$session_dir/capiss_audit.jsonl\" && jq -cn --arg c \"$cid\" '{event_type:\"jiramcp_gateway_decision\",decision:\"deny\",reason_code:\"upstream_error\",correlation_id:\$c,act:\"create_story\",res:\"jira-mcp:/project:IAM\",token_id:\"tok-1\",root_token_id:\"root-1\",budget_remaining:19,upstream_called:true,upstream_operation:\"story_create\",upstream_status:401,upstream_error_detail:\"Unauthorized — the Jira credential was rejected\",timestamp:\"2026-06-19T10:00:03Z\"}' >\"$session_dir/gateway_audit.jsonl\" && { jq -cn --arg c \"$cid\" '{event_type:\"adapter_request\",correlation_id:\$c,tool_name:\"create_story\",res:\"jira-mcp:/project:IAM\",project_key:\"IAM\",timestamp:\"2026-06-19T10:00:01Z\"}'; jq -cn --arg c \"$cid\" '{event_type:\"adapter_decision\",correlation_id:\$c,ok:false,reason:\"upstream_error\",timestamp:\"2026-06-19T10:00:04Z\"}'; } >\"$session_dir/adapter_audit.jsonl\""
+  exercise_guard "render trace json and human in live mode" \
+    "python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode live --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode live >\"$EVDIR/trace.txt\" 2>>\"$EVDIR/trace.err\""
+  outcome_guard "gateway enforcement leg is ALLOW (the gateway did not deny)" \
+    "jq -e --arg c \"$cid\" '.[] | select(.correlation_id==\$c) | .legs[] | select(.leg==\"gateway\") | .present==true and .fields.leg_status==\"allow\"' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "upstream leg carries the denial (401 fail), distinct from the gateway" \
+    "jq -e --arg c \"$cid\" '.[] | select(.correlation_id==\$c) | .legs[] | select(.leg==\"upstream\") | .present==true and .fields.leg_status==\"fail\" and .fields.upstream_status==401' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "human view separates gateway ALLOW from upstream 401 FAIL" \
+    "grep -Eq 'GATEWAY .* ALLOW' \"$EVDIR/trace.txt\" && grep -Eq 'UPSTREAM .* 401 FAIL' \"$EVDIR/trace.txt\""
+  outcome_guard "upstream leg is gateway-attested (no fabricated independent voice)" \
+    "grep -Fq 'gateway-attested, live' \"$EVDIR/trace.txt\""
+  outcome_guard "human view relays the gateway-attested Jira error detail verbatim (no constructed interpretation)" \
+    "tr '\n' ' ' < \"$EVDIR/trace.txt\" | tr -s ' ' | grep -Fq 'Unauthorized — the Jira credential was rejected' && ! grep -Fq 'Action' \"$EVDIR/trace.txt\" && jq -e --arg c \"$cid\" '.[] | select(.correlation_id==\$c) | .legs[] | select(.leg==\"upstream\") | .fields.upstream_error_detail==\"Unauthorized — the Jira credential was rejected\"' \"$EVDIR/trace.json\" >/dev/null"
+  return 0
+}
+
 print_section "Milestone 1 - Server and agent connection and successful entry"
 if [ "$RUN_M1" -eq 1 ]; then
   TEST_PREFIX="M1"
@@ -4084,6 +4507,17 @@ if [ "$RUN_M5" -eq 1 ]; then
   run_test "T46" "Varambu audit stale tailer warning and strict failure" M5_T46_test
   run_test "T47" "Varambu audit local and UTC timing semantics" M5_T47_test
   run_test "T48" "Varambu audit uniform capiss enrichment" M5_T48_test
+  run_test "T49" "Varambu trace full chain allowed" M5_T49_test
+  run_test "T50" "Varambu trace denied mint partial chain" M5_T50_test
+  run_test "T51" "Varambu trace intent pending then converges" M5_T51_test
+  run_test "T52" "Varambu trace multi tool-call attribution" M5_T52_test
+  run_test "T53" "Varambu trace secret hygiene and bounds" M5_T53_test
+  run_test "T54" "Varambu trace agent tamper detection" M5_T54_test
+  run_test "T55" "Varambu trace honest live upstream leg" M5_T55_test
+  run_test "T56" "Varambu trace CLI surface and audit non-regression" M5_T56_test
+  run_test "T57" "Varambu trace canonical ordering and join integrity" M5_T57_test
+  run_test "T58" "Varambu trace anchor rule mint reuse and timestamps" M5_T58_test
+  run_test "T59" "Varambu trace separates gateway allow from upstream deny" M5_T59_test
 fi
 
 printf '\nTotal: %d  Passed: %d  Failed: %d\n' "$TOTAL" "$PASSED" "$FAILED"

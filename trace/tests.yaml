@@ -635,3 +635,148 @@ tests:
   evidence_prefixes:
   - M5-T48
   status: active
+- id: E2E-M5-FT-TRACE-SUITE
+  type: e2e_suite
+  source_requirements:
+  - REQ-M5-FT1
+  - REQ-M5-FT2
+  - REQ-M5-FT3
+  - REQ-M5-FT4
+  - REQ-M5-FT5
+  - REQ-M5-FT6
+  - REQ-M5-FT7
+  - REQ-M5-FT8
+  - REQ-M5-FT9
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: TEST_PREFIX="M5"
+  evidence_prefixes:
+  - M5-T49
+  - M5-T50
+  - M5-T51
+  - M5-T52
+  - M5-T53
+  - M5-T54
+  - M5-T55
+  - M5-T56
+  - M5-T57
+  - M5-T58
+  - M5-T59
+  status: active
+- id: E2E-M5-T49-TRACE-FULL-CHAIN
+  type: e2e_case
+  source_requirements:
+  - REQ-M5-FT1
+  - REQ-M5-FT2
+  - REQ-M5-FT3
+  - REQ-M5-FT9
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M5_T49_test
+  evidence_prefixes:
+  - M5-T49
+  status: active
+- id: E2E-M5-T50-TRACE-DENIED-PARTIAL
+  type: e2e_case
+  source_requirements:
+  - REQ-M5-FT1
+  - REQ-M5-FT4
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M5_T50_test
+  evidence_prefixes:
+  - M5-T50
+  status: active
+- id: E2E-M5-T51-TRACE-INTENT-CONVERGE
+  type: e2e_case
+  source_requirements:
+  - REQ-M5-FT4
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M5_T51_test
+  evidence_prefixes:
+  - M5-T51
+  status: active
+- id: E2E-M5-T52-TRACE-MULTI-TOOL
+  type: e2e_case
+  source_requirements:
+  - REQ-M5-FT2
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M5_T52_test
+  evidence_prefixes:
+  - M5-T52
+  status: active
+- id: E2E-M5-T53-TRACE-SECRET-BOUNDS
+  type: e2e_case
+  source_requirements:
+  - REQ-M5-FT6
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M5_T53_test
+  evidence_prefixes:
+  - M5-T53
+  status: active
+- id: E2E-M5-T54-TRACE-TAMPER-DETECTION
+  type: e2e_case
+  source_requirements:
+  - REQ-M5-FT3
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M5_T54_test
+  evidence_prefixes:
+  - M5-T54
+  status: active
+- id: E2E-M5-T55-TRACE-LIVE-UPSTREAM
+  type: e2e_case
+  source_requirements:
+  - REQ-M5-FT7
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M5_T55_test
+  evidence_prefixes:
+  - M5-T55
+  status: active
+- id: E2E-M5-T56-TRACE-CLI-SURFACE
+  type: e2e_case
+  source_requirements:
+  - REQ-M5-FT1
+  - REQ-M5-FT9
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M5_T56_test
+  evidence_prefixes:
+  - M5-T56
+  status: active
+- id: E2E-M5-T57-TRACE-CANONICAL-JOIN
+  type: e2e_case
+  source_requirements:
+  - REQ-M5-FT1
+  - REQ-M5-FT8
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M5_T57_test
+  evidence_prefixes:
+  - M5-T57
+  status: active
+- id: E2E-M5-T58-TRACE-ANCHOR-MINT-TZ
+  type: e2e_case
+  source_requirements:
+  - REQ-M5-FT8
+  - REQ-M5-FT9
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M5_T58_test
+  evidence_prefixes:
+  - M5-T58
+  status: active
+- id: E2E-M5-T59-TRACE-GATEWAY-ALLOW-UPSTREAM-DENY
+  type: e2e_case
+  source_requirements:
+  - REQ-M5-FT7
+  location:
+    file: scripts/rogue_node_tests.sh
+    selector: M5_T59_test
+  evidence_prefixes:
+  - M5-T59
+  status: active

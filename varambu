@@ -30,6 +30,14 @@ AUDIT_JSONL_FILE="$LOG_DIR/capiss_audit.jsonl"
 AUDIT_HUMAN_FILE="$LOG_DIR/capiss_audit.log"
 AUDIT_TAILER_PID_FILE="$LOG_DIR/audit_tailer.pid"
 AUDIT_TAILER_ERR_FILE="$LOG_DIR/audit_tailer.err"
+# ARCH-033 full-chain trace: gateway leg tailer + per-session Codex home
+GATEWAY_AUDIT_JSONL_FILE="$LOG_DIR/gateway_audit.jsonl"
+GATEWAY_AUDIT_HUMAN_FILE="$LOG_DIR/gateway_audit.log"
+GATEWAY_TAILER_PID_FILE="$LOG_DIR/gateway_tailer.pid"
+GATEWAY_TAILER_ERR_FILE="$LOG_DIR/gateway_audit.err"
+CODEX_HOME_DIR="$LOG_DIR/codex-home"
+VARAMBU_SESSION_REL="$STAMP"
+export VARAMBU_SESSION_REL
 TIMEZONE_OVERRIDE=""
 SVID_DIR="${SPIRE_SVID_DIR:-/run/spire/svid}"
 DEMO_SVID_CONTAINERS=(
@@ -47,12 +55,15 @@ usage() {
   cat <<EOF
 Usage:
   varambu start [--live|--mock] [--timezone ZONE] [--verbose] [--no-build] [--no-codex-config]
+  varambu codex [codex args...]
   varambu audit [--all] [--json] [--follow] [--strict]
   varambu show-audit-logs [--all] [--json] [--follow] [--strict]
   varambu audit-file [--all] [--json|--human]
+  varambu trace [--cid ID] [--all] [--json]
 
 Starts the Varambu demo stack from a clean state and prepares the Codex MCP
-stdio bridge.
+stdio bridge. After 'varambu start', run 'varambu codex' to launch Codex against
+the current session's CODEX_HOME (MCP registered, auth seeded) with no env to set.
 
 Options:
   --live             Start jira-mcp-gateway in live Jira mode. Default.
@@ -233,6 +244,130 @@ start_audit_tailer() {
   return 1
 }
 
+# DD: DD-918
+# Implements: ARCH-033
+# Title: start_gateway_tailer varambu jira-mcp-gateway decision tailer
+start_gateway_tailer() {
+  docker inspect spiffe-jira-mcp-gateway >/dev/null 2>&1 || {
+    PHASE_FAIL_REASON="gateway container unavailable for trace tailer"
+    vb_detail "ERROR: spiffe-jira-mcp-gateway container is not inspectable"
+    return 1
+  }
+  : >"$GATEWAY_AUDIT_JSONL_FILE"
+  : >"$GATEWAY_AUDIT_HUMAN_FILE"
+  : >"$GATEWAY_TAILER_ERR_FILE"
+  "$ROOT_DIR/scripts/varambu_audit.py" tail \
+    --since "$SESSION_START_UTC" \
+    --jsonl "$GATEWAY_AUDIT_JSONL_FILE" \
+    --human "$GATEWAY_AUDIT_HUMAN_FILE" \
+    --err "$GATEWAY_TAILER_ERR_FILE" \
+    --container spiffe-jira-mcp-gateway \
+    --source gateway \
+    >/dev/null 2>>"$GATEWAY_TAILER_ERR_FILE" &
+  pid="$!"
+  echo "$pid" >"$GATEWAY_TAILER_PID_FILE"
+  sleep 2
+  if kill -0 "$pid" 2>/dev/null; then
+    say "gateway_tailer_pid=$pid"
+    say "gateway_jsonl=$GATEWAY_AUDIT_JSONL_FILE"
+    return 0
+  fi
+  PHASE_FAIL_REASON="gateway tailer did not stay up"
+  vb_detail "VARAMBU_ERROR gateway_tailer_failed"
+  return 1
+}
+
+# seed_codex_auth: link the operator's existing Codex credential into a per-session
+# CODEX_HOME so launching against it does not force a fresh login. A symlink (not a
+# copy) keeps the secret in ~/.codex; varambu trace only reads rollout files and never
+# auth.json, so no credential enters the session evidence bundle.
+seed_codex_auth() {
+  home_dir="$1"
+  src="${CODEX_AUTH_SOURCE:-$HOME/.codex/auth.json}"
+  if [ -f "$src" ]; then
+    ln -sfn "$src" "$home_dir/auth.json"
+    return 0
+  fi
+  return 1
+}
+
+# DD: DD-920
+# Implements: ARCH-033
+# Title: provision_codex_home varambu per-session intent-capture destination
+provision_codex_home() {
+  mkdir -p "$CODEX_HOME_DIR/sessions"
+  if [ "$CONFIGURE_CODEX" -ne 1 ]; then
+    say "codex_home_mcp_skipped by --no-codex-config; MCP launcher is still available at scripts/codex_jira_mcp.sh"
+  elif ! command -v codex >/dev/null 2>&1; then
+    say "WARNING: codex CLI not found; MCP launcher is still available at scripts/codex_jira_mcp.sh"
+  else
+    CODEX_HOME="$CODEX_HOME_DIR" codex mcp remove "$MCP_NAME" >/dev/null 2>&1 || true
+    CODEX_HOME="$CODEX_HOME_DIR" run codex mcp add \
+      --env "COMPOSE_FILE=$COMPOSE_FILE" \
+      "$MCP_NAME" -- \
+      "$ROOT_DIR/scripts/codex_jira_mcp.sh"
+    say "codex_home_mcp_registered=$MCP_NAME"
+  fi
+  if seed_codex_auth "$CODEX_HOME_DIR"; then
+    say "codex_auth_linked=$CODEX_HOME_DIR/auth.json"
+  else
+    say "codex_auth_not_seeded (no ~/.codex/auth.json yet; run 'codex login' once, then 'varambu codex')"
+  fi
+  say "codex_home=$CODEX_HOME_DIR"
+}
+
+# run_codex: launch codex against the current session's CODEX_HOME with auth seeded,
+# so the operator never has to set the env var or re-login by hand.
+run_codex() {
+  if ! command -v codex >/dev/null 2>&1; then
+    echo "ERROR: codex CLI not found on PATH" >&2
+    return 127
+  fi
+  session_dir="$(current_session_dir)"
+  [ -n "$session_dir" ] || { echo "No Varambu session found. Run: varambu start" >&2; return 1; }
+  home_dir="$session_dir/codex-home"
+  mkdir -p "$home_dir/sessions"
+  seed_codex_auth "$home_dir" || echo "WARNING: no ~/.codex/auth.json to seed; codex may prompt for login" >&2
+  exec env CODEX_HOME="$home_dir" codex -C "$ROOT_DIR" "$@"
+}
+
+# DD: DD-921
+# Implements: ARCH-033
+# Title: run_trace varambu full-chain trace dispatch
+run_trace() {
+  all=0
+  json=0
+  cid=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --all) all=1 ;;
+      --json) json=1 ;;
+      --cid)
+        [ "$#" -ge 2 ] || { echo "ERROR: --cid requires a value" >&2; return 2; }
+        cid="$2"
+        shift
+        ;;
+      -h|--help) usage; return 0 ;;
+      *) echo "ERROR: unknown trace option: $1" >&2; return 2 ;;
+    esac
+    shift
+  done
+  sessions_root="$ROOT_DIR/artifacts/varambu-demo"
+  tz="$(detect_timezone)"
+  args=(trace --tz "$tz")
+  if [ "$all" -eq 1 ]; then
+    args+=(--session "$sessions_root" --all --sessions-root "$sessions_root")
+  else
+    session_dir="$(current_session_dir)"
+    [ -n "$session_dir" ] || { echo "No Varambu session found. Run: varambu start" >&2; return 1; }
+    [ -r "$session_dir/mode" ] && args+=(--mode "$(cat "$session_dir/mode")")
+    args+=(--session "$session_dir")
+  fi
+  [ -n "$cid" ] && args+=(--cid "$cid")
+  [ "$json" -eq 1 ] && args+=(--json)
+  "$ROOT_DIR/scripts/varambu_audit.py" "${args[@]}"
+}
+
 if [ "$#" -eq 0 ]; then
   usage
   exit 0
@@ -250,6 +385,16 @@ case "$1" in
   audit-file)
     shift
     show_audit_file "$@"
+    exit $?
+    ;;
+  trace)
+    shift
+    run_trace "$@"
+    exit $?
+    ;;
+  codex)
+    shift
+    run_codex "$@"
     exit $?
     ;;
   -h|--help)
@@ -302,6 +447,7 @@ done
 
 mkdir -p "$LOG_DIR"
 touch "$LOG_FILE"
+printf '%s\n' "$MODE" >"$LOG_DIR/mode"
 
 VARAMBU_VERBOSE="$VERBOSE"
 VARAMBU_LOG_FILE="$LOG_FILE"
@@ -451,23 +597,6 @@ compose_cmd() {
   fi
 }
 
-configure_codex_mcp() {
-  if [ "$CONFIGURE_CODEX" -ne 1 ]; then
-    say "Codex MCP config skipped by --no-codex-config"
-    return 0
-  fi
-  if ! command -v codex >/dev/null 2>&1; then
-    say "WARNING: codex CLI not found; MCP launcher is still available at scripts/codex_jira_mcp.sh"
-    return 0
-  fi
-
-  codex mcp remove "$MCP_NAME" >/dev/null 2>&1 || true
-  run codex mcp add \
-    --env "COMPOSE_FILE=$COMPOSE_FILE" \
-    "$MCP_NAME" -- \
-    "$ROOT_DIR/scripts/codex_jira_mcp.sh"
-}
-
 vb_title "$MODE"
 say "repo_root=$ROOT_DIR"
 say "mode=$MODE"
@@ -517,6 +646,8 @@ vb_phase_ok "(${#DEMO_SVID_CONTAINERS[@]} SVIDs)"
 
 vb_phase "Start audit capture"
 start_audit_tailer
+start_gateway_tailer
+provision_codex_home
 ln -sfn "$LOG_DIR" "$CURRENT_LINK"
 say "current_session=$CURRENT_LINK"
 vb_phase_ok
@@ -537,20 +668,21 @@ fi
 say "mcp_tools=$MCP_TOOLS_FILE"
 vb_phase_ok
 
-if [ "$CONFIGURE_CODEX" -eq 1 ]; then
-  vb_phase "Configure Codex"
-  configure_codex_mcp
-  vb_phase_ok
-else
-  configure_codex_mcp
-fi
+# Codex MCP registration is per-session only (ARCH-033 / REQ-M5-FT5): the MCP
+# server is registered into this session's CODEX_HOME by provision_codex_home in
+# the audit-capture phase. There is no global registration, so intent capture is
+# confined to the deterministic session tree the operator launches Codex against.
 
 capture_stack_log
 
 say "mode=$MODE"
 say "mcp_server=$MCP_NAME"
 say "log_file=$LOG_FILE"
-say "next_new_session=codex -C $ROOT_DIR"
-say "next_resume=codex -C $ROOT_DIR resume"
+# ARCH-033 / REQ-M5-FT5: launch Codex against the per-session home so intent
+# capture lands in this session's deterministic tree and `varambu trace` can join it.
+say "codex_home=$CODEX_HOME_DIR"
+say "next_new_session=varambu codex"
+say "next_new_session_manual=CODEX_HOME=$CODEX_HOME_DIR codex -C $ROOT_DIR"
+say "trace_after_run=varambu trace"
 say "demo_prompt=Use the Jira MCP tools to read project summary for IAM."
 vb_banner

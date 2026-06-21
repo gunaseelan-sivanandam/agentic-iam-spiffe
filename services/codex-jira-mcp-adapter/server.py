@@ -2,8 +2,9 @@ import json
 import os
 import ssl
 import sys
-import time
 import uuid
+from datetime import datetime, timezone
+from pathlib import Path
 from urllib import error, request
 
 
@@ -162,6 +163,28 @@ def validate_tool_arguments(tool_name: str, arguments: object) -> tuple[dict[str
     return None, "unknown_tool"
 
 
+# DD: DD-919
+# Implements: ARCH-033
+# Title: emit_adapter_event codex-jira-mcp-adapter independent in-boundary audit emitter
+def emit_adapter_event(event_type: str, fields: dict[str, object]) -> None:
+    """Write an adapter audit event to the per-session bind-mounted file. The
+    adapter cannot use stdout (it is the MCP channel) so it speaks for itself
+    here. No-op when VARAMBU_SESSION_REL is unset so live MCP stays clean."""
+    session_rel = os.getenv("VARAMBU_SESSION_REL", "").strip()
+    if not session_rel:
+        return None
+    audit_root = os.getenv("VARAMBU_AUDIT_ROOT", "/var/audit")
+    path = Path(audit_root) / session_rel / "adapter_audit.jsonl"
+    record = {"event_type": event_type, "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"), **fields}
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, sort_keys=True) + "\n")
+    except OSError as exc:
+        print(json.dumps({"event_type": "adapter_audit_error", "reason": str(exc)}), file=sys.stderr, flush=True)
+    return None
+
+
 # DD: DD-707
 # Implements: ARCH-027
 # Title: invoke_tool codex-jira-mcp-adapter tool execution coordinator
@@ -174,17 +197,21 @@ def invoke_tool(tool_name: str, arguments: object, correlation_id: str | None = 
     if err or payload is None:
         return {"ok": False, "reason": err or "payload_invalid", "correlation_id": correlation_id}
     project_key = str(payload["project_key"])
+    emit_adapter_event("adapter_request", {"correlation_id": correlation_id, "tool_name": tool_name, "act": action, "res": resource_for_project(project_key), "project_key": project_key})
     token, token_meta = mint_token(action, project_key, correlation_id)
     if token is None:
+        emit_adapter_event("adapter_decision", dict(token_meta))
         print(json.dumps({"event_type": "adapter_decision", **token_meta}), file=sys.stderr, flush=True)
         return token_meta
     status, body = call_gateway(tool_name, token, payload, correlation_id)
     if status not in {200, 201}:
         reason = body.get("reason") if isinstance(body.get("reason"), str) else "gateway_unavailable"
         result = {"ok": False, "reason": reason, "correlation_id": correlation_id}
+        emit_adapter_event("adapter_decision", {**result, "status": status, **token_meta})
         print(json.dumps({"event_type": "adapter_decision", **result, "status": status, **token_meta}, sort_keys=True), file=sys.stderr, flush=True)
         return result
     body.pop("token", None)
+    emit_adapter_event("adapter_decision", {"ok": True, "correlation_id": correlation_id, **token_meta})
     print(json.dumps({"event_type": "adapter_decision", "ok": True, "correlation_id": correlation_id, **token_meta}, sort_keys=True), file=sys.stderr, flush=True)
     return body
 
