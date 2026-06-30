@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 from tests.unit.shared.loaders import REPO_ROOT, load_module_from_path
 
@@ -1283,6 +1284,38 @@ def test_render_chain_human_omits_advisory(guard):
     guard.outcome("no advisory text in human view", "advisory" not in rendered.lower())
     guard.outcome("gateway allow status shown", "ALLOW" in rendered)
     guard.outcome("upstream ok status shown", "201 OK" in rendered)
+
+
+# UT: UT-345
+# Test Description: TTY trace output colorizes the headline, outcome/status tokens, column header, and detail labels for scanability.
+# Precondition: Module loaded; stdout reports isatty=True and a complete successful chain is rendered.
+# Expected Output: The chain title is blue, OK/ALLOW status text is green, the #/LEG/TIME/STATUS/DETAIL header is yellow, and detail labels are cyan.
+# Covers DD: DD-916
+def test_render_chain_tty_colorizes_headline_status_and_columns(guard):
+    mod = guard.premise("module loaded", _load)
+    chain = guard.exercise("build chain", lambda: _full_chain(mod))
+    with patch.object(mod.sys.stdout, "isatty", return_value=True):
+        rendered = guard.exercise("render tty", lambda: mod.render_chain(chain))
+    guard.outcome("headline title blue", f"{mod._BLUE}create_story  IAM{mod._RESET}" in rendered)
+    guard.outcome("ok outcome or status green", f"{mod._GREEN}ok{mod._RESET}" in rendered or f"{mod._GREEN}OK{mod._RESET}" in rendered)
+    guard.outcome("gateway allow green", f"{mod._GREEN}ALLOW{mod._RESET}" in rendered)
+    guard.outcome("column header yellow", f"{mod._YELLOW}   #  LEG" in rendered and f"DETAIL{mod._RESET}" in rendered)
+    guard.outcome("detail labels cyan", f"{mod._CYAN}Prompt    {mod._RESET}" in rendered and f"{mod._CYAN}Tool      {mod._RESET}" in rendered)
+
+
+# UT: UT-346
+# Test Description: Non-TTY trace output remains ANSI-free so persisted evidence, pipes, and grep-based tests stay plain text.
+# Precondition: Module loaded; stdout reports isatty=False and a complete successful chain is rendered.
+# Expected Output: No ANSI escape sequence is emitted; ordinary headline and status text remain present.
+# Covers DD: DD-916
+def test_render_chain_non_tty_has_no_ansi_color(guard):
+    mod = guard.premise("module loaded", _load)
+    chain = guard.exercise("build chain", lambda: _full_chain(mod))
+    with patch.object(mod.sys.stdout, "isatty", return_value=False):
+        rendered = guard.exercise("render non tty", lambda: mod.render_chain(chain))
+    guard.outcome("no ansi escapes", "\033[" not in rendered)
+    guard.outcome("plain headline still present", "create_story  IAM  ·  ok" in rendered)
+    guard.outcome("plain columns still present", "#  LEG" in rendered and "STATUS" in rendered and "DETAIL" in rendered)
 
 
 # UT: UT-314

@@ -119,6 +119,9 @@ def _humanize_reason(reason_code: str) -> str:
 
 _GREEN = "\033[32m"
 _RED = "\033[1;31m"
+_BLUE = "\033[94m"
+_YELLOW = "\033[33m"
+_CYAN = "\033[36m"
 _RESET = "\033[0m"
 _HEADER_RE = re.compile(r"^#\d+ (MINTED|DENIED)\b")
 
@@ -136,6 +139,12 @@ def _colorize_line(line: str) -> str:
     body = line.rstrip("\n")
     newline = "\n" if line.endswith("\n") else ""
     return f"{color}{body}{_RESET}{newline}"
+
+
+def _tty_color(text: str, color: str) -> str:
+    if not sys.stdout.isatty():
+        return text
+    return f"{color}{text}{_RESET}"
 
 
 # DD: DD-902
@@ -830,21 +839,31 @@ def _status_token(slot: str, leg: dict[str, Any]) -> str:
 
 
 def _color_status(token: str) -> str:
-    if not token or not sys.stdout.isatty():
+    if not token:
         return token
     upper = token.upper()
     if "FAIL" in upper or upper in ("DENY", "DENIED"):
-        return f"{_RED}{token}{_RESET}"
+        return _tty_color(token, _RED)
     if upper in ("OK", "ALLOW") or upper.endswith(" OK"):
-        return f"{_GREEN}{token}{_RESET}"
+        return _tty_color(token, _GREEN)
     return token
 
 
+def _color_outcome(outcome: str) -> str:
+    lowered = outcome.lower()
+    if lowered == "ok":
+        return _tty_color(outcome, _GREEN)
+    if lowered == "in progress":
+        return _tty_color(outcome, _YELLOW)
+    return _tty_color(outcome, _RED)
+
+
 def _detail_text(label: str, value: Any, indent: int) -> list[str]:
-    label_part = f"{label:<{_INNER_LABEL_W}} "
-    avail = max(20, 100 - indent - len(label_part))
+    plain_label = f"{label:<{_INNER_LABEL_W}} "
+    label_part = _tty_color(plain_label, _CYAN)
+    avail = max(20, 100 - indent - len(plain_label))
     wrapped = textwrap.wrap(_display(value), width=avail) or [""]
-    pad = " " * (indent + len(label_part))
+    pad = " " * (indent + len(plain_label))
     return [label_part + wrapped[0]] + [pad + line for line in wrapped[1:]]
 
 
@@ -907,11 +926,17 @@ def _chain_outcome(legs: dict[str, Any]) -> str:
 def render_chain(chain: dict[str, Any], *, tz: str | None = None, mode: str = "mock") -> str:
     legs = chain["legs"]
     start = _chain_start_utc(legs)
+    title = _tty_color(_chain_title(legs), _BLUE)
+    outcome = _color_outcome(_chain_outcome(legs))
+    column_header = _tty_color(
+        f"  {'#':>2}  {'LEG':<{_LABEL_W}}{'TIME':<{_TIME_W}}{'STATUS':<{_STATUS_W}}DETAIL",
+        _YELLOW,
+    )
     header = (
         f"{_RULE}\n"
-        f"  {_chain_title(legs)}  ·  {_chain_outcome(legs)}\n"
+        f"  {title}  ·  {outcome}\n"
         f"  cid {chain['correlation_id']}   {_to_local(start, tz)}\n"
-        f"  {'#':>2}  {'LEG':<{_LABEL_W}}{'TIME':<{_TIME_W}}{'STATUS':<{_STATUS_W}}DETAIL"
+        f"{column_header}"
     )
     out = [header]
     for index, slot in enumerate(CHAIN_LEG_ORDER, start=1):

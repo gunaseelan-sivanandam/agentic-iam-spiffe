@@ -259,7 +259,9 @@ never the biscuit; trace re-scrubs regardless).
 - **DD-916** `render_chain` / `render_chain_json` — full-audit-trace renderers. Human view reuses
   the existing capiss `render_record` for the mint leg verbatim (`MINTED OK`/`DENIED: Reason …`),
   renders every leg's full fields, heads each leg with `<LABEL> <local time> (+Δ advisory)`; JSON
-  view carries full fields + `timestamp_utc`/`timestamp_local`/`sequence` per leg.
+  view carries full fields + `timestamp_utc`/`timestamp_local`/`sequence` per leg. Human view
+  applies TTY-gated ANSI color (headline blue, outcome/status green/red/yellow, column header
+  yellow, detail labels cyan) only when `stdout.isatty()`; piped/persisted output stays ANSI-free.
 - **DD-917** `trace` (CLI subcommand) — `--cid/--all/--json`, current-session default.
 - **DD-918** gateway docker-logs tailer wiring (second tailer alongside the capiss tailer).
 - **DD-919** adapter `emit_adapter_event` — `adapter_request`/`adapter_decision` to the

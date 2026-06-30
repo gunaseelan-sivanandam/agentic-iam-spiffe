@@ -131,6 +131,7 @@ Legs (canonical order): `intent, action, adapter_request, mint, gateway, adapter
 | Live-mode upstream | mode=live | gateway leg labeled gateway-attested; no independent upstream voice |
 | JSON | complete + partial | valid JSON; legs array canonical order; each leg carries `timestamp_utc`,`timestamp_local`,`sequence`; missing legs explicit |
 | Render-time scrub | inject forbidden value into a leg | not emitted in either renderer |
+| TTY colorization | stdout `isatty()=True` vs `False` | TTY view colors headline (blue), outcome/status (green/red, in-progress yellow), column header (yellow), detail labels (cyan); non-TTY view is ANSI-free, content identical (UT-345/UT-346) |
 
 ### DD-917 `trace` CLI
 | Area | Cases | Expected |
