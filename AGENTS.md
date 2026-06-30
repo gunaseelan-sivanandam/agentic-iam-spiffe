@@ -11,9 +11,8 @@ Use these commands first before inventing alternatives.
   - runtime-visible proof in `trace/tests.yaml` plus evidence artifacts
 - Internal implementation artifacts such as `DD-*`, `UT-*`, source helpers, or local test doubles are engineering controls, not the primary proof model for system behavior.
 - If a security-relevant behavior depends on hidden state, that behavior must be authored before implementation in:
-  - architecture state inventory
-  - slice ADR/DDR
-  - implementation contract
+  - the slice `plan.md`
+  - the authored architecture state inventory in `docs/architecture.md` when runtime behavior changes
 - Do not introduce or retain runtime-significant behavior that exists only in code.
 
 ## Project map
@@ -30,25 +29,22 @@ Use the 4-phase flow for milestone and security-relevant changes.
 
 1. `Phase 1: plan and review`
    - create a per-slice bundle under `docs/slices/<slice-id>/`
-   - update requirements and architecture deltas
-   - record ADR/DDR decisions
-   - write the implementation and retirement contracts
+   - start with the `grill-me` skill and resolve the design choices branch-by-branch
+   - capture the agreed design choices, requirements to change or add, hidden-state decisions, scope, and out-of-scope items in `plan.md`
+   - create `test_plan.md` for UT and E2E based on the approved design choices and requirements
 2. `Phase 2: tests from the approved bundle`
-   - add UT/E2E only from the reviewed slice contract
+   - add UT/E2E only from the reviewed `test_plan.md`
    - if tests require a new assumption, stop and update the slice docs first
 3. `Phase 3: implementation and retirement`
    - implement only approved behavior
-   - remove dead code, stale compatibility paths, and obsolete artifacts called out in the retirement contract
+   - remove dead code, stale compatibility paths, and obsolete artifacts called out in `plan.md`
 4. `Phase 4: independent verification`
    - run trace, quality, E2E, and evidence checks
    - record the result in `docs/local_status_capture/implementation_status.md`
 
 Mandatory authoring in every slice bundle:
-- authoritative state inventory
-- ADR for architecture/runtime trust choices
-- DDR for design/implementation-shape choices
-- implementation contract
-- retirement contract
+- `plan.md`
+- `test_plan.md`
 
 ## Environment assumptions
 - Docker Engine + Docker Compose v2 available.
@@ -198,7 +194,7 @@ After a test run, validate that evidence directories were produced and contain g
   - `trace/tests.yaml` remains the authored non-unit test map:
     - `e2e_suite/e2e_case -> source_requirements`
     - `integration_case -> source_architecture`
-  - For black-box trust, requirement satisfaction should be argued primarily through authored runtime mappings and evidence, not through unit-level implementation summaries.
+  - For black-box trust, requirement satisfaction should be argued primarily through authored runtime mappings, the approved slice `plan.md` and `test_plan.md`, and evidence, not through unit-level implementation summaries.
   - Structural failures are blocking. Coverage gaps are reported but are not forced closed.
 - Validate E2E evidence completeness (post test-run):
   ```bash

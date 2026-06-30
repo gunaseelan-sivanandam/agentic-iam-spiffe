@@ -1,7 +1,7 @@
 # Architecture Delta
 
 ## Runtime Changes
-- Extend OPA/capiss Jira authority issuance to allow `act=write` only for `spiffe://example.org/agent-a` and `jira-tool:/project:IAM`.
+- Extend OPA/capiss Jira authority issuance to allow `act=write` only for `spiffe://varambu.org/agent-a` and `jira-tool:/project:IAM`.
 - Extend `jira-tool` action semantics:
   - `GET /jira/rest/api/3/issue/<ISSUE_KEY>` accepts `act=read` or `act=write`.
   - `PUT /jira/rest/api/3/issue/<ISSUE_KEY>` requires `act=write`.

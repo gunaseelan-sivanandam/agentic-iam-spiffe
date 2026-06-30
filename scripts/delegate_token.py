@@ -5,7 +5,7 @@ Usage:
   python3 scripts/delegate_token.py \
     --token <parent_token_b64> \
     --public-key-b64-file capiss_keys/root_public_key.b64 \
-    --subject spiffe://example.org/rogue
+    --subject spiffe://varambu.org/rogue
 """
 
 from __future__ import annotations

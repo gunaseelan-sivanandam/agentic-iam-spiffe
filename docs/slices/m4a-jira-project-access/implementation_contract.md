@@ -2,7 +2,7 @@
 
 ## Runtime behavior changes
 - `capiss` accepts syntactically valid Jira project resources for root mint requests and sends them to OPA for authorization.
-- OPA allows `spiffe://example.org/agent-a` to mint only the configured allowed Jira project token and denies all other Jira project token requests by default.
+- OPA allows `spiffe://varambu.org/agent-a` to mint only the configured allowed Jira project token and denies all other Jira project token requests by default.
 - `jira-tool` accepts only root Jira project read tokens for M4a.
 - `jira-tool` denies delegated Jira tokens with `delegation_not_supported`.
 - In the M4a contract, `jira-tool` denies non-GET requests in application code. The current runtime is extended by M4b, which permits only the M4b description-write `PUT` path under the separate M4b contract.
@@ -54,9 +54,9 @@
 - Keep `jira-mock` off `jiratool_edge_net` and off host ports.
 - Make `jira-mock` reachable to `jira-tool` as upstream test infrastructure and reachable to the test harness only through internal/test access needed for evidence.
 - Expose `jira-tool-envoy` on host port `10443` unless implementation discovers a documented conflict and stops for approval.
-- Configure `jira-tool-envoy` with SPIFFE identity `spiffe://example.org/jira-tool-envoy`.
-- Configure `jira-tool` with SPIFFE identity `spiffe://example.org/jira-tool`.
-- Configure `jira-tool-envoy` mTLS client SAN allowlist to include `spiffe://example.org/agent-a` and `spiffe://example.org/rogue`.
+- Configure `jira-tool-envoy` with SPIFFE identity `spiffe://varambu.org/jira-tool-envoy`.
+- Configure `jira-tool` with SPIFFE identity `spiffe://varambu.org/jira-tool`.
+- Configure `jira-tool-envoy` mTLS client SAN allowlist to include `spiffe://varambu.org/agent-a` and `spiffe://varambu.org/rogue`.
 - Attach `agent-a` and `rogue` to `jiratool_edge_net` for positive and negative proof.
 
 ## Test intent

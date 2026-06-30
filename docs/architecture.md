@@ -13,13 +13,13 @@ Scope notes:
 
 ### Component Architecture
 
-This diagram shows the main runtime components and their trust-oriented relationships, including the M4a/M4b Jira components.
+This diagram shows the main runtime components and their trust-oriented relationships, including the M4a/M4b Jira tool path and the M5 Codex Jira MCP path.
 
 ![Component architecture diagram](only_arch.svg)
 
 ### Network Architecture
 
-This diagram shows the current network segmentation and boundary layout used by the stack, including the M4a/M4b Jira networks.
+This diagram shows the current network segmentation and boundary layout used by the stack, including the M4a/M4b Jira networks and the M5 Codex Jira MCP networks.
 Redis is shown in multiple internal networks as the same shared state service attached where needed.
 
 ![Network architecture diagram](architecture_diagram.svg)
@@ -190,10 +190,10 @@ Overview:
 The capability issuer is the central authority that mints root and resource-scoped capability tokens. It translates allowed policy outcomes into explicit signed authority artifacts and enforces the current M4 new-resource mint-rate rule.
 
 Trust/Responsibility:
-It owns mint-time validation, required token fields, delegated token metadata, current M4 registry-gated resource minting, and current M4 new-resource mint-rate enforcement. It is also the current source for mint-decision logging and must emit one final mint-decision event for every mint exit path. In the canonical-resource cleanup slice it is responsible for rejecting non-canonical mint requests instead of silently preserving compatibility aliases.
+It owns mint-time validation, required token fields, delegated token metadata, current M4 registry-gated resource minting, and current M4 new-resource mint-rate enforcement. It is also the authoritative source for mint-decision logging and must emit one final `capiss_mint_decision` event for every mint exit path. The final event includes allow/deny result, reason, subject, action/resource/audience, token identifiers when available, parent context when available, local and UTC decision timestamps, issued/expires timestamps and actual TTL for issued tokens, optional caller-supplied correlation ID, policy metadata, and `capiss`-derived resource attributes for known resource families. It must not log bearer token values or other secret material. In the canonical-resource cleanup slice it is responsible for rejecting non-canonical mint requests instead of silently preserving compatibility aliases.
 
 Interactions:
-It receives verified identity from Envoy, queries OPA for mint policy, reads and writes shared state where needed, enforces the new-resource mint-rate against Redis-backed state, emits structured JSON mint-decision events to stdout for container-log capture, and returns signed tokens to callers.
+It receives verified identity from Envoy, queries OPA for mint policy, reads and writes shared state where needed, enforces the new-resource mint-rate against Redis-backed state, emits structured JSON mint-decision events to stdout for container-log capture and Varambu session copying, and returns signed tokens to callers.
 
 ## ARCH-013 OPA
 
@@ -341,7 +341,7 @@ Overview:
 This subsystem extends the existing capability issuance model to Jira project authority. It keeps Jira access and description-write authority as explicit authority minted by `capiss` under OPA policy rather than as a side effect of a broad upstream Jira API credential.
 
 Trust/Responsibility:
-OPA is the source of truth for allowed Jira projects and actions. For M4a, `spiffe://example.org/agent-a` may mint `aud=jira-tool`, `act=read`, `res=jira-tool:/project:IAM`. For M4b, the same workload may also mint `aud=jira-tool`, `act=write`, `res=jira-tool:/project:IAM`. Other Jira project/action mint requests deny by default. `capiss` remains responsible for required authority fields, canonical Jira resource validation, policy evaluation, root token issuance, root budget initialization, and mint-decision audit events.
+OPA is the source of truth for allowed Jira projects and actions. For M4a, `spiffe://varambu.org/agent-a` may mint `aud=jira-tool`, `act=read`, `res=jira-tool:/project:IAM`. For M4b, the same workload may also mint `aud=jira-tool`, `act=write`, `res=jira-tool:/project:IAM`. Other Jira project/action mint requests deny by default. `capiss` remains responsible for required authority fields, canonical Jira resource validation, policy evaluation, root token issuance, root budget initialization, and mint-decision audit events.
 
 Interactions:
 The agent calls `capability-issuer-envoy` over mTLS. The Envoy boundary injects verified caller identity into `capiss`. `capiss` sends the requested Jira authority tuple to OPA, and on allow returns a signed root capability token that `jira-tool` can verify locally.
@@ -442,3 +442,149 @@ Trust/Responsibility:
 
 Interactions:
 `jira-mock` is reachable by `jira-tool` and by the test harness for precondition and request-log evidence. It is not attached to the Jira edge network and is not host-exposed. Its request-log/reset endpoints are test-only and must not be reachable by agents.
+
+## ARCH-027 M5 Codex Jira MCP Session Boundary
+
+Type: Component
+Satisfies: REQ-M5-CJ1, REQ-M5-CJ2, REQ-M5-CJ4
+
+Status:
+Implemented in M5 Slice 1.
+
+Overview:
+The M5 Codex boundary consists of a local launcher and the `codex-jira-mcp-adapter` workload. Codex is treated as untrusted input. It starts a stdio MCP session through the launcher, which executes into the already-running adapter container. The adapter exposes exactly `read_project_summary` and `create_story`.
+
+Trust/Responsibility:
+The launcher owns only local process bridging and must not mutate stack lifecycle. The adapter owns MCP translation, fixed tool-to-action mapping, fresh token minting per call, correlation propagation, and internal gateway forwarding. It is not a PDP or PEP and must not authorize project allowlists locally.
+
+Interactions:
+The adapter calls `capability-issuer-envoy` over SPIFFE mTLS for `aud=jira-mcp-gateway` tokens and calls `jira-mcp-envoy` over SPIFFE mTLS for protected Jira MCP requests. It has no inbound Envoy in Slice 1 because Codex reaches it through local stdio.
+
+## ARCH-028 M5 Jira MCP Authority Issuance
+
+Type: Logical
+Satisfies: REQ-M5-CJ3, REQ-M5-CJ4, REQ-M5-CJ10
+
+Status:
+Implemented in M5 Slice 1.
+
+Overview:
+M5 adds a distinct Jira MCP authority family to `capiss`: `aud=jira-mcp-gateway`, `act=read_project_summary|create_story`, and `res=jira-mcp:/project:<KEY>`. This authority is separate from the M4a/M4b `jira-tool` audience and resource family.
+
+Trust/Responsibility:
+OPA is the source of truth for allowed M5 project/action tuples. `capiss` validates strict M5 project resource syntax, evaluates policy, initializes shared root budget, signs the token, and emits mint-decision events. Only `spiffe://varambu.org/codex-jira-mcp-adapter` may mint M5 Slice 1 authority for `IAM`; `NAS`, future actions, old subjects, and mixed M4/M5 authority forms deny.
+
+Interactions:
+The adapter presents its SPIFFE identity to `capability-issuer-envoy`; Envoy injects the verified identity into `capiss`; `capiss` returns a short-lived root token used only inside the adapter-to-gateway request path.
+
+## ARCH-029 jira-mcp-envoy
+
+Type: Component
+Satisfies: REQ-M5-CJ5, REQ-M5-CJ10
+
+Status:
+Implemented in M5 Slice 1.
+
+Overview:
+`jira-mcp-envoy` is the M5 gateway ingress boundary. It terminates mTLS, verifies allowed client workload identities, injects the trusted `x-spiffe-id` header, and forwards to `jira-mcp-gateway`.
+
+Trust/Responsibility:
+The Envoy boundary is responsible for transport authentication and trusted caller identity propagation. It is not the semantic authorization decision point. The gateway still verifies the capiss token and binds token subject to the Envoy-verified caller identity.
+
+Interactions:
+`codex-jira-mcp-adapter` reaches `jira-mcp-envoy` on the M5 edge network. The gateway app is not attached to that edge network. The test harness may use the edge path for black-box proof.
+
+## ARCH-030 jira-mcp-gateway
+
+Type: Component
+Satisfies: REQ-M5-CJ2, REQ-M5-CJ5, REQ-M5-CJ6, REQ-M5-CJ7, REQ-M5-CJ8, REQ-M5-CJ9, REQ-M5-CJ10
+
+Status:
+Implemented in M5 Slice 1.
+
+Overview:
+`jira-mcp-gateway` is the M5 protected Jira request-time PEP. It is an internal HTTP service behind `jira-mcp-envoy`, not an MCP-native gateway in Slice 1.
+
+Trust/Responsibility:
+The gateway verifies capiss-signed tokens, token expiry, token subject, audience, endpoint-bound action, resource syntax, payload project, and Envoy caller identity before upstream use. It validates the bounded summary and story-create contracts, verifies optional same-project epics, strips client-supplied upstream authorization/impersonation headers, consumes Redis budget/rate governance immediately before upstream use, and emits `jiramcp_gateway_decision` audit events.
+
+Interactions:
+`POST /mcp/jira/project-summary` requires `act=read_project_summary`. `POST /mcp/jira/stories` requires `act=create_story`. The gateway calls `jira-mcp-mock` in deterministic mode or Jira Cloud only in explicit live mode. It uses Redis for the existing M4 `m4:budget:<root_token_id>` and request-rate keys.
+
+## ARCH-031 jira-mcp-mock and M5 Live Smoke Proof
+
+Type: Logical
+Satisfies: REQ-M5-CJ6, REQ-M5-CJ7, REQ-M5-CJ8, REQ-M5-CJ10
+
+Status:
+Implemented in M5 Slice 1.
+
+Overview:
+`jira-mcp-mock` is the deterministic upstream Jira Cloud substitute for M5. It is separate from the M4a/M4b `jira-mock` and includes broad `IAM` and `NAS` fixtures to prove protected-path narrowing.
+
+Trust/Responsibility:
+The mock is not an authorization component. It returns broad upstream project data, stores created stories, verifies fixture availability for epic checks, records request logs, supports reset and failure injection endpoints for tests, and captures enough request metadata to prove that only the gateway performs upstream operations.
+
+Interactions:
+`jira-mcp-gateway` calls the mock over the private Jira MCP app network. The mock is also attached to the test-only upstream inspection network so the harness can access mock premise and evidence endpoints without exposing the gateway app listener. Codex, the launcher, the adapter, capiss, and Envoys do not receive live Jira credentials.
+
+## ARCH-032 Varambu Demo Audit Session
+
+Type: Component
+Satisfies: REQ-M5-VA1, REQ-M4-O2
+
+Status:
+Target state for the Varambu audit demo slice. Implementation proof is not accepted until the slice completes the approved tests-first workflow.
+
+Overview:
+The Varambu operator interface provides the demo lifecycle commands `varambu start`, `varambu audit`/`varambu show-audit-logs`, and `varambu audit-file`. Each `varambu start` creates a new timestamped session directory under `artifacts/varambu-demo/`, starts the Docker/SPIFFE stack, passes the selected local audit timezone to `capiss`, starts a host-side capiss audit tailer, and updates `artifacts/varambu-demo/current` to the active session after audit capture is alive. For the full-chain trace (ARCH-033), `varambu start` additionally provisions a per-session Codex home for intent capture and prints its launch line, mounts a per-session adapter audit path into the adapter container, and starts a second host-side tailer for `jira-mcp-gateway` decisions.
+
+Trust/Responsibility:
+Container stdout remains the authoritative audit source. The Varambu audit tailer is a session evidence copier: it reads `spiffe-capability-issuer` logs from the session start time, filters `capiss_mint_decision` events, allowlists the approved audit schema, drops forbidden or unknown fields, and appends secret-free records to `capiss_audit.jsonl` and `capiss_audit.log`. It adds a session-local sequence number for display only. It does not deduplicate because each `varambu start` creates a new session and stops the previous tailer. It never persists bearer capability token values, authorization header values, upstream credentials, cookies, or other secret-bearing fields.
+
+Interactions:
+`varambu audit` reads the current session's persisted human log and does not scrape Docker logs. `varambu audit --json` prints the persisted JSONL exactly as written. `varambu audit --all` reads historical session files in timestamp order. `varambu audit --follow` follows the current persisted file. `varambu audit-file` prints direct paths to the current or historical audit artifacts. If the current session has a tailer PID file and the process is no longer alive, the audit command warns that the file may be stale; strict mode fails instead of presenting stale files as fresh proof.
+
+Authoritative State:
+| State | Store/System | Writer | Reader | TTL/Lifecycle | Decision Impact | Classification |
+| --- | --- | --- | --- | --- | --- | --- |
+| M5 allowed authority tuple | OPA policy/data | Operator/repo config | OPA during capiss mint | Deployment lifecycle | Determines whether adapter may mint `read_project_summary` or `create_story` for `IAM` | Authoritative |
+| M5 capiss token | Adapter process memory | capiss | Adapter, gateway | Root token TTL; one fresh token per MCP call | Grants one narrow M5 action/resource for gateway use | Authoritative secret |
+| Envoy verified M5 caller | `jira-mcp-envoy` trusted header | Envoy | gateway | Request lifecycle | Must match token subject before upstream use | Authoritative |
+| M5 request budget/rate | Redis `m4:*` keys | capiss initializes; gateway consumes | gateway | Bounded by root expiry/rate window | Denies summary/create when exhausted, missing, invalid, rate-limited, or store unavailable | Authoritative |
+| Jira API credential | gateway live environment only | Operator/live setup | gateway | Live runtime secret lifecycle | Enables live upstream calls only after local enforcement | Sensitive secret |
+| MCP session process | Adapter container process | launcher | Codex stdio | One MCP server session | Transports untrusted MCP requests and bounded responses | Runtime transport |
+| M5 correlation ID | Adapter, capiss, gateway, mock/live logs | adapter or gateway | tests/operators, `varambu trace` | Request lifecycle | Reconstructs mint, enforcement, upstream, and Codex-visible result; trace join key | Evidence metadata |
+| Varambu current session pointer | `artifacts/varambu-demo/current` symlink | `varambu start` | `varambu audit`, `varambu audit-file` | Replaced on each successful start | Selects the default operator-visible audit files | Evidence metadata |
+| Varambu audit tailer PID | `artifacts/varambu-demo/<timestamp>/audit_tailer.pid` | `varambu start` | `varambu audit`, operator | Session lifecycle | Warns when persisted audit files may be stale | Advisory |
+| Varambu session audit files | `artifacts/varambu-demo/<timestamp>/capiss_audit.jsonl` and `.log` | Varambu audit tailer | operator/tests | Per-session, append-only during tailer lifetime | Human/demo evidence copied from authoritative capiss stdout | Evidence copy |
+| Varambu audit timezone | `VARAMBU_TZ` environment | `varambu start` | capiss | Runtime config | Determines local display timestamps only; UTC remains available in JSONL | Evidence metadata |
+| jira-mcp-mock request log | mock memory | mock | test harness | Test lifecycle/reset per test | Proves upstream calls happened only after authorization and only from gateway path | Test evidence |
+| Per-session Codex home | `artifacts/varambu-demo/<timestamp>/codex-home/` (`config.toml` + `sessions/`) | `varambu start`, Codex agent | `varambu trace` | Per-session | Deterministic, session-scoped destination for agent intent capture and MCP registration | Untrusted input (agent-written rollouts) |
+| Adapter audit session file | `artifacts/varambu-demo/<timestamp>/adapter_audit.jsonl` | adapter process (bind-mounted path) | `varambu trace` | Per-session, append-only | Independent in-boundary adapter request/decision legs; enables agent-tamper detection | Evidence (in-boundary) |
+| Adapter session path | `VARAMBU_SESSION_REL` environment | `varambu start` | adapter | Container lifetime | Selects the session directory the adapter writes its audit file into | Runtime config |
+| Gateway audit session files | `artifacts/varambu-demo/<timestamp>/gateway_audit.jsonl` | Varambu gateway audit tailer | `varambu trace` | Per-session, append-only during tailer lifetime | Gateway verification + upstream leg, copied from authoritative gateway stdout | Evidence copy |
+| Varambu gateway tailer PID | `artifacts/varambu-demo/<timestamp>/gateway_tailer.pid` | `varambu start` | `varambu trace`, operator | Session lifecycle | Warns when the gateway leg may be stale | Advisory |
+
+## ARCH-033 Varambu Full-Chain Audit Trace
+
+Type: Component
+Satisfies: REQ-M5-FT1, REQ-M5-FT2, REQ-M5-FT3, REQ-M5-FT4, REQ-M5-FT5, REQ-M5-FT6, REQ-M5-FT7, REQ-M5-FT8, REQ-M5-FT9
+
+Status:
+Target state for the M5 full-chain audit trace slice. Implementation proof is not accepted until the slice completes the approved tests-first workflow. This component builds on the adapter (ARCH-027), the M5 mint path (ARCH-028), the gateway (ARCH-030), and the Varambu demo session (ARCH-032); it adds no new enforcement and changes no authorization decision.
+
+Overview:
+`varambu trace` reconstructs, for each completed M5 Codex→Jira request, one ordered chain joined by the shared M5 correlation ID. The chain presents seven legs in fixed causal order: verbatim user intent, model action, adapter request (`ADAPTER`), capiss mint decision, gateway enforcement decision, upstream call, and the adapter result returned to the agent (`RETURN TO CODEX`). Each rendered leg shows only what its own source event attests: the gateway enforcement leg echoes the verified `aud`/`act` and the request-vs-token project comparison from `jiramcp_gateway_decision` (rather than a fixed checklist), and the mint leg includes the token subject identity, matching the `varambu audit` record. The gateway and upstream legs are derived from the single `jiramcp_gateway_decision` event so that gateway enforcement and the upstream-call outcome are distinguished — a request the gateway authorized but the upstream rejected is shown as a gateway allow with an upstream failure, not as a gateway denial. On an upstream failure the gateway relays the upstream (Jira) error body into `upstream_error_detail` — credential-shaped material redacted (`summarize_upstream_error`, DD-517) and the text bounded — which the trace passes through verbatim as the upstream leg's `Jira` row (re-screened for secret markers at read time) with no constructed status interpretation. Relaying the upstream's own words avoids asserting a single cause from an ambiguous status code (for example Jira returning 404 for an unauthorized or expired credential rather than a genuinely missing resource). The command defaults to the current session, supports `--cid <id>`, `--all`, and `--json`, assembles chains at read time from persisted per-source evidence, and has no follow mode. `varambu audit` and `varambu audit-file` are unchanged. Each chain renders as a single detailed record: every leg shares a common aligned structure (leg identifier, local time, status) with grouped per-leg fields, statuses are colour-coded on a TTY (and plain when piped). The capiss mint leg presents the same fields as its `varambu audit` record (not necessarily byte-identical). Correlation, token, and policy identifiers are shown in full and never truncated; only secret material is withheld. Each leg shows local time first, with UTC, a per-source sequence, and an advisory elapsed offset preserved in `--json`.
+
+Trust/Responsibility:
+Every in-boundary leg originates from within the trust boundary and speaks for itself: the mint leg from the existing `capiss_audit.jsonl`, the gateway verification + upstream leg from `jira-mcp-gateway` stdout copied by a session tailer, and the adapter request/decision legs written by the adapter process itself. The adapter cannot use container stdout for audit because Codex reaches it via `docker compose exec` (its streams belong to the MCP channel and the exec caller, not `docker logs`) and its stdout must stay MCP-protocol-clean; it therefore writes its own JSONL to a per-session bind-mounted path. The system trusts the agent only for the verbatim user-intent leg, because no in-boundary component observes the operator prompt; an agent that misreports a result is detectable by comparing the agent-visible result against the independent in-boundary legs sharing the correlation ID. The upstream leg is gateway-attested identically in mock and live, with no independent upstream voice manufactured only for mock. All sources are re-screened for forbidden fields and forbidden values at read time, and only a minimal, size-bounded intent record is persisted (verbatim prompt ≤ 2048 bytes; `summary`/`description` ≤ 1024 bytes; truncation marked); whole agent session records are never persisted. Because each per-session Codex home is freshly provisioned, `varambu start` (and the `varambu codex` launch command) link the operator's existing Codex credential into the session home by symlink so launching does not force re-authentication; the credential stays in the operator's own `~/.codex` (it is never copied into the `artifacts/` session bundle), and the trace assembler reads only rollout records, never `auth.json`, so no credential enters trace evidence.
+
+Interactions:
+`varambu trace` reads the current session's `capiss_audit.jsonl`, `gateway_audit.jsonl`, `adapter_audit.jsonl`, and the per-session Codex home rollout tree, and persists the scrubbed intent triple to `trace.jsonl`. The join is docker-anchored on M5-specific in-boundary sources: the authoritative correlation IDs are those appearing in the adapter or gateway evidence. The agent session record is untrusted, so an M5 model tool call that appears only there (with no adapter or gateway evidence) does not by itself anchor a chain; the verbatim intent is attached to an already-anchored chain. A decision appearing only in the shared capiss audit stream, such as a non-M5 authority mint, is not surfaced as an M5 chain. For each correlation ID, the assembler locates the agent's recorded tool result carrying that ID, restricts it to the M5 tools `read_project_summary` and `create_story`, and attributes the nearest preceding recorded operator prompt; durable conversation records are primary and the agent's tool-call-end event is optional corroboration only. Captured per-source files are kept in arrival order as evidence; the trace is an assembled view that groups by correlation ID, renders legs in fixed causal order independent of wall-clock time, lists chains in request-start order, renders missing legs explicitly as not-yet-available, and converges on re-run as late legs (notably intent) appear. The single captured `jiramcp_gateway_decision` event yields two rendered legs: the gateway enforcement leg (allow when the request reached the upstream call or the gateway recorded allow; otherwise deny with the enforcement reason) and the upstream leg (present only when the upstream was called, carrying its operation and status, gateway-attested in both mock and live).
+
+Authoritative State:
+| State | Store/System | Writer | Reader | TTL/Lifecycle | Decision Impact | Classification |
+| --- | --- | --- | --- | --- | --- | --- |
+| Persisted intent triple | `artifacts/varambu-demo/<timestamp>/trace.jsonl` | `varambu trace` (on read) | operators/tests | Per-session; rewritten idempotently | Durable, scrubbed, bounded verbatim-intent and result evidence joined by correlation ID | Evidence copy (derived from untrusted agent rollout) |
+| Assembled trace chain | `varambu trace` output (not persisted unless redirected) | `varambu trace` | operators/auditors | Recomputed each invocation | Presents the end-to-end M5 chain; agent-tamper detectable by cross-source comparison | Derived view |

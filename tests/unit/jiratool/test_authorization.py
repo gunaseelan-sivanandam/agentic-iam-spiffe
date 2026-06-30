@@ -15,7 +15,7 @@ def _claims(**overrides):
     data = {
         "root_token_id": "root-1",
         "token_id": "token-root",
-        "subject_spiffe_id": "spiffe://example.org/agent-a",
+        "subject_spiffe_id": "spiffe://varambu.org/agent-a",
         "aud": "jira-tool",
         "act": "read",
         "res": "jira-tool:/project:IAM",
@@ -111,7 +111,7 @@ def test_verify_biscuit_allows_full_authority_and_consumes_budget(jiratool_modul
     )
     allowed, reason, claims = guard.exercise(
         "verify valid Jira token",
-        lambda: jiratool_module.verify_biscuit("token", "spiffe://example.org/agent-a", "IAM"),
+        lambda: jiratool_module.verify_biscuit("token", "spiffe://varambu.org/agent-a", "IAM"),
     )
     guard.outcome("request allowed", allowed is True)
     guard.outcome("no deny reason", reason == "")
@@ -142,7 +142,7 @@ def test_verify_biscuit_enforces_read_write_action_sets(jiratool_module, monkeyp
         "verify write token for read-compatible request",
         lambda: jiratool_module.verify_biscuit(
             "token",
-            "spiffe://example.org/agent-a",
+            "spiffe://varambu.org/agent-a",
             "IAM",
             {"read", "write"},
         ),
@@ -151,7 +151,7 @@ def test_verify_biscuit_enforces_read_write_action_sets(jiratool_module, monkeyp
         "verify write token for write-only request",
         lambda: jiratool_module.verify_biscuit(
             "token",
-            "spiffe://example.org/agent-a",
+            "spiffe://varambu.org/agent-a",
             "IAM",
             {"write"},
         ),
@@ -161,7 +161,7 @@ def test_verify_biscuit_enforces_read_write_action_sets(jiratool_module, monkeyp
         "verify read token for write-only request",
         lambda: jiratool_module.verify_biscuit(
             "token",
-            "spiffe://example.org/agent-a",
+            "spiffe://varambu.org/agent-a",
             "IAM",
             {"write"},
         ),
@@ -193,7 +193,7 @@ def test_verify_biscuit_denies_subject_mismatch_before_budget(jiratool_module, m
     )
     allowed, reason, _claims_out = guard.exercise(
         "verify stolen token",
-        lambda: jiratool_module.verify_biscuit("token", "spiffe://example.org/rogue", "IAM"),
+        lambda: jiratool_module.verify_biscuit("token", "spiffe://varambu.org/rogue", "IAM"),
     )
     guard.outcome("request denied", allowed is False)
     guard.outcome("subject mismatch reason", reason == "sub_mismatch")
@@ -236,7 +236,7 @@ def test_verify_biscuit_denies_authority_mismatches(
     )
     allowed, reason, _claims_out = guard.exercise(
         "verify mismatched authority",
-        lambda: jiratool_module.verify_biscuit("token", "spiffe://example.org/agent-a", requested_project),
+        lambda: jiratool_module.verify_biscuit("token", "spiffe://varambu.org/agent-a", requested_project),
     )
     guard.outcome("request denied", allowed is False)
     guard.outcome("exact reason returned", reason == expected_reason)
@@ -486,18 +486,18 @@ def test_handler_authorize_status_mapping(jiratool_module, monkeypatch, guard):
         return result, denials
 
     missing_spiffe = guard.exercise("authorize without SPIFFE ID", lambda: run({}))
-    missing_token = guard.exercise("authorize without bearer token", lambda: run({"x-spiffe-id": "spiffe://example.org/agent-a"}))
-    empty_token = guard.exercise("authorize with empty bearer token", lambda: run({"x-spiffe-id": "spiffe://example.org/agent-a", "Authorization": "Bearer "}))
-    invalid = guard.exercise("authorize invalid token", lambda: run({"x-spiffe-id": "spiffe://example.org/agent-a", "Authorization": "Bearer bad"}, (False, "invalid_token", None)))
-    store_down = guard.exercise("authorize store failure", lambda: run({"x-spiffe-id": "spiffe://example.org/agent-a", "Authorization": "Bearer good"}, (False, "store_unavailable", _claims())))
-    allowed = guard.exercise("authorize valid token", lambda: run({"x-spiffe-id": "spiffe://example.org/agent-a", "Authorization": "Bearer good"}, (True, "", _claims())))
+    missing_token = guard.exercise("authorize without bearer token", lambda: run({"x-spiffe-id": "spiffe://varambu.org/agent-a"}))
+    empty_token = guard.exercise("authorize with empty bearer token", lambda: run({"x-spiffe-id": "spiffe://varambu.org/agent-a", "Authorization": "Bearer "}))
+    invalid = guard.exercise("authorize invalid token", lambda: run({"x-spiffe-id": "spiffe://varambu.org/agent-a", "Authorization": "Bearer bad"}, (False, "invalid_token", None)))
+    store_down = guard.exercise("authorize store failure", lambda: run({"x-spiffe-id": "spiffe://varambu.org/agent-a", "Authorization": "Bearer good"}, (False, "store_unavailable", _claims())))
+    allowed = guard.exercise("authorize valid token", lambda: run({"x-spiffe-id": "spiffe://varambu.org/agent-a", "Authorization": "Bearer good"}, (True, "", _claims())))
 
     guard.outcome("missing SPIFFE ID is 401", missing_spiffe[1][0][0][0:2] == (401, "missing_spiffe_id"))
     guard.outcome("missing token is 401", missing_token[1][0][0][0:2] == (401, "missing_token"))
     guard.outcome("empty bearer token is 401", empty_token[1][0][0][0:2] == (401, "missing_token"))
     guard.outcome("invalid token is 401", invalid[1][0][0][0:2] == (401, "invalid_token"))
     guard.outcome("store unavailable is 503", store_down[1][0][0][0:2] == (503, "store_unavailable"))
-    guard.outcome("valid token returns auth tuple", allowed[0][0] == "spiffe://example.org/agent-a" and allowed[0][1]["token_id"] == "token-root")
+    guard.outcome("valid token returns auth tuple", allowed[0][0] == "spiffe://varambu.org/agent-a" and allowed[0][1]["token_id"] == "token-root")
 
 
 # UT: UT-176
@@ -510,7 +510,7 @@ def test_handler_get_dispatch_paths(jiratool_module, monkeypatch, guard):
     _premise_module_loaded(guard, jiratool_module)
     guard.exercise("silence audit logger", lambda: monkeypatch.setattr(jiratool_module, "log_event", lambda *_args, **_kwargs: None))
 
-    def run(path, *, auth=("spiffe://example.org/agent-a", _claims(token_project="IAM")), upstream=(200, b'{"fields":{"project":{"key":"IAM"}}}', "application/json")):
+    def run(path, *, auth=("spiffe://varambu.org/agent-a", _claims(token_project="IAM")), upstream=(200, b'{"fields":{"project":{"key":"IAM"}}}', "application/json")):
         handler = _handler(jiratool_module, path=path)
         sent = []
         denials = []
@@ -555,7 +555,7 @@ def test_handler_put_dispatch_paths(jiratool_module, monkeypatch, guard):
     _premise_module_loaded(guard, jiratool_module)
     guard.exercise("silence audit logger", lambda: monkeypatch.setattr(jiratool_module, "log_event", lambda *_args, **_kwargs: None))
 
-    def run(body, *, auth=("spiffe://example.org/agent-a", _claims(token_project="IAM", act="write")), upstream=(204, b"", "application/json")):
+    def run(body, *, auth=("spiffe://varambu.org/agent-a", _claims(token_project="IAM", act="write")), upstream=(204, b"", "application/json")):
         handler = _handler(
             jiratool_module,
             path="/jira/rest/api/3/issue/IAM-1",
@@ -610,7 +610,7 @@ def test_handler_deny_and_unsupported_methods(jiratool_module, monkeypatch, guar
     events = []
     guard.exercise("capture audit events", lambda: monkeypatch.setattr(jiratool_module, "log_event", lambda event_type, **fields: events.append((event_type, fields))))
 
-    handler = _handler(jiratool_module, headers={"x-spiffe-id": "spiffe://example.org/agent-a"})
+    handler = _handler(jiratool_module, headers={"x-spiffe-id": "spiffe://varambu.org/agent-a"})
     sent = []
     handler._send_json = lambda status, payload: sent.append((status, payload))
     guard.exercise(
@@ -619,7 +619,7 @@ def test_handler_deny_and_unsupported_methods(jiratool_module, monkeypatch, guar
             handler,
             403,
             "project_mismatch",
-            "spiffe://example.org/agent-a",
+            "spiffe://varambu.org/agent-a",
             _claims(token_project="IAM"),
             issue_key="NAS-1",
             requested_project="NAS",
@@ -627,7 +627,7 @@ def test_handler_deny_and_unsupported_methods(jiratool_module, monkeypatch, guar
     )
 
     method_denials = []
-    method_handler = _handler(jiratool_module, headers={"x-spiffe-id": "spiffe://example.org/agent-a"})
+    method_handler = _handler(jiratool_module, headers={"x-spiffe-id": "spiffe://varambu.org/agent-a"})
     method_handler._deny = lambda *args, **kwargs: method_denials.append((args, kwargs))
     for method_name in ("do_POST", "do_PATCH", "do_DELETE"):
         guard.exercise(f"deny unsupported {method_name}", lambda method_name=method_name: getattr(jiratool_module.JiraToolHandler, method_name)(method_handler))

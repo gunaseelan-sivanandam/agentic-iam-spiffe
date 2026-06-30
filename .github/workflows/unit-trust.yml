@@ -60,6 +60,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -77,7 +79,7 @@ jobs:
       - name: Fetch PR base for diff coverage
         if: github.event_name == 'pull_request'
         run: |
-          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          git fetch --no-tags origin "${{ github.base_ref }}"
 
       - name: Run diff coverage gate (PR only)
         if: github.event_name == 'pull_request'

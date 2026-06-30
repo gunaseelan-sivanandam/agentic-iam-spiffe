@@ -81,9 +81,9 @@ def make_spiffe_cert(path: Path, spiffe_id: str):
 def test_spiffe_id_from_cert_path(toolb_module, tmp_path, guard):
     _premise_module_loaded(guard, toolb_module)
     cert_path = tmp_path / "svid.pem"
-    guard.exercise("generate spiife cert", lambda: make_spiffe_cert(cert_path, "spiffe://example.org/agent-a"))
+    guard.exercise("generate spiife cert", lambda: make_spiffe_cert(cert_path, "spiffe://varambu.org/agent-a"))
     spiffe_id = guard.exercise("extract spiffe id", lambda: toolb_module.spiffe_id_from_cert_path(str(cert_path)))
-    guard.outcome("spiffe id matches", spiffe_id == "spiffe://example.org/agent-a")
+    guard.outcome("spiffe id matches", spiffe_id == "spiffe://varambu.org/agent-a")
 
 
 # UT: UT-088
@@ -109,14 +109,14 @@ def test_parse_fact_arg_decodes_string_integer_and_raw(toolb_module, guard):
 def test_parse_block_source_aliases_sub_and_ignores_noise(toolb_module, guard):
     _premise_module_loaded(guard, toolb_module)
     source = '\n'.join([
-        'sub("spiffe://example.org/agent-a");',
+        'sub("spiffe://varambu.org/agent-a");',
         'act("read");',
         "exp(7);",
         "not a fact line",
     ])
     claims = guard.exercise("parse biscuit block source", lambda: toolb_module.parse_block_source(source))
-    guard.outcome("sub preserved", claims.get("sub") == "spiffe://example.org/agent-a")
-    guard.outcome("subject alias added", claims.get("subject_spiffe_id") == "spiffe://example.org/agent-a")
+    guard.outcome("sub preserved", claims.get("sub") == "spiffe://varambu.org/agent-a")
+    guard.outcome("subject alias added", claims.get("subject_spiffe_id") == "spiffe://varambu.org/agent-a")
     guard.outcome("act preserved", claims.get("act") == "read")
     guard.outcome("exp converted", claims.get("exp") == 7)
     guard.outcome("noise ignored", "not a fact line" not in claims)
@@ -227,7 +227,7 @@ def test_record_discovery_success(toolb_module, monkeypatch, guard):
         "record discovery",
         lambda: toolb_module.record_discovery(
             "root-1",
-            "spiffe://example.org/agent-a",
+            "spiffe://varambu.org/agent-a",
             ["tool-b:/read-file:fileA", "tool-b:/read-file:fileB"],
             int(time.time()) + 10,
         ),
@@ -247,7 +247,7 @@ def test_verify_biscuit_rejects_when_issuer_key_unavailable(toolb_module, monkey
         "verify biscuit",
         lambda: toolb_module.verify_biscuit(
             "token",
-            "spiffe://example.org/agent-a",
+            "spiffe://varambu.org/agent-a",
             "read",
             "tool-b:/search",
         ),

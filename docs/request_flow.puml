@@ -1,0 +1,88 @@
+@startuml
+!pragma layout smetana
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam sequenceArrowThickness 1.5
+skinparam sequenceGroupBorderThickness 1
+skinparam sequenceGroupBorderColor #888888
+skinparam sequenceGroupBackgroundColor #F8F8F8
+skinparam sequenceGroupFontSize 12
+skinparam sequenceGroupFontStyle bold
+skinparam noteFontSize 12
+skinparam noteBorderColor #aaaaaa
+skinparam noteBackgroundColor #fffef0
+skinparam participantFontSize 13
+skinparam participantBorderColor #41516a
+skinparam participantBackgroundColor #EBF1FB
+skinparam arrowColor #33445c
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+title Agentic IAM — Request Flow
+
+participant "User / Codex" as U
+participant "codex-jira-mcp-adapter\n(SPIFFE workload)" as A
+participant "SPIRE" as SP
+participant "capability-issuer-envoy" as CE
+participant "capability-issuer\n(capiss)" as C
+participant "OPA" as O
+participant "jira-mcp-envoy" as ME
+participant "jira-mcp-gateway\n(PEP)" as G
+participant "Jira\n(mock / live)" as J
+
+== Identity bootstrap (startup, repeated on rotation) ==
+
+SP -> A : X.509 SVID\nspiffe://.../codex-jira-mcp-adapter\n(short-lived, auto-rotated)
+SP -> G : X.509 SVID\nspiffe://.../jira-mcp-gateway
+
+note over SP, A
+  Every workload in the stack receives a SPIFFE identity from SPIRE.
+  SVIDs are short-lived and rotated automatically.
+  A workload that is not explicitly registered cannot obtain one.
+end note
+
+== Per-request: authority minting ==
+
+U -> A : "summarise the IAM project"
+note over A
+  Translates instruction to precise intent:
+  aud = jira-mcp-gateway
+  act = read_project_summary
+  res = jira-mcp:/project:IAM
+end note
+
+A -> CE : mTLS (SVID as client cert)\nmint request {aud, act, res}
+CE -> C : verified caller SPIFFE ID\n+ mint request
+C -> O : may spiffe://.../codex-jira-mcp-adapter\nmint {aud, act, res}?
+O --> C : permit
+
+C --> CE : Biscuit token\n{aud, act, res, sub, exp}
+CE --> A : token
+
+note over A
+  Token stays inside the adapter.
+  It is never returned to Codex,
+  never logged, never sent upstream.
+end note
+
+== Per-request: authority enforcement ==
+
+A -> ME : mTLS (SVID as client cert)\n+ capability token + call params
+ME -> G : x-verified-spiffe-id: spiffe://.../codex-jira-mcp-adapter\n+ capability token + call params
+
+note over G
+  Enforces (all must pass — any failure → DENY, upstream never called):
+  ① token signature valid and not expired
+  ② token subject == x-verified-spiffe-id header
+  ③ token audience == jira-mcp-gateway
+  ④ token action == requested action
+  ⑤ token resource == requested project key
+  ⑥ call budget and rate allow this request
+end note
+
+G -> J : upstream API call\n(no capability token, no Codex credentials)
+J --> G : response
+G --> A : result
+A --> U : MCP response\n(no tokens, no credentials, no raw Jira URLs)
+
+@enduml

@@ -6,7 +6,7 @@ import pytest
 from fastapi.responses import JSONResponse
 
 
-SPIFFE_ID = "spiffe://example.org/agent-a"
+SPIFFE_ID = "spiffe://varambu.org/agent-a"
 
 
 def decode_body(resp: JSONResponse) -> dict:

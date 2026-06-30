@@ -35,10 +35,10 @@ static_resources:
                   match_typed_subject_alt_names:
                     - san_type: URI
                       matcher:
-                        exact: "spiffe://example.org/agent-a"
+                        exact: "spiffe://varambu.org/agent-a"
                     - san_type: URI
                       matcher:
-                        exact: "spiffe://example.org/rogue"
+                        exact: "spiffe://varambu.org/rogue"
           filters:
             - name: envoy.filters.network.http_connection_manager
               typed_config:

@@ -1,0 +1,70 @@
+@startuml
+!include <C4/C4_Container>
+
+LAYOUT_WITH_LEGEND()
+
+title Agentic IAM with SPIFFE/SPIRE — Container Architecture\n<size:13>(M5 path shown as the representative example; M4a/M4b and M3/M4 follow the same pattern)</size>
+
+' ── External actors ───────────────────────────────────────────────────────────
+Person_Ext(user, "User / Codex", "No Jira credentials or tokens. Talks to the adapter via MCP stdio.")
+System_Ext(jira_upstream, "Jira", "jira-mcp-mock (tests) or Jira Cloud (explicit live mode).")
+
+' ── SPIFFE trust domain ───────────────────────────────────────────────────────
+Boundary(domain, "SPIFFE Trust Domain — spiffe://varambu.org") {
+
+  Boundary(spire_b, "SPIRE Control Plane") {
+    Container(spire_server, "spire-server", "SPIRE Server", "Node admission and SVID CA. Only registered workloads receive identities.")
+    Container(spire_agent,  "spire-agent",  "SPIRE Agent",  "Delivers short-lived, auto-rotated X.509 SVIDs to every registered workload.")
+  }
+
+  Boundary(client_b, "Workload Client — SPIFFE identity, no upstream credentials") {
+    Container(adapter, "codex-jira-mcp-adapter", "Python / MCP", "Translates MCP calls to scoped token requests. Never holds Jira credentials or capiss tokens.")
+  }
+
+  Boundary(edge_b, "mTLS Edge — Envoy\nTerminates mTLS · derives verified SPIFFE identity · blocks all unauthenticated traffic") {
+    Container(capiss_envoy,  "capability-issuer-envoy", "Envoy + SPIRE SDS", "Boundary for capability mint requests.")
+    Container(jiramcp_envoy, "jira-mcp-envoy",          "Envoy + SPIRE SDS", "Boundary for Jira MCP gateway requests.")
+  }
+
+  Boundary(pep_b, "Policy Enforcement Points — token + caller identity + action + resource + budget, all verified per request") {
+    Container(capiss,     "capability-issuer", "Python / Flask", "Mints Biscuit tokens scoped to {aud, act, res, sub, exp}. Fail-closed on policy error.")
+    Container(jiramcp_gw, "jira-mcp-gateway",  "Python / Flask", "Verifies token, caller identity, audience, action, resource, and budget before calling Jira.")
+  }
+
+  Boundary(gov_b, "Governance — trusted runtime state, unreachable by callers") {
+    ContainerDb(redis, "Redis",       "Redis",            "Call budgets · rate counters · mint-rate limits · token provenance registry.")
+    Container(opa,     "OPA",         "Rego",             "Policy decision point. Every mint requires an explicit permit.")
+    Container(keys,    "capiss-keys", "Biscuit root key", "Root signing keys. Never leave this boundary.")
+  }
+}
+
+' ── Layout hints ──────────────────────────────────────────────────────────────
+Lay_R(capiss_envoy,  capiss)
+Lay_R(jiramcp_envoy, jiramcp_gw)
+Lay_R(capiss_envoy,  jiramcp_envoy)
+
+' ── Relationships ─────────────────────────────────────────────────────────────
+
+' SPIRE: identity bootstrap (startup, auto-rotated)
+Rel_R(spire_server, spire_agent,  "SVID CA")
+Rel_D(spire_agent,  adapter,      "SVID (X.509, auto-rotated)", "Workload API")
+Rel_D(spire_agent,  capiss_envoy, "SVID", "Workload API")
+Rel_D(spire_agent,  jiramcp_envoy,"SVID", "Workload API")
+
+' User entry
+Rel_D(user, adapter, "MCP tool call", "stdio")
+
+' Step 1 — mint a scoped capability token before calling any tool
+Rel_D(adapter,      capiss_envoy, "1  mint {aud, act=read_project_summary,\nres=jira-mcp:/project:IAM}", "mTLS")
+Rel_R(capiss_envoy, capiss,       "verified SPIFFE ID + mint request")
+Rel_D(capiss, opa,   "policy query")
+Rel_D(capiss, keys,  "sign token")
+Rel_D(capiss, redis, "mint-rate + provenance markers")
+
+' Step 2 — call the tool with the minted token
+Rel_D(adapter,       jiramcp_envoy, "2  capability token + call params", "mTLS")
+Rel_R(jiramcp_envoy, jiramcp_gw,    "x-verified-spiffe-id + token + params")
+Rel_D(jiramcp_gw,    redis,         "budget / rate check")
+Rel_R(jiramcp_gw,    jira_upstream, "upstream call (token and credentials never forwarded)")
+
+@enduml

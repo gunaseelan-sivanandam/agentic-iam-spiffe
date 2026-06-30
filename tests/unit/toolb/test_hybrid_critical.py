@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 
-SPIFFE_ID = "spiffe://example.org/agent-a"
+SPIFFE_ID = "spiffe://varambu.org/agent-a"
 
 
 def _premise_modules_loaded(guard, toolb_module, capiss_module):
@@ -19,7 +19,7 @@ def _premise_modules_loaded(guard, toolb_module, capiss_module):
 @pytest.mark.hybrid_critical
 def test_verify_biscuit_hybrid_root_secret_token(toolb_module, capiss_module, monkeypatch, guard):
     _premise_modules_loaded(guard, toolb_module, capiss_module)
-    token, _, _, _ = guard.exercise(
+    token, _, _, _, _ = guard.exercise(
         "mint root secret token",
         lambda: capiss_module.mint_root_biscuit(
             SPIFFE_ID,
@@ -51,7 +51,7 @@ def test_verify_biscuit_hybrid_root_secret_token(toolb_module, capiss_module, mo
 @pytest.mark.hybrid_critical
 def test_verify_biscuit_hybrid_delegated_chain_depth(toolb_module, capiss_module, monkeypatch, guard):
     _premise_modules_loaded(guard, toolb_module, capiss_module)
-    root_token, _, _, _ = guard.exercise(
+    root_token, _, _, _, _ = guard.exercise(
         "mint root search token",
         lambda: capiss_module.mint_root_biscuit(
             SPIFFE_ID,
@@ -65,7 +65,7 @@ def test_verify_biscuit_hybrid_delegated_chain_depth(toolb_module, capiss_module
     guard.outcome("parent biscuit returned", parent_biscuit is not None)
     guard.outcome("parent claims returned", parent_claims is not None)
 
-    delegated_token, _, _ = guard.exercise(
+    delegated_token, _, _, _ = guard.exercise(
         "append delegated token",
         lambda: capiss_module.append_resource_token(
             parent_biscuit,

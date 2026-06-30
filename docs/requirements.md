@@ -485,13 +485,19 @@ For every mint request (root token mint or resource token mint), `capiss` MUST e
 - allow/deny
 - `policy_id` and `policy_hash`
 - structured `reason_code`
+- `timestamp_utc`, `timestamp_local`, and `timezone` for the final audit decision
+- optional `correlation_id` when supplied by the caller
 - `subject_spiffe_id` when known from the request
 - requested `aud`, `act`, `res` when truthfully known from the request
+- `resource_attrs` derived by `capiss` from canonical `res` when a known resource family has safe display attributes
 - `root_token_id` when a root token context exists for that decision
 - `token_id` when a token was successfully created before a later fail-closed step
 - `parent_token_id` and `delegation_depth` for delegated/resource mint decisions when those values are available
+- `issued_at_utc`, `issued_at_local`, `expires_at_utc`, `expires_at_local`, and actual `ttl_seconds` for successfully issued tokens
 - `registry_hit` yes/no for resource mint decisions governed by the Discovery Registry
 - `error` for fail-closed/store-transport cases when implementation detail is available
+
+Mint-decision audit events MUST NOT include bearer capability token values, upstream credentials, authorization header values, cookies, or other secret material. Denied decisions MUST omit token-validity fields when no token is issued.
 
 ### REQ-M4-O3 — Chain reconstruction is always possible
 From audit events + DA logs, it MUST be possible to reconstruct:
@@ -550,7 +556,7 @@ The system MUST provide enough data to detect boundary erosion patterns, includi
 Apply the M4 capability and governance model to a real Jira-shaped use case: a trusted Jira connector may hold an upstream Jira API credential with access to multiple projects, but the agent shall only read issues from the project explicitly authorized by OPA and minted by `capiss`.
 
 ## Concrete M4a scope
-- Authorization subject: workload identity, specifically `spiffe://example.org/agent-a`.
+- Authorization subject: workload identity, specifically `spiffe://varambu.org/agent-a`.
 - Allowed Jira space/project: `agentic-iam-spiffe`, project key `IAM`.
 - Allowed issue examples: `IAM-1`, `IAM-2`.
 - Non-allowed test/demo space/project: `No-Agent-Space`, project key `NAS`.
@@ -570,7 +576,7 @@ The agent SHALL NOT receive, forward, log, store, or embed the Jira API credenti
 
 ## REQ-M4A-J3 — OPA allowed-project minting
 `capiss` SHALL mint Jira project authority only when OPA explicitly allows the authenticated workload identity for the requested Jira project.
-For M4a, `spiffe://example.org/agent-a` may be allowed for project `IAM`; all other Jira project mint requests SHALL deny by default.
+For M4a, `spiffe://varambu.org/agent-a` may be allowed for project `IAM`; all other Jira project mint requests SHALL deny by default.
 
 ## REQ-M4A-J4 — Jira canonical project resource
 Jira project authority SHALL use a deterministic canonical resource:
@@ -635,7 +641,7 @@ When optional live smoke is run, it SHALL first prove that the same live Jira AP
 Extend the Jira facade from M4a read-only access to a deliberately narrow project-scoped description write. The upstream Jira API credential may be broad, but the agent may write only the description field for issues in the OPA-allowed project through `capiss` and `jira-tool`.
 
 ## Concrete M4b scope
-- Authorization subject: workload identity, specifically `spiffe://example.org/agent-a`.
+- Authorization subject: workload identity, specifically `spiffe://varambu.org/agent-a`.
 - Allowed Jira project key: `IAM`.
 - Non-allowed test/demo project key: `NAS`.
 - Supported read operation: `GET /jira/rest/api/3/issue/<ISSUE_KEY>`.
@@ -651,7 +657,7 @@ Agent write authority SHALL come from authenticated workload identity plus a cap
 
 ## REQ-M4B-W2 — OPA allowed-project write minting
 `capiss` SHALL mint Jira project write authority only when OPA explicitly allows the authenticated workload identity for the requested Jira project and action.
-For M4b, `spiffe://example.org/agent-a` may mint `aud=jira-tool`, `act=write`, `res=jira-tool:/project:IAM`; other Jira project write mint requests SHALL deny by default.
+For M4b, `spiffe://varambu.org/agent-a` may mint `aud=jira-tool`, `act=write`, `res=jira-tool:/project:IAM`; other Jira project write mint requests SHALL deny by default.
 
 ## REQ-M4B-W3 — Jira read/write action semantics
 `jira-tool` SHALL allow `GET /jira/rest/api/3/issue/<ISSUE_KEY>` with either `act=read` or `act=write` for the matching project.
@@ -689,7 +695,127 @@ When optional live smoke is run, it SHALL perform a protected IAM description wr
 
 ---
 
-# 10. Test contract requirements
+# 10. Milestone 5 requirements
+
+## REQ-M5-CJ1 — Codex-facing MCP boundary
+M5 SHALL expose Jira work to Codex only through a local MCP launcher and the `codex-jira-mcp-adapter` stdio MCP server.
+The launcher SHALL use `docker compose exec -T` into an already-running adapter container, SHALL NOT start or rebuild the stack, and SHALL keep MCP stdout protocol-clean.
+Slice 1 SHALL expose exactly the MCP tools `read_project_summary` and `create_story`.
+
+## REQ-M5-CJ2 — Codex credential and token isolation
+Codex-visible MCP requests, responses, launcher output, adapter output, normal logs, and evidence SHALL NOT contain Jira API credentials or capiss bearer tokens.
+Only token metadata such as audience, action, resource, token identifiers, decisions, reasons, and correlation IDs MAY appear in evidence.
+
+## REQ-M5-CJ3 — Distinct M5 authority family
+M5 SHALL use the authority tuple family `aud=jira-mcp-gateway`, `act=read_project_summary|create_story`, and `res=jira-mcp:/project:<KEY>`.
+`capiss` SHALL allow only `spiffe://varambu.org/codex-jira-mcp-adapter` to mint Slice 1 authority for `jira-mcp:/project:IAM`.
+`capiss` SHALL deny `NAS`, malformed M5 resources, unsupported M5 actions, wrong subjects, and attempts to mix M5 resources with the older `jira-tool` authority family.
+
+## REQ-M5-CJ4 — Adapter is not the authorization decision point
+`codex-jira-mcp-adapter` SHALL map each MCP tool to exactly one fixed capiss action, construct the requested M5 project resource from `project_key`, request a fresh capiss token per tool call through `capability-issuer-envoy`, and forward the request through `jira-mcp-envoy`.
+The adapter SHALL NOT authorize allowed projects locally, SHALL NOT accept free-form action values from Codex, SHALL NOT cache capiss tokens, and SHALL NOT retry read or create operations automatically.
+
+## REQ-M5-CJ5 — Gateway request-time enforcement
+`jira-mcp-gateway` SHALL be the M5 request-time PEP.
+For every protected endpoint, it SHALL verify the capiss token signature, expiry, subject, audience, endpoint-bound action, resource, payload project, and Envoy-verified caller identity before upstream use.
+The gateway SHALL deny when token `subject_spiffe_id` does not match the Envoy-verified caller identity.
+
+## REQ-M5-CJ6 — Bounded project summary
+`read_project_summary` SHALL return only bounded metadata for the authorized project: project key, project name, issue count, latest non-epic issue metadata, and latest epic metadata.
+The summary SHALL omit descriptions, comments, assignees, sprint data, board data, raw JQL, raw Jira URLs, Jira credentials, and bearer tokens.
+The summary SHALL include at most 50 non-epic issues and at most 25 epics.
+
+## REQ-M5-CJ7 — Narrow story creation
+`create_story` SHALL accept only `project_key`, `summary`, `description`, optional `acceptance_criteria`, and optional `epic_key`.
+The gateway SHALL set issue type `Story` internally, SHALL convert plain text to Jira ADF mechanically, and SHALL reject arbitrary Jira fields, raw Jira `fields`, raw ADF, comments, attachments, transitions, labels, components, priorities, assignees, sprint data, and arbitrary links.
+Slice 1 SHALL NOT enforce story-quality rules beyond defensive type and length bounds.
+
+## REQ-M5-CJ8 — Same-project epic verification
+When `epic_key` is supplied, `jira-mcp-gateway` SHALL require strict `<PROJECT>-<NUMBER>` syntax, require the project to match the token project, verify upstream existence, and verify the upstream issue type is `Epic` before creating the story.
+Invalid, missing, non-Epic, or cross-project epics SHALL fail closed and SHALL NOT create an unlinked story.
+
+## REQ-M5-CJ9 — Governance and failure semantics
+M5 summary reads and story creation SHALL reuse M4 Redis-backed budget and request-rate governance.
+The gateway SHALL consume budget/rate immediately before upstream summary use or story creation, SHALL NOT consume budget on pre-authorization or pre-validation denial, and SHALL NOT refund budget when an authorized upstream create fails after budget consumption.
+Authorization, validation, budget, rate, gateway, and upstream failures SHALL return standardized local errors that do not reveal non-allowed upstream project or issue existence.
+
+## REQ-M5-CJ10 — Upstream and audit proof
+Only `jira-mcp-gateway` SHALL call `jira-mcp-mock` or live Jira in M5.
+The deterministic default proof SHALL use `jira-mcp-mock`, which contains broad `IAM` and `NAS` data and request logs.
+M5 SHALL emit correlated adapter, capiss, gateway, and mock/live evidence using a correlation ID for allow, deny, validation, budget/rate, and upstream failure paths.
+Optional live smoke SHALL be explicit opt-in and SHALL prove broad live credential access plus protected-path narrowing without exposing live credentials.
+
+## REQ-M5-VA1 — Varambu demo audit view
+The Varambu operator interface SHALL provide a coherent command-line demo flow with `varambu start`, `varambu audit`/`varambu show-audit-logs`, and `varambu audit-file`.
+Each `varambu start` SHALL create a new timestamped demo session, pass an explicit audit timezone to `capiss`, stop any previous Varambu audit tailer, start one active capiss audit tailer for the new session, and maintain a current-session pointer.
+The active tailer SHALL append normalized, secret-free capiss mint-decision records to both a structured JSONL file and a human-readable log file as mint allow/deny decisions occur.
+`varambu audit` SHALL read persisted session files only; it SHALL NOT scrape Docker logs or synthesize missing audit entries at display time.
+The default audit view SHALL show only the current session, SHALL support `--all` for historical sessions, `--json` for persisted JSONL, and `--follow` for live viewing of persisted files.
+`varambu audit-file` SHALL print direct paths for the JSONL and human-readable audit files so operators can inspect the files without the Varambu CLI.
+The audit command SHALL warn when the current-session tailer is no longer running and SHALL provide a strict mode that fails instead of presenting stale evidence as fresh proof.
+The human-readable audit log SHALL show local time first while preserving UTC fields in the structured JSONL evidence.
+Varambu audit artifacts and CLI output SHALL NOT include bearer capability token values, upstream credentials, authorization header values, cookies, or other secret material.
+
+## REQ-M5-FT1 — Full-chain audit trace reconstruction and command
+The Varambu operator interface SHALL provide a `varambu trace` command that reconstructs, for each completed M5 Codex→Jira request, a single ordered chain joined by one shared correlation ID.
+The chain SHALL present the following legs in fixed causal order: verbatim user intent, model action, adapter request, capiss mint decision, gateway verification and upstream call, and adapter decision.
+`varambu trace` SHALL default to the current demo session, SHALL support `--cid <id>` to select one chain by correlation ID, `--all` to include historical sessions, and `--json` for machine-readable output.
+`varambu trace` SHALL assemble chains at read time from persisted per-source evidence, SHALL NOT depend on a live stream, and SHALL NOT provide a follow mode.
+Introducing `varambu trace` SHALL NOT change the behavior or output of `varambu audit`, `varambu audit --all`, `varambu audit --json`, `varambu audit --follow`, or `varambu audit-file`.
+
+## REQ-M5-FT2 — Verbatim user intent leg
+The user-intent leg SHALL be the operator's verbatim prompt as recorded by the Codex agent, and SHALL NOT be a model paraphrase, summary, or reconstructed intent.
+The intent SHALL be joined to the rest of the chain solely by the correlation ID that the adapter returns in its tool result and that the agent records in its session log.
+Intent association SHALL select the model tool call bound to the chain's correlation ID, restricted to the M5 MCP tools `read_project_summary` and `create_story`, and SHALL attribute the nearest preceding recorded operator prompt; non-M5 agent tool calls SHALL be ignored when associating intent.
+When a single operator prompt triggers more than one M5 tool call, each resulting chain SHALL attribute that same verbatim prompt.
+
+## REQ-M5-FT3 — Independent in-boundary evidence and trust minimization
+Each in-boundary component contributing to a chain — adapter, capiss, and gateway — SHALL record its own leg from within the trust boundary, independent of any agent-produced record.
+The adapter SHALL record both an entry event, capturing that the call was received with its mapped action and resource and that minting was initiated, and a terminal decision event capturing the outcome.
+The system SHALL trust the agent only for the verbatim user-intent leg, because no in-boundary component observes the operator's prompt; every other leg SHALL derive from an in-boundary source.
+An agent that misreports a tool outcome SHALL be detectable by comparing the agent-visible result against the independent in-boundary legs that share the same correlation ID.
+
+## REQ-M5-FT4 — Partial chains and re-runnable assembly
+`varambu trace` SHALL render whatever legs are available and SHALL mark missing legs explicitly as not-yet-available, rather than failing, blocking, or waiting.
+When the agent has not yet recorded the intent at trace time, the in-boundary legs SHALL still render, and a subsequent `varambu trace` SHALL incorporate the intent once it becomes available.
+A request denied before later legs occur, such as a denied mint, SHALL render as a partial chain that ends at the denial, with subsequent legs shown as absent and not as errors.
+
+## REQ-M5-FT5 — Controlled intent-capture destination
+`varambu start` SHALL provision a per-session, Varambu-owned destination for the agent's session records and SHALL register the M5 MCP server into that destination, so intent capture is confined to a deterministic, session-scoped location rather than a shared agent home.
+`varambu start` SHALL print the exact launch line the operator uses to start the agent against that destination, and the operator interface SHALL provide a command that launches the agent against the current session destination without requiring the operator to set the destination by hand.
+Because the per-session destination is freshly provisioned, the operator interface SHALL make the operator's existing agent credential available to that destination by reference, so launching the agent against it does not force re-authentication; the credential SHALL remain in its original location and SHALL NOT be copied into the session evidence bundle, and `varambu trace` SHALL NOT read it.
+`varambu trace` SHALL read intent only from the current session's destination by default, and from each historical session's destination when `--all` is used.
+
+## REQ-M5-FT6 — Secret-free and bounded trace evidence
+Persisted trace evidence and `varambu trace` output SHALL NOT contain bearer capability token values, Basic authentication values, Jira API credentials, cookies, or other secret material; token identifiers and non-secret metadata MAY appear.
+The trace SHALL persist only the minimal intent record per correlation ID — the verbatim prompt, the M5 tool name, its arguments, and the bounded result fields of outcome, reason, created issue key, and status — and SHALL NOT persist agent reasoning, unrelated agent tool calls, or any whole agent session record.
+Operator-supplied content SHALL be size-bounded: the persisted prompt SHALL NOT exceed 2048 bytes, and persisted `summary` and `description` SHALL NOT each exceed 1024 bytes, with any truncation explicitly marked.
+Every source SHALL be re-screened against the forbidden-field and forbidden-value rules at read time, regardless of origin.
+
+## REQ-M5-FT7 — Honest, mode-consistent upstream leg
+The upstream call SHALL be presented as a leg distinct from the gateway's own enforcement decision, so that a request the gateway authorized but the upstream rejected is attributed to the upstream and not reported as a gateway denial.
+The upstream leg SHALL be represented identically in deterministic mock mode and in live mode.
+Because the live upstream cannot emit Varambu evidence, the upstream leg SHALL be attested solely by the gateway's own upstream-call record — whether the upstream was invoked, the operation, and the returned status — and SHALL be labeled as gateway-attested.
+The system SHALL NOT manufacture an independent upstream evidence voice that exists only in mock mode and that the live path cannot produce.
+When the upstream call fails, the gateway SHALL relay the upstream error as faithfully as possible into its upstream-call record so an operator can determine the cause and the remediation, redacting only credential-bearing material and bounding the relayed text. The Varambu trace SHALL surface this relayed detail on the upstream leg and SHALL re-screen it for secret markers at read time. Because providers such as Jira Cloud return an HTTP status (for example 404) that does not by itself distinguish a missing resource from an unauthorized or expired credential, the upstream-leg presentation SHALL NOT assert a single cause from the status code alone where that code is ambiguous.
+
+## REQ-M5-FT8 — Capture model, ordering, and scope of surfaced chains
+In-boundary evidence SHALL be captured per source in arrival order and SHALL NOT be reordered, because arrival order is itself evidence.
+`varambu trace` SHALL be an assembled view over that captured evidence: it SHALL group events by correlation ID, render legs in the fixed causal order independent of wall-clock timestamps, and list multiple chains in request-start order.
+A correlation ID SHALL be surfaced as an M5 chain only when it appears in an M5-specific in-boundary source — the adapter or gateway evidence. Because the agent session record is untrusted, an M5 model tool call that appears only in that record, with no corresponding adapter or gateway evidence, SHALL NOT by itself surface a chain; the verbatim intent is attached to an already-anchored chain rather than anchoring one. A decision that appears only in the shared capiss audit stream, such as a non-M5 authority mint, SHALL NOT be surfaced as an M5 chain.
+M5 full-chain trace SHALL cover only the M5 Codex→Jira path and SHALL NOT require correlation plumbing in non-M5 milestones.
+
+## REQ-M5-FT9 — Trace presentation and timing
+`varambu trace` SHALL present the full audit detail of each leg rather than an abbreviated view, rendering each chain as a single detailed record in which every leg shares a common, aligned structure (a fixed leg identifier, local time, and status) with its grouped per-leg fields.
+The capiss mint leg SHALL present the same fields as the corresponding `varambu audit` record for that decision; it need not reproduce that record byte-for-byte, and `varambu audit` itself SHALL remain unchanged.
+Identifiers that exist for correlation — including the correlation ID, token identifiers, and policy identifier — SHALL be shown in full and SHALL NOT be truncated; only secret material SHALL be withheld.
+Each leg SHALL display local time first, consistent with the audit view, while the structured `--json` output SHALL preserve UTC and a per-source sequence for each leg.
+The structured `--json` output MAY carry an advisory elapsed offset from the chain start per leg; such an offset SHALL be marked advisory and SHALL NOT be used to order legs.
+Leg order SHALL always be the fixed causal order and SHALL NEVER be a wall-clock sort.
+
+---
+
+# 11. Test contract requirements
 
 These requirements are mandatory for negative security tests.
 
@@ -719,7 +845,7 @@ Evidence may include, as applicable, TLS transcripts, server-side entry snapshot
 
 ---
 
-# 11. Milestone summaries
+# 12. Milestone summaries
 
 ## Milestone 1 summary
 The system shall allow only explicitly authorized nodes to join the trust domain and obtain node identity.  
@@ -746,9 +872,14 @@ The system shall extend Jira access to project-scoped description replacement on
 `act=write` may read and replace issue descriptions in the OPA-allowed `IAM` project, while `act=read` remains read-only.
 The protected Jira facade shall deny `NAS` writes before upstream use and prove description update behavior through black-box evidence.
 
+## Milestone 5 summary
+The system shall let Codex use Jira through a real MCP adapter while preserving SPIFFE, capiss, Envoy, gateway, and budget/rate boundaries.
+Codex may request bounded IAM project summaries and IAM story creation, but shall not receive Jira credentials, capiss bearer tokens, direct Jira access, arbitrary Jira operations, or NAS authority.
+M5 uses a distinct `jira-mcp-gateway` authority family and a separate `jira-mcp-mock` proof model so M4a/M4b `jira-tool` behavior remains undisturbed.
+
 ---
 
-# 12. Out of scope for these milestones
+# 13. Out of scope for these milestones
 
 The following are intentionally out of scope for the implemented and approved milestones in this document unless a milestone explicitly says otherwise:
 
@@ -759,13 +890,15 @@ The following are intentionally out of scope for the implemented and approved mi
 - Intent-to-mechanics compilation
 - Confluence support in M4a/M4b
 - Jira comments, transitions, attachments, search, delete, arbitrary field update, or issue-level attenuation in M4a/M4b
+- Jira comments, transitions, attachments, search, delete, arbitrary field update, issue details, bugs, subtasks, epics, sprint actions, assignees, or generic Jira proxying in M5 Slice 1
 - Human-user Jira authorization or OAuth 3LO in M4a/M4b
+- Human-user Jira authorization or OAuth 3LO in M5 Slice 1
 
 Future milestones may introduce additional requirements in these areas.
 
 ---
 
-# 13. Completion rule
+# 14. Completion rule
 
 A milestone shall be considered complete only when its requirements are satisfied and supported by sufficient evidence.  
 A working demo alone shall not be treated as proof of milestone completion.

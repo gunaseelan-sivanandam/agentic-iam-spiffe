@@ -1,0 +1,24 @@
+@startuml
+!include <C4/C4_Context>
+
+LAYOUT_TOP_DOWN()
+LAYOUT_WITH_LEGEND()
+
+title Agentic IAM with SPIFFE — System Context
+
+Person_Ext(user, "User / Codex", "Issues instructions via MCP.\nHolds no Jira credentials or capability tokens.")
+
+System_Boundary(iam, "Agentic IAM Lab") {
+  System(identity, "SPIFFE / SPIRE", "Issues cryptographic workload identities (X.509 SVIDs).\nShort-lived, auto-rotated. Explicit registration required.\nNo registration = no identity = no entry.")
+  System(authority, "Capability Issuer + OPA", "Mints short-lived, narrowly scoped Biscuit tokens\nafter OPA policy explicitly permits.\nFail-closed: any policy error denies the mint.")
+  System(enforcement, "Policy Enforcement Points\n(tool-b, jira-tool, jira-mcp-gateway)", "Verify workload identity, token signature, audience,\naction, resource, and budget on every request.\nUpstream credentials never leave this layer.")
+}
+
+System_Ext(jira, "Jira", "External project management.\njira-mock (tests) or Jira Cloud (explicit live mode).")
+
+Rel_R(identity, authority, "Supplies verified\nworkload SPIFFE IDs")
+Rel_R(authority, enforcement, "Issues narrowly\nscoped tokens")
+Rel_D(user, enforcement, "MCP tool call", "stdio / HTTP")
+Rel_D(enforcement, jira, "Bounded upstream call\n(only after all checks pass)", "HTTPS")
+
+@enduml

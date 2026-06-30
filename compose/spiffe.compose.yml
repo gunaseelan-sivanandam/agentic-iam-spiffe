@@ -63,18 +63,38 @@ services:
       dockerfile: spire/rogue-tests/Dockerfile
     container_name: spiffe-rogue-tests
     depends_on:
-      - spire-server
-      - spire-token-init
-      - spire-agent
-      - spire-rogue-agent
-      - rogue-socket
-      - tool-b-envoy
-      - capability-issuer-envoy
-      - capability-issuer-no-opa-envoy
-      - jira-tool-envoy
-      - jira-mock
-      - agent-a
-      - rogue
+      spire-server:
+        condition: service_started
+      spire-token-init:
+        condition: service_started
+      spire-agent:
+        condition: service_started
+      spire-rogue-agent:
+        condition: service_started
+      rogue-socket:
+        condition: service_started
+      tool-b-envoy:
+        condition: service_healthy
+      capability-issuer-envoy:
+        condition: service_healthy
+      capability-issuer-no-opa-envoy:
+        condition: service_healthy
+      jira-tool-envoy:
+        condition: service_healthy
+      jira-mock:
+        condition: service_started
+      codex-jira-mcp-adapter:
+        condition: service_healthy
+      jira-mcp-envoy:
+        condition: service_healthy
+      jira-mcp-gateway:
+        condition: service_healthy
+      jira-mcp-mock:
+        condition: service_started
+      agent-a:
+        condition: service_started
+      rogue:
+        condition: service_started
     volumes:
       - ../spire/rogue:/run/spire/rogue
       - ../spire/shared:/run/spire/shared:ro
@@ -89,6 +109,8 @@ services:
       - capiss_edge_net
       - jiratool_edge_net
       - jiratool_upstream_net
+      - jiramcp_edge_net
+      - jiramcp_upstream_net
     profiles:
       - tests
 
@@ -119,6 +141,12 @@ services:
     container_name: spiffe-tool-b-envoy
     labels:
       spiffe.workload: "tool-b-envoy"
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /run/spire/svid/svid.pem && test -s /run/spire/svid/svid.key"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 90s
     depends_on:
       - spire-agent
       - tool-b
@@ -173,6 +201,12 @@ services:
     container_name: spiffe-jira-tool-envoy
     labels:
       spiffe.workload: "jira-tool-envoy"
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /run/spire/svid/svid.pem && test -s /run/spire/svid/svid.key"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 90s
     depends_on:
       - spire-agent
       - jira-tool
@@ -183,6 +217,103 @@ services:
     networks:
       - jiratool_edge_net
       - jiratool_app_net
+
+  jira-mcp-mock:
+    build:
+      context: ..
+      dockerfile: services/jira-mcp-mock/Dockerfile
+    container_name: spiffe-jira-mcp-mock
+    networks:
+      - jiramcp_app_net
+      - jiramcp_upstream_net
+
+  jira-mcp-gateway:
+    build:
+      context: ..
+      dockerfile: services/jira-mcp-gateway/Dockerfile
+    container_name: spiffe-jira-mcp-gateway
+    labels:
+      spiffe.workload: "jira-mcp-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /run/spire/svid/svid.pem && test -s /run/spire/svid/svid.key"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 90s
+    environment:
+      CAPISS_PUBLIC_KEY_PATH: /var/lib/capiss/keys/root_public_key.b64
+      REDIS_URL: redis://redis:6379/0
+      M4_MAX_DEPTH: "3"
+      M4_RATE_LIMIT: "20"
+      M4_RATE_WINDOW_SECONDS: "10"
+      M4_REQUEST_COST: "1"
+      JIRA_MCP_UPSTREAM_MODE: ${JIRA_MCP_UPSTREAM_MODE:-mock}
+      JIRA_MCP_MOCK_BASE_URL: http://jira-mcp-mock:8080
+      JIRA_BASE_URL: ${JIRA_BASE_URL:-}
+      JIRA_EMAIL: ${JIRA_EMAIL:-}
+      JIRA_API_TOKEN: ${JIRA_API_TOKEN:-}
+    volumes:
+      - ../capiss_keys:/var/lib/capiss/keys:ro
+      - ../spire/agent:/run/spire/agent:ro
+    depends_on:
+      - spire-agent
+      - redis
+      - jira-mcp-mock
+    networks:
+      - jiramcp_app_net
+
+  jira-mcp-envoy:
+    build: ../services/jira-mcp-envoy
+    container_name: spiffe-jira-mcp-envoy
+    labels:
+      spiffe.workload: "jira-mcp-envoy"
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /run/spire/svid/svid.pem && test -s /run/spire/svid/svid.key"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 90s
+    depends_on:
+      - spire-agent
+      - jira-mcp-gateway
+    ports:
+      - "11443:11443"
+    volumes:
+      - ../spire/agent:/run/spire/agent:ro
+    networks:
+      - jiramcp_edge_net
+      - jiramcp_app_net
+
+  codex-jira-mcp-adapter:
+    build:
+      context: ..
+      dockerfile: services/codex-jira-mcp-adapter/Dockerfile
+    container_name: spiffe-codex-jira-mcp-adapter
+    labels:
+      spiffe.workload: "codex-jira-mcp-adapter"
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /run/spire/svid/svid.pem && test -s /run/spire/svid/svid.key"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 90s
+    environment:
+      CAPABILITY_ISSUER_URL: https://capability-issuer-envoy:9443
+      JIRA_MCP_GATEWAY_URL: https://jira-mcp-envoy:11443
+      # ARCH-033: adapter writes its own in-boundary audit leg to the per-session
+      # bind-mounted path; VARAMBU_SESSION_REL selects the active session dir.
+      VARAMBU_AUDIT_ROOT: /var/audit
+      VARAMBU_SESSION_REL: ${VARAMBU_SESSION_REL:-}
+    volumes:
+      - ../spire/agent:/run/spire/agent:ro
+      - ../artifacts/varambu-demo:/var/audit
+    depends_on:
+      - spire-agent
+      - capability-issuer-envoy
+      - jira-mcp-envoy
+    networks:
+      - capiss_edge_net
+      - jiramcp_edge_net
 
   capability-issuer:
     build:
@@ -197,6 +328,7 @@ services:
       M4_MAX_DEPTH: "3"
       M4_DEFAULT_BUDGET: "10"
       M4_ROOT_TTL_SECONDS: "60"
+      VARAMBU_TZ: ${VARAMBU_TZ:-UTC}
     networks:
       - capiss_app_net
     depends_on:
@@ -210,6 +342,12 @@ services:
     container_name: spiffe-capability-issuer-envoy
     labels:
       spiffe.workload: "capability-issuer-envoy"
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /run/spire/svid/svid.pem && test -s /run/spire/svid/svid.key"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 90s
     depends_on:
       - spire-agent
       - capability-issuer
@@ -235,6 +373,7 @@ services:
       M4_MAX_DEPTH: "3"
       M4_DEFAULT_BUDGET: "10"
       M4_ROOT_TTL_SECONDS: "60"
+      VARAMBU_TZ: ${VARAMBU_TZ:-UTC}
     networks:
       - capiss_app_net
     profiles:
@@ -247,6 +386,12 @@ services:
     container_name: spiffe-capability-issuer-no-opa-envoy
     labels:
       spiffe.workload: "capability-issuer-no-opa-envoy"
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /run/spire/svid/svid.pem && test -s /run/spire/svid/svid.key"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 90s
     depends_on:
       - spire-agent
       - capability-issuer-no-opa
@@ -276,6 +421,7 @@ services:
       - capiss_app_net
       - toolb_app_net
       - jiratool_app_net
+      - jiramcp_app_net
 
   agent-a:
     build: ../agents/agent-a
@@ -313,6 +459,7 @@ services:
     environment:
       TOOL_B_URL: https://tool-b-envoy:8443
       JIRA_TOOL_URL: https://jira-tool-envoy:10443
+      JIRA_MCP_URL: https://jira-mcp-envoy:11443
     command: ["/app/rogue.sh"]
     volumes:
       - ../spire/agent:/run/spire/agent:ro
@@ -321,6 +468,7 @@ services:
       - toolb_edge_net
       - capiss_edge_net
       - jiratool_edge_net
+      - jiramcp_edge_net
     profiles:
       - clients
       - tests
@@ -333,3 +481,6 @@ networks:
   jiratool_edge_net: {}
   jiratool_app_net: {}
   jiratool_upstream_net: {}
+  jiramcp_edge_net: {}
+  jiramcp_app_net: {}
+  jiramcp_upstream_net: {}

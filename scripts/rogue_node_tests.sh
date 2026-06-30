@@ -66,6 +66,7 @@ RUN_M3=1
 RUN_M4=1
 RUN_M4A=1
 RUN_M4B=1
+RUN_M5=1
 
 if [ -n "${TEST_MILESTONES:-}" ]; then
   RUN_M1=0
@@ -75,6 +76,7 @@ if [ -n "${TEST_MILESTONES:-}" ]; then
   RUN_M4=0
   RUN_M4A=0
   RUN_M4B=0
+  RUN_M5=0
   for token in $(printf '%s' "$TEST_MILESTONES" | tr ',' ' '); do
     case "$token" in
       m1|M1) RUN_M1=1 ;;
@@ -84,6 +86,7 @@ if [ -n "${TEST_MILESTONES:-}" ]; then
       m4|M4) RUN_M4=1 ;;
       m4a|M4a|M4A) RUN_M4A=1 ;;
       m4b|M4b|M4B) RUN_M4B=1 ;;
+      m5|M5) RUN_M5=1 ;;
     esac
   done
 fi
@@ -574,6 +577,14 @@ resolve_host_ip() {
         container="spiffe-jira-mock"
         network_suffix="jiratool_upstream_net"
         ;;
+      jira-mcp-envoy)
+        container="spiffe-jira-mcp-envoy"
+        network_suffix="jiramcp_edge_net"
+        ;;
+      jira-mcp-mock)
+        container="spiffe-jira-mcp-mock"
+        network_suffix="jiramcp_upstream_net"
+        ;;
       *)
         container=""
         network_suffix=""
@@ -998,6 +1009,11 @@ CAPISS_AGENT_BUNDLE=""
 CAPISS_ROGUE_CERT=""
 CAPISS_ROGUE_KEY=""
 CAPISS_ROGUE_BUNDLE=""
+JIRAMCP_READY=0
+JIRAMCP_REASON=""
+JIRAMCP_ADAPTER_CERT=""
+JIRAMCP_ADAPTER_KEY=""
+JIRAMCP_ADAPTER_BUNDLE=""
 CAPISS_MINT_URL="https://capability-issuer-envoy:9443/capabilities/mint"
 CAPISS_ROOT_MINT_URL="https://capability-issuer-envoy:9443/capabilities/root-mint"
 CAPISS_RESOURCE_MINT_URL="https://capability-issuer-envoy:9443/capabilities/resource-mint"
@@ -1013,6 +1029,14 @@ JIRA_IAM_MINT_BODY='{"aud":"jira-tool","act":"read","res":"jira-tool:/project:IA
 JIRA_IAM_WRITE_MINT_BODY='{"aud":"jira-tool","act":"write","res":"jira-tool:/project:IAM"}'
 JIRA_NAS_MINT_BODY='{"aud":"jira-tool","act":"read","res":"jira-tool:/project:NAS"}'
 JIRA_NAS_WRITE_MINT_BODY='{"aud":"jira-tool","act":"write","res":"jira-tool:/project:NAS"}'
+JIRA_MCP_URL="https://jira-mcp-envoy:11443"
+JIRA_MCP_SUMMARY_URL="${JIRA_MCP_URL}/mcp/jira/project-summary"
+JIRA_MCP_STORIES_URL="${JIRA_MCP_URL}/mcp/jira/stories"
+JIRA_MCP_MOCK_URL="http://jira-mcp-mock:8080"
+JIRA_MCP_IAM_SUMMARY_MINT_BODY='{"aud":"jira-mcp-gateway","act":"read_project_summary","res":"jira-mcp:/project:IAM"}'
+JIRA_MCP_IAM_CREATE_MINT_BODY='{"aud":"jira-mcp-gateway","act":"create_story","res":"jira-mcp:/project:IAM"}'
+JIRA_MCP_NAS_SUMMARY_MINT_BODY='{"aud":"jira-mcp-gateway","act":"read_project_summary","res":"jira-mcp:/project:NAS"}'
+JIRA_MCP_UNSUPPORTED_MINT_BODY='{"aud":"jira-mcp-gateway","act":"update_story","res":"jira-mcp:/project:IAM"}'
 
 ensure_toolb_material() {
   if [ "$TOOLB_READY" -eq 1 ]; then
@@ -1148,6 +1172,35 @@ ensure_capiss_material() {
   return 0
 }
 
+ensure_jiramcp_material() {
+  if [ "$JIRAMCP_READY" -eq 1 ]; then
+    ev_copy_if_exists "${JIRAMCP_ADAPTER_CERT:-}" "codex-jira-mcp-adapter_svid.pem"
+    return 0
+  fi
+  if [ "$JIRAMCP_READY" -eq -1 ]; then
+    set_reason "$JIRAMCP_REASON"
+    return 1
+  fi
+
+  tmpdir="/tmp/jiramcp_material"
+  rm -rf "$tmpdir"
+  mkdir -p "$tmpdir"
+
+  if ! prepare_client_material "codex-jira-mcp-adapter" "$tmpdir"; then
+    JIRAMCP_READY=-1
+    JIRAMCP_REASON="$FAIL_REASON"
+    set_reason "$FAIL_REASON"
+    return 1
+  fi
+  JIRAMCP_ADAPTER_CERT="$CLIENT_CERT"
+  JIRAMCP_ADAPTER_KEY="$CLIENT_KEY"
+  JIRAMCP_ADAPTER_BUNDLE="$CLIENT_BUNDLE"
+
+  JIRAMCP_READY=1
+  ev_copy_if_exists "${JIRAMCP_ADAPTER_CERT:-}" "codex-jira-mcp-adapter_svid.pem"
+  return 0
+}
+
 ensure_toolb_envoy_ready() {
   if ! wait_dns "tool-b-envoy" 30; then
     return 1
@@ -1214,12 +1267,28 @@ ensure_jira_envoy_ready() {
   return 0
 }
 
+ensure_jira_mcp_envoy_ready() {
+  if ! wait_dns "jira-mcp-envoy" 30; then
+    return 1
+  fi
+  if ! wait_tcp "jira-mcp-envoy" "11443" 30; then
+    return 1
+  fi
+  JIRA_MCP_ENVOY_IP="$(wait_resolve_ip "jira-mcp-envoy" 30 || true)"
+  if [ -z "${JIRA_MCP_ENVOY_IP:-}" ]; then
+    set_reason "failed to resolve jira-mcp-envoy IP"
+    return 1
+  fi
+  return 0
+}
+
 expected_spiffe_for_host() {
   case "$1" in
-    capability-issuer-envoy) printf '%s\n' 'spiffe://example.org/capability-issuer-envoy' ;;
-    capability-issuer-no-opa-envoy) printf '%s\n' 'spiffe://example.org/capability-issuer-no-opa-envoy' ;;
-    tool-b-envoy) printf '%s\n' 'spiffe://example.org/tool-b-envoy' ;;
-    jira-tool-envoy) printf '%s\n' 'spiffe://example.org/jira-tool-envoy' ;;
+    capability-issuer-envoy) printf '%s\n' 'spiffe://varambu.org/capability-issuer-envoy' ;;
+    capability-issuer-no-opa-envoy) printf '%s\n' 'spiffe://varambu.org/capability-issuer-no-opa-envoy' ;;
+    tool-b-envoy) printf '%s\n' 'spiffe://varambu.org/tool-b-envoy' ;;
+    jira-tool-envoy) printf '%s\n' 'spiffe://varambu.org/jira-tool-envoy' ;;
+    jira-mcp-envoy) printf '%s\n' 'spiffe://varambu.org/jira-mcp-envoy' ;;
     *) return 1 ;;
   esac
 }
@@ -1243,6 +1312,10 @@ record_verified_identity() {
     jira-tool-envoy)
       printf '%s' "$result" >"$EVDIR/verified_jiratool_result.txt" 2>/dev/null || true
       printf '%s' "$spiffe_id" >"$EVDIR/verified_jiratool_spiffe_id.txt" 2>/dev/null || true
+      ;;
+    jira-mcp-envoy)
+      printf '%s' "$result" >"$EVDIR/verified_jiramcp_result.txt" 2>/dev/null || true
+      printf '%s' "$spiffe_id" >"$EVDIR/verified_jiramcp_spiffe_id.txt" 2>/dev/null || true
       ;;
   esac
 }
@@ -1532,6 +1605,190 @@ jira_mock_request_log() {
   curl -sS "${JIRA_MOCK_URL}/__test__/requests" >"$out"
 }
 
+jira_mcp_mock_reset() {
+  curl -sS -X POST "${JIRA_MCP_MOCK_URL}/__test__/reset" >/dev/null
+}
+
+jira_mcp_mock_request_log() {
+  out="$1"
+  curl -sS "${JIRA_MCP_MOCK_URL}/__test__/requests" >"$out"
+}
+
+jira_mcp_mock_created() {
+  out="$1"
+  curl -sS "${JIRA_MCP_MOCK_URL}/__test__/created" >"$out"
+}
+
+jira_mcp_mock_breadth() {
+  out="$1"
+  curl -sS "${JIRA_MCP_MOCK_URL}/__test__/breadth" >"$out"
+}
+
+jira_mcp_mock_fail_next_create() {
+  curl -sS -X POST "${JIRA_MCP_MOCK_URL}/__test__/fail_next_create" >/dev/null
+}
+
+jira_mcp_mint_with_body_to_file() {
+  body="$1"
+  out="$2"
+  status_file="$3"
+  status="$(verified_https_request "$JIRAMCP_ADAPTER_CERT" "$JIRAMCP_ADAPTER_KEY" "$JIRAMCP_ADAPTER_BUNDLE" \
+    "$CAPISS_ROOT_MINT_URL" "POST" "$body" "" "$out")"
+  printf '%s' "$status" >"$status_file"
+}
+
+jira_mcp_request_to_file() {
+  token="$1"
+  url="$2"
+  body="$3"
+  out="$4"
+  status_file="$5"
+  status="$(verified_https_request "$JIRAMCP_ADAPTER_CERT" "$JIRAMCP_ADAPTER_KEY" "$JIRAMCP_ADAPTER_BUNDLE" \
+    "$url" "POST" "$body" "$token" "$out")"
+  printf '%s' "$status" >"$status_file"
+}
+
+jira_mcp_rogue_request_to_file() {
+  token="$1"
+  url="$2"
+  body="$3"
+  out="$4"
+  status_file="$5"
+  status="$(verified_https_request "$CAPISS_ROGUE_CERT" "$CAPISS_ROGUE_KEY" "$CAPISS_ROGUE_BUNDLE" \
+    "$url" "POST" "$body" "$token" "$out")"
+  printf '%s' "$status" >"$status_file"
+}
+
+mcp_launcher_message() {
+  message="$1"
+  out="$2"
+  err="$3"
+  (cd /repo && printf '%s\n' "$message" | COMPOSE_FILE=compose/spiffe.compose.yml scripts/codex_jira_mcp.sh >"$out" 2>"$err")
+}
+
+mcp_tool_call() {
+  tool="$1"
+  args_json="$2"
+  out="$3"
+  err="$4"
+  msg="$(jq -cn --arg tool "$tool" --argjson args "$args_json" '{jsonrpc:"2.0",id:1,method:"tools/call",params:{name:$tool,arguments:$args}}')"
+  mcp_launcher_message "$msg" "$out" "$err"
+}
+
+mcp_text_json_to_file() {
+  in_file="$1"
+  out_file="$2"
+  jq -r '.result.content[0].text' "$in_file" | jq . >"$out_file"
+}
+
+# --- M5 full-chain trace (ARCH-033) E2E helpers ---------------------------
+# Invoke an MCP tool through the adapter while injecting the per-session audit
+# destination, so the adapter writes its independent adapter_request/decision
+# legs into <session>/adapter_audit.jsonl (bind-mounted /var/audit/<rel>).
+mcp_tool_call_traced() {
+  tool="$1"
+  args_json="$2"
+  out="$3"
+  err="$4"
+  sess_rel="$5"
+  msg="$(jq -cn --arg tool "$tool" --argjson args "$args_json" '{jsonrpc:"2.0",id:1,method:"tools/call",params:{name:$tool,arguments:$args}}')"
+  (cd /repo && printf '%s\n' "$msg" \
+    | docker compose -f compose/spiffe.compose.yml exec -T \
+        -e VARAMBU_AUDIT_ROOT=/var/audit -e VARAMBU_SESSION_REL="$sess_rel" \
+        codex-jira-mcp-adapter python /app/server.py >"$out" 2>"$err")
+}
+
+# Correlation id the adapter returned in the MCP tool result.
+mcp_cid() {
+  jq -r '.result.content[0].text | fromjson | .correlation_id' "$1"
+}
+
+# Reset the mock with a short retry: m5_ready performs an in-band `docker run`
+# (SVID fetch) that can transiently flush the harness container's embedded DNS,
+# so the immediately-following jira-mcp-mock resolution may need a moment.
+trace_mock_reset() {
+  i=1
+  while [ "$i" -le 8 ]; do
+    if curl -sS -X POST "${JIRA_MCP_MOCK_URL}/__test__/reset" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+    i=$((i + 1))
+  done
+  return 1
+}
+
+# Start the capiss + gateway docker-logs tailers for one session.
+trace_start_tailers() {
+  sess="$1"
+  since="$2"
+  : >"$sess/capiss_audit.jsonl"; : >"$sess/capiss_audit.log"
+  python3 /repo/scripts/varambu_audit.py tail --since "$since" \
+    --jsonl "$sess/capiss_audit.jsonl" --human "$sess/capiss_audit.log" \
+    --err "$sess/audit_tailer.err" >/dev/null 2>>"$sess/audit_tailer.err" &
+  echo $! >"$sess/audit_tailer.pid"
+  : >"$sess/gateway_audit.jsonl"; : >"$sess/gateway_audit.log"
+  python3 /repo/scripts/varambu_audit.py tail --since "$since" \
+    --jsonl "$sess/gateway_audit.jsonl" --human "$sess/gateway_audit.log" \
+    --err "$sess/gateway_tailer.err" --container spiffe-jira-mcp-gateway --source gateway \
+    >/dev/null 2>>"$sess/gateway_tailer.err" &
+  echo $! >"$sess/gateway_tailer.pid"
+  sleep 2
+  kill -0 "$(cat "$sess/audit_tailer.pid")" && kill -0 "$(cat "$sess/gateway_tailer.pid")"
+}
+
+trace_stop_tailers() {
+  sess="$1"
+  kill "$(cat "$sess/audit_tailer.pid")" 2>/dev/null || true
+  kill "$(cat "$sess/gateway_tailer.pid")" 2>/dev/null || true
+}
+
+# Synthetic codex-cli rollout records (validated 0.139.0 shape). The correlation
+# id is templated from the live call so the agent-attested intent joins the real
+# in-boundary legs by correlation_id.
+rollout_user() {
+  jq -cn --arg m "$1" '{type:"event_msg",timestamp:"2026-06-19T10:00:00.000Z",payload:{type:"user_message",message:$m}}'
+}
+rollout_call() {
+  jq -cn --arg n "$1" --arg c "$2" --argjson a "$3" \
+    '{type:"response_item",timestamp:"2026-06-19T10:00:01.000Z",payload:{type:"function_call",name:$n,call_id:$c,arguments:($a|tojson),namespace:"jira-mcp"}}'
+}
+rollout_output() {
+  jq -cn --arg c "$1" --arg cid "$2" --argjson ok "$3" \
+    '{type:"response_item",timestamp:"2026-06-19T10:00:02.000Z",payload:{type:"function_call_output",call_id:$c,output:({ok:$ok,correlation_id:$cid}|tojson)}}'
+}
+
+# Build a fully populated, isolated synthetic trace session (no shared docker
+# log streams) for deterministic CLI-surface assertions. Mirrors the synthetic
+# fixture approach used by the varambu audit CLI tests (M5-T44).
+write_synth_trace_session() {
+  sess="$1"
+  cid="$2"
+  prompt="$3"
+  mkdir -p "$sess/codex-home/sessions/2026/06/19"
+  jq -cn --arg c "$cid" '{event_type:"capiss_mint_decision",result:"allow",reason_code:"ok",subject_spiffe_id:"spiffe://varambu.org/codex-jira-mcp-adapter",act:"create_story",res:"jira-mcp:/project:IAM",aud:"jira-mcp-gateway",decision_type:"root_mint",token_id:"tok-1",root_token_id:"root-1",delegation_depth:0,issued_at_local:"2026-06-19 12:00:02 UTC",expires_at_local:"2026-06-19 12:01:02 UTC",timestamp_local:"2026-06-19 12:00:02 UTC",ttl_seconds:60,issued_at_utc:"2026-06-19T10:00:02Z",expires_at_utc:"2026-06-19T10:01:02Z",timestamp_utc:"2026-06-19T10:00:02Z",correlation_id:$c,policy_id:"capiss.allow.v3",policy_hash:"sha256:capiss-policy-v3"}' >"$sess/capiss_audit.jsonl"
+  printf '#1 MINTED OK  2026-06-19 12:00:02 UTC\nCorrelation:  %s\n\n' "$cid" >"$sess/capiss_audit.log"
+  jq -cn --arg c "$cid" '{event_type:"jiramcp_gateway_decision",decision:"allow",reason_code:"ok",correlation_id:$c,act:"create_story",res:"jira-mcp:/project:IAM",upstream_called:true,upstream_operation:"story_create",upstream_status:201,timestamp:"2026-06-19T10:00:03Z"}' >"$sess/gateway_audit.jsonl"
+  { jq -cn --arg c "$cid" '{event_type:"adapter_request",correlation_id:$c,tool_name:"create_story",act:"create_story",res:"jira-mcp:/project:IAM",project_key:"IAM",timestamp:"2026-06-19T10:00:01Z"}'; jq -cn --arg c "$cid" '{event_type:"adapter_decision",correlation_id:$c,ok:true,token_id:"tok-1",root_token_id:"root-1",key:"IAM-9",timestamp:"2026-06-19T10:00:04Z"}'; } >"$sess/adapter_audit.jsonl"
+  { rollout_user "$prompt"; rollout_call create_story call-X '{"project_key":"IAM","summary":"s","description":"d"}'; rollout_output call-X "$cid" true; } >"$sess/codex-home/sessions/2026/06/19/rollout-1.jsonl"
+}
+
+# Wait until both in-boundary capture files have at least one line (or timeout).
+trace_wait_inboundary() {
+  sess="$1"
+  need_gateway="${2:-1}"
+  i=1
+  while [ $i -le 30 ]; do
+    if [ -s "$sess/capiss_audit.jsonl" ]; then
+      if [ "$need_gateway" -eq 0 ] || [ -s "$sess/gateway_audit.jsonl" ]; then
+        break
+      fi
+    fi
+    sleep 1
+    i=$((i + 1))
+  done
+}
+
 sanitize_token_response() {
   raw="$1"
   dest="$2"
@@ -1807,7 +2064,7 @@ T9_test() {
   premise_guard "tool-b-envoy tcp reachable" "wait_tcp \"\$toolb_ip\" 8443 30"
   ev_note "target tool-b-envoy ${toolb_ip}:8443"
 
-  spiffe_id="spiffe://example.org/rogue-socket-shortttl"
+  spiffe_id="spiffe://varambu.org/rogue-socket-shortttl"
   selector="docker:label:com.docker.compose.service:rogue-socket"
   tmpdir="/tmp/toolb_material"
   short_dir="/tmp/short_svid"
@@ -1821,7 +2078,7 @@ T9_test() {
   fi
 
   entry_json="$(docker exec spiffe-spire-server /opt/spire/bin/spire-server entry create \
-    -parentID spiffe://example.org/agent/spire-agent \
+    -parentID spiffe://varambu.org/agent/spire-agent \
     -spiffeID "$spiffe_id" \
     -selector "$selector" \
     -x509SVIDTTL 20 \
@@ -1849,7 +2106,7 @@ T9_test() {
 
   if [ "$status_code" = "6" ] && [ -z "$entry_id" ]; then
     entry_json="$(docker exec spiffe-spire-server /opt/spire/bin/spire-server entry create \
-      -parentID spiffe://example.org/agent/spire-agent \
+      -parentID spiffe://varambu.org/agent/spire-agent \
       -spiffeID "$spiffe_id" \
       -selector "$selector" \
       -x509SVIDTTL 20 \
@@ -1993,7 +2250,7 @@ T6_test() {
   premise_guard "workload socket present" \
     "docker exec spiffe-rogue-socket test -S /run/spire/agent/private/api.sock 2>/dev/null"
   exercise_guard "attempt fetch without entry" \
-    "set +e; docker exec spiffe-rogue-socket /bin/sh -lc 'printf \"%s\\n\" \"agent {\" \"  trust_domain = \\\"example.org\\\"\" \"  socket_path = \\\"/run/spire/agent/private/api.sock\\\"\" \"}\" > /tmp/rogue_socket_min.conf; SPIRE_AGENT_CONFIG=/tmp/rogue_socket_min.conf /opt/spire/bin/spire-agent api fetch x509 -socketPath /run/spire/agent/private/api.sock -write /tmp/rogue_socket_svid' >/tmp/rogue_socket_fetch 2>&1; rc=\$?; set -e; echo \$rc >\"$EVDIR/rc.txt\"; cat /tmp/rogue_socket_fetch >\"$EVDIR/rogue_socket_fetch.txt\" 2>/dev/null || true"
+    "set +e; docker exec spiffe-rogue-socket /bin/sh -lc 'printf \"%s\\n\" \"agent {\" \"  trust_domain = \\\"varambu.org\\\"\" \"  socket_path = \\\"/run/spire/agent/private/api.sock\\\"\" \"}\" > /tmp/rogue_socket_min.conf; SPIRE_AGENT_CONFIG=/tmp/rogue_socket_min.conf /opt/spire/bin/spire-agent api fetch x509 -socketPath /run/spire/agent/private/api.sock -write /tmp/rogue_socket_svid' >/tmp/rogue_socket_fetch 2>&1; rc=\$?; set -e; echo \$rc >\"$EVDIR/rc.txt\"; cat /tmp/rogue_socket_fetch >\"$EVDIR/rogue_socket_fetch.txt\" 2>/dev/null || true"
   outcome_guard "fetch denied without entry" \
     "rc=\$(cat \"$EVDIR/rc.txt\" 2>/dev/null || echo 0); [ \"\$rc\" -ne 0 ] && ! docker exec spiffe-rogue-socket test -e /tmp/rogue_socket_svid/svid.pem 2>/dev/null && assert_text_matches \"$EVDIR/rogue_socket_fetch.txt\" '(No identity issued|no identity|permission denied|unauthorized|not authorized|denied)'"
   return 0
@@ -2120,9 +2377,9 @@ M3S2_T1_test() {
   outcome_guard "token non-empty" \
     "assert_json_present \"$out\" '.token' && jq -r '.token' \"$out\" >\"$EVDIR/token.txt\""
   outcome_guard "mint fields correct" \
-    "assert_json_eq \"$out\" '.token_type' 'biscuit' && assert_json_present \"$out\" '.expires_at' && assert_json_eq \"$out\" '.issued_to' 'spiffe://example.org/agent-a' && assert_json_eq \"$out\" '.aud' 'tool-b' && assert_json_eq \"$out\" '.act' 'read' && assert_json_eq \"$out\" '.res' 'tool-b:/secret'"
+    "assert_json_eq \"$out\" '.token_type' 'biscuit' && assert_json_present \"$out\" '.expires_at' && assert_json_eq \"$out\" '.issued_to' 'spiffe://varambu.org/agent-a' && assert_json_eq \"$out\" '.aud' 'tool-b' && assert_json_eq \"$out\" '.act' 'read' && assert_json_eq \"$out\" '.res' 'tool-b:/secret'"
   outcome_guard "verified issuer identity recorded" \
-    "assert_file_eq \"$EVDIR/verified_capiss_spiffe_id.txt\" \"spiffe://example.org/capability-issuer-envoy\" && assert_file_eq \"$EVDIR/verified_capiss_result.txt\" \"ok\""
+    "assert_file_eq \"$EVDIR/verified_capiss_spiffe_id.txt\" \"spiffe://varambu.org/capability-issuer-envoy\" && assert_file_eq \"$EVDIR/verified_capiss_result.txt\" \"ok\""
   return 0
 }
 
@@ -2330,7 +2587,7 @@ M3S4_T2_test() {
   outcome_guard "secret value correct" \
     "assert_json_eq \"$out\" '.secret' 'super sensitive demo secret'"
   outcome_guard "verified tool-b identity recorded" \
-    "assert_file_eq \"$EVDIR/verified_toolb_spiffe_id.txt\" \"spiffe://example.org/tool-b-envoy\" && assert_file_eq \"$EVDIR/verified_toolb_result.txt\" \"ok\""
+    "assert_file_eq \"$EVDIR/verified_toolb_spiffe_id.txt\" \"spiffe://varambu.org/tool-b-envoy\" && assert_file_eq \"$EVDIR/verified_toolb_result.txt\" \"ok\""
   return 0
 }
 
@@ -2742,13 +2999,13 @@ M4_T9_test() {
   exercise_guard "capture capiss and tool-b logs since flow start" \
     "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; docker logs --since \"\$since\" spiffe-capability-issuer >\"$EVDIR/capiss_container.log\" 2>&1; docker logs --since \"\$since\" spiffe-tool-b >\"$EVDIR/toolb_container.log\" 2>&1; grep -F '\"event_type\"' \"$EVDIR/capiss_container.log\" >\"$EVDIR/capiss_events.jsonl\" || :; grep -F '\"event_type\"' \"$EVDIR/toolb_container.log\" >\"$EVDIR/toolb_events.jsonl\" || :"
   outcome_guard "capiss root mint event correlated" \
-    "jq -e --arg root \"\$root_id\" --arg token \"\$root_claim_token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"root_mint\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .res==\"tool-b:/search\")' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
+    "jq -e --arg root \"\$root_id\" --arg token \"\$root_claim_token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"root_mint\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://varambu.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .res==\"tool-b:/search\")' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
   outcome_guard "capiss delegated mint event correlated" \
-    "jq -e --arg root \"\$root_id\" --arg token \"\$child_token_id\" --arg parent \"\$parent_token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"resource_mint\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .delegator_spiffe_id==\"spiffe://example.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .parent_token_id==\$parent and .res==\"tool-b:/read-file:fileA\")' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
+    "jq -e --arg root \"\$root_id\" --arg token \"\$child_token_id\" --arg parent \"\$parent_token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"resource_mint\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://varambu.org/agent-a\" and .delegator_spiffe_id==\"spiffe://varambu.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .parent_token_id==\$parent and .res==\"tool-b:/read-file:fileA\")' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
   outcome_guard "discovery registry write correlated" \
-    "jq -e --arg root \"\$root_id\" 'select(.event_type==\"discovery_registry_write\" and .root_token_id==\$root and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .discovery_endpoint==\"tool-b:/search\" and (.res_count >= 1))' \"$EVDIR/toolb_events.jsonl\" >/dev/null"
+    "jq -e --arg root \"\$root_id\" 'select(.event_type==\"discovery_registry_write\" and .root_token_id==\$root and .subject_spiffe_id==\"spiffe://varambu.org/agent-a\" and .discovery_endpoint==\"tool-b:/search\" and (.res_count >= 1))' \"$EVDIR/toolb_events.jsonl\" >/dev/null"
   outcome_guard "tool-b allow event correlated" \
-    "jq -e --arg root \"\$root_id\" --arg token \"\$child_token_id\" --arg parent \"\$parent_token_id\" 'select(.event_type==\"toolb_enforcement_decision\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .delegator_spiffe_id==\"spiffe://example.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .parent_token_id==\$parent and .res==\"tool-b:/read-file:fileA\" and .path==\"/read-file/fileA\")' \"$EVDIR/toolb_events.jsonl\" >/dev/null"
+    "jq -e --arg root \"\$root_id\" --arg token \"\$child_token_id\" --arg parent \"\$parent_token_id\" 'select(.event_type==\"toolb_enforcement_decision\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://varambu.org/agent-a\" and .delegator_spiffe_id==\"spiffe://varambu.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .parent_token_id==\$parent and .res==\"tool-b:/read-file:fileA\" and .path==\"/read-file/fileA\")' \"$EVDIR/toolb_events.jsonl\" >/dev/null"
   return 0
 }
 
@@ -2791,7 +3048,7 @@ M4_T10_test() {
   exercise_guard "capture capiss logs since flow start" \
     "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; docker logs --since \"\$since\" spiffe-capability-issuer >\"$EVDIR/capiss_container.log\" 2>&1; grep -F '\"event_type\"' \"$EVDIR/capiss_container.log\" >\"$EVDIR/capiss_events.jsonl\" || :"
   outcome_guard "capiss mint-rate deny event correlated" \
-    "jq -e --arg root \"\$root_id\" --arg parent \"\$root_claim_token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"resource_mint\" and .result==\"deny\" and .reason_code==\"mint_rate_exceeded\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .delegator_spiffe_id==\"spiffe://example.org/agent-a\" and .root_token_id==\$root and .parent_token_id==\$parent and .res==\"tool-b:/read-file:fileA\" and .registry_hit==true)' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
+    "jq -e --arg root \"\$root_id\" --arg parent \"\$root_claim_token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"resource_mint\" and .result==\"deny\" and .reason_code==\"mint_rate_exceeded\" and .subject_spiffe_id==\"spiffe://varambu.org/agent-a\" and .delegator_spiffe_id==\"spiffe://varambu.org/agent-a\" and .root_token_id==\$root and .parent_token_id==\$parent and .res==\"tool-b:/read-file:fileA\" and .registry_hit==true)' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
   return 0
 }
 
@@ -2930,7 +3187,7 @@ M4A_T2_test() {
   outcome_guard "IAM-1 read allowed" \
     "assert_file_eq \"$EVDIR/status.txt\" \"200\" && assert_json_eq \"$EVDIR/response.json\" '.fields.project.key' 'IAM'"
   outcome_guard "verified jira-tool identity recorded" \
-    "assert_file_eq \"$EVDIR/verified_jiratool_spiffe_id.txt\" \"spiffe://example.org/jira-tool-envoy\" && assert_file_eq \"$EVDIR/verified_jiratool_result.txt\" \"ok\""
+    "assert_file_eq \"$EVDIR/verified_jiratool_spiffe_id.txt\" \"spiffe://varambu.org/jira-tool-envoy\" && assert_file_eq \"$EVDIR/verified_jiratool_result.txt\" \"ok\""
   return 0
 }
 
@@ -3092,9 +3349,9 @@ M4A_T10_test() {
   exercise_guard "capture capiss and jira-tool logs since flow start" \
     "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; docker logs --since \"\$since\" spiffe-capability-issuer >\"$EVDIR/capiss_container.log\" 2>&1; docker logs --since \"\$since\" spiffe-jira-tool >\"$EVDIR/jiratool_container.log\" 2>&1; grep -F '\"event_type\"' \"$EVDIR/capiss_container.log\" >\"$EVDIR/capiss_events.jsonl\" || :; grep -F '\"event_type\"' \"$EVDIR/jiratool_container.log\" >\"$EVDIR/jiratool_events.jsonl\" || :"
   outcome_guard "capiss Jira root mint event correlated" \
-    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"root_mint\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .aud==\"jira-tool\" and .act==\"read\" and .res==\"jira-tool:/project:IAM\" and .root_token_id==\$root and .token_id==\$token and .policy_id==\"capiss.allow.v3\")' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
+    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"root_mint\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://varambu.org/agent-a\" and .aud==\"jira-tool\" and .act==\"read\" and .res==\"jira-tool:/project:IAM\" and .root_token_id==\$root and .token_id==\$token and .policy_id==\"capiss.allow.v3\")' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
   outcome_guard "jira-tool allow event correlated" \
-    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"jiratool_enforcement_decision\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .aud==\"jira-tool\" and .act==\"read\" and .res==\"jira-tool:/project:IAM\" and .jira_operation==\"issue_read\" and .requested_project==\"IAM\" and .token_project==\"IAM\" and .issue_key==\"IAM-1\" and .upstream_called==true and .upstream_status==200 and (.budget_remaining|type)==\"number\")' \"$EVDIR/jiratool_events.jsonl\" >/dev/null"
+    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"jiratool_enforcement_decision\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://varambu.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .aud==\"jira-tool\" and .act==\"read\" and .res==\"jira-tool:/project:IAM\" and .jira_operation==\"issue_read\" and .requested_project==\"IAM\" and .token_project==\"IAM\" and .issue_key==\"IAM-1\" and .upstream_called==true and .upstream_status==200 and (.budget_remaining|type)==\"number\")' \"$EVDIR/jiratool_events.jsonl\" >/dev/null"
   return 0
 }
 
@@ -3233,11 +3490,863 @@ M4B_T6_test() {
   exercise_guard "capture capiss and jira-tool logs since flow start" \
     "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; docker logs --since \"\$since\" spiffe-capability-issuer >\"$EVDIR/capiss_container.log\" 2>&1; docker logs --since \"\$since\" spiffe-jira-tool >\"$EVDIR/jiratool_container.log\" 2>&1; grep -F '\"event_type\"' \"$EVDIR/capiss_container.log\" >\"$EVDIR/capiss_events.jsonl\" || :; grep -F '\"event_type\"' \"$EVDIR/jiratool_container.log\" >\"$EVDIR/jiratool_events.jsonl\" || :"
   outcome_guard "capiss Jira write root mint event correlated" \
-    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"root_mint\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .aud==\"jira-tool\" and .act==\"write\" and .res==\"jira-tool:/project:IAM\" and .root_token_id==\$root and .token_id==\$token and .policy_id==\"capiss.allow.v3\")' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
+    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"capiss_mint_decision\" and .decision_type==\"root_mint\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://varambu.org/agent-a\" and .aud==\"jira-tool\" and .act==\"write\" and .res==\"jira-tool:/project:IAM\" and .root_token_id==\$root and .token_id==\$token and .policy_id==\"capiss.allow.v3\")' \"$EVDIR/capiss_events.jsonl\" >/dev/null"
   outcome_guard "jira-tool write allow event correlated" \
-    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"jiratool_enforcement_decision\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .aud==\"jira-tool\" and .act==\"write\" and .res==\"jira-tool:/project:IAM\" and .jira_operation==\"issue_description_write\" and .requested_project==\"IAM\" and .token_project==\"IAM\" and .issue_key==\"IAM-2\" and .upstream_called==true and .upstream_status==204 and (.budget_remaining|type)==\"number\")' \"$EVDIR/jiratool_events.jsonl\" >/dev/null"
+    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"jiratool_enforcement_decision\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://varambu.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .aud==\"jira-tool\" and .act==\"write\" and .res==\"jira-tool:/project:IAM\" and .jira_operation==\"issue_description_write\" and .requested_project==\"IAM\" and .token_project==\"IAM\" and .issue_key==\"IAM-2\" and .upstream_called==true and .upstream_status==204 and (.budget_remaining|type)==\"number\")' \"$EVDIR/jiratool_events.jsonl\" >/dev/null"
   outcome_guard "jira-tool read allow event with write token correlated" \
-    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"jiratool_enforcement_decision\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://example.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .aud==\"jira-tool\" and .act==\"write\" and .res==\"jira-tool:/project:IAM\" and .jira_operation==\"issue_read\" and .requested_project==\"IAM\" and .token_project==\"IAM\" and .issue_key==\"IAM-2\" and .upstream_called==true and .upstream_status==200 and (.budget_remaining|type)==\"number\")' \"$EVDIR/jiratool_events.jsonl\" >/dev/null"
+    "jq -e --arg root \"\$root_id\" --arg token \"\$token_id\" 'select(.event_type==\"jiratool_enforcement_decision\" and .result==\"allow\" and .reason_code==\"ok\" and .subject_spiffe_id==\"spiffe://varambu.org/agent-a\" and .root_token_id==\$root and .token_id==\$token and .aud==\"jira-tool\" and .act==\"write\" and .res==\"jira-tool:/project:IAM\" and .jira_operation==\"issue_read\" and .requested_project==\"IAM\" and .token_project==\"IAM\" and .issue_key==\"IAM-2\" and .upstream_called==true and .upstream_status==200 and (.budget_remaining|type)==\"number\")' \"$EVDIR/jiratool_events.jsonl\" >/dev/null"
+  return 0
+}
+
+m5_ready() {
+  ensure_capiss_material &&
+    ensure_jiramcp_material &&
+    ensure_capiss_envoy_ready &&
+    ensure_jira_mcp_envoy_ready
+}
+
+m5_mint_token_file() {
+  body="$1"
+  token_file="$2"
+  prefix="$3"
+  jira_mcp_mint_with_body_to_file "$body" "$EVDIR/${prefix}_mint.json" "$EVDIR/${prefix}_mint_status.txt"
+  assert_file_eq "$EVDIR/${prefix}_mint_status.txt" "200" || return 1
+  jq -r '.token' "$EVDIR/${prefix}_mint.json" >"$token_file"
+}
+
+M5_T1_test() {
+  begin_test_evidence "M5-T1" "mcp_launcher_session"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "adapter container is running" "container_running spiffe-codex-jira-mcp-adapter"
+  premise_guard "launcher uses docker compose exec -T" "grep -Fq 'exec -T' /repo/scripts/codex_jira_mcp.sh && ! grep -Eq 'compose .* up|--build' /repo/scripts/codex_jira_mcp.sh"
+  exercise_guard "list tools through launcher" \
+    "mcp_launcher_message '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}' \"$EVDIR/tools.json\" \"$EVDIR/launcher.err\""
+  outcome_guard "stdout is valid MCP JSON" "jq -e '.jsonrpc==\"2.0\" and .result.tools' \"$EVDIR/tools.json\" >/dev/null"
+  outcome_guard "diagnostics are stderr-only" "! grep -Eq 'codex-jira|adapter|ERROR' \"$EVDIR/tools.json\""
+  return 0
+}
+
+M5_T2_test() {
+  begin_test_evidence "M5-T2" "mcp_tool_surface"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "adapter container is running" "container_running spiffe-codex-jira-mcp-adapter"
+  exercise_guard "list MCP tools" "mcp_launcher_message '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}' \"$EVDIR/tools.json\" \"$EVDIR/launcher.err\""
+  outcome_guard "only approved tools are exposed" \
+    "jq -e '[.result.tools[].name] == [\"read_project_summary\",\"create_story\"]' \"$EVDIR/tools.json\" >/dev/null"
+  return 0
+}
+
+M5_T3_test() {
+  begin_test_evidence "M5-T3" "iam_summary_success"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path and mock ready" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "call IAM project summary through MCP" \
+    "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/summary.json\""
+  exercise_guard "capture mock request log" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "IAM summary succeeds" "jq -e '.ok==true and .project.key==\"IAM\" and (.issues|length)>0 and (.epics|length)>0' \"$EVDIR/summary.json\" >/dev/null"
+  outcome_guard "mock called for summary" "jq -e '.requests[] | select(.path==\"/rest/api/3/project/IAM/summary\" and .gateway_marker==\"jira-mcp-gateway\")' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T4_test() {
+  begin_test_evidence "M5-T4" "summary_allowed_fields"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready" "m5_ready"
+  exercise_guard "call summary" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/summary.json\""
+  outcome_guard "hidden Jira fields omitted" \
+    "! grep -Eiq 'description|comments|assignee|sprint|board|raw_jql|atlassian.net|Bearer|token' \"$EVDIR/summary.json\""
+  return 0
+}
+
+M5_T5_test() {
+  begin_test_evidence "M5-T5" "summary_bounds"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "mock has excess IAM data" "jira_mcp_mock_breadth \"$EVDIR/breadth.json\" && jq -e '.iam_count > 75' \"$EVDIR/breadth.json\" >/dev/null"
+  exercise_guard "call summary" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/summary.json\""
+  outcome_guard "summary counts are bounded" "jq -e '(.issues|length)<=50 and (.epics|length)<=25' \"$EVDIR/summary.json\" >/dev/null"
+  return 0
+}
+
+M5_T6_test() {
+  begin_test_evidence "M5-T6" "nas_summary_mint_denied"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "call NAS summary through adapter" "mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/error.json\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "mint denied locally to Codex" "jq -e '.ok==false and .reason==\"mint_denied\"' \"$EVDIR/error.json\" >/dev/null"
+  outcome_guard "gateway/mock not called" "jq -e '.requests|length==0' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T7_test() {
+  begin_test_evidence "M5-T7" "iam_story_create"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "create IAM story through MCP" \
+    "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"M5 story\",\"description\":\"M5 description\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/create.json\""
+  exercise_guard "capture created stories" "jira_mcp_mock_created \"$EVDIR/created.json\""
+  outcome_guard "create returns bounded metadata" "jq -e '.ok==true and .project_key==\"IAM\" and .issue_type==\"Story\" and (.key|startswith(\"IAM-\")) and (has(\"fields\")|not)' \"$EVDIR/create.json\" >/dev/null"
+  outcome_guard "mock stored one story" "jq -e '.created|length==1' \"$EVDIR/created.json\" >/dev/null"
+  return 0
+}
+
+M5_T8_test() {
+  begin_test_evidence "M5-T8" "iam_story_create_ac"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "create IAM story with acceptance criteria" \
+    "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"M5 AC story\",\"description\":\"M5 description\",\"acceptance_criteria\":[\"AC one\",\"AC two\"]}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/create.json\""
+  exercise_guard "capture created stories" "jira_mcp_mock_created \"$EVDIR/created.json\""
+  outcome_guard "acceptance criteria folded into ADF description" "jq -e '.created[0].fields.description.content[].content[]?.text | select(test(\"Acceptance Criteria|AC one|AC two\"))' \"$EVDIR/created.json\" >/dev/null"
+  return 0
+}
+
+M5_T9_test() {
+  begin_test_evidence "M5-T9" "iam_story_create_epic"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "create IAM story with valid epic" \
+    "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"M5 epic story\",\"description\":\"M5 description\",\"epic_key\":\"IAM-101\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/create.json\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "create linked to epic" "jq -e '.ok==true and .epic_key==\"IAM-101\"' \"$EVDIR/create.json\" >/dev/null"
+  outcome_guard "epic checked before create" "jq -e '[.requests[].path] | index(\"/rest/api/3/issue/IAM-101\") < index(\"/rest/api/3/issue\")' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T10_test() {
+  begin_test_evidence "M5-T10" "invalid_epic_no_create"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "attempt create with non-Epic IAM issue" \
+    "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"bad epic\",\"description\":\"d\",\"epic_key\":\"IAM-900\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/error.json\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "epic invalid returned" "jq -e '.ok==false and .reason==\"epic_invalid\"' \"$EVDIR/error.json\" >/dev/null"
+  outcome_guard "no create request occurred" "jq -e '[.requests[] | select(.method==\"POST\" and .path==\"/rest/api/3/issue\")] | length==0' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T11_test() {
+  begin_test_evidence "M5-T11" "nas_create_mint_denied"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "attempt NAS create through MCP" "mcp_tool_call create_story '{\"project_key\":\"NAS\",\"summary\":\"NAS\",\"description\":\"d\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/error.json\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "mint denied" "jq -e '.ok==false and .reason==\"mint_denied\"' \"$EVDIR/error.json\" >/dev/null"
+  outcome_guard "mock untouched" "jq -e '.requests|length==0' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T12_test() {
+  begin_test_evidence "M5-T12" "iam_token_nas_payload_denied"
+  echo "EVIDENCE_DIR=$EVDIR"
+  token_file="$EVDIR/create_token.txt"
+  premise_guard "M5 path ready and create token minted" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$token_file' create"
+  exercise_guard "call create endpoint with NAS payload" "token=\"\$(cat '$token_file')\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"NAS\",\"summary\":\"x\",\"description\":\"d\"}' \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "gateway denies project mismatch" "assert_file_eq \"$EVDIR/status.txt\" \"403\" && jq -e '.reason==\"project_mismatch\"' \"$EVDIR/response.json\" >/dev/null"
+  outcome_guard "no upstream call" "jq -e '.requests|length==0' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T13_test() {
+  begin_test_evidence "M5-T13" "cross_project_epic_denied"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "attempt create with NAS epic" "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":\"d\",\"epic_key\":\"NAS-101\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/error.json\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "cross-project epic denied" "jq -e '.reason==\"epic_invalid\"' \"$EVDIR/error.json\" >/dev/null"
+  outcome_guard "no upstream call for cross-project epic" "jq -e '.requests|length==0' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T14_test() {
+  begin_test_evidence "M5-T14" "arbitrary_fields_rejected"
+  echo "EVIDENCE_DIR=$EVDIR"
+  token_file="$EVDIR/create_token.txt"
+  premise_guard "M5 path ready and create token minted" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$token_file' create"
+  exercise_guard "send arbitrary assignee field to gateway" "token=\"\$(cat '$token_file')\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":\"d\",\"assignee\":\"bad\"}' \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "payload rejected" "assert_file_eq \"$EVDIR/status.txt\" \"400\" && jq -e '.reason==\"payload_invalid\"' \"$EVDIR/response.json\" >/dev/null"
+  outcome_guard "no upstream call" "jq -e '.requests|length==0' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T15_test() {
+  begin_test_evidence "M5-T15" "raw_adf_rejected"
+  echo "EVIDENCE_DIR=$EVDIR"
+  token_file="$EVDIR/create_token.txt"
+  premise_guard "M5 path ready and create token minted" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$token_file' create"
+  exercise_guard "send raw ADF description" "token=\"\$(cat '$token_file')\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":{\"type\":\"doc\"}}' \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "raw ADF rejected" "assert_file_eq \"$EVDIR/status.txt\" \"400\" && jq -e '.reason==\"payload_invalid\"' \"$EVDIR/response.json\" >/dev/null"
+  outcome_guard "no upstream call" "jq -e '.requests|length==0' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T16_test() {
+  begin_test_evidence "M5-T16" "adapter_forwards_nas_to_capiss"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "call NAS summary through adapter" "mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/error.json\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "adapter reports capiss mint denial" "jq -e '.ok==false and .reason==\"mint_denied\"' \"$EVDIR/error.json\" >/dev/null"
+  outcome_guard "adapter stderr records mint_denied, not local project denial" "grep -Fq 'mint_denied' \"$EVDIR/adapter.err\" && ! grep -Fq 'local_authorization' \"$EVDIR/adapter.err\""
+  outcome_guard "upstream not called" "jq -e '.requests|length==0' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T17_test() {
+  begin_test_evidence "M5-T17" "unsupported_action_denied"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 capiss material ready" "m5_ready"
+  exercise_guard "attempt unsupported M5 action mint" "jira_mcp_mint_with_body_to_file '$JIRA_MCP_UNSUPPORTED_MINT_BODY' \"$EVDIR/mint.json\" \"$EVDIR/status.txt\""
+  outcome_guard "unsupported action denied" "assert_file_eq \"$EVDIR/status.txt\" \"403\" && jq -e '.reason==\"policy\"' \"$EVDIR/mint.json\" >/dev/null"
+  return 0
+}
+
+M5_T18_test() {
+  begin_test_evidence "M5-T18" "old_jira_authority_separated"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "capiss and M5 gateway ready" "m5_ready"
+  exercise_guard "adapter cannot mint old jira-tool resource for M5 subject" "jira_mcp_mint_with_body_to_file '{\"aud\":\"jira-tool\",\"act\":\"read\",\"res\":\"jira-tool:/project:IAM\"}' \"$EVDIR/mint.json\" \"$EVDIR/status.txt\""
+  outcome_guard "old authority denied for adapter" "assert_file_eq \"$EVDIR/status.txt\" \"403\" && jq -e '.reason==\"policy\"' \"$EVDIR/mint.json\" >/dev/null"
+  return 0
+}
+
+M5_T19_test() {
+  begin_test_evidence "M5-T19" "m4_jira_not_disturbed"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M4 Jira policy entries still present" "grep -Fq 'aud == \"jira-tool\"' /repo/services/opa/policy.rego && grep -Fq 'jira-tool:/project:IAM' /repo/services/opa/policy.rego"
+  exercise_guard "M4 jira-tool health remains reachable" "ensure_capiss_material && ensure_jira_envoy_ready"
+  outcome_guard "M4 jira-tool envoy identity verified" "test -n \"${JIRA_ENVOY_IP:-}\""
+  return 0
+}
+
+M5_T20_test() {
+  begin_test_evidence "M5-T20" "endpoint_bound_action"
+  echo "EVIDENCE_DIR=$EVDIR"
+  read_token="$EVDIR/read_token.txt"
+  create_token="$EVDIR/create_token.txt"
+  premise_guard "M5 tokens minted" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_SUMMARY_MINT_BODY' '$read_token' read && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$create_token' create"
+  exercise_guard "use read token on create endpoint" "token=\"\$(cat '$read_token')\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":\"d\"}' \"$EVDIR/read_on_create.json\" \"$EVDIR/read_on_create_status.txt\""
+  exercise_guard "use create token on summary endpoint" "token=\"\$(cat '$create_token')\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_SUMMARY_URL\" '{\"project_key\":\"IAM\"}' \"$EVDIR/create_on_read.json\" \"$EVDIR/create_on_read_status.txt\""
+  outcome_guard "endpoint/action mismatches denied" "jq -e '.reason==\"act_mismatch\"' \"$EVDIR/read_on_create.json\" >/dev/null && jq -e '.reason==\"act_mismatch\"' \"$EVDIR/create_on_read.json\" >/dev/null"
+  return 0
+}
+
+M5_T21_test() {
+  begin_test_evidence "M5-T21" "audience_mismatch_denied"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 capiss material ready" "m5_ready"
+  exercise_guard "attempt wrong-audience M5 resource mint" "jira_mcp_mint_with_body_to_file '{\"aud\":\"jira-tool\",\"act\":\"read_project_summary\",\"res\":\"jira-mcp:/project:IAM\"}' \"$EVDIR/mint.json\" \"$EVDIR/status.txt\""
+  outcome_guard "wrong audience/resource family denied" "assert_file_any \"$EVDIR/status.txt\" \"400\" \"403\""
+  return 0
+}
+
+M5_T22_test() {
+  begin_test_evidence "M5-T22" "stolen_token_subject_mismatch"
+  echo "EVIDENCE_DIR=$EVDIR"
+  token_file="$EVDIR/read_token.txt"
+  premise_guard "M5 read token minted" "m5_ready && ensure_capiss_material && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_SUMMARY_MINT_BODY' '$token_file' read"
+  exercise_guard "rogue presents adapter token to gateway" "token=\"\$(cat '$token_file')\"; jira_mcp_rogue_request_to_file \"\$token\" \"$JIRA_MCP_SUMMARY_URL\" '{\"project_key\":\"IAM\"}' \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
+  outcome_guard "subject mismatch denied" "assert_file_eq \"$EVDIR/status.txt\" \"403\" && jq -e '.reason==\"subject_mismatch\"' \"$EVDIR/response.json\" >/dev/null"
+  return 0
+}
+
+M5_T23_test() {
+  begin_test_evidence "M5-T23" "invalid_token_denied"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 gateway ready" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "call gateway with invalid token" "jira_mcp_request_to_file 'not-a-token' \"$JIRA_MCP_SUMMARY_URL\" '{\"project_key\":\"IAM\"}' \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "invalid token denied" "assert_file_eq \"$EVDIR/status.txt\" \"401\" && jq -e '.reason==\"token_invalid\"' \"$EVDIR/response.json\" >/dev/null"
+  outcome_guard "upstream not called" "jq -e '.requests|length==0' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T24_test() {
+  begin_test_evidence "M5-T24" "direct_app_bypass_unavailable"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 edge path reachable" "m5_ready"
+  exercise_guard "attempt direct gateway app from test harness" "set +e; curl -sS --max-time 2 http://jira-mcp-gateway:8080/health >\"$EVDIR/direct_gateway.out\" 2>&1; rc=\$?; set -e; echo \$rc >\"$EVDIR/direct_gateway_rc.txt\""
+  outcome_guard "direct app path not available from edge/test context" "rc=\$(cat \"$EVDIR/direct_gateway_rc.txt\"); [ \"\$rc\" -ne 0 ] && grep -Eiq '(Could not resolve|timed out|No route|Failed to connect)' \"$EVDIR/direct_gateway.out\""
+  return 0
+}
+
+M5_T25_test() {
+  begin_test_evidence "M5-T25" "only_gateway_calls_mock"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "run allowed and denied MCP calls" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/iam.json\" \"$EVDIR/iam.err\"; mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/nas.json\" \"$EVDIR/nas.err\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "all mock requests carry gateway marker" "jq -e '(.requests|length)>0 and all(.requests[]; .gateway_marker==\"jira-mcp-gateway\")' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T26_test() {
+  begin_test_evidence "M5-T26" "mcp_responses_no_tokens"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready" "m5_ready"
+  exercise_guard "call summary and create" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/summary_mcp.json\" \"$EVDIR/summary.err\"; mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":\"d\"}' \"$EVDIR/create_mcp.json\" \"$EVDIR/create.err\""
+  outcome_guard "Codex-visible stdout contains no bearer token material" "! grep -Eiq 'Bearer |token_type|\"token\"|Biscuit|JIRA_API_TOKEN' \"$EVDIR/summary_mcp.json\" \"$EVDIR/create_mcp.json\""
+  return 0
+}
+
+M5_T27_test() {
+  begin_test_evidence "M5-T27" "adapter_logs_no_tokens"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready" "m5_ready"
+  exercise_guard "call summary and capture adapter stderr" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/summary_mcp.json\" \"$EVDIR/adapter.err\""
+  outcome_guard "adapter stderr contains metadata but no bearer token" "grep -Fq 'adapter_decision' \"$EVDIR/adapter.err\" && ! grep -Eiq 'Bearer |\"token\"|token_type|Biscuit' \"$EVDIR/adapter.err\""
+  return 0
+}
+
+M5_T28_test() {
+  begin_test_evidence "M5-T28" "adapter_env_no_jira_secret"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "adapter container running" "container_running spiffe-codex-jira-mcp-adapter"
+  exercise_guard "capture adapter environment" "docker exec spiffe-codex-jira-mcp-adapter env | sort >\"$EVDIR/adapter_env.txt\""
+  outcome_guard "adapter has no Jira credential env" "! grep -E 'JIRA_API_TOKEN|JIRA_EMAIL|JIRA_BASE_URL' \"$EVDIR/adapter_env.txt\""
+  return 0
+}
+
+M5_T30_test() {
+  begin_test_evidence "M5-T30" "upstream_header_stripping"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
+  exercise_guard "create story through gateway" "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"header\",\"description\":\"d\"}' \"$EVDIR/create_mcp.json\" \"$EVDIR/adapter.err\""
+  exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
+  outcome_guard "mock did not receive Authorization header in mock mode" "jq -e 'all(.requests[]; .authorization_present==false)' \"$EVDIR/mock_requests.json\" >/dev/null"
+  return 0
+}
+
+M5_T31_test() {
+  begin_test_evidence "M5-T31" "summary_budget_governance"
+  echo "EVIDENCE_DIR=$EVDIR"
+  token_file="$EVDIR/read_token.txt"
+  premise_guard "M5 read token minted" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_SUMMARY_MINT_BODY' '$token_file' read"
+  exercise_guard "use same summary token until budget exhausted" "token=\"\$(cat '$token_file')\"; : >\"$EVDIR/statuses.txt\"; i=1; while [ \$i -le 11 ]; do jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_SUMMARY_URL\" '{\"project_key\":\"IAM\"}' \"$EVDIR/resp_\$i.json\" \"$EVDIR/status_\$i.txt\"; cat \"$EVDIR/status_\$i.txt\" >>\"$EVDIR/statuses.txt\"; echo >>\"$EVDIR/statuses.txt\"; i=\$((i+1)); done"
+  outcome_guard "eleventh summary denied by budget" "test \"\$(grep -c '^200$' \"$EVDIR/statuses.txt\")\" -eq 10 && grep -Fxq '403' \"$EVDIR/status_11.txt\" && jq -e '.reason==\"budget_exhausted\"' \"$EVDIR/resp_11.json\" >/dev/null"
+  return 0
+}
+
+M5_T32_test() {
+  begin_test_evidence "M5-T32" "create_budget_before_upstream"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 ready and log baseline captured" "m5_ready && jira_mcp_mock_reset && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
+  exercise_guard "create story" "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"budget\",\"description\":\"d\"}' \"$EVDIR/create_mcp.json\" \"$EVDIR/adapter.err\""
+  exercise_guard "capture gateway logs" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; docker logs --since \"\$since\" spiffe-jira-mcp-gateway >\"$EVDIR/gateway.log\" 2>&1"
+  outcome_guard "gateway allow event has budget remaining and upstream create" "grep -F 'jiramcp_gateway_decision' \"$EVDIR/gateway.log\" | jq -e 'select(.decision==\"allow\" and .upstream_operation==\"story_create\" and (.budget_remaining|type)==\"number\")' >/dev/null"
+  return 0
+}
+
+M5_T33_test() {
+  begin_test_evidence "M5-T33" "budget_exhaustion_denies_create"
+  echo "EVIDENCE_DIR=$EVDIR"
+  token_file="$EVDIR/create_token.txt"
+  premise_guard "M5 create token minted" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$token_file' create"
+  exercise_guard "exhaust create token budget then attempt create" "token=\"\$(cat '$token_file')\"; i=1; while [ \$i -le 10 ]; do jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":\"d\"}' \"$EVDIR/create_\$i.json\" \"$EVDIR/status_\$i.txt\"; i=\$((i+1)); done; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":\"d\"}' \"$EVDIR/denied.json\" \"$EVDIR/denied_status.txt\""
+  outcome_guard "exhausted create denied before upstream" "assert_file_eq \"$EVDIR/denied_status.txt\" \"403\" && jq -e '.reason==\"budget_exhausted\"' \"$EVDIR/denied.json\" >/dev/null"
+  return 0
+}
+
+M5_T34_test() {
+  begin_test_evidence "M5-T34" "prevalidation_no_budget_spend"
+  echo "EVIDENCE_DIR=$EVDIR"
+  token_file="$EVDIR/create_token.txt"
+  premise_guard "M5 create token minted" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$token_file' create"
+  exercise_guard "send invalid payload before valid create" "token=\"\$(cat '$token_file')\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":{\"type\":\"doc\"}}' \"$EVDIR/invalid.json\" \"$EVDIR/invalid_status.txt\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"valid\",\"description\":\"d\"}' \"$EVDIR/valid.json\" \"$EVDIR/valid_status.txt\""
+  outcome_guard "invalid payload did not consume budget needed by valid create" "assert_file_eq \"$EVDIR/invalid_status.txt\" \"400\" && assert_file_eq \"$EVDIR/valid_status.txt\" \"201\""
+  return 0
+}
+
+M5_T35_test() {
+  begin_test_evidence "M5-T35" "upstream_failure_no_refund"
+  echo "EVIDENCE_DIR=$EVDIR"
+  token_file="$EVDIR/create_token.txt"
+  premise_guard "M5 create token minted and mock failure armed" "m5_ready && jira_mcp_mock_reset && jira_mcp_mock_fail_next_create && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$token_file' create"
+  exercise_guard "authorized create hits injected upstream failure" "token=\"\$(cat '$token_file')\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"fail\",\"description\":\"d\"}' \"$EVDIR/fail.json\" \"$EVDIR/fail_status.txt\""
+  outcome_guard "upstream error is standardized after spend" "assert_file_eq \"$EVDIR/fail_status.txt\" \"502\" && jq -e '.reason==\"upstream_error\"' \"$EVDIR/fail.json\" >/dev/null"
+  return 0
+}
+
+M5_T36_test() {
+  begin_test_evidence "M5-T36" "read_audit_correlation"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and log baseline captured" "m5_ready && jira_mcp_mock_reset && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
+  exercise_guard "call summary" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/summary.json\""
+  exercise_guard "capture logs" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; docker logs --since \"\$since\" spiffe-capability-issuer >\"$EVDIR/capiss.log\" 2>&1; docker logs --since \"\$since\" spiffe-jira-mcp-gateway >\"$EVDIR/gateway.log\" 2>&1"
+  outcome_guard "gateway read allow event present" "grep -F 'jiramcp_gateway_decision' \"$EVDIR/gateway.log\" | jq -e 'select(.decision==\"allow\" and .upstream_operation==\"project_summary\" and .aud==\"jira-mcp-gateway\" and .act==\"read_project_summary\")' >/dev/null"
+  outcome_guard "capiss M5 mint event present" "grep -F 'capiss_mint_decision' \"$EVDIR/capiss.log\" | jq -e 'select(.result==\"allow\" and .aud==\"jira-mcp-gateway\" and .act==\"read_project_summary\")' >/dev/null"
+  return 0
+}
+
+M5_T37_test() {
+  begin_test_evidence "M5-T37" "create_audit_correlation"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "M5 path ready and log baseline captured" "m5_ready && jira_mcp_mock_reset && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
+  exercise_guard "create story" "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"audit\",\"description\":\"d\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/create.json\""
+  exercise_guard "capture gateway logs" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; docker logs --since \"\$since\" spiffe-jira-mcp-gateway >\"$EVDIR/gateway.log\" 2>&1"
+  outcome_guard "gateway create allow event present" "grep -F 'jiramcp_gateway_decision' \"$EVDIR/gateway.log\" | jq -e 'select(.decision==\"allow\" and .upstream_operation==\"story_create\" and .issue_key)' >/dev/null"
+  return 0
+}
+
+M5_T38_test() {
+  begin_test_evidence "M5-T38" "deny_decision_events"
+  echo "EVIDENCE_DIR=$EVDIR"
+  token_file="$EVDIR/create_token.txt"
+  premise_guard "M5 token and log baseline ready" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$token_file' create && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
+  exercise_guard "trigger payload deny" "token=\"\$(cat '$token_file')\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":{\"type\":\"doc\"}}' \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
+  exercise_guard "capture gateway logs" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; docker logs --since \"\$since\" spiffe-jira-mcp-gateway >\"$EVDIR/gateway.log\" 2>&1"
+  outcome_guard "deny decision event present" "grep -F 'jiramcp_gateway_decision' \"$EVDIR/gateway.log\" | jq -e 'select(.decision==\"deny\" and .reason_code==\"payload_invalid\")' >/dev/null"
+  return 0
+}
+
+M5_T39_test() {
+  begin_test_evidence "M5-T39" "standard_errors_no_existence_leak"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "mock proves NAS exists and M5 path ready" "jira_mcp_mock_breadth \"$EVDIR/breadth.json\" && jq -e '.projects | index(\"NAS\")' \"$EVDIR/breadth.json\" >/dev/null && m5_ready"
+  exercise_guard "attempt NAS summary" "mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/error.json\""
+  outcome_guard "standard local error has no upstream detail" "jq -e '.ok==false and .reason==\"mint_denied\" and (has(\"project\")|not) and (has(\"issues\")|not)' \"$EVDIR/error.json\" >/dev/null"
+  return 0
+}
+
+M5_T40_test() {
+  begin_test_evidence "M5-T40" "mock_breadth"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "jira-mcp-mock reachable" "wait_dns jira-mcp-mock 30"
+  exercise_guard "capture mock breadth" "jira_mcp_mock_breadth \"$EVDIR/breadth.json\""
+  outcome_guard "mock has IAM and NAS data" "jq -e '(.projects|sort)==[\"IAM\",\"NAS\"] and .iam_count>75 and .nas_count>=4' \"$EVDIR/breadth.json\" >/dev/null"
+  return 0
+}
+
+M5_T41_test() {
+  begin_test_evidence "M5-T41" "protected_path_narrows_mock"
+  echo "EVIDENCE_DIR=$EVDIR"
+  premise_guard "mock breadth and M5 path ready" "jira_mcp_mock_breadth \"$EVDIR/breadth.json\" && m5_ready && jira_mcp_mock_reset"
+  exercise_guard "allowed IAM and denied NAS through MCP" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/iam_mcp.json\" \"$EVDIR/iam.err\" && mcp_text_json_to_file \"$EVDIR/iam_mcp.json\" \"$EVDIR/iam.json\"; mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/nas_mcp.json\" \"$EVDIR/nas.err\" && mcp_text_json_to_file \"$EVDIR/nas_mcp.json\" \"$EVDIR/nas.json\""
+  outcome_guard "protected path allows IAM and denies NAS" "jq -e '.ok==true and .project.key==\"IAM\"' \"$EVDIR/iam.json\" >/dev/null && jq -e '.ok==false and .reason==\"mint_denied\"' \"$EVDIR/nas.json\" >/dev/null"
+  return 0
+}
+
+M5_T42_test() {
+  begin_test_evidence "M5-T42" "varambu_capiss_audit_files"
+  echo "EVIDENCE_DIR=$EVDIR"
+  session_dir="/repo/artifacts/varambu-demo/e2e-M5-T42"
+  premise_guard "M5 path ready and audit session prepared" "m5_ready && jira_mcp_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
+  exercise_guard "start Varambu capiss audit tailer" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; : >\"$session_dir/capiss_audit.jsonl\"; : >\"$session_dir/capiss_audit.log\"; python3 /repo/scripts/varambu_audit.py tail --since \"\$since\" --jsonl \"$session_dir/capiss_audit.jsonl\" --human \"$session_dir/capiss_audit.log\" --err \"$session_dir/audit_tailer.err\" >/dev/null 2>>\"$session_dir/audit_tailer.err\" & echo \$! >\"$session_dir/audit_tailer.pid\"; sleep 2; kill -0 \"\$(cat \"$session_dir/audit_tailer.pid\")\""
+  exercise_guard "perform allowed and denied MCP requests" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/iam_read_mcp.json\" \"$EVDIR/iam_read.err\" && mcp_text_json_to_file \"$EVDIR/iam_read_mcp.json\" \"$EVDIR/iam_read.json\"; mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"audit e2e\",\"description\":\"d\"}' \"$EVDIR/iam_create_mcp.json\" \"$EVDIR/iam_create.err\" && mcp_text_json_to_file \"$EVDIR/iam_create_mcp.json\" \"$EVDIR/iam_create.json\"; mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/nas_read_mcp.json\" \"$EVDIR/nas_read.err\" && mcp_text_json_to_file \"$EVDIR/nas_read_mcp.json\" \"$EVDIR/nas_read.json\"; mcp_tool_call create_story '{\"project_key\":\"NAS\",\"summary\":\"denied\",\"description\":\"d\"}' \"$EVDIR/nas_create_mcp.json\" \"$EVDIR/nas_create.err\" && mcp_text_json_to_file \"$EVDIR/nas_create_mcp.json\" \"$EVDIR/nas_create.json\""
+  exercise_guard "wait for audit entries and stop tailer" "i=1; while [ \$i -le 30 ]; do [ \"\$(wc -l <\"$session_dir/capiss_audit.jsonl\")\" -ge 4 ] && break; sleep 1; i=\$((i+1)); done; kill \"\$(cat \"$session_dir/audit_tailer.pid\")\" 2>/dev/null || true; cp \"$session_dir/capiss_audit.jsonl\" \"$EVDIR/capiss_audit.jsonl\"; cp \"$session_dir/capiss_audit.log\" \"$EVDIR/capiss_audit.log\""
+  exercise_guard "render persisted audit through varambu cli" "bash /repo/varambu audit --json >\"$EVDIR/varambu_audit_json.out\""
+  outcome_guard "audit file contains two minted and two denied entries in append order" "jq -s 'length>=4 and .[0].result==\"allow\" and .[0].act==\"read_project_summary\" and .[1].result==\"allow\" and .[1].act==\"create_story\" and .[2].result==\"deny\" and .[2].res==\"jira-mcp:/project:NAS\" and .[3].result==\"deny\" and .[3].res==\"jira-mcp:/project:NAS\"' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
+  outcome_guard "minted rows include subject token validity local utc and correlation metadata" "jq -s '.[0].subject_spiffe_id==\"spiffe://varambu.org/codex-jira-mcp-adapter\" and (.[0].token_id|type)==\"string\" and (.[0].root_token_id|type)==\"string\" and (.[0].issued_at_local|type)==\"string\" and (.[0].expires_at_local|type)==\"string\" and (.[0].issued_at_utc|type)==\"string\" and (.[0].expires_at_utc|type)==\"string\" and (.[0].timestamp_local|type)==\"string\" and (.[0].ttl_seconds|type)==\"number\" and (.[0].correlation_id|type)==\"string\"' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
+  outcome_guard "denied rows include reason and omit token validity" "jq -s '.[2].reason_code==\"policy\" and (.[2]|has(\"token_id\")|not) and (.[2]|has(\"issued_at_utc\")|not) and (.[2]|has(\"expires_at_utc\")|not) and (.[2].resource_attrs.project_key)==\"NAS\"' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
+  outcome_guard "audit artifacts do not expose bearer token values or upstream secrets" "! grep -E '\"token\"|Bearer |Basic |JIRA_API_TOKEN' \"$EVDIR/capiss_audit.jsonl\" \"$EVDIR/capiss_audit.log\" \"$EVDIR/varambu_audit_json.out\""
+  outcome_guard "human log is readable and includes logged time" "grep -Fq 'MINTED OK' \"$EVDIR/capiss_audit.log\" && grep -Fq 'DENIED: Reason Policy' \"$EVDIR/capiss_audit.log\" && grep -Fq 'Logged At:' \"$EVDIR/capiss_audit.log\""
+  return 0
+}
+
+M5_T43_test() {
+  begin_test_evidence "M5-T43" "varambu_audit_active_append"
+  session_dir="/repo/artifacts/varambu-demo/e2e-M5-T43"
+  premise_guard "M5 path ready and empty audit session prepared" "m5_ready && jira_mcp_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && sleep 2 && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
+  exercise_guard "start audit tailer" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; : >\"$session_dir/capiss_audit.jsonl\"; : >\"$session_dir/capiss_audit.log\"; python3 /repo/scripts/varambu_audit.py tail --since \"\$since\" --jsonl \"$session_dir/capiss_audit.jsonl\" --human \"$session_dir/capiss_audit.log\" --err \"$session_dir/audit_tailer.err\" >/dev/null 2>>\"$session_dir/audit_tailer.err\" & echo \$! >\"$session_dir/audit_tailer.pid\"; sleep 2; kill -0 \"\$(cat \"$session_dir/audit_tailer.pid\")\""
+  exercise_guard "perform one allowed mint request" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/iam_mcp.json\" \"$EVDIR/iam.err\""
+  exercise_guard "wait for first entry and snapshot jsonl line count" "i=1; while [ \$i -le 15 ]; do [ \"\$(wc -l <\"$session_dir/capiss_audit.jsonl\")\" -ge 1 ] && break; sleep 1; i=\$((i+1)); done; cp \"$session_dir/capiss_audit.jsonl\" \"$EVDIR/after_first.jsonl\""
+  exercise_guard "render audit through varambu cli after first request" "bash /repo/varambu audit --json >\"$EVDIR/varambu_after_first.out\""
+  exercise_guard "perform one denied mint request" "mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/nas_mcp.json\" \"$EVDIR/nas.err\""
+  exercise_guard "wait for second entry and stop tailer" "i=1; while [ \$i -le 15 ]; do [ \"\$(wc -l <\"$session_dir/capiss_audit.jsonl\")\" -ge 2 ] && break; sleep 1; i=\$((i+1)); done; kill \"\$(cat \"$session_dir/audit_tailer.pid\")\" 2>/dev/null || true; cp \"$session_dir/capiss_audit.jsonl\" \"$EVDIR/after_second.jsonl\""
+  outcome_guard "first snapshot has exactly one entry" "[ \"\$(wc -l <\"$EVDIR/after_first.jsonl\")\" -eq 1 ]"
+  outcome_guard "varambu cli output matches persisted first entry without synthesis" "diff -q \"$EVDIR/after_first.jsonl\" \"$EVDIR/varambu_after_first.out\" >/dev/null"
+  outcome_guard "second entry appended after first in request order" "[ \"\$(wc -l <\"$EVDIR/after_second.jsonl\")\" -eq 2 ] && jq -rn '[inputs] | .[0].result' \"$EVDIR/after_second.jsonl\" | grep -q allow && jq -rn '[inputs] | .[1].result' \"$EVDIR/after_second.jsonl\" | grep -q deny"
+  return 0
+}
+
+M5_T44_test() {
+  begin_test_evidence "M5-T44" "varambu_audit_session_and_history"
+  session1="/repo/artifacts/varambu-demo/e2e-M5-T44-s1"
+  session2="/repo/artifacts/varambu-demo/e2e-M5-T44-s2"
+  premise_guard "two synthetic sessions exist with distinct records and current points to session 2" "mkdir -p /repo/artifacts/varambu-demo && find /repo/artifacts/varambu-demo -mindepth 1 -maxdepth 1 -exec rm -rf {} + && mkdir -p \"$session1\" \"$session2\" && printf '{\"sequence\":1,\"result\":\"allow\",\"reason_code\":\"ok\"}\n' >\"$session1/capiss_audit.jsonl\" && printf '#1 MINTED OK  -\n' >\"$session1/capiss_audit.log\" && printf '{\"sequence\":1,\"result\":\"deny\",\"reason_code\":\"policy\"}\n' >\"$session2/capiss_audit.jsonl\" && printf '#1 DENIED: Reason Policy  -\n' >\"$session2/capiss_audit.log\" && ln -sfn \"$session2\" /repo/artifacts/varambu-demo/current"
+  exercise_guard "show default current session audit" "bash /repo/varambu audit >\"$EVDIR/current.out\" 2>\"$EVDIR/current.err\""
+  exercise_guard "show all sessions audit" "bash /repo/varambu audit --all >\"$EVDIR/all.out\" 2>\"$EVDIR/all.err\""
+  exercise_guard "get current session audit file paths" "bash /repo/varambu audit-file >\"$EVDIR/paths.out\" 2>\"$EVDIR/paths.err\""
+  exercise_guard "get all sessions audit file paths" "bash /repo/varambu audit-file --all >\"$EVDIR/paths_all.out\" 2>\"$EVDIR/paths_all.err\""
+  outcome_guard "default audit shows only current session denied record" "grep -q 'DENIED' \"$EVDIR/current.out\" && ! grep -q 'MINTED' \"$EVDIR/current.out\""
+  outcome_guard "all sessions audit shows both minted and denied records" "grep -q 'MINTED' \"$EVDIR/all.out\" && grep -q 'DENIED' \"$EVDIR/all.out\""
+  outcome_guard "no cross-session deduplification" "[ \"\$(grep -c 'MINTED\|DENIED' \"$EVDIR/all.out\")\" -eq 2 ]"
+  outcome_guard "audit-file paths point to existing readable files" "paths_ok=1; while IFS= read -r p; do p=\"\${p#*=}\"; [ -f \"\$p\" ] || { echo \"missing: \$p\"; paths_ok=0; }; done <\"$EVDIR/paths.out\"; [ \"\$paths_ok\" -eq 1 ]"
+  outcome_guard "audit-file --all exposes paths for both sessions" "grep -c 'capiss_audit' \"$EVDIR/paths_all.out\" | grep -q '[2-9]'"
+  return 0
+}
+
+M5_T45_test() {
+  begin_test_evidence "M5-T45" "varambu_audit_secret_exclusion"
+  session_dir="/repo/artifacts/varambu-demo/e2e-M5-T45"
+  premise_guard "M5 path ready and audit session prepared" "m5_ready && jira_mcp_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
+  exercise_guard "start audit tailer" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; : >\"$session_dir/capiss_audit.jsonl\"; : >\"$session_dir/capiss_audit.log\"; python3 /repo/scripts/varambu_audit.py tail --since \"\$since\" --jsonl \"$session_dir/capiss_audit.jsonl\" --human \"$session_dir/capiss_audit.log\" --err \"$session_dir/audit_tailer.err\" >/dev/null 2>>\"$session_dir/audit_tailer.err\" & echo \$! >\"$session_dir/audit_tailer.pid\"; sleep 2; kill -0 \"\$(cat \"$session_dir/audit_tailer.pid\")\""
+  exercise_guard "perform allowed and denied MCP requests" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/iam_mcp.json\" \"$EVDIR/iam.err\"; mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"t45\",\"description\":\"d\"}' \"$EVDIR/iam_create_mcp.json\" \"$EVDIR/iam_create.err\"; mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/nas_mcp.json\" \"$EVDIR/nas.err\""
+  exercise_guard "wait for entries and stop tailer" "i=1; while [ \$i -le 30 ]; do [ \"\$(wc -l <\"$session_dir/capiss_audit.jsonl\")\" -ge 3 ] && break; sleep 1; i=\$((i+1)); done; kill \"\$(cat \"$session_dir/audit_tailer.pid\")\" 2>/dev/null || true; cp \"$session_dir/capiss_audit.jsonl\" \"$EVDIR/capiss_audit.jsonl\"; cp \"$session_dir/capiss_audit.log\" \"$EVDIR/capiss_audit.log\"; cp \"$session_dir/audit_tailer.err\" \"$EVDIR/audit_tailer.err\""
+  exercise_guard "render audit through varambu cli" "bash /repo/varambu audit --json >\"$EVDIR/varambu_audit.out\""
+  outcome_guard "no bearer token values in jsonl evidence" "! grep -E 'Bearer |\"token\":\s*\"[A-Za-z0-9+/]{20,}' \"$EVDIR/capiss_audit.jsonl\""
+  outcome_guard "no bearer token values in human log evidence" "! grep -E 'Bearer |Basic ' \"$EVDIR/capiss_audit.log\""
+  outcome_guard "no upstream credentials in tailer diagnostics" "! grep -E 'Bearer |Basic |JIRA_API_TOKEN' \"$EVDIR/audit_tailer.err\""
+  outcome_guard "no bearer token values in varambu cli output" "! grep -E 'Bearer |Basic ' \"$EVDIR/varambu_audit.out\""
+  outcome_guard "token identifiers are present but contain only identifier chars" "jq -e 'select(.token_id != null) | .token_id | test(\"^[a-f0-9-]+$\")' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
+  return 0
+}
+
+M5_T46_test() {
+  begin_test_evidence "M5-T46" "varambu_audit_stale_tailer_warning"
+  session_dir="/repo/artifacts/varambu-demo/e2e-M5-T46"
+  premise_guard "session with dead tailer PID prepared" "rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && printf '#1 MINTED OK  -\nLogged At:    -\n\n' >\"$session_dir/capiss_audit.log\" && printf '{\"sequence\":1,\"result\":\"allow\",\"reason_code\":\"ok\"}\n' >\"$session_dir/capiss_audit.jsonl\" && echo 99999999 >\"$session_dir/audit_tailer.pid\""
+  exercise_guard "run non-strict audit with dead tailer" "bash /repo/varambu audit >\"$EVDIR/audit_warn.out\" 2>\"$EVDIR/audit_warn.err\""
+  exercise_guard "capture strict audit exit code" "bash /repo/varambu audit --strict >\"$EVDIR/audit_strict.out\" 2>\"$EVDIR/audit_strict.err\"; echo \$? >\"$EVDIR/strict_rc.txt\""
+  outcome_guard "non-strict audit emits stale tailer warning to stderr" "grep -qi 'WARNING.*tailer' \"$EVDIR/audit_warn.err\""
+  outcome_guard "non-strict audit still prints persisted evidence" "grep -q 'MINTED' \"$EVDIR/audit_warn.out\""
+  outcome_guard "strict audit exits with non-zero code" "[ \"\$(cat \"$EVDIR/strict_rc.txt\")\" != \"0\" ]"
+  return 0
+}
+
+M5_T47_test() {
+  begin_test_evidence "M5-T47" "varambu_audit_timing_semantics"
+  session_dir="/repo/artifacts/varambu-demo/e2e-M5-T47"
+  premise_guard "M5 path ready and audit session prepared" "m5_ready && jira_mcp_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
+  exercise_guard "start audit tailer" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; : >\"$session_dir/capiss_audit.jsonl\"; : >\"$session_dir/capiss_audit.log\"; python3 /repo/scripts/varambu_audit.py tail --since \"\$since\" --jsonl \"$session_dir/capiss_audit.jsonl\" --human \"$session_dir/capiss_audit.log\" --err \"$session_dir/audit_tailer.err\" >/dev/null 2>>\"$session_dir/audit_tailer.err\" & echo \$! >\"$session_dir/audit_tailer.pid\"; sleep 2; kill -0 \"\$(cat \"$session_dir/audit_tailer.pid\")\""
+  exercise_guard "perform allowed and denied mint requests" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/iam_mcp.json\" \"$EVDIR/iam.err\"; mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/nas_mcp.json\" \"$EVDIR/nas.err\""
+  exercise_guard "wait for entries and stop tailer" "i=1; while [ \$i -le 20 ]; do [ \"\$(wc -l <\"$session_dir/capiss_audit.jsonl\")\" -ge 2 ] && break; sleep 1; i=\$((i+1)); done; kill \"\$(cat \"$session_dir/audit_tailer.pid\")\" 2>/dev/null || true; cp \"$session_dir/capiss_audit.jsonl\" \"$EVDIR/capiss_audit.jsonl\""
+  outcome_guard "minted record includes utc and local timestamps and timezone" "jq -e 'select(.result==\"allow\") | (.timestamp_utc | endswith(\"Z\")) and (.timestamp_local | test(\" [A-Za-z]\")) and (.timezone | type)==\"string\"' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
+  outcome_guard "minted record includes issued expires and actual ttl" "jq -e 'select(.result==\"allow\") | (.issued_at_utc | endswith(\"Z\")) and (.expires_at_utc | endswith(\"Z\")) and (.ttl_seconds | type)==\"number\" and .ttl_seconds > 0' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
+  outcome_guard "denied record includes logged timestamps and omits token validity" "jq -e 'select(.result==\"deny\") | (.timestamp_utc | endswith(\"Z\")) and (.timezone | type)==\"string\" and (has(\"issued_at_utc\") | not) and (has(\"expires_at_utc\") | not) and (has(\"ttl_seconds\") | not)' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
+  outcome_guard "human log shows local time in header" "grep -E '^#[0-9]+ (MINTED|DENIED).* [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}' \"$session_dir/capiss_audit.log\" >/dev/null"
+  return 0
+}
+
+M5_T48_test() {
+  begin_test_evidence "M5-T48" "varambu_audit_uniform_enrichment"
+  session_dir="/repo/artifacts/varambu-demo/e2e-M5-T48"
+  premise_guard "M5 path ready and audit session prepared" "m5_ready && jira_mcp_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
+  exercise_guard "start audit tailer" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; : >\"$session_dir/capiss_audit.jsonl\"; : >\"$session_dir/capiss_audit.log\"; python3 /repo/scripts/varambu_audit.py tail --since \"\$since\" --jsonl \"$session_dir/capiss_audit.jsonl\" --human \"$session_dir/capiss_audit.log\" --err \"$session_dir/audit_tailer.err\" >/dev/null 2>>\"$session_dir/audit_tailer.err\" & echo \$! >\"$session_dir/audit_tailer.pid\"; sleep 2; kill -0 \"\$(cat \"$session_dir/audit_tailer.pid\")\""
+  exercise_guard "perform M5 read and create requests and a denied request" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/iam_read_mcp.json\" \"$EVDIR/iam_read.err\"; mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"t48\",\"description\":\"d\"}' \"$EVDIR/iam_create_mcp.json\" \"$EVDIR/iam_create.err\"; mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/nas_mcp.json\" \"$EVDIR/nas.err\""
+  exercise_guard "wait for entries and stop tailer" "i=1; while [ \$i -le 30 ]; do [ \"\$(wc -l <\"$session_dir/capiss_audit.jsonl\")\" -ge 3 ] && break; sleep 1; i=\$((i+1)); done; kill \"\$(cat \"$session_dir/audit_tailer.pid\")\" 2>/dev/null || true; cp \"$session_dir/capiss_audit.jsonl\" \"$EVDIR/capiss_audit.jsonl\""
+  outcome_guard "all records share the same enriched schema fields" "jq -e '[inputs] | all(has(\"result\") and has(\"reason_code\") and has(\"timestamp_utc\") and has(\"timestamp_local\") and has(\"timezone\") and has(\"policy_id\") and has(\"policy_hash\"))' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
+  outcome_guard "all minted records include token validity and no bearer values" "jq -e '[inputs] | map(select(.result==\"allow\")) | all(has(\"token_id\") and has(\"issued_at_utc\") and has(\"expires_at_utc\") and has(\"ttl_seconds\"))' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
+  outcome_guard "all denied records omit token validity fields" "jq -e '[inputs] | map(select(.result==\"deny\")) | all((has(\"issued_at_utc\") | not) and (has(\"expires_at_utc\") | not) and (has(\"ttl_seconds\") | not))' \"$EVDIR/capiss_audit.jsonl\" >/dev/null"
+  outcome_guard "no bearer token values in any audit record" "! grep -E 'Bearer |Basic ' \"$EVDIR/capiss_audit.jsonl\""
+  return 0
+}
+
+M5_T49_test() {
+  begin_test_evidence "M5-T49" "trace_full_chain_allowed"
+  echo "EVIDENCE_DIR=$EVDIR"
+  sess_rel="e2e-M5-T49"
+  session_dir="/repo/artifacts/varambu-demo/$sess_rel"
+  prompt="Use the Jira MCP tools to create a story in IAM."
+  premise_guard "M5 path and mock ready; session prepared" \
+    "m5_ready && trace_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir/codex-home/sessions/2026/06/19\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/since.txt\""
+  exercise_guard "start capiss and gateway tailers" \
+    "trace_start_tailers \"$session_dir\" \"\$(cat \"$EVDIR/since.txt\")\""
+  exercise_guard "allowed create_story for IAM with adapter audit" \
+    "mcp_tool_call_traced create_story '{\"project_key\":\"IAM\",\"summary\":\"trace e2e\",\"description\":\"full chain\"}' \"$EVDIR/mcp.json\" \"$EVDIR/adapter.err\" \"$sess_rel\""
+  exercise_guard "extract correlation id" \
+    "mcp_cid \"$EVDIR/mcp.json\" >\"$EVDIR/cid.txt\"; grep -Eq '^[0-9a-f-]{36}$' \"$EVDIR/cid.txt\""
+  exercise_guard "synthesize codex rollout carrying verbatim intent" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; { rollout_user '$prompt'; rollout_call create_story call-X '{\"project_key\":\"IAM\",\"summary\":\"trace e2e\",\"description\":\"full chain\"}'; rollout_output call-X \"\$cid\" true; } >\"$session_dir/codex-home/sessions/2026/06/19/rollout-1.jsonl\""
+  exercise_guard "wait for in-boundary legs and stop tailers" \
+    "trace_wait_inboundary \"$session_dir\" 1; trace_stop_tailers \"$session_dir\"; cp \"$session_dir/capiss_audit.jsonl\" \"$EVDIR/capiss_audit.jsonl\"; cp \"$session_dir/gateway_audit.jsonl\" \"$EVDIR/gateway_audit.jsonl\"; cp \"$session_dir/adapter_audit.jsonl\" \"$EVDIR/adapter_audit.jsonl\""
+  exercise_guard "render trace json and human" \
+    "python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock >\"$EVDIR/trace.txt\" 2>>\"$EVDIR/trace.err\"; cp \"$session_dir/trace.jsonl\" \"$EVDIR/trace.jsonl\""
+  outcome_guard "exactly one chain for the correlation id" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '[.[] | select(.correlation_id==\$c)] | length==1' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "legs render in fixed seven-leg canonical order" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '.[] | select(.correlation_id==\$c) | [.legs[].leg] == [\"intent\",\"action\",\"adapter_request\",\"mint\",\"gateway\",\"upstream\",\"adapter_decision\"]' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "all seven legs present including a distinct upstream leg" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '.[] | select(.correlation_id==\$c) | .legs | all(.[]; .present==true)' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "gateway leg is enforcement allow and upstream leg carries the upstream status" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '.[] | select(.correlation_id==\$c) | (.legs[]|select(.leg==\"gateway\")|.fields.leg_status==\"allow\") and (.legs[]|select(.leg==\"upstream\")|.fields.upstream_status==201)' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "intent leg equals the verbatim prompt" \
+    "jq -e --arg p '$prompt' 'first(.[]) | .legs[] | select(.leg==\"intent\") | .fields.user_message==\$p' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "mint, gateway, and upstream legs carry the same correlation id" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '.[] | select(.correlation_id==\$c) | (.legs[]|select(.leg==\"mint\")|.fields.correlation_id==\$c) and (.legs[]|select(.leg==\"gateway\")|.fields.correlation_id==\$c) and (.legs[]|select(.leg==\"upstream\")|.fields.correlation_id==\$c)' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "human render shows the redesigned labels and verbatim intent" \
+    "grep -Eq '[0-9]  ADAPTER ' \"$EVDIR/trace.txt\" && grep -Fq 'RETURN TO CODEX' \"$EVDIR/trace.txt\" && grep -Fq 'MINT' \"$EVDIR/trace.txt\" && tr '\n' ' ' < \"$EVDIR/trace.txt\" | tr -s ' ' | grep -Fq '$prompt'"
+  return 0
+}
+
+M5_T50_test() {
+  begin_test_evidence "M5-T50" "trace_denied_mint_partial"
+  echo "EVIDENCE_DIR=$EVDIR"
+  sess_rel="e2e-M5-T50"
+  session_dir="/repo/artifacts/varambu-demo/$sess_rel"
+  premise_guard "M5 path and mock ready; session prepared" \
+    "m5_ready && trace_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir/codex-home/sessions/2026/06/19\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/since.txt\""
+  exercise_guard "start capiss and gateway tailers" \
+    "trace_start_tailers \"$session_dir\" \"\$(cat \"$EVDIR/since.txt\")\""
+  exercise_guard "denied read_project_summary for NAS with adapter audit" \
+    "mcp_tool_call_traced read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/mcp.json\" \"$EVDIR/adapter.err\" \"$sess_rel\""
+  exercise_guard "extract correlation id" \
+    "mcp_cid \"$EVDIR/mcp.json\" >\"$EVDIR/cid.txt\"; grep -Eq '^[0-9a-f-]{36}$' \"$EVDIR/cid.txt\""
+  exercise_guard "synthesize codex rollout for the denied request" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; { rollout_user 'Read the NAS project summary.'; rollout_call read_project_summary call-X '{\"project_key\":\"NAS\"}'; rollout_output call-X \"\$cid\" false; } >\"$session_dir/codex-home/sessions/2026/06/19/rollout-1.jsonl\""
+  exercise_guard "wait for capiss deny and stop tailers" \
+    "trace_wait_inboundary \"$session_dir\" 0; trace_stop_tailers \"$session_dir\"; cp \"$session_dir/capiss_audit.jsonl\" \"$EVDIR/capiss_audit.jsonl\"; cp \"$session_dir/adapter_audit.jsonl\" \"$EVDIR/adapter_audit.jsonl\""
+  exercise_guard "render trace json and human" \
+    "python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock >\"$EVDIR/trace.txt\" 2>>\"$EVDIR/trace.err\""
+  outcome_guard "trace renders without error" \
+    "test ! -s \"$EVDIR/trace.err\""
+  outcome_guard "mint leg present and denied" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '.[] | select(.correlation_id==\$c) | .legs[] | select(.leg==\"mint\") | .present==true and .fields.result==\"deny\"' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "gateway and upstream legs shown absent (partial chain ends at deny)" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '.[] | select(.correlation_id==\$c) | (.legs[]|select(.leg==\"gateway\")|.present==false) and (.legs[]|select(.leg==\"upstream\")|.present==false)' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "adapter_request leg still present" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '.[] | select(.correlation_id==\$c) | .legs[] | select(.leg==\"adapter_request\") | .present==true' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "missing leg rendered as not yet available not an error" \
+    "grep -Fq 'not yet available' \"$EVDIR/trace.txt\""
+  return 0
+}
+
+M5_T51_test() {
+  begin_test_evidence "M5-T51" "trace_intent_pending_converge"
+  echo "EVIDENCE_DIR=$EVDIR"
+  sess_rel="e2e-M5-T51"
+  session_dir="/repo/artifacts/varambu-demo/$sess_rel"
+  prompt="Create a story in IAM after the in-boundary legs are captured."
+  premise_guard "M5 path and mock ready; session prepared" \
+    "m5_ready && trace_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir/codex-home/sessions/2026/06/19\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/since.txt\""
+  exercise_guard "start capiss and gateway tailers" \
+    "trace_start_tailers \"$session_dir\" \"\$(cat \"$EVDIR/since.txt\")\""
+  exercise_guard "allowed create_story for IAM with adapter audit" \
+    "mcp_tool_call_traced create_story '{\"project_key\":\"IAM\",\"summary\":\"converge\",\"description\":\"d\"}' \"$EVDIR/mcp.json\" \"$EVDIR/adapter.err\" \"$sess_rel\""
+  exercise_guard "extract correlation id and capture in-boundary legs" \
+    "mcp_cid \"$EVDIR/mcp.json\" >\"$EVDIR/cid.txt\"; grep -Eq '^[0-9a-f-]{36}$' \"$EVDIR/cid.txt\"; trace_wait_inboundary \"$session_dir\" 1; trace_stop_tailers \"$session_dir\""
+  exercise_guard "render trace before rollout exists (intent pending)" \
+    "python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --json >\"$EVDIR/trace_before.json\" 2>\"$EVDIR/trace_before.err\""
+  exercise_guard "make the rollout available then re-render" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; { rollout_user '$prompt'; rollout_call create_story call-X '{\"project_key\":\"IAM\",\"summary\":\"converge\",\"description\":\"d\"}'; rollout_output call-X \"\$cid\" true; } >\"$session_dir/codex-home/sessions/2026/06/19/rollout-1.jsonl\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --json >\"$EVDIR/trace_after.json\" 2>\"$EVDIR/trace_after.err\""
+  outcome_guard "first run shows in-boundary legs with intent not yet available" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '.[] | select(.correlation_id==\$c) | (.legs[]|select(.leg==\"intent\")|.present==false) and (.legs[]|select(.leg==\"adapter_request\")|.present==true)' \"$EVDIR/trace_before.json\" >/dev/null"
+  outcome_guard "second run incorporates the verbatim intent" \
+    "jq -e --arg p '$prompt' 'first(.[]) | .legs[] | select(.leg==\"intent\") | .present==true and .fields.user_message==\$p' \"$EVDIR/trace_after.json\" >/dev/null"
+  return 0
+}
+
+M5_T52_test() {
+  begin_test_evidence "M5-T52" "trace_multi_tool_attribution"
+  echo "EVIDENCE_DIR=$EVDIR"
+  sess_rel="e2e-M5-T52"
+  session_dir="/repo/artifacts/varambu-demo/$sess_rel"
+  prompt="Use the Jira MCP tools to read IAM and then create a story in IAM."
+  premise_guard "M5 path and mock ready; session prepared" \
+    "m5_ready && trace_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir/codex-home/sessions/2026/06/19\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/since.txt\""
+  exercise_guard "start capiss and gateway tailers" \
+    "trace_start_tailers \"$session_dir\" \"\$(cat \"$EVDIR/since.txt\")\""
+  exercise_guard "allowed read then create for IAM with adapter audit" \
+    "mcp_tool_call_traced read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/read.json\" \"$EVDIR/read.err\" \"$sess_rel\"; mcp_tool_call_traced create_story '{\"project_key\":\"IAM\",\"summary\":\"two tools\",\"description\":\"d\"}' \"$EVDIR/create.json\" \"$EVDIR/create.err\" \"$sess_rel\""
+  exercise_guard "extract both correlation ids" \
+    "mcp_cid \"$EVDIR/read.json\" >\"$EVDIR/cid_a.txt\"; mcp_cid \"$EVDIR/create.json\" >\"$EVDIR/cid_b.txt\"; grep -Eq '^[0-9a-f-]{36}$' \"$EVDIR/cid_a.txt\" && grep -Eq '^[0-9a-f-]{36}$' \"$EVDIR/cid_b.txt\""
+  exercise_guard "synthesize one-turn rollout driving both tool calls" \
+    "cida=\"\$(cat \"$EVDIR/cid_a.txt\")\"; cidb=\"\$(cat \"$EVDIR/cid_b.txt\")\"; { rollout_user '$prompt'; rollout_call read_project_summary call-A '{\"project_key\":\"IAM\"}'; rollout_output call-A \"\$cida\" true; rollout_call create_story call-B '{\"project_key\":\"IAM\",\"summary\":\"two tools\",\"description\":\"d\"}'; rollout_output call-B \"\$cidb\" true; } >\"$session_dir/codex-home/sessions/2026/06/19/rollout-1.jsonl\""
+  exercise_guard "wait then render trace" \
+    "trace_wait_inboundary \"$session_dir\" 1; trace_stop_tailers \"$session_dir\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\"; cp \"$session_dir/trace.jsonl\" \"$EVDIR/trace.jsonl\""
+  outcome_guard "two distinct chains surfaced" \
+    "cida=\"\$(cat \"$EVDIR/cid_a.txt\")\"; cidb=\"\$(cat \"$EVDIR/cid_b.txt\")\"; jq -e --arg a \"\$cida\" --arg b \"\$cidb\" '([.[]|select(.correlation_id==\$a)]|length==1) and ([.[]|select(.correlation_id==\$b)]|length==1) and (\$a!=\$b)' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "both chains attribute the same verbatim prompt" \
+    "cida=\"\$(cat \"$EVDIR/cid_a.txt\")\"; cidb=\"\$(cat \"$EVDIR/cid_b.txt\")\"; jq -e --arg a \"\$cida\" --arg b \"\$cidb\" --arg p '$prompt' '(.[]|select(.correlation_id==\$a)|.legs[]|select(.leg==\"intent\")|.fields.user_message==\$p) and (.[]|select(.correlation_id==\$b)|.legs[]|select(.leg==\"intent\")|.fields.user_message==\$p)' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "each chain keeps its own M5 tool action" \
+    "cida=\"\$(cat \"$EVDIR/cid_a.txt\")\"; cidb=\"\$(cat \"$EVDIR/cid_b.txt\")\"; jq -e --arg a \"\$cida\" --arg b \"\$cidb\" '(.[]|select(.correlation_id==\$a)|.legs[]|select(.leg==\"action\")|.fields.tool_name==\"read_project_summary\") and (.[]|select(.correlation_id==\$b)|.legs[]|select(.leg==\"action\")|.fields.tool_name==\"create_story\")' \"$EVDIR/trace.json\" >/dev/null"
+  return 0
+}
+
+M5_T53_test() {
+  begin_test_evidence "M5-T53" "trace_secret_hygiene_bounds"
+  echo "EVIDENCE_DIR=$EVDIR"
+  sess_rel="e2e-M5-T53"
+  session_dir="/repo/artifacts/varambu-demo/$sess_rel"
+  premise_guard "M5 path and mock ready; session prepared" \
+    "m5_ready && trace_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir/codex-home/sessions/2026/06/19\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/since.txt\""
+  exercise_guard "start capiss and gateway tailers" \
+    "trace_start_tailers \"$session_dir\" \"\$(cat \"$EVDIR/since.txt\")\""
+  exercise_guard "allowed create_story for IAM with adapter audit" \
+    "mcp_tool_call_traced create_story '{\"project_key\":\"IAM\",\"summary\":\"hygiene\",\"description\":\"d\"}' \"$EVDIR/mcp.json\" \"$EVDIR/adapter.err\" \"$sess_rel\""
+  exercise_guard "extract correlation id" \
+    "mcp_cid \"$EVDIR/mcp.json\" >\"$EVDIR/cid.txt\"; grep -Eq '^[0-9a-f-]{36}$' \"$EVDIR/cid.txt\""
+  exercise_guard "synthesize rollout with secrets, over-limit text, reasoning, and exec noise" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; bigmsg=\"\$(python3 -c \"print('U'*3000)\")\"; bigsum=\"\$(python3 -c \"print('S'*1500)\")\"; args=\"\$(jq -cn --arg s \"\$bigsum\" '{project_key:\"IAM\",summary:\$s,description:\"d\",token:\"biscuit-leak-value\",authorization:\"Bearer sk-leaked-secret\"}')\"; { rollout_user \"\$bigmsg\"; jq -cn '{type:\"response_item\",timestamp:\"2026-06-19T10:00:00.500Z\",payload:{type:\"reasoning\",text:\"SECRET model chain-of-thought reasoning\"}}'; rollout_call create_story call-X \"\$args\"; jq -cn '{type:\"response_item\",timestamp:\"2026-06-19T10:00:01.500Z\",payload:{type:\"function_call\",name:\"exec_command\",call_id:\"call-E\",arguments:\"{\\\"command\\\":\\\"cat /etc/shadow\\\"}\"}}'; rollout_output call-X \"\$cid\" true; } >\"$session_dir/codex-home/sessions/2026/06/19/rollout-1.jsonl\""
+  exercise_guard "wait then render trace" \
+    "trace_wait_inboundary \"$session_dir\" 1; trace_stop_tailers \"$session_dir\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock >\"$EVDIR/trace.txt\" 2>>\"$EVDIR/trace.err\"; cp \"$session_dir/trace.jsonl\" \"$EVDIR/trace.jsonl\""
+  outcome_guard "no bearer/basic/biscuit/cookie/jira secret values anywhere" \
+    "! grep -E 'Bearer |Basic |biscuit|sk-leaked-secret|JIRA_API_TOKEN|[Cc]ookie:' \"$EVDIR/trace.jsonl\" \"$EVDIR/trace.txt\" \"$session_dir/capiss_audit.jsonl\" \"$session_dir/gateway_audit.jsonl\" \"$session_dir/adapter_audit.jsonl\""
+  outcome_guard "forbidden field names dropped from persisted arguments" \
+    "jq -e '(has(\"token\")|not) and (.arguments | (has(\"token\")|not) and (has(\"authorization\")|not))' \"$EVDIR/trace.jsonl\" >/dev/null"
+  outcome_guard "over-limit user_message truncated with marker" \
+    "jq -r '.user_message' \"$EVDIR/trace.jsonl\" | grep -Fq '[truncated]' && [ \"\$(jq -r '.user_message' \"$EVDIR/trace.jsonl\" | wc -c)\" -le 2049 ]"
+  outcome_guard "over-limit summary truncated with marker" \
+    "jq -r '.arguments.summary' \"$EVDIR/trace.jsonl\" | grep -Fq '[truncated]'"
+  outcome_guard "no reasoning or exec_command content persisted in trace evidence" \
+    "! grep -E 'chain-of-thought|exec_command|/etc/shadow' \"$EVDIR/trace.jsonl\""
+  return 0
+}
+
+M5_T54_test() {
+  begin_test_evidence "M5-T54" "trace_agent_tamper_detection"
+  echo "EVIDENCE_DIR=$EVDIR"
+  sess_rel="e2e-M5-T54"
+  session_dir="/repo/artifacts/varambu-demo/$sess_rel"
+  premise_guard "M5 path and mock ready; session prepared" \
+    "m5_ready && trace_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir/codex-home/sessions/2026/06/19\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/since.txt\""
+  exercise_guard "start capiss and gateway tailers" \
+    "trace_start_tailers \"$session_dir\" \"\$(cat \"$EVDIR/since.txt\")\""
+  exercise_guard "denied read_project_summary for NAS with adapter audit" \
+    "mcp_tool_call_traced read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/mcp.json\" \"$EVDIR/adapter.err\" \"$sess_rel\""
+  exercise_guard "extract correlation id" \
+    "mcp_cid \"$EVDIR/mcp.json\" >\"$EVDIR/cid.txt\"; grep -Eq '^[0-9a-f-]{36}$' \"$EVDIR/cid.txt\""
+  exercise_guard "forge a rollout output claiming success for the denied request" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; { rollout_user 'Read the NAS project summary.'; rollout_call read_project_summary call-X '{\"project_key\":\"NAS\"}'; rollout_output call-X \"\$cid\" true; } >\"$session_dir/codex-home/sessions/2026/06/19/rollout-1.jsonl\""
+  exercise_guard "wait then render trace" \
+    "trace_wait_inboundary \"$session_dir\" 0; trace_stop_tailers \"$session_dir\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock >\"$EVDIR/trace.txt\" 2>>\"$EVDIR/trace.err\""
+  outcome_guard "forged success claim is present in the agent rollout" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -r 'select(.payload.type==\"function_call_output\") | .payload.output' \"$session_dir/codex-home/sessions/2026/06/19/rollout-1.jsonl\" | jq -e --arg c \"\$cid\" '.ok==true and .correlation_id==\$c' >/dev/null"
+  outcome_guard "in-boundary mint leg reflects the true denial" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '.[] | select(.correlation_id==\$c) | .legs[] | select(.leg==\"mint\") | .fields.result==\"deny\"' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "in-boundary adapter decision reflects failure not the forged success" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '.[] | select(.correlation_id==\$c) | .legs[] | select(.leg==\"adapter_decision\") | .fields.ok==false' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "human trace presents the in-boundary truth (denied)" \
+    "grep -Eq 'DENIED' \"$EVDIR/trace.txt\""
+  return 0
+}
+
+M5_T55_test() {
+  begin_test_evidence "M5-T55" "trace_live_upstream_attested"
+  echo "EVIDENCE_DIR=$EVDIR"
+  sess_rel="e2e-M5-T55"
+  session_dir="/repo/artifacts/varambu-demo/$sess_rel"
+  upstream_mode="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' spiffe-jira-mcp-gateway 2>/dev/null | sed -n 's/^JIRA_MCP_UPSTREAM_MODE=//p')"
+  if [ "${upstream_mode:-mock}" != "live" ]; then
+    add_warning "M5-T55 skipped: gateway not in live Jira mode (JIRA_MCP_UPSTREAM_MODE=${upstream_mode:-unset}); live upstream leg not exercised"
+    return 0
+  fi
+  premise_guard "M5 live path ready; session prepared" \
+    "m5_ready && rm -rf \"$session_dir\" && mkdir -p \"$session_dir/codex-home/sessions/2026/06/19\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/since.txt\""
+  exercise_guard "start capiss and gateway tailers" \
+    "trace_start_tailers \"$session_dir\" \"\$(cat \"$EVDIR/since.txt\")\""
+  exercise_guard "allowed create_story against live Jira with adapter audit" \
+    "mcp_tool_call_traced create_story '{\"project_key\":\"IAM\",\"summary\":\"live trace\",\"description\":\"d\"}' \"$EVDIR/mcp.json\" \"$EVDIR/adapter.err\" \"$sess_rel\""
+  exercise_guard "extract correlation id and synthesize rollout" \
+    "mcp_cid \"$EVDIR/mcp.json\" >\"$EVDIR/cid.txt\"; cid=\"\$(cat \"$EVDIR/cid.txt\")\"; { rollout_user 'Create a story in IAM.'; rollout_call create_story call-X '{\"project_key\":\"IAM\",\"summary\":\"live trace\",\"description\":\"d\"}'; rollout_output call-X \"\$cid\" true; } >\"$session_dir/codex-home/sessions/2026/06/19/rollout-1.jsonl\""
+  exercise_guard "wait then render trace in live mode" \
+    "trace_wait_inboundary \"$session_dir\" 1; trace_stop_tailers \"$session_dir\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode live >\"$EVDIR/trace.txt\" 2>\"$EVDIR/trace.err\""
+  outcome_guard "upstream leg is gateway-attested and explicitly labeled live" \
+    "grep -Fq 'gateway-attested, live' \"$EVDIR/trace.txt\""
+  outcome_guard "no fabricated independent upstream voice present" \
+    "! grep -Eq 'jiramcp_upstream_request|mock_upstream' \"$EVDIR/trace.txt\""
+  return 0
+}
+
+M5_T56_test() {
+  begin_test_evidence "M5-T56" "trace_cli_surface_and_audit_nonregression"
+  echo "EVIDENCE_DIR=$EVDIR"
+  root="/repo/artifacts/varambu-demo"
+  s1="$root/e2e-M5-T56-s1"
+  s2="$root/e2e-M5-T56-s2"
+  cid1="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+  cid2="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+  echo "$cid1" >"$EVDIR/cid1.txt"
+  echo "$cid2" >"$EVDIR/cid2.txt"
+  premise_guard "two isolated synthetic trace sessions; current points to session two" \
+    "rm -rf \"$s1\" \"$s2\" && write_synth_trace_session \"$s1\" \"$cid1\" 'First session prompt.' && write_synth_trace_session \"$s2\" \"$cid2\" 'Second session prompt.' && ln -sfn \"$s2\" \"$root/current\""
+  exercise_guard "run trace default, cid, all, json" \
+    "bash /repo/varambu trace >\"$EVDIR/trace_default.out\" 2>\"$EVDIR/trace_default.err\"; bash /repo/varambu trace --cid \"$cid2\" >\"$EVDIR/trace_cid.out\" 2>>\"$EVDIR/trace_default.err\"; bash /repo/varambu trace --all >\"$EVDIR/trace_all.out\" 2>>\"$EVDIR/trace_default.err\"; bash /repo/varambu trace --json >\"$EVDIR/trace_json.out\" 2>>\"$EVDIR/trace_default.err\""
+  exercise_guard "run audit surfaces (non-regression)" \
+    "bash /repo/varambu audit >\"$EVDIR/audit.out\" 2>\"$EVDIR/audit.err\"; bash /repo/varambu audit --all >\"$EVDIR/audit_all.out\" 2>>\"$EVDIR/audit.err\"; bash /repo/varambu audit --json >\"$EVDIR/audit_json.out\" 2>>\"$EVDIR/audit.err\"; bash /repo/varambu audit-file >\"$EVDIR/audit_file.out\" 2>>\"$EVDIR/audit.err\""
+  outcome_guard "default trace shows the current session chain and not the other session" \
+    "grep -Fq \"$cid2\" \"$EVDIR/trace_default.out\" && ! grep -Fq \"$cid1\" \"$EVDIR/trace_default.out\""
+  outcome_guard "trace --cid selects exactly the requested chain" \
+    "grep -Fq \"$cid2\" \"$EVDIR/trace_cid.out\""
+  outcome_guard "trace --all shows both sessions" \
+    "grep -Fq \"$cid1\" \"$EVDIR/trace_all.out\" && grep -Fq \"$cid2\" \"$EVDIR/trace_all.out\""
+  outcome_guard "trace --json is machine readable" \
+    "jq -e 'type==\"array\"' \"$EVDIR/trace_json.out\" >/dev/null"
+  outcome_guard "audit current session shows only its record (non-regression)" \
+    "grep -Fq 'MINTED OK' \"$EVDIR/audit.out\" && grep -Fq \"$cid2\" \"$EVDIR/audit.out\" && ! grep -Fq \"$cid1\" \"$EVDIR/audit.out\""
+  outcome_guard "audit --json parses and audit-file resolves capiss paths (non-regression)" \
+    "jq -e '.result==\"allow\"' \"$EVDIR/audit_json.out\" >/dev/null && grep -Eq 'capiss_audit' \"$EVDIR/audit_file.out\""
+  return 0
+}
+
+M5_T57_test() {
+  begin_test_evidence "M5-T57" "trace_canonical_join_integrity"
+  echo "EVIDENCE_DIR=$EVDIR"
+  sess_rel="e2e-M5-T57"
+  session_dir="/repo/artifacts/varambu-demo/$sess_rel"
+  premise_guard "M5 path and mock ready; session prepared" \
+    "m5_ready && trace_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir/codex-home/sessions/2026/06/19\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/since.txt\""
+  exercise_guard "start capiss and gateway tailers" \
+    "trace_start_tailers \"$session_dir\" \"\$(cat \"$EVDIR/since.txt\")\""
+  exercise_guard "two allowed create_story calls with adapter audit" \
+    "mcp_tool_call_traced create_story '{\"project_key\":\"IAM\",\"summary\":\"first\",\"description\":\"d\"}' \"$EVDIR/a.json\" \"$EVDIR/a.err\" \"$sess_rel\"; mcp_tool_call_traced create_story '{\"project_key\":\"IAM\",\"summary\":\"second\",\"description\":\"d\"}' \"$EVDIR/b.json\" \"$EVDIR/b.err\" \"$sess_rel\""
+  exercise_guard "extract correlation ids and synthesize two rollout turns" \
+    "mcp_cid \"$EVDIR/a.json\" >\"$EVDIR/cid_a.txt\"; mcp_cid \"$EVDIR/b.json\" >\"$EVDIR/cid_b.txt\"; cida=\"\$(cat \"$EVDIR/cid_a.txt\")\"; cidb=\"\$(cat \"$EVDIR/cid_b.txt\")\"; { rollout_user 'First create.'; rollout_call create_story call-A '{\"project_key\":\"IAM\",\"summary\":\"first\",\"description\":\"d\"}'; rollout_output call-A \"\$cida\" true; rollout_user 'Second create.'; rollout_call create_story call-B '{\"project_key\":\"IAM\",\"summary\":\"second\",\"description\":\"d\"}'; rollout_output call-B \"\$cidb\" true; } >\"$session_dir/codex-home/sessions/2026/06/19/rollout-1.jsonl\""
+  exercise_guard "wait then render trace json" \
+    "trace_wait_inboundary \"$session_dir\" 1; trace_stop_tailers \"$session_dir\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\""
+  outcome_guard "every chain renders legs in fixed canonical order" \
+    "jq -e 'all(.[]; [.legs[].leg] == [\"intent\",\"action\",\"adapter_request\",\"mint\",\"gateway\",\"upstream\",\"adapter_decision\"])' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "join is by correlation id with no cross-chain leg leakage" \
+    "jq -e 'all(.[]; .correlation_id as \$c | (.legs[] | select(.leg==\"mint\" and .present) | .fields.correlation_id==\$c) and (.legs[] | select(.leg==\"gateway\" and .present) | .fields.correlation_id==\$c) and (.legs[] | select(.leg==\"adapter_request\" and .present) | .fields.correlation_id==\$c))' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "two chains present with distinct correlation ids" \
+    "cida=\"\$(cat \"$EVDIR/cid_a.txt\")\"; cidb=\"\$(cat \"$EVDIR/cid_b.txt\")\"; jq -e --arg a \"\$cida\" --arg b \"\$cidb\" '([.[]|select(.correlation_id==\$a)]|length==1) and ([.[]|select(.correlation_id==\$b)]|length==1)' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "each present leg preserves its own utc timestamp and sequence" \
+    "jq -e 'all(.[]; all(.legs[] | select(.present); has(\"timestamp_utc\") and has(\"sequence\")))' \"$EVDIR/trace.json\" >/dev/null"
+  return 0
+}
+
+M5_T58_test() {
+  begin_test_evidence "M5-T58" "trace_anchor_mint_reuse_timestamps"
+  echo "EVIDENCE_DIR=$EVDIR"
+  sess_rel="e2e-M5-T58"
+  session_dir="/repo/artifacts/varambu-demo/$sess_rel"
+  fakecid="00000000-0000-4000-8000-0000000000ff"
+  premise_guard "M5 path and mock ready; session prepared" \
+    "m5_ready && trace_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir/codex-home/sessions/2026/06/19\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/since.txt\""
+  exercise_guard "start capiss and gateway tailers" \
+    "trace_start_tailers \"$session_dir\" \"\$(cat \"$EVDIR/since.txt\")\""
+  exercise_guard "allowed create_story for IAM with adapter audit" \
+    "mcp_tool_call_traced create_story '{\"project_key\":\"IAM\",\"summary\":\"anchor\",\"description\":\"d\"}' \"$EVDIR/mcp.json\" \"$EVDIR/adapter.err\" \"$sess_rel\""
+  exercise_guard "extract correlation id and synthesize rollout" \
+    "mcp_cid \"$EVDIR/mcp.json\" >\"$EVDIR/cid.txt\"; cid=\"\$(cat \"$EVDIR/cid.txt\")\"; { rollout_user 'Create a story in IAM.'; rollout_call create_story call-X '{\"project_key\":\"IAM\",\"summary\":\"anchor\",\"description\":\"d\"}'; rollout_output call-X \"\$cid\" true; } >\"$session_dir/codex-home/sessions/2026/06/19/rollout-1.jsonl\""
+  exercise_guard "wait, stop tailers, then inject a non-M5 capiss-only mint" \
+    "trace_wait_inboundary \"$session_dir\" 1; trace_stop_tailers \"$session_dir\"; jq -cn --arg c '$fakecid' '{event_type:\"capiss_mint_decision\",result:\"allow\",reason_code:\"ok\",subject_spiffe_id:\"spiffe://varambu.org/agent-a\",aud:\"tool-b\",act:\"read\",res:\"tool-b:/secret\",correlation_id:\$c,timestamp_utc:\"2026-06-19T09:00:00Z\",timestamp_local:\"2026-06-19 11:00:00 Europe/Berlin\",timezone:\"Europe/Berlin\"}' >>\"$session_dir/capiss_audit.jsonl\""
+  exercise_guard "render trace json and human in a non-UTC zone" \
+    "python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz Europe/Berlin --mode mock --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz Europe/Berlin --mode mock >\"$EVDIR/trace.txt\" 2>>\"$EVDIR/trace.err\""
+  outcome_guard "the M5 request is surfaced as a chain" \
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '[.[]|select(.correlation_id==\$c)]|length==1' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "the capiss-only non-M5 mint is NOT surfaced (anchor rule)" \
+    "jq -e --arg c '$fakecid' '[.[]|select(.correlation_id==\$c)]|length==0' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "mint leg presents the same capiss fields (full token id and grant) as the audit record" \
+    "tid=\"\$(jq -r 'select(.result==\"allow\") | .token_id' \"$session_dir/capiss_audit.jsonl\" | head -n1)\"; test -n \"\$tid\" && grep -Fq \"\$tid\" \"$EVDIR/trace.txt\" && grep -Fq 'MINT' \"$EVDIR/trace.txt\" && grep -Fq 'create_story' \"$EVDIR/trace.txt\""
+  outcome_guard "json legs carry utc, local time, and sequence per leg" \
+    "jq -e 'first(.[]) | all(.legs[] | select(.present); has(\"timestamp_utc\") and has(\"timestamp_local\") and has(\"sequence\"))' \"$EVDIR/trace.json\" >/dev/null"
+  return 0
+}
+
+M5_T59_test() {
+  begin_test_evidence "M5-T59" "trace_gateway_allow_upstream_deny"
+  echo "EVIDENCE_DIR=$EVDIR"
+  sess_rel="e2e-M5-T59"
+  session_dir="/repo/artifacts/varambu-demo/$sess_rel"
+  cid="cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+  premise_guard "session with a gateway-allow / upstream-deny fixture prepared" \
+    "rm -rf \"$session_dir\" && mkdir -p \"$session_dir/codex-home/sessions/2026/06/19\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && jq -cn --arg c \"$cid\" '{event_type:\"capiss_mint_decision\",result:\"allow\",reason_code:\"ok\",subject_spiffe_id:\"spiffe://varambu.org/codex-jira-mcp-adapter\",act:\"create_story\",res:\"jira-mcp:/project:IAM\",aud:\"jira-mcp-gateway\",token_id:\"tok-1\",root_token_id:\"root-1\",timestamp_utc:\"2026-06-19T10:00:02Z\",correlation_id:\$c}' >\"$session_dir/capiss_audit.jsonl\" && jq -cn --arg c \"$cid\" '{event_type:\"jiramcp_gateway_decision\",decision:\"deny\",reason_code:\"upstream_error\",correlation_id:\$c,act:\"create_story\",res:\"jira-mcp:/project:IAM\",token_id:\"tok-1\",root_token_id:\"root-1\",budget_remaining:19,upstream_called:true,upstream_operation:\"story_create\",upstream_status:401,upstream_error_detail:\"Unauthorized — the Jira credential was rejected\",timestamp:\"2026-06-19T10:00:03Z\"}' >\"$session_dir/gateway_audit.jsonl\" && { jq -cn --arg c \"$cid\" '{event_type:\"adapter_request\",correlation_id:\$c,tool_name:\"create_story\",res:\"jira-mcp:/project:IAM\",project_key:\"IAM\",timestamp:\"2026-06-19T10:00:01Z\"}'; jq -cn --arg c \"$cid\" '{event_type:\"adapter_decision\",correlation_id:\$c,ok:false,reason:\"upstream_error\",timestamp:\"2026-06-19T10:00:04Z\"}'; } >\"$session_dir/adapter_audit.jsonl\""
+  exercise_guard "render trace json and human in live mode" \
+    "python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode live --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode live >\"$EVDIR/trace.txt\" 2>>\"$EVDIR/trace.err\""
+  outcome_guard "gateway enforcement leg is ALLOW (the gateway did not deny)" \
+    "jq -e --arg c \"$cid\" '.[] | select(.correlation_id==\$c) | .legs[] | select(.leg==\"gateway\") | .present==true and .fields.leg_status==\"allow\"' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "upstream leg carries the denial (401 fail), distinct from the gateway" \
+    "jq -e --arg c \"$cid\" '.[] | select(.correlation_id==\$c) | .legs[] | select(.leg==\"upstream\") | .present==true and .fields.leg_status==\"fail\" and .fields.upstream_status==401' \"$EVDIR/trace.json\" >/dev/null"
+  outcome_guard "human view separates gateway ALLOW from upstream 401 FAIL" \
+    "grep -Eq 'GATEWAY .* ALLOW' \"$EVDIR/trace.txt\" && grep -Eq 'UPSTREAM .* 401 FAIL' \"$EVDIR/trace.txt\""
+  outcome_guard "upstream leg is gateway-attested (no fabricated independent voice)" \
+    "grep -Fq 'gateway-attested, live' \"$EVDIR/trace.txt\""
+  outcome_guard "human view relays the gateway-attested Jira error detail verbatim (no constructed interpretation)" \
+    "tr '\n' ' ' < \"$EVDIR/trace.txt\" | tr -s ' ' | grep -Fq 'Unauthorized — the Jira credential was rejected' && ! grep -Fq 'Action' \"$EVDIR/trace.txt\" && jq -e --arg c \"$cid\" '.[] | select(.correlation_id==\$c) | .legs[] | select(.leg==\"upstream\") | .fields.upstream_error_detail==\"Unauthorized — the Jira credential was rejected\"' \"$EVDIR/trace.json\" >/dev/null"
   return 0
 }
 
@@ -3346,6 +4455,69 @@ if [ "$RUN_M4B" -eq 1 ]; then
   run_test "T4" "IAM write token cannot update NAS before upstream use" M4B_T4_test
   run_test "T5" "description writes reject malformed or overbroad bodies" M4B_T5_test
   run_test "T6" "Jira write audit trace reconstructs mint and use" M4B_T6_test
+fi
+
+print_section "Milestone 5 — Codex Jira MCP Slice 1"
+if [ "$RUN_M5" -eq 1 ]; then
+  TEST_PREFIX="M5"
+  run_test "T1" "MCP launcher starts adapter session" M5_T1_test
+  run_test "T2" "MCP tool surface is exactly Slice 1" M5_T2_test
+  run_test "T3" "IAM project summary succeeds" M5_T3_test
+  run_test "T4" "Summary response contains only allowed fields" M5_T4_test
+  run_test "T5" "Summary response is bounded" M5_T5_test
+  run_test "T6" "NAS project summary denies at capiss" M5_T6_test
+  run_test "T7" "IAM story creation succeeds" M5_T7_test
+  run_test "T8" "IAM story creation accepts criteria" M5_T8_test
+  run_test "T9" "IAM story creation accepts valid epic" M5_T9_test
+  run_test "T10" "Invalid same-project epic denies" M5_T10_test
+  run_test "T11" "NAS project story creation denies at capiss" M5_T11_test
+  run_test "T12" "IAM token with NAS payload denies" M5_T12_test
+  run_test "T13" "IAM token with NAS epic denies" M5_T13_test
+  run_test "T14" "Arbitrary create fields are rejected" M5_T14_test
+  run_test "T15" "Plain text only and raw ADF rejected" M5_T15_test
+  run_test "T16" "Adapter forwards NAS to capiss" M5_T16_test
+  run_test "T17" "Unsupported action cannot be minted" M5_T17_test
+  run_test "T18" "Old Jira tool authority is separate" M5_T18_test
+  run_test "T19" "M5 does not disturb existing jira-tool path" M5_T19_test
+  run_test "T20" "Endpoint-bound action is enforced" M5_T20_test
+  run_test "T21" "Audience mismatch denies" M5_T21_test
+  run_test "T22" "Stolen token subject mismatch denies" M5_T22_test
+  run_test "T23" "Invalid token denies" M5_T23_test
+  run_test "T24" "Direct app bypass is unavailable" M5_T24_test
+  run_test "T25" "Only gateway calls mock upstream" M5_T25_test
+  run_test "T26" "MCP responses contain no capiss tokens" M5_T26_test
+  run_test "T27" "Adapter logs contain no bearer tokens" M5_T27_test
+  run_test "T28" "Adapter environment has no Jira API key" M5_T28_test
+  run_test "T30" "Client auth headers are stripped upstream" M5_T30_test
+  run_test "T31" "Summary participates in budget governance" M5_T31_test
+  run_test "T32" "Create consumes budget before upstream" M5_T32_test
+  run_test "T33" "Budget exhaustion denies create" M5_T33_test
+  run_test "T34" "Pre-validation denials do not consume budget" M5_T34_test
+  run_test "T35" "Upstream create failure is not refunded" M5_T35_test
+  run_test "T36" "Read audit events correlate" M5_T36_test
+  run_test "T37" "Create audit events correlate" M5_T37_test
+  run_test "T38" "Deny paths produce final decision evidence" M5_T38_test
+  run_test "T39" "Local errors avoid upstream existence leak" M5_T39_test
+  run_test "T40" "Mock upstream breadth precondition" M5_T40_test
+  run_test "T41" "Protected path narrows broad mock" M5_T41_test
+  run_test "T42" "Varambu capiss audit files" M5_T42_test
+  run_test "T43" "Varambu audit active append without post-processing" M5_T43_test
+  run_test "T44" "Varambu audit current session history and file access" M5_T44_test
+  run_test "T45" "Varambu audit secret exclusion in persisted evidence" M5_T45_test
+  run_test "T46" "Varambu audit stale tailer warning and strict failure" M5_T46_test
+  run_test "T47" "Varambu audit local and UTC timing semantics" M5_T47_test
+  run_test "T48" "Varambu audit uniform capiss enrichment" M5_T48_test
+  run_test "T49" "Varambu trace full chain allowed" M5_T49_test
+  run_test "T50" "Varambu trace denied mint partial chain" M5_T50_test
+  run_test "T51" "Varambu trace intent pending then converges" M5_T51_test
+  run_test "T52" "Varambu trace multi tool-call attribution" M5_T52_test
+  run_test "T53" "Varambu trace secret hygiene and bounds" M5_T53_test
+  run_test "T54" "Varambu trace agent tamper detection" M5_T54_test
+  run_test "T55" "Varambu trace honest live upstream leg" M5_T55_test
+  run_test "T56" "Varambu trace CLI surface and audit non-regression" M5_T56_test
+  run_test "T57" "Varambu trace canonical ordering and join integrity" M5_T57_test
+  run_test "T58" "Varambu trace anchor rule mint reuse and timestamps" M5_T58_test
+  run_test "T59" "Varambu trace separates gateway allow from upstream deny" M5_T59_test
 fi
 
 printf '\nTotal: %d  Passed: %d  Failed: %d\n' "$TOTAL" "$PASSED" "$FAILED"

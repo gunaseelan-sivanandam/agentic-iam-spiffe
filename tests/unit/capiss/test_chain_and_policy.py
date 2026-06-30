@@ -32,7 +32,7 @@ def base_root_block(**overrides) -> str:
     data = {
         "root_token_id": "root-1",
         "token_id": "token-root",
-        "subject_spiffe_id": "spiffe://example.org/agent-a",
+        "subject_spiffe_id": "spiffe://varambu.org/agent-a",
         "aud": "tool-b",
         "act": "read",
         "res": "tool-b:/search",
@@ -48,8 +48,8 @@ def delegated_block(**overrides) -> str:
         "root_token_id": "root-1",
         "token_id": "token-child",
         "parent_token_id": "token-root",
-        "delegator_spiffe_id": "spiffe://example.org/agent-a",
-        "subject_spiffe_id": "spiffe://example.org/agent-a",
+        "delegator_spiffe_id": "spiffe://varambu.org/agent-a",
+        "subject_spiffe_id": "spiffe://varambu.org/agent-a",
         "aud": "tool-b",
         "act": "read",
         "res": "tool-b:/search",
@@ -284,7 +284,7 @@ def test_check_opa_allow_success(capiss_module, monkeypatch, guard):
     )
     allowed, err = guard.exercise(
         "check opa allow",
-        lambda: capiss_module.check_opa_allow({"sub": "spiffe://example.org/agent-a"}),
+        lambda: capiss_module.check_opa_allow({"sub": "spiffe://varambu.org/agent-a"}),
     )
     guard.outcome("opa allow true", allowed is True)
     guard.outcome("no opa error", err is None)
@@ -315,7 +315,7 @@ def test_check_opa_allow_fail_closed_on_invalid_json(capiss_module, monkeypatch,
     )
     allowed, err = guard.exercise(
         "check opa allow with invalid json",
-        lambda: capiss_module.check_opa_allow({"sub": "spiffe://example.org/agent-a"}),
+        lambda: capiss_module.check_opa_allow({"sub": "spiffe://varambu.org/agent-a"}),
     )
     guard.outcome("allow is indeterminate", allowed is None)
     guard.outcome("json error captured", err is not None and "Expecting property name enclosed in double quotes" in err)
@@ -336,7 +336,7 @@ def test_check_opa_allow_fail_closed_on_transport_error(capiss_module, monkeypat
     guard.exercise("mock opa transport error", lambda: monkeypatch.setattr(capiss_module.request, "urlopen", raise_error))
     allowed, err = guard.exercise(
         "check opa allow with transport error",
-        lambda: capiss_module.check_opa_allow({"sub": "spiffe://example.org/agent-a"}),
+        lambda: capiss_module.check_opa_allow({"sub": "spiffe://varambu.org/agent-a"}),
     )
     guard.outcome("allow is indeterminate", allowed is None)
     guard.outcome("transport error captured", err is not None and "down" in err)
@@ -437,8 +437,8 @@ def test_run_policy_or_fail_forwards_policy_input_unchanged(capiss_module, monke
     _premise_module_loaded(guard, capiss_module)
     policy_input = {
         "decision_type": "resource_mint",
-        "sub": "spiffe://example.org/agent-a",
-        "subject_spiffe_id": "spiffe://example.org/agent-a",
+        "sub": "spiffe://varambu.org/agent-a",
+        "subject_spiffe_id": "spiffe://varambu.org/agent-a",
         "aud": "tool-b",
         "act": "read",
         "res": "tool-b:/search",
@@ -467,7 +467,7 @@ def test_run_policy_or_fail_forwards_policy_input_unchanged(capiss_module, monke
 def test_check_opa_allow_builds_post_json_request(capiss_module, monkeypatch, guard):
     _premise_module_loaded(guard, capiss_module)
     captured = {}
-    payload = {"sub": "spiffe://example.org/agent-a", "aud": "tool-b"}
+    payload = {"sub": "spiffe://varambu.org/agent-a", "aud": "tool-b"}
 
     class FakeResp:
         def __enter__(self):
@@ -522,7 +522,7 @@ def test_check_opa_allow_returns_false_on_explicit_deny(capiss_module, monkeypat
         "mock opa deny response",
         lambda: monkeypatch.setattr(capiss_module.request, "urlopen", lambda *args, **kwargs: FakeResp()),
     )
-    allowed, err = guard.exercise("check opa deny", lambda: capiss_module.check_opa_allow({"sub": "spiffe://example.org/agent-a"}))
+    allowed, err = guard.exercise("check opa deny", lambda: capiss_module.check_opa_allow({"sub": "spiffe://varambu.org/agent-a"}))
     guard.outcome("allow false", allowed is False)
     guard.outcome("no error on deny", err is None)
 
@@ -550,7 +550,7 @@ def test_check_opa_allow_missing_result_defaults_false(capiss_module, monkeypatc
         "mock opa response missing result",
         lambda: monkeypatch.setattr(capiss_module.request, "urlopen", lambda *args, **kwargs: FakeResp()),
     )
-    allowed, err = guard.exercise("check opa missing result", lambda: capiss_module.check_opa_allow({"sub": "spiffe://example.org/agent-a"}))
+    allowed, err = guard.exercise("check opa missing result", lambda: capiss_module.check_opa_allow({"sub": "spiffe://varambu.org/agent-a"}))
     guard.outcome("allow defaults false", allowed is False)
     guard.outcome("no error for missing result", err is None)
 

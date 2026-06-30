@@ -3,8 +3,8 @@ set -e
 
 SPIRE_SOCKET="${SPIRE_AGENT_SOCKET:-/run/spire/agent/private/api.sock}"
 SVID_DIR="${SPIRE_SVID_DIR:-/run/spire/svid}"
-SERVER_EXPECTED_SPIFFE_ID="${TOOL_B_SPIFFE_ID:-spiffe://example.org/tool-b-envoy}"
-CAPISS_EXPECTED_SPIFFE_ID="${CAPABILITY_ISSUER_SPIFFE_ID:-spiffe://example.org/capability-issuer-envoy}"
+SERVER_EXPECTED_SPIFFE_ID="${TOOL_B_SPIFFE_ID:-spiffe://varambu.org/tool-b-envoy}"
+CAPISS_EXPECTED_SPIFFE_ID="${CAPABILITY_ISSUER_SPIFFE_ID:-spiffe://varambu.org/capability-issuer-envoy}"
 
 if [ -z "$TOOL_B_URL" ]; then
   echo "ERROR: TOOL_B_URL is not set"

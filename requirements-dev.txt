@@ -7,5 +7,5 @@ pytest
 pytest-cov
 pytest-repeat
 diff-cover
-mutmut
+mutmut==3.5.0
 PyYAML

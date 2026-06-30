@@ -21,7 +21,7 @@ M4a applies the M4 capability and governance model to a real-world Jira access-c
 - Add explicit Jira network segmentation: edge clients reach only `jira-tool-envoy`; `jira-tool` and `jira-mock` stay off the edge network; Redis joins the Jira app network for shared budget/rate governance.
 - Add a simple Python stdlib `jira-mock` upstream with broad mock data for `IAM-1`, `IAM-2`, `NAS-1`, and `NAS-2`, plus test-only request log/reset endpoints.
 - Extend `capiss` canonicalization for Jira project resources with a small explicit branch, not a plugin framework.
-- Extend OPA policy so `spiffe://example.org/agent-a` can mint only the allowed Jira project token; all other projects deny by default.
+- Extend OPA policy so `spiffe://varambu.org/agent-a` can mint only the allowed Jira project token; all other projects deny by default.
 - Advance static capiss policy version metadata for audit events, e.g. `capiss.allow.v3` and `sha256:capiss-policy-v3`.
 - Add explicit `agent-a` Jira demo script triggered manually, not on normal stack startup.
 - Add M4a E2E cases under a separate `M4a-T*` suite and support `TEST_MILESTONES=m4a`.

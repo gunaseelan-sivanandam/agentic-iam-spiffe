@@ -6,7 +6,7 @@ import pytest
 from fastapi.responses import JSONResponse
 
 
-SPIFFE_ID = "spiffe://example.org/agent-a"
+SPIFFE_ID = "spiffe://varambu.org/agent-a"
 
 
 def decode_body(resp: JSONResponse) -> dict:
@@ -19,9 +19,20 @@ def _premise_module_loaded(guard, capiss_module):
 
 def capture_log_events(monkeypatch, capiss_module):
     events = []
+    legacy_projection_drop = {
+        "timestamp_utc",
+        "timestamp_local",
+        "timezone",
+        "issued_at_utc",
+        "issued_at_local",
+        "expires_at_utc",
+        "expires_at_local",
+        "ttl_seconds",
+        "resource_attrs",
+    }
 
     def fake_log_event(event_type: str, **fields):
-        events.append({"event_type": event_type, **fields})
+        events.append({"event_type": event_type, **{key: value for key, value in fields.items() if key not in legacy_projection_drop}})
 
     monkeypatch.setattr(capiss_module, "log_event", fake_log_event)
     return events
@@ -154,7 +165,7 @@ def test_root_mint_fail_closed_when_budget_store_unavailable(capiss_module, monk
         lambda: monkeypatch.setattr(
             capiss_module,
             "mint_root_biscuit",
-            lambda *_: ("token", 2_000_000_000, "root-1", "token-1"),
+            lambda *_: ("token", 1_999_999_940, 2_000_000_000, "root-1", "token-1"),
         ),
     )
     guard.exercise("mock budget unavailable", lambda: monkeypatch.setattr(capiss_module, "ensure_root_budget", lambda *_: (False, "down")))
@@ -206,7 +217,7 @@ def test_root_mint_fail_closed_when_marker_store_unavailable(capiss_module, monk
         lambda: monkeypatch.setattr(
             capiss_module,
             "mint_root_biscuit",
-            lambda *_: ("token", 2_000_000_000, "root-1", "token-1"),
+            lambda *_: ("token", 1_999_999_940, 2_000_000_000, "root-1", "token-1"),
         ),
     )
     guard.exercise("mock budget allow", lambda: monkeypatch.setattr(capiss_module, "ensure_root_budget", lambda *_: (True, "")))
@@ -260,7 +271,7 @@ def test_root_mint_success_logs_final_decision(capiss_module, monkeypatch, guard
         lambda: monkeypatch.setattr(
             capiss_module,
             "mint_root_biscuit",
-            lambda *_: ("token-value", 2_000_000_000, "root-1", "token-1"),
+            lambda *_: ("token-value", 1_999_999_940, 2_000_000_000, "root-1", "token-1"),
         ),
     )
     guard.exercise("mock budget allow", lambda: monkeypatch.setattr(capiss_module, "ensure_root_budget", lambda *_: (True, "")))
@@ -398,9 +409,10 @@ def test_mint_dispatches_to_root_mint(capiss_module, monkeypatch, guard):
     forwarded = {}
     expected = {"token": "compat-token", "root_token_id": "root-1"}
 
-    def fake_root_mint(*, payload=None, x_spiffe_id=None):
+    def fake_root_mint(*, payload=None, x_spiffe_id=None, x_correlation_id=None):
         forwarded["payload"] = payload
         forwarded["x_spiffe_id"] = x_spiffe_id
+        forwarded["x_correlation_id"] = x_correlation_id
         return expected
 
     guard.exercise("mock root mint", lambda: monkeypatch.setattr(capiss_module, "root_mint", fake_root_mint))
@@ -411,6 +423,7 @@ def test_mint_dispatches_to_root_mint(capiss_module, monkeypatch, guard):
     guard.outcome("root mint result returned", out == expected)
     guard.outcome("payload forwarded", forwarded.get("payload") == payload)
     guard.outcome("spiffe id forwarded", forwarded.get("x_spiffe_id") == SPIFFE_ID)
+    guard.outcome("correlation absent by default", forwarded.get("x_correlation_id") is None)
 
 
 def base_parent_claims(**overrides):
@@ -426,6 +439,74 @@ def base_parent_claims(**overrides):
     }
     claims.update(overrides)
     return claims
+
+
+# UT: UT-229
+# Test Description: Verifies that resource mint requires spiffe id before any bearer-token processing.
+# Precondition: Module fixtures are loaded and final mint-decision logging is captured.
+# Expected Output: The SUT raises the existing 401 error and emits one resource-mint deny decision.
+# Covers DD: DD-105, DD-222
+@pytest.mark.invariant
+def test_resource_mint_requires_spiffe_id_logs_final_decision(capiss_module, monkeypatch, guard):
+    _premise_module_loaded(guard, capiss_module)
+    events = guard.exercise("capture log events", lambda: capture_log_events(monkeypatch, capiss_module))
+
+    def call_resource_mint():
+        with pytest.raises(capiss_module.HTTPException) as exc:
+            capiss_module.resource_mint(payload={}, x_spiffe_id=None, authorization="Bearer parent")
+        return exc.value
+
+    exc_value = guard.exercise("call resource_mint without spiffe", call_resource_mint)
+    mint_events = guard.exercise("collect final mint events", lambda: final_mint_events(events))
+    guard.outcome("status is 401", exc_value.status_code == 401)
+    guard.outcome(
+        "missing spiffe logged exactly",
+        mint_events
+        == [
+            {
+                "event_type": "capiss_mint_decision",
+                "result": "deny",
+                "reason_code": "missing_spiffe_id",
+                "decision_type": "resource_mint",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
+            }
+        ],
+    )
+
+
+# UT: UT-230
+# Test Description: Verifies that resource mint rejects invalid spiffe id before any bearer-token processing.
+# Precondition: Module fixtures are loaded and final mint-decision logging is captured.
+# Expected Output: The SUT raises the existing 400 error and emits one resource-mint deny decision.
+# Covers DD: DD-105, DD-222
+@pytest.mark.invariant
+def test_resource_mint_rejects_invalid_spiffe_id_logs_final_decision(capiss_module, monkeypatch, guard):
+    _premise_module_loaded(guard, capiss_module)
+    events = guard.exercise("capture log events", lambda: capture_log_events(monkeypatch, capiss_module))
+
+    def call_resource_mint():
+        with pytest.raises(capiss_module.HTTPException) as exc:
+            capiss_module.resource_mint(payload={}, x_spiffe_id="not-spiffe", authorization="Bearer parent")
+        return exc.value
+
+    exc_value = guard.exercise("call resource_mint with invalid spiffe", call_resource_mint)
+    mint_events = guard.exercise("collect final mint events", lambda: final_mint_events(events))
+    guard.outcome("status is 400", exc_value.status_code == 400)
+    guard.outcome(
+        "invalid spiffe logged exactly",
+        mint_events
+        == [
+            {
+                "event_type": "capiss_mint_decision",
+                "result": "deny",
+                "reason_code": "invalid_spiffe_id",
+                "decision_type": "resource_mint",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
+            }
+        ],
+    )
 
 
 # UT: UT-021
@@ -451,6 +532,48 @@ def test_resource_mint_requires_bearer_token_logs_final_decision(capiss_module, 
     guard.outcome("reason missing_token", body.get("reason") == "missing_token")
     guard.outcome(
         "missing token logged exactly",
+        mint_events
+        == [
+            {
+                "event_type": "capiss_mint_decision",
+                "result": "deny",
+                "reason_code": "missing_token",
+                "decision_type": "resource_mint",
+                "subject_spiffe_id": SPIFFE_ID,
+                "delegator_spiffe_id": SPIFFE_ID,
+                "aud": "tool-b",
+                "act": "read",
+                "res": "tool-b:/search",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
+            }
+        ],
+    )
+
+
+# UT: UT-231
+# Test Description: Verifies that resource mint treats an empty bearer value as a missing token.
+# Precondition: Module fixtures are loaded and the authorization header has the Bearer scheme but no token value.
+# Expected Output: The SUT returns the existing missing-token denial and emits one final resource-mint decision.
+# Covers DD: DD-105, DD-222
+@pytest.mark.invariant
+def test_resource_mint_rejects_empty_bearer_token_logs_final_decision(capiss_module, monkeypatch, guard):
+    _premise_module_loaded(guard, capiss_module)
+    events = guard.exercise("capture log events", lambda: capture_log_events(monkeypatch, capiss_module))
+    resp = guard.exercise(
+        "resource mint with empty bearer",
+        lambda: capiss_module.resource_mint(
+            payload={"aud": "tool-b", "act": "read", "res": "tool-b:/search"},
+            x_spiffe_id=SPIFFE_ID,
+            authorization="Bearer   ",
+        ),
+    )
+    body = guard.exercise("decode body", lambda: decode_body(resp))
+    mint_events = guard.exercise("collect final mint events", lambda: final_mint_events(events))
+    guard.outcome("status is 401", resp.status_code == 401)
+    guard.outcome("reason missing_token", body.get("reason") == "missing_token")
+    guard.outcome(
+        "empty bearer logged exactly",
         mint_events
         == [
             {
@@ -526,7 +649,7 @@ def test_resource_mint_rejects_subject_mismatch(capiss_module, monkeypatch, guar
         lambda: monkeypatch.setattr(
             capiss_module,
             "parse_token",
-            lambda *_: (object(), base_parent_claims(subject_spiffe_id="spiffe://example.org/rogue"), None),
+            lambda *_: (object(), base_parent_claims(subject_spiffe_id="spiffe://varambu.org/rogue"), None),
         ),
     )
     resp = guard.exercise(
@@ -751,7 +874,7 @@ def test_resource_mint_success_logs_final_decision(capiss_module, monkeypatch, g
         lambda: monkeypatch.setattr(
             capiss_module,
             "append_resource_token",
-            lambda *_: ("resource-token", 2_000_000_000, "token-child"),
+            lambda *_: ("resource-token", 1_999_999_940, 2_000_000_000, "token-child"),
         ),
     )
     guard.exercise("mock marker allow", lambda: monkeypatch.setattr(capiss_module, "mark_capiss_minted_token", lambda *_: (True, "")))
@@ -818,7 +941,7 @@ def test_resource_mint_success_logs_delegator_provenance(capiss_module, monkeypa
         lambda: monkeypatch.setattr(
             capiss_module,
             "append_resource_token",
-            lambda *_: ("resource-token", 2_000_000_000, "token-child"),
+            lambda *_: ("resource-token", 1_999_999_940, 2_000_000_000, "token-child"),
         ),
     )
     guard.exercise("mock marker allow", lambda: monkeypatch.setattr(capiss_module, "mark_capiss_minted_token", lambda *_: (True, "")))
@@ -933,7 +1056,7 @@ def test_resource_mint_same_resource_bypasses_mint_rate(capiss_module, monkeypat
         lambda: monkeypatch.setattr(
             capiss_module,
             "append_resource_token",
-            lambda *_: ("resource-token", 2_000_000_000, "token-child"),
+            lambda *_: ("resource-token", 1_999_999_940, 2_000_000_000, "token-child"),
         ),
     )
     guard.exercise("mock marker allow", lambda: monkeypatch.setattr(capiss_module, "mark_capiss_minted_token", lambda *_: (True, "")))
@@ -986,7 +1109,7 @@ def test_resource_mint_new_resource_consumes_mint_rate_once(capiss_module, monke
         lambda: monkeypatch.setattr(
             capiss_module,
             "append_resource_token",
-            lambda *_: ("resource-token", 2_000_000_000, "token-child"),
+            lambda *_: ("resource-token", 1_999_999_940, 2_000_000_000, "token-child"),
         ),
     )
     guard.exercise("mock marker allow", lambda: monkeypatch.setattr(capiss_module, "mark_capiss_minted_token", lambda *_: (True, "")))
@@ -1003,6 +1126,68 @@ def test_resource_mint_new_resource_consumes_mint_rate_once(capiss_module, monke
     guard.outcome("root token id passed", seen[0][0] == "root-1")
     guard.outcome("root expiry passed", seen[0][1] == 2_000_000_000)
     guard.outcome("root lifetime constant passed", seen[0][2] == capiss_module.M4_ROOT_TTL_SECONDS)
+
+
+# UT: UT-232
+# Test Description: Verifies that resource mint fails closed when the delegated token marker store is unavailable after child token creation.
+# Precondition: Parent token, policy, registry, and mint-rate checks allow, but the minted-token marker write fails.
+# Expected Output: The SUT returns store_unavailable and emits a final decision with child and parent token context.
+# Covers DD: DD-105, DD-121, DD-222
+@pytest.mark.invariant
+def test_resource_mint_fail_closed_when_marker_store_unavailable(capiss_module, monkeypatch, guard):
+    _premise_module_loaded(guard, capiss_module)
+    events = guard.exercise("capture log events", lambda: capture_log_events(monkeypatch, capiss_module))
+    guard.exercise(
+        "mock parse token",
+        lambda: monkeypatch.setattr(capiss_module, "parse_token", lambda *_: (object(), base_parent_claims(), None)),
+    )
+    guard.exercise("mock policy allow", lambda: monkeypatch.setattr(capiss_module, "run_policy_or_fail", lambda *_: (True, None)))
+    guard.exercise(
+        "mock append token",
+        lambda: monkeypatch.setattr(
+            capiss_module,
+            "append_resource_token",
+            lambda *_: ("resource-token", 1_999_999_940, 2_000_000_000, "token-child"),
+        ),
+    )
+    guard.exercise("mock marker failure", lambda: monkeypatch.setattr(capiss_module, "mark_capiss_minted_token", lambda *_: (False, "down")))
+    resp = guard.exercise(
+        "invoke resource mint",
+        lambda: capiss_module.resource_mint(
+            payload={"aud": "tool-b", "act": "read", "res": "tool-b:/search"},
+            x_spiffe_id=SPIFFE_ID,
+            authorization="Bearer parent",
+        ),
+    )
+    body = guard.exercise("decode body", lambda: decode_body(resp))
+    mint_events = guard.exercise("collect final mint events", lambda: final_mint_events(events))
+    guard.outcome("status is 503", resp.status_code == 503)
+    guard.outcome("reason is store_unavailable", body.get("reason") == "store_unavailable")
+    guard.outcome(
+        "resource marker failure logged exactly",
+        mint_events
+        == [
+            {
+                "event_type": "capiss_mint_decision",
+                "result": "deny",
+                "reason_code": "store_unavailable",
+                "decision_type": "resource_mint",
+                "subject_spiffe_id": SPIFFE_ID,
+                "delegator_spiffe_id": SPIFFE_ID,
+                "root_token_id": "root-1",
+                "token_id": "token-child",
+                "parent_token_id": "parent-1",
+                "delegation_depth": 1,
+                "aud": "tool-b",
+                "act": "read",
+                "res": "tool-b:/search",
+                "registry_hit": True,
+                "error": "down",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
+            }
+        ],
+    )
 
 
 # UT: UT-136
@@ -1216,6 +1401,55 @@ def test_resource_mint_bad_payload_logs_final_decision(capiss_module, monkeypatc
                 "delegation_depth": 0,
                 "aud": "tool-b",
                 "act": "read",
+                "policy_id": "capiss.allow.v3",
+                "policy_hash": "sha256:capiss-policy-v3",
+            }
+        ],
+    )
+
+
+# UT: UT-233
+# Test Description: Verifies resource mint rejects a syntactically invalid child resource after parent context is known.
+# Precondition: The parent token parses successfully and the child request has all required fields but a non-canonical resource.
+# Expected Output: The SUT returns the existing bad-request response and emits a final decision with parent/root context.
+# Covers DD: DD-105, DD-115, DD-222
+@pytest.mark.invariant
+def test_resource_mint_invalid_child_resource_logs_final_decision(capiss_module, monkeypatch, guard):
+    _premise_module_loaded(guard, capiss_module)
+    events = guard.exercise("capture log events", lambda: capture_log_events(monkeypatch, capiss_module))
+    guard.exercise(
+        "mock parse token",
+        lambda: monkeypatch.setattr(capiss_module, "parse_token", lambda *_: (object(), base_parent_claims(), None)),
+    )
+    resp = guard.exercise(
+        "invoke delegated mint with invalid child resource",
+        lambda: capiss_module.resource_mint(
+            payload={"aud": "tool-b", "act": "read", "res": "bad"},
+            x_spiffe_id=SPIFFE_ID,
+            authorization="Bearer parent",
+        ),
+    )
+    body = guard.exercise("decode body", lambda: decode_body(resp))
+    mint_events = guard.exercise("collect final mint events", lambda: final_mint_events(events))
+    guard.outcome("status is 400", resp.status_code == 400)
+    guard.outcome("reason is res", body == {"error": "bad_request", "reason": "res"})
+    guard.outcome(
+        "invalid child resource logged exactly",
+        mint_events
+        == [
+            {
+                "event_type": "capiss_mint_decision",
+                "result": "deny",
+                "reason_code": "res",
+                "decision_type": "resource_mint",
+                "subject_spiffe_id": SPIFFE_ID,
+                "delegator_spiffe_id": SPIFFE_ID,
+                "root_token_id": "root-1",
+                "parent_token_id": "parent-1",
+                "delegation_depth": 0,
+                "aud": "tool-b",
+                "act": "read",
+                "res": "bad",
                 "policy_id": "capiss.allow.v3",
                 "policy_hash": "sha256:capiss-policy-v3",
             }
