@@ -13,7 +13,6 @@ capiss_keys/
 !.env.example
 test_report.log
 artifacts/
-docs/local_status_capture/
 docs/*.png
 .pytest_cache/
 .coverage

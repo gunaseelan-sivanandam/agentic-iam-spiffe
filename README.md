@@ -127,7 +127,7 @@ docker compose --profile tests -f compose/spiffe.compose.yml run --rm \
 
 ```bash
 docker compose --profile tests -f compose/spiffe.compose.yml run --rm \
-  -e TEST_ONLY=M5.S1-T1,M5.S1-T2 rogue-tests
+  -e TEST_ONLY=M5-T1,M5-T2 rogue-tests
 ```
 
 **Start the local Codex MCP session (stack must already be running)**
@@ -139,19 +139,19 @@ scripts/codex_jira_mcp.sh
 The launcher bridges stdio into the running `codex-jira-mcp-adapter` container.
 It does not start, rebuild, or tear down the Docker stack.
 
-**Varambu audit demo flow**
+**Varambu demo flow**
 
-The Varambu audit demo slice is authored under
-`docs/slices/m5-varambu-audit-demo/`. Its target operator story is:
+`varambu` starts the stack from a clean state, prepares a Codex session, and
+shows the audit trail. `--live` (default) uses real Jira; `--mock` uses the
+deterministic mock.
 
 ```bash
-varambu start --mock
-varambu audit
-varambu audit-file
+./varambu start --mock     # clean start, Codex MCP bridge ready
+./varambu codex            # launch Codex against this session
+./varambu audit            # capiss mint decisions for the session
+./varambu trace            # full chain: intent → mint → gateway → upstream
+./varambu --help           # all commands and options
 ```
-
-This flow is not accepted as implemented until the slice completes the
-tests-first workflow and records final verification.
 
 **Run the M4a/M4b Jira demo**
 
@@ -187,8 +187,9 @@ so security claims can be inspected after a run.
 **Unit tests**
 
 ```bash
-make unit-trust           # run unit tests
-make unit-guard-check     # run unit tests with coverage and mutation gate
+make unit-guard-check     # unit tests + premise/exercise/outcome guard check
+make unit-trust           # guard check, coverage gates, invariant/negative-control suites
+make unit-mutation        # mutation score gate (capiss, tool-b)
 ```
 
 **Traceability and quality**
@@ -196,40 +197,31 @@ make unit-guard-check     # run unit tests with coverage and mutation gate
 ```bash
 make qa-trace             # validate REQ → ARCH → DD → UT → E2E linkage
 make qa-evidence          # check that passing E2E tests produced PEO artifacts
-make qa-quality           # ruff, mypy, radon (CC ≤ 10), bandit
+make qa-quality           # qa-trace + unit traceability check + unit guard check
 ```
 
 Evidence artifacts land in `artifacts/rogue-tests/` after a run. The test
-report is written to `test_report.log`.
+report is written to `test_report.log`. Which gates run in CI is listed in
+[AGENTS.md](AGENTS.md#quality-gates).
 
 Reference documents:
+- Current project status: [docs/STATUS.md](docs/STATUS.md)
 - Requirements: [docs/requirements.md](docs/requirements.md)
 - Architecture: [docs/architecture.md](docs/architecture.md)
 - E2E trace map: [trace/tests.yaml](trace/tests.yaml)
-- Test specification: [docs/test_spec.md](docs/test_spec.md)
-- Detailed E2E behavior: [docs/test_spec_detailed.md](docs/test_spec_detailed.md)
+- E2E test specification: [docs/test_spec.md](docs/test_spec.md)
 - Unit test specification: [docs/unit_test_spec.md](docs/unit_test_spec.md)
+- Open problems: [docs/open_problem_log.md](docs/open_problem_log.md)
 
 ---
 
 ## Development Workflow
 
-Security-relevant changes follow a four-phase slice workflow to keep
-requirements, architecture, and code in step.
-
-1. **Phase 1 — Plan.** Create a bundle under `docs/slices/<slice-id>/`. Use
-   the `grill-me` skill to resolve design choices. Capture decisions, hidden
-   state, scope, and non-goals in `plan.md` and `test_plan.md`.
-2. **Phase 2 — Tests.** Write UT and E2E tests from the approved `test_plan.md`
-   only. If a test requires a new assumption, stop and update the slice docs
-   first.
-3. **Phase 3 — Implementation.** Implement only approved behavior. Remove dead
-   code and stale compatibility paths called out in `plan.md`.
-4. **Phase 4 — Verification.** Run trace, quality, E2E, and evidence checks.
-   Record the result in `docs/local_status_capture/implementation_status.md`.
-
-See [AGENTS.md](AGENTS.md) for the full operating model and command reference.
-Slice templates are in [docs/slices/](docs/slices/).
+Security-relevant changes follow a four-phase slice workflow (plan → tests →
+implementation → verification) to keep requirements, architecture, code, and
+documentation in step. The rules, ID scheme, and quality gates are defined in
+[AGENTS.md](AGENTS.md), the repository rulebook. Slice bundles and their index
+are in [docs/slices/](docs/slices/README.md).
 
 ---
 

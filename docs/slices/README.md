@@ -1,73 +1,32 @@
 # Slice Bundles
 
-Use a per-slice review bundle for milestone and security-relevant changes.
+A slice bundle is the review record for one milestone or security-relevant change: the agreed design,
+requirement and architecture changes, hidden-state decisions, and the UT/E2E proof plan.
+The workflow that produces and closes a bundle is defined in [`AGENTS.md`](../../AGENTS.md#slice-workflow).
 
-## Goal
-Make security-relevant behavior visible in authored records before it exists in code.
+- New bundle: copy [`_template/`](_template/) to `docs/slices/<slice-id>/` (`plan.md` + `test_plan.md`).
+- Once a slice is implemented its bundle is a **frozen record**. Do not edit it to match later
+  reality; record later changes in a new slice or in `docs/history/implementation_log.md`.
+- Add a row to the index below when a bundle is created, and update its status when it closes.
 
-Each slice bundle is the review unit for:
-- requirement changes
-- architecture changes
-- agreed design choices
-- hidden-state decisions
-- UT and E2E proof planning
+## Index
 
-## Folder layout
-Create one folder per slice, for example:
+| Slice | Milestone | Status | Dates | Notes |
+| --- | --- | --- | --- | --- |
+| [docs-consolidation](docs-consolidation/) | — | In progress | 2026-10-27 | Documentation structure and rulebook |
+| [m5-generic-verifier-architecture](m5-generic-verifier-architecture/) | M5+ | Brainstorm, not approved | 2026-06-14 | Generic capability verifier; next candidate slice |
+| [m5-full-chain-audit-trace](m5-full-chain-audit-trace/) | M5 | Implemented | 2026-06-19 – 06-30 | `varambu trace`, `M5-T49..T59`; Increment 3 harness hardening on branch `fix/m5-evidence-harness-hardening` |
+| [varambu-audit-format](varambu-audit-format/) | M5 | Implemented | 2026-06-13 | Human audit log presentation (`d417568`) |
+| [varambu-start-ux](varambu-start-ux/) | M5 | Implemented | 2026-06-13 | `varambu start` output (`d417568`) |
+| [m5-varambu-audit-demo](m5-varambu-audit-demo/) | M5 | Implemented | 2026-06-06 | `varambu` CLI and capiss audit, `M5-T42..T48`. Its plan header still reads "untrusted spike"; implementation is recorded in the implementation log (2026-06-06) |
+| [m5-codex-jira-mcp-slice-1](m5-codex-jira-mcp-slice-1/) | M5 | Implemented | 2026-05-16 | Codex → Jira MCP path, `M5-T1..T41` |
 
-```text
-docs/slices/m4-capiss-observability/
-```
+### Archived (legacy 8–9 file format, implemented)
 
-Start from:
-
-```text
-docs/slices/_template/
-```
-
-## Implemented slice bundles
-- `docs/slices/m4a-jira-project-access/`: implemented M4a bundle for Jira project reads with a broad upstream credential narrowed by capiss, OPA, and `jira-tool`. This slice predates the simplified two-document Phase 1 workflow and still contains legacy planning artifacts.
-- `docs/slices/m4b-jira-description-write/`: implemented M4b bundle for project-scoped Jira description writes using the M4a Jira boundary. This slice predates the simplified two-document Phase 1 workflow and still contains legacy planning artifacts.
-- `docs/slices/m5-codex-jira-mcp-slice-1/`: M5 Slice 1 bundle for Codex-to-Jira MCP project summaries and story creation through a separate adapter, capiss authority family, Envoy boundary, gateway PEP, and deterministic `jira-mcp-mock`.
-
-## Required files
-- `plan.md`
-- `test_plan.md`
-
-## 4-phase workflow
-1. `Phase 1: plan and review`
-   - start with the `grill-me` skill
-   - ask and resolve design questions one branch at a time until the slice choices are agreed
-   - capture the final design choices, requirements to change or add, hidden-state decisions, in-scope work, out-of-scope work, and retirement expectations in `plan.md`
-   - create `test_plan.md` with UT and E2E coverage derived from the agreed choices and requirements
-   - do not implement before review
-2. `Phase 2: tests`
-   - create UT/E2E from the approved `test_plan.md`
-   - if tests require a new assumption, return to Phase 1
-   - update authored requirements, architecture, trace mappings, and process docs before making runtime code pass the tests
-3. `Phase 3: implementation`
-   - implement only approved behavior
-   - remove obsolete logic and artifacts listed in `plan.md`
-4. `Phase 4: verification`
-   - run trace, quality, E2E, and evidence checks
-   - summarize the result in `docs/local_status_capture/implementation_status.md`
-
-## Hidden-state rule
-If a decision depends on hidden state, `plan.md` must list:
-- state/key name
-- store/system
-- writer
-- reader
-- TTL or lifecycle
-- decision impact
-- authoritative vs advisory
-
-This is mandatory for security-relevant Redis, file, cache, policy, or derived-state behavior.
-
-## Retirement rule
-Every `plan.md` must explicitly state:
-- what old logic is being removed
-- what compatibility behavior is being kept temporarily, if any
-- what stale docs/tests/artifacts must be deleted or archived
-
-If nothing is retired, say so explicitly in `plan.md`.
+| Slice | Milestone | Dates |
+| --- | --- | --- |
+| [m4b-jira-description-write](archive/m4b-jira-description-write/) | M4b | 2026-05-15 |
+| [m4a-jira-project-access](archive/m4a-jira-project-access/) | M4a | 2026-05-14 |
+| [m4-semantic-trace-closure](archive/m4-semantic-trace-closure/) | M4 | 2026-05-13 |
+| [m2-verified-client-requests](archive/m2-verified-client-requests/) | M2 | 2026-04-27 |
+| [m4-observability-closure](archive/m4-observability-closure/) | M4 | 2026-04-24 |

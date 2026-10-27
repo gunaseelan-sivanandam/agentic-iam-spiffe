@@ -128,7 +128,7 @@ Usage:
 - First observed: 2026-05-14
 - Area: capability issuance API lifecycle
 - Related slice:
-  - `docs/slices/m4a-jira-project-access/`
+  - `docs/slices/archive/m4a-jira-project-access/`
 - Related endpoint:
   - `/capabilities/mint`
   - `/capabilities/root-mint`
@@ -158,7 +158,7 @@ Usage:
 - First observed: 2026-05-14
 - Area: auditability / policy provenance
 - Related slice:
-  - `docs/slices/m4a-jira-project-access/`
+  - `docs/slices/archive/m4a-jira-project-access/`
 - Related audit event:
   - `capiss_mint_decision`
 
