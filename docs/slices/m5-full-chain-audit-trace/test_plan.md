@@ -359,3 +359,44 @@ FAIL (representative below/at/above the 2xx band).
 ### Non-regression
 - `varambu audit*` paths and the existing M5-T42..T48 audit E2E remain unchanged (the redesign does
   not touch the capiss audit renderer; `varambu audit` stays byte-exact).
+
+---
+
+## Increment 3 — Evidence-harness hardening (2026-10-27)
+
+Found by the first full-suite run after this slice (`119/120`, `make qa-evidence` failing). No
+product behavior changes; these amend how the E2E proof is asserted and validated.
+
+### H1 — Chain-scoped assertions (M5-T49, T50, T51, T54, T58)
+The trace session window starts at a second-granular `since`, so a request from the previous test in
+the same second can appear as an extra chain in the session. Assertions that read "the first chain"
+or grep the whole human render can then pass or fail on another test's chain.
+Rule: every chain-specific outcome selects the chain by the test's own `cid.txt`:
+- JSON checks use `.[] | select(.correlation_id==$cid)` — never `first(.[])`.
+- Human-render checks grep a render produced with `varambu_audit.py trace --cid <cid>`; the JSON
+  render stays unfiltered so "exactly one chain for the cid" and the anchor rule (M5-T58) still see
+  every chain.
+- M5-T58 takes the token id from the capiss record whose `correlation_id` is the test's cid.
+- Negative checks (secret exclusion, "no fabricated upstream voice") keep scanning everything.
+A missing or mismatched cid yields no jq output / "No matching trace chains", so these checks fail
+closed.
+
+### H2 — Per-test status binding (M5-T43..T48)
+These tests must print `EVIDENCE_DIR=` like every other test, so `qa-evidence` binds their
+PASS/FAIL line to their evidence directory.
+
+### H3 — M5-T55 env-gated skip
+Replaces "record the exact environment error rather than claim completion" with a concrete contract:
+- Premise (always runs): read `JIRA_MCP_UPSTREAM_MODE` from the running `spiffe-jira-mcp-gateway`
+  into `upstream_mode.txt` (only the mode value is persisted, never the container environment).
+  If the gateway cannot be inspected the premise fails and the test FAILS — an unreadable gate is
+  not a skip.
+- Mode ≠ `live`: write `skip_reason.txt` (`env_gate=live_jira upstream_mode=<mode>`), add the
+  existing warning, stop. No exercise or outcome guards run.
+- `trace/tests.yaml` declares the gate per evidence prefix on the e2e suite
+  (`E2E-M5-FT-TRACE-SUITE`: `env_gates: {M5-T55: live_jira}`), because `qa-evidence` validates
+  `e2e_suite` entries and a gate belongs to one prefix, not the whole suite.
+- `qa-evidence` counts a prefix as **skipped** (not validated) only if its suite declares an
+  env gate for that prefix, `skip_reason.txt` names that gate, premise evidence exists, and no exercise/outcome
+  artifacts exist. Any other combination is a failure (e.g. an undeclared skip, or a skip without
+  the gate evaluation recorded). The summary reports `validated` and `skipped` separately.

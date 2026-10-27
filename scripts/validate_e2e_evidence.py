@@ -100,6 +100,57 @@ def _parse_prefix_statuses(test_report: Path) -> dict[str, str]:
     return statuses
 
 
+def _env_gate_for(test: dict[str, Any], prefix: str) -> str | None:
+    """Gate declared for one evidence prefix via the suite's `env_gates` map; malformed means none."""
+    gates = test.get("env_gates")
+    gate = gates.get(prefix) if isinstance(gates, dict) else None
+    return gate if isinstance(gate, str) and gate else None
+
+
+def _names_other_gate(env_gate: str | None, skip_messages: list[str]) -> bool:
+    marker = f"env_gate={env_gate}"
+    return bool(env_gate) and not any(marker in m for m in skip_messages)
+
+
+def _skip_violations(
+    env_gate: str | None,
+    skip_messages: list[str],
+    premise_count: int,
+    exercise_count: int,
+    outcome_count: int,
+) -> list[str] | None:
+    """Return None when the evidence records no skip, [] for a valid env-gated skip, else violations.
+
+    A skip is only valid for a test that declares `env_gate` in trace/tests.yaml, that recorded the
+    gate evaluation as premise evidence, and that did not also produce exercise/outcome artifacts.
+    """
+    if not skip_messages:
+        return None
+    checks = [
+        (not env_gate, "skip_reason recorded but test declares no env_gate"),
+        (_names_other_gate(env_gate, skip_messages), f"skip_reason does not name env_gate={env_gate}"),
+        (premise_count == 0, "skip has no premise evidence of the env gate evaluation"),
+        (exercise_count + outcome_count > 0, "skip recorded alongside exercise/outcome artifacts"),
+    ]
+    return [message for violated, message in checks if violated]
+
+
+def _artifact_failures(
+    premise_count: int, exercise_count: int, outcome_count: int, cmd_count: int, skipped: bool
+) -> list[str]:
+    checks = [
+        (premise_count, "premise guard", False),
+        (exercise_count, "exercise guard", True),
+        (outcome_count, "outcome guard", True),
+        (cmd_count, "command capture", False),
+    ]
+    return [
+        f"missing {name} artifacts"
+        for count, name, waived_by_skip in checks
+        if count == 0 and not (waived_by_skip and skipped)
+    ]
+
+
 def _latest_dir_for_prefix(base: Path, prefix: str) -> Path | None:
     matches = sorted([p for p in base.glob(f"{prefix}_*") if p.is_dir()])
     if not matches:
@@ -161,15 +212,17 @@ def main() -> int:
             warning_count = _count("warning_reason_*.txt", ev_dir)
             warning_messages = _read_lines("warning_reason_*.txt", ev_dir)
             fail_reason_messages = _read_lines("fail_reason.txt", ev_dir)
+            skip_messages = _read_lines("skip_reason.txt", ev_dir)
 
-            if premise_count == 0:
-                failures.append(f"{test_id}/{prefix}: missing premise guard artifacts")
-            if exercise_count == 0:
-                failures.append(f"{test_id}/{prefix}: missing exercise guard artifacts")
-            if outcome_count == 0:
-                failures.append(f"{test_id}/{prefix}: missing outcome guard artifacts")
-            if cmd_count == 0:
-                failures.append(f"{test_id}/{prefix}: missing command capture artifacts")
+            skip_violations = _skip_violations(
+                _env_gate_for(test, prefix), skip_messages, premise_count, exercise_count, outcome_count
+            )
+            skipped = skip_violations == []
+            failures.extend(f"{test_id}/{prefix}: {v}" for v in skip_violations or [])
+            failures.extend(
+                f"{test_id}/{prefix}: {f}"
+                for f in _artifact_failures(premise_count, exercise_count, outcome_count, cmd_count, skipped)
+            )
 
             report_status = report_statuses.get(prefix)
             if report_status is None:
@@ -204,6 +257,8 @@ def main() -> int:
                     "fail_reason_messages": fail_reason_messages,
                     "warning_count": warning_count,
                     "warning_messages": warning_messages,
+                    "skipped": skipped,
+                    "skip_messages": skip_messages,
                     "report_status": report_status,
                     "age_hours": round(age_hours, 2),
                 }
@@ -216,11 +271,13 @@ def main() -> int:
     elif failed_count > 0:
         failures.append(f"test_report.log indicates failed tests: {failed_count}")
 
+    skipped_count = sum(t["skipped"] for t in report_tests)
     report = {
         "summary": {
             "e2e_suites": len(active_e2e),
             "expected_test_prefixes": expected_prefix_count,
-            "validated_prefixes": len(report_tests),
+            "validated_prefixes": len(report_tests) - skipped_count,
+            "skipped_prefixes": skipped_count,
             "failures": len(failures),
             "warnings": len(warnings),
             "failed_count_from_report": failed_count,
@@ -245,7 +302,7 @@ def main() -> int:
     print(
         "[qa-evidence] PASSED "
         f"(validated={summary['validated_prefixes']}/{summary['expected_test_prefixes']}, "
-        f"warnings={summary['warnings']})"
+        f"skipped={summary['skipped_prefixes']}, warnings={summary['warnings']})"
     )
     print(f"[qa-evidence] report: {report_path}")
     if warnings:

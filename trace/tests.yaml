@@ -662,6 +662,8 @@ tests:
   - M5-T57
   - M5-T58
   - M5-T59
+  env_gates:
+    M5-T55: live_jira
   status: active
 - id: E2E-M5-T49-TRACE-FULL-CHAIN
   type: e2e_case
