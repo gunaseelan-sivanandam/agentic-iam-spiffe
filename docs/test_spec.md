@@ -1,12 +1,17 @@
 # E2E Test Specification
 
-Hand-written, plain-English description of every E2E test in `scripts/rogue_node_tests.sh`: what it tests, how it does it, and what evidence it leaves. Requirement mappings live in `trace/tests.yaml`. If a detail is not explicit in the harness, it is marked as UNKNOWN.
+Hand-written, plain-English description of every E2E test in `scripts/rogue_node_tests.sh`: what it tests, how it does it, and what evidence it leaves under `artifacts/rogue-tests/<test-id>_<slug>/`. Requirement mappings live in `trace/tests.yaml`. If a detail is not explicit in the harness, it is marked as UNKNOWN.
 
-Maintenance rule (see `AGENTS.md`, Phase 4): every slice that adds or changes an E2E test updates this file in the same change. **Known gap:** the 58 Milestone 5 tests (`M5-T1`..`M5-T59`; there is no `M5-T29`) are not yet described here.
+How to read it:
+- Each test heading starts with its harness ID (for example `M3.S4-T2`), which is also the value to pass in `TEST_ONLY=` and the prefix of its evidence directory.
+- Every test runs **premise** guards (preconditions), **exercise** guards (the action), and **outcome** guards (the assertions). A failed guard fails the test and leaves `fail_reason.txt`.
+- Where a test's title claims more than its guards check, the entry says so in a note.
+
+Maintenance rule (see `AGENTS.md`, slice workflow step 4): every change that adds or changes an E2E test updates this file in the same change. `make docs-check` fails if a harness test ID is missing here.
 
 ## Milestone 1 - Server and agent connection and successful entry
 
-### T1 — “Rogue missing join token rejects attestation”
+### M1-T1 — “Rogue missing join token rejects attestation”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -55,7 +60,7 @@ Outcome guards
 - (non‑EVDIR) /run/spire/server/data/private/api.sock  
 - (non‑EVDIR) /run/spire/shared/join_token
 
-### T2 — “Rogue forged join token rejects attestation”
+### M1-T2 — “Rogue forged join token rejects attestation”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -121,7 +126,7 @@ Outcome guards
 - $EVDIR/verified_toolb_result.txt
 - $EVDIR/verified_toolb_spiffe_id.txt
 
-### T3 — “Rogue replayed join token rejects attestation”
+### M1-T3 — “Rogue replayed join token rejects attestation”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -171,7 +176,7 @@ Outcome guards
 - (non‑EVDIR) /run/spire/server/data/private/api.sock  
 - (non‑EVDIR) /run/spire/shared/join_token
 
-### T4 — “Rogue repeated attestation attempt is rejected”
+### M1-T4 — “Rogue repeated attestation attempt is rejected”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -229,7 +234,7 @@ Outcome guards
 - $EVDIR/token.txt
 - $EVDIR/toolb_envoy_ip.txt
 
-### T5 — “Rogue without Workload API socket cannot fetch SVID”
+### M1-T5 — “Rogue without Workload API socket cannot fetch SVID”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -276,7 +281,7 @@ Outcome guards
 
 ## Milestone 2 - Workload identities security tests
 
-### T1 — “Rogue without SVID cannot access /secret”
+### M2-T1 — “Rogue without SVID cannot access /secret”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -316,7 +321,7 @@ Outcome guards
 - $EVDIR/toolb_bundle.pem  
 - $EVDIR/toolb_envoy_ip.txt
 
-### T2 — “Rogue with invalid client cert is rejected”
+### M2-T2 — “Rogue with invalid client cert is rejected”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -366,7 +371,7 @@ Outcome guards
 - $EVDIR/token.txt
 - $EVDIR/toolb_envoy_ip.txt
 
-### T3 — “Rogue with expired client cert is rejected”
+### M2-T3 — “Rogue with expired client cert is rejected”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -411,7 +416,7 @@ Outcome guards
 - (non‑EVDIR) /tmp/exp_end.err  
 - (non‑EVDIR) /tmp/toolb_material
 
-### T4 — “Rogue with wrong SPIFFE ID is rejected”
+### M2-T4 — “Rogue with wrong SPIFFE ID is rejected”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -464,7 +469,7 @@ Outcome guards
 - $EVDIR/token.txt
 - $EVDIR/toolb_envoy_ip.txt
 
-### T5 — “Rogue without Workload API socket cannot fetch SVID”
+### M2-T5 — “Rogue without Workload API socket cannot fetch SVID”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -510,7 +515,7 @@ Outcome guards
 - $EVDIR/status.txt
 - $EVDIR/toolb_envoy_ip.txt
 
-### T6 — “Rogue with socket but no entry cannot fetch SVID”
+### M2-T6 — “Rogue with socket but no entry cannot fetch SVID”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -550,7 +555,7 @@ Outcome guards
 - (non‑EVDIR) /tmp/rogue_socket_svid  
 - (non‑EVDIR) /tmp/rogue_socket_svid/svid.pem
 
-### T7 — “Rogue cannot read SVIDs or keys”
+### M2-T7 — “Rogue cannot read SVIDs or keys”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -596,7 +601,7 @@ Outcome guards
 - (non‑EVDIR) /tmp/rogue_svid_key  
 - (non‑EVDIR) /tmp/rogue_svid_out
 
-### T8 — “No unintended SPIRE entries created”
+### M2-T8 — “No unintended SPIRE entries created”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -624,7 +629,7 @@ Outcome guards
 
 - $EVDIR/entries_after.txt
 
-### T9 — “Rogue with expired short-lived SVID is rejected”
+### M2-T9 — “Rogue with expired short-lived SVID is rejected”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -672,7 +677,7 @@ Outcome guards
 
 ## Milestone 2.5 - Envoy ingress boundary
 
-### T1 — “tool-b app not reachable from edge network”
+### M2.5-T1 — “tool-b app not reachable from edge network”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -708,7 +713,7 @@ Outcome guards
 - $EVDIR/toolb_direct.out  
 - $EVDIR/toolb_ip.txt
 
-### T2 — “tool-b rejects missing x-spiffe-id header”
+### M2.5-T2 — “tool-b rejects missing x-spiffe-id header”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -746,7 +751,7 @@ Outcome guards
 - $EVDIR/token.txt
 - $EVDIR/toolb_envoy_ip.txt
 
-### T3 — “tool-b rejects mismatched x-spiffe-id header”
+### M2.5-T3 — “tool-b rejects mismatched x-spiffe-id header”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -797,7 +802,7 @@ Outcome guards
 
 ## M3.S2 — OPA-gated capability minting
 
-### T1 — “agent-a can mint (allowed by OPA)”
+### M3.S2-T1 — “agent-a can mint (allowed by OPA)”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -847,7 +852,7 @@ Outcome guards
 - $EVDIR/mint_headers.txt  
 - $EVDIR/status.txt
 
-### T2 — “rogue mint denied by policy”
+### M3.S2-T2 — “rogue mint denied by policy”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -897,7 +902,7 @@ Outcome guards
 - $EVDIR/token.txt
 - $EVDIR/toolb_envoy_ip.txt
 
-### T3 — “OPA is not reachable from edge”
+### M3.S2-T3 — “OPA is not reachable from edge”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -932,7 +937,7 @@ Outcome guards
 - $EVDIR/edge_http.txt  
 - $EVDIR/opa_unreachable.out
 
-### T4 — “Fail closed when OPA is unavailable”
+### M3.S2-T4 — “Fail closed when OPA is unavailable”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -982,7 +987,7 @@ Outcome guards
 - $EVDIR/token.txt
 - $EVDIR/toolb_envoy_ip.txt
 
-### T5 — “Issuer app not reachable from edge”
+### M3.S2-T5 — “Issuer app not reachable from edge”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -1026,7 +1031,7 @@ Outcome guards
 
 ## M3.S3 — Biscuit minting
 
-### T1 — “mint returns non-empty token”
+### M3.S3-T1 — “mint returns non-empty token”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -1066,7 +1071,7 @@ Outcome guards
 - $EVDIR/mint_headers.txt  
 - $EVDIR/status.txt
 
-### T2 — “expires_at is present and in the near future”
+### M3.S3-T2 — “expires_at is present and in the near future”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -1116,7 +1121,7 @@ Outcome guards
 - $EVDIR/token.txt
 - $EVDIR/toolb_envoy_ip.txt
 
-### T3 — “two mints produce different tokens”
+### M3.S3-T3 — “two mints produce different tokens”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -1157,7 +1162,7 @@ Outcome guards
 
 ## M3.S4 — tool-b enforces capability tokens
 
-### T1 — “identity-only access to /secret is denied”
+### M3.S4-T1 — “identity-only access to /secret is denied”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -1196,7 +1201,7 @@ Outcome guards
 - $EVDIR/status.txt  
 - $EVDIR/toolb_envoy_ip.txt
 
-### T2 — “agent-a can access /secret with minted capability”
+### M3.S4-T2 — “agent-a can access /secret with minted capability”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -1261,7 +1266,7 @@ Outcome guards
 - $EVDIR/token.txt
 - $EVDIR/toolb_envoy_ip.txt
 
-### T3 — “rogue cannot access /secret without token”
+### M3.S4-T3 — “rogue cannot access /secret without token”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -1298,7 +1303,7 @@ Outcome guards
 - $EVDIR/status.txt  
 - $EVDIR/toolb_envoy_ip.txt
 
-### T4 — “stolen token replay by rogue is rejected (sub mismatch)”
+### M3.S4-T4 — “stolen token replay by rogue is rejected (sub mismatch)”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -1362,7 +1367,7 @@ Outcome guards
 - $EVDIR/token.txt
 - $EVDIR/toolb_envoy_ip.txt
 
-### T5 — “expired token is rejected”
+### M3.S4-T5 — “expired token is rejected”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -1425,7 +1430,7 @@ Outcome guards
 - $EVDIR/status.txt
 - $EVDIR/toolb_envoy_ip.txt
 
-### T6 — “mint rejects missing parameters”
+### M3.S4-T6 — “mint rejects missing parameters”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -1467,7 +1472,7 @@ Outcome guards
 - $EVDIR/mint_headers.txt  
 - $EVDIR/status.txt
 
-### T7 — “mint denies unapproved authority request”
+### M3.S4-T7 — “mint denies unapproved authority request”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -1511,7 +1516,7 @@ Outcome guards
 
 ## Milestone 4 - Delegation chain and registry/budget enforcement
 
-### T1 — “root mint includes chain metadata”
+### M4-T1 — “root mint includes chain metadata”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -1550,7 +1555,7 @@ Outcome guards
 - $EVDIR/mint_body.json  
 - $EVDIR/status.txt
 
-### T2 — “search writes discovery registry entries”
+### M4-T2 — “search writes discovery registry entries”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -1601,7 +1606,7 @@ Outcome guards
 - $EVDIR/search_response.json  
 - $EVDIR/search_status.txt
 
-### T3 — “resource mint requires registry proof”
+### M4-T3 — “resource mint requires registry proof”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -1644,7 +1649,7 @@ Outcome guards
 - $EVDIR/resource_mint.json  
 - $EVDIR/resource_status.txt
 
-### T4 — “resource mint after discovery allows read-file”
+### M4-T4 — “resource mint after discovery allows read-file”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -1707,7 +1712,7 @@ Outcome guards
 - $EVDIR/read_response.json  
 - $EVDIR/read_status.txt
 
-### T5 — “budget is enforced per root token”
+### M4-T5 — “budget is enforced per root token”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -1759,7 +1764,7 @@ Outcome guards
 - $EVDIR/resp_*.json  
 - $EVDIR/st_*.txt
 
-### T6 — “tampered token is denied”
+### M4-T6 — “tampered token is denied”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -1808,7 +1813,7 @@ Outcome guards
 - $EVDIR/tampered_response.json  
 - $EVDIR/tampered_status.txt
 
-### T7 — “depth limit is enforced on repeated delegation”
+### M4-T7 — “depth limit is enforced on repeated delegation”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -1878,7 +1883,7 @@ Outcome guards
 - $EVDIR/depth4_mint.json  
 - $EVDIR/depth4_status.txt  
 
-### T8 — “new-resource mint rate is enforced at capiss”
+### M4-T8 — “new-resource mint rate is enforced at capiss”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -1943,7 +1948,7 @@ Outcome guards
 - $EVDIR/fileA_again_mint.json  
 - $EVDIR/fileA_again_status.txt  
 
-### T9 — “allow flow emits correlatable audit events”
+### M4-T9 — “allow flow emits correlatable audit events”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -2016,7 +2021,7 @@ Outcome guards
 - $EVDIR/toolb_container.log  
 - $EVDIR/toolb_events.jsonl  
 
-### T10 — “deny flow emits correlatable mint audit event”
+### M4-T10 — “deny flow emits correlatable mint audit event”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -2091,7 +2096,7 @@ Outcome guards
 - $EVDIR/capiss_container.log  
 - $EVDIR/capiss_events.jsonl  
 
-### T11 — “amplified delegated mint is denied”
+### M4-T11 — “amplified delegated mint is denied”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -2133,7 +2138,7 @@ Outcome guards
 - $EVDIR/amplified_mint.json
 - $EVDIR/amplified_status.txt
 
-### T12 — “wildcard delegated resource is denied”
+### M4-T12 — “wildcard delegated resource is denied”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -2175,7 +2180,7 @@ Outcome guards
 - $EVDIR/wildcard_mint.json
 - $EVDIR/wildcard_status.txt
 
-### T13 — “budget and registry TTLs are bounded by root expiry”
+### M4-T13 — “budget and registry TTLs are bounded by root expiry”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -2230,7 +2235,7 @@ Outcome guards
 - $EVDIR/registry_ttl.txt
 - $EVDIR/ttl_check_now.txt
 
-### T14 — “protected request does not require capiss hot path”
+### M4-T14 — “protected request does not require capiss hot path”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
@@ -2297,54 +2302,770 @@ Outcome guards
 
 These tests are implemented in `scripts/rogue_node_tests.sh` as `M4A_T1_test` through `M4A_T10_test`. They prove that broad Jira/mock upstream access does not become broad agent authority: `capiss` and OPA mint only the allowed IAM project token, and `jira-tool` enforces identity, token action, project scope, budget/rate state, and upstream project verification before returning data.
 
-### M4a-T1 - mock upstream breadth
+### M4a-T1 — “mock upstream breadth”
 Directly reads `IAM-1` and `NAS-1` from `jira-mock` to prove the upstream test data is broader than the agent's allowed project.
 
-### M4a-T2 - allowed mint and IAM read
+### M4a-T2 — “allowed mint and IAM read”
 Mints `aud=jira-tool`, `act=read`, `res=jira-tool:/project:IAM` for agent-a, reads `IAM-1` through `jira-tool-envoy`, and records the verified `jira-tool-envoy` SPIFFE identity.
 
-### M4a-T3 - non-allowed project mint denied
+### M4a-T3 — “non-allowed project mint denied”
 Attempts a NAS Jira root mint as agent-a and expects `403` with reason `policy`.
 
-### M4a-T4 - NAS read denied before upstream
+### M4a-T4 — “NAS read denied before upstream”
 Uses an IAM read token against `NAS-1`, expects `403` with reason `project_mismatch`, and verifies the mock request log is empty.
 
-### M4a-T5 - rogue Jira mint denied
+### M4a-T5 — “rogue Jira mint denied”
 Attempts an IAM Jira root mint using rogue client material and expects `403` with reason `policy`.
 
-### M4a-T6 - stolen Jira token denied
+### M4a-T6 — “stolen Jira token denied”
 Mints an IAM token as agent-a, reuses it with rogue client material, and expects `403` with reason `sub_mismatch` before upstream use.
 
-### M4a-T7 - Jira budget consumption
+### M4a-T7 — “Jira budget consumption”
 Reads `IAM-1` once with an IAM token and verifies Redis budget remaining is `9`.
 
-### M4a-T8 - Jira budget exhaustion
+### M4a-T8 — “Jira budget exhaustion”
 Performs eleven protected reads with one IAM token, expects the first ten to succeed and the eleventh to deny with `budget_exceeded`, and verifies only ten upstream calls occurred.
 
-### M4a-T9 - upstream project mismatch denied
+### M4a-T9 — “upstream project mismatch denied”
 Reads the mismatch fixture `IAM-999`, expects `upstream_project_mismatch`, and verifies the mismatched upstream body is not returned.
 
-### M4a-T10 - Jira audit trace reconstruction
+### M4a-T10 — “Jira audit trace reconstruction”
 Captures capiss and jira-tool logs after an allowed read and verifies correlated `capiss_mint_decision` and `jiratool_enforcement_decision` events.
 
 ## Milestone 4b - Jira project-scoped description write
 
 These tests are implemented in `scripts/rogue_node_tests.sh` as `M4B_T1_test` through `M4B_T6_test`. They prove `act=write` is project-scoped read plus description replacement only. `act=read` cannot write, malformed or overbroad bodies are rejected locally, and NAS writes are denied before any upstream call.
 
-### M4b-T1 - allowed write update and readback
+### M4b-T1 — “allowed write update and readback”
 Mints `aud=jira-tool`, `act=write`, `res=jira-tool:/project:IAM`, writes a timestamp marker to `IAM-1`, reads the issue back with the write token, and verifies the mock saw PUT then GET.
 
-### M4b-T2 - read token write denied
+### M4b-T2 — “read token write denied”
 Mints an IAM read token, attempts description PUT, and expects `403` with reason `insufficient_authority` and no mock write.
 
-### M4b-T3 - NAS write mint denied
+### M4b-T3 — “NAS write mint denied”
 Attempts a NAS write root mint as agent-a and expects `403` with reason `policy`.
 
-### M4b-T4 - NAS write denied before upstream
+### M4b-T4 — “NAS write denied before upstream”
 Uses an IAM write token against `NAS-1`, expects `403` with reason `project_mismatch`, and verifies no mock request occurred.
 
-### M4b-T5 - description write body shape
+### M4b-T5 — “description write body shape”
 Sends malformed JSON and a body containing both `description` and `summary`, expects `400` with `malformed_body` or `unsupported_fields`, and verifies no mock request occurred.
 
-### M4b-T6 - write audit trace reconstruction
+### M4b-T6 — “write audit trace reconstruction”
 Mints an IAM write token, writes and reads `IAM-2`, captures capiss and jira-tool logs, and verifies correlated write mint plus jira-tool write/read allow events.
+
+## Milestone 5 - Codex to Jira through MCP, Varambu audit, and full-chain trace
+
+These tests are implemented in `scripts/rogue_node_tests.sh` as `M5_T1_test` through `M5_T59_test` (there is no `M5-T29`). They prove that an AI agent (Codex) reaching Jira through MCP gets only the authority it was minted, never more: the `codex-jira-mcp-adapter` turns each tool call into a capiss mint for exactly one action on one project, `jira-mcp-gateway` re-checks that capability before touching Jira, and every decision leaves evidence an auditor can follow end to end.
+
+Shared vocabulary for this section:
+- **Adapter** — `codex-jira-mcp-adapter`, an MCP server over stdio. Tests reach it through `scripts/codex_jira_mcp.sh`, which runs `docker compose exec -T` into the already-running container.
+- **Mint** — a capiss root mint with `aud=jira-mcp-gateway`, `act=read_project_summary` or `act=create_story`, and `res=jira-mcp:/project:<KEY>`. OPA allows only the adapter identity, only for project `IAM`.
+- **Gateway** — `jira-mcp-gateway` behind `jira-mcp-envoy:11443`, with endpoints `/mcp/jira/project-summary` and `/mcp/jira/stories`. It verifies the token, enforces project scope, payload shape, and budget, holds the only Jira credential, and calls upstream.
+- **Mock** — `jira-mcp-mock`, a deterministic Jira holding more data than the agent may see (projects `IAM` and `NAS`). Test-only endpoints expose what it received: `/__test__/requests`, `/__test__/created`, `/__test__/breadth`, `/__test__/reset`, `/__test__/fail_next_create`.
+- **Direct gateway call** — some tests skip the adapter and call the gateway with a token minted by the harness using the adapter's client material, to probe the gateway's own checks.
+
+Group overview:
+
+| Group | Tests | Proves |
+| --- | --- | --- |
+| Session and tool surface | M5-T1, M5-T2 | The launcher attaches to the running adapter; only two tools exist |
+| Project summary | M5-T3 – M5-T6 | IAM summaries work, are filtered and bounded; NAS is refused at mint |
+| Story creation | M5-T7 – M5-T15 | IAM stories work with criteria and epics; cross-project and malformed requests never reach Jira |
+| Authority separation and token checks | M5-T16 – M5-T23 | The adapter cannot decide or widen authority; the gateway rejects wrong action, audience, subject, and invalid tokens |
+| Boundary and secret hygiene | M5-T24 – M5-T30 | The gateway is not directly reachable; no tokens or Jira credentials leak to Codex, logs, or upstream |
+| Budget | M5-T31 – M5-T35 | Per-token budgets apply to reads and creates |
+| Audit events | M5-T36 – M5-T39 | Allow and deny decisions are logged; errors do not reveal what exists upstream |
+| Upstream breadth | M5-T40, M5-T41 | The mock really is broader than the agent's authority |
+| Varambu audit | M5-T42 – M5-T48 | The `varambu` audit files are complete, append-only, secret-free, and correctly timed |
+| Full-chain trace | M5-T49 – M5-T59 | `varambu trace` joins intent, action, mint, gateway, and upstream legs into one honest chain per request |
+
+### M5-T1 — “MCP launcher starts adapter session”
+
+**What it tests:** The local Codex launcher attaches to the adapter that is already running, without starting or rebuilding the stack, and speaks clean MCP on stdout.
+
+**How:**
+- Premise: the adapter container is running; `scripts/codex_jira_mcp.sh` uses `docker compose exec -T` and contains no `compose … up` or `--build`.
+- Exercise: send an MCP `tools/list` request through the launcher.
+- Outcome: stdout is valid MCP JSON-RPC (`jsonrpc: "2.0"` with a tool list), and no diagnostic text (`codex-jira`, `adapter`, `ERROR`) is mixed into stdout — diagnostics go to stderr only.
+
+**Evidence:** `tools.json`, `launcher.err`
+
+### M5-T2 — “MCP tool surface is exactly Slice 1”
+
+**What it tests:** Codex is offered exactly the two approved tools, in order, and nothing else.
+
+**How:**
+- Premise: the adapter container is running.
+- Exercise: `tools/list` through the launcher.
+- Outcome: the tool names are exactly `read_project_summary` and `create_story`.
+
+**Evidence:** `tools.json`, `launcher.err`
+
+### M5-T3 — “IAM project summary succeeds”
+
+**What it tests:** The allowed path works end to end: an IAM summary request travels adapter → capiss → gateway → mock and returns data.
+
+**How:**
+- Premise: the M5 path is ready (capiss and adapter material present, both Envoys healthy) and the mock is reset.
+- Exercise: call `read_project_summary` for `IAM` through MCP; read the mock's request log.
+- Outcome: the response is `ok` for project `IAM` with at least one issue and one epic; the mock received `/rest/api/3/project/IAM/summary` stamped with the `jira-mcp-gateway` marker, so the call came through the gateway.
+
+**Evidence:** `mcp_response.json`, `summary.json`, `mock_requests.json`, `adapter.err`
+
+### M5-T4 — “Summary response contains only allowed fields”
+
+**What it tests:** The summary is a curated view, not a raw Jira dump.
+
+**How:**
+- Premise: the M5 path is ready.
+- Exercise: call `read_project_summary` for `IAM`.
+- Outcome: the returned summary contains none of `description`, `comments`, `assignee`, `sprint`, `board`, `raw_jql`, `atlassian.net`, `Bearer`, or `token` (case-insensitive).
+
+**Evidence:** `mcp_response.json`, `summary.json`
+
+### M5-T5 — “Summary response is bounded”
+
+**What it tests:** A large project cannot flood the agent: the summary is capped.
+
+**How:**
+- Premise: the mock's breadth report shows more than 75 IAM issues.
+- Exercise: call `read_project_summary` for `IAM`.
+- Outcome: at most 50 issues and at most 25 epics are returned.
+
+**Evidence:** `breadth.json`, `summary.json`
+
+### M5-T6 — “NAS project summary denies at capiss”
+
+**What it tests:** A summary of a project the agent is not authorized for is refused at the mint, before any gateway or Jira call.
+
+**How:**
+- Premise: the M5 path is ready and the mock is reset.
+- Exercise: call `read_project_summary` for `NAS`; read the mock's request log.
+- Outcome: Codex receives `ok: false` with reason `mint_denied`, and the mock received no requests at all.
+
+**Evidence:** `mcp_response.json`, `error.json`, `mock_requests.json`
+
+### M5-T7 — “IAM story creation succeeds”
+
+**What it tests:** The allowed write path creates exactly one story and returns only bounded metadata.
+
+**How:**
+- Premise: the M5 path is ready and the mock is reset.
+- Exercise: call `create_story` for `IAM` with a summary and description; read the mock's created-stories list.
+- Outcome: the response is `ok` with `project_key: IAM`, `issue_type: Story`, a key starting `IAM-`, and no raw Jira `fields` object; the mock stored exactly one story.
+
+**Evidence:** `mcp_response.json`, `create.json`, `created.json`
+
+### M5-T8 — “IAM story creation accepts criteria”
+
+**What it tests:** Acceptance criteria supplied as a plain list end up inside the story description.
+
+**How:**
+- Premise: the M5 path is ready and the mock is reset.
+- Exercise: call `create_story` for `IAM` with `acceptance_criteria: ["AC one", "AC two"]`.
+- Outcome: the description the mock stored (Atlassian Document Format) contains the acceptance-criteria text.
+
+**Evidence:** `mcp_response.json`, `create.json`, `created.json`
+
+### M5-T9 — “IAM story creation accepts valid epic”
+
+**What it tests:** A story can be linked to an epic in the same project, and the gateway verifies the epic before creating anything.
+
+**How:**
+- Premise: the M5 path is ready and the mock is reset.
+- Exercise: call `create_story` for `IAM` with `epic_key: IAM-101`; read the mock's request log.
+- Outcome: the response is `ok` with `epic_key: IAM-101`, and the mock saw the lookup of `IAM-101` before the create request.
+
+**Evidence:** `mcp_response.json`, `create.json`, `mock_requests.json`
+
+### M5-T10 — “Invalid same-project epic denies”
+
+**What it tests:** Pointing at an IAM issue that is not an epic stops the request before any story is created.
+
+**How:**
+- Premise: the M5 path is ready and the mock is reset.
+- Exercise: call `create_story` for `IAM` with `epic_key: IAM-900` (exists, but is not an Epic).
+- Outcome: Codex receives `ok: false` with reason `epic_invalid`, and the mock received no create (`POST /rest/api/3/issue`).
+
+**Evidence:** `mcp_response.json`, `error.json`, `mock_requests.json`
+
+### M5-T11 — “NAS project story creation denies at capiss”
+
+**What it tests:** Creating in an unauthorized project is refused at the mint.
+
+**How:**
+- Premise: the M5 path is ready and the mock is reset.
+- Exercise: call `create_story` for `NAS`.
+- Outcome: Codex receives `ok: false` with reason `mint_denied`, and the mock received no requests.
+
+**Evidence:** `mcp_response.json`, `error.json`, `mock_requests.json`
+
+### M5-T12 — “IAM token with NAS payload denies”
+
+**What it tests:** A valid IAM create token cannot be spent on a different project by changing the request body.
+
+**How:**
+- Premise: an IAM `create_story` token is minted.
+- Exercise: direct gateway call to `/mcp/jira/stories` with that token and `project_key: NAS`.
+- Outcome: HTTP 403 with reason `project_mismatch`, and the mock received no requests.
+
+**Evidence:** `create_mint.json`, `response.json`, `status.txt`, `mock_requests.json`
+
+### M5-T13 — “IAM token with NAS epic denies”
+
+**What it tests:** A story in IAM cannot be attached to an epic in another project, and the cross-project epic is not even looked up.
+
+**How:**
+- Premise: the M5 path is ready and the mock is reset.
+- Exercise: call `create_story` for `IAM` with `epic_key: NAS-101`.
+- Outcome: reason `epic_invalid`, and the mock received no requests at all.
+
+**Evidence:** `mcp_response.json`, `error.json`, `mock_requests.json`
+
+### M5-T14 — “Arbitrary create fields are rejected”
+
+**What it tests:** Only the approved story fields are accepted; extra Jira fields cannot be smuggled in.
+
+**How:**
+- Premise: an IAM `create_story` token is minted.
+- Exercise: direct gateway call with an extra `assignee` field.
+- Outcome: HTTP 400 with reason `payload_invalid`, and no upstream request.
+
+**Evidence:** `response.json`, `status.txt`, `mock_requests.json`
+
+### M5-T15 — “Plain text only and raw ADF rejected”
+
+**What it tests:** Descriptions must be plain text; a caller cannot pass raw Atlassian Document Format.
+
+**How:**
+- Premise: an IAM `create_story` token is minted.
+- Exercise: direct gateway call with `description` as an ADF object (`{"type": "doc"}`).
+- Outcome: HTTP 400 with reason `payload_invalid`, and no upstream request.
+
+**Evidence:** `response.json`, `status.txt`, `mock_requests.json`
+
+### M5-T16 — “Adapter forwards NAS to capiss”
+
+**What it tests:** The adapter is not a policy engine: it forwards the NAS request to capiss and reports capiss's refusal, rather than deciding locally.
+
+**How:**
+- Premise: the M5 path is ready and the mock is reset.
+- Exercise: call `read_project_summary` for `NAS`.
+- Outcome: Codex receives reason `mint_denied`; the adapter's stderr records `mint_denied` and never `local_authorization`; the mock received no requests.
+
+**Evidence:** `mcp_response.json`, `error.json`, `adapter.err`, `mock_requests.json`
+
+### M5-T17 — “Unsupported action cannot be minted”
+
+**What it tests:** Actions outside the approved pair cannot be minted, even for the allowed project.
+
+**How:**
+- Premise: capiss material is ready.
+- Exercise: mint `act=update_story` on `jira-mcp:/project:IAM` with the adapter identity.
+- Outcome: HTTP 403 with reason `policy`.
+
+**Evidence:** `mint.json`, `status.txt`
+
+### M5-T18 — “Old Jira tool authority is separate”
+
+**What it tests:** The adapter cannot borrow the M4 `jira-tool` authority family.
+
+**How:**
+- Premise: capiss and the M5 path are ready.
+- Exercise: as the adapter, mint `aud=jira-tool`, `act=read`, `res=jira-tool:/project:IAM`.
+- Outcome: HTTP 403 with reason `policy`.
+
+**Evidence:** `mint.json`, `status.txt`
+
+### M5-T19 — “M5 does not disturb existing jira-tool path”
+
+**What it tests:** Adding M5 left the M4 Jira path in place.
+
+**How:**
+- Premise: the OPA policy still contains the `jira-tool` audience and `jira-tool:/project:IAM` rules.
+- Exercise: check that capiss material is present and `jira-tool-envoy` resolves and accepts TCP connections on port 10443.
+- Outcome: the `jira-tool-envoy` address was resolved.
+- Note: this is a presence check of the M4 path. Despite the guard's wording ("identity verified"), no SPIFFE identity is checked here; the M4a/M4b suites prove that path's behavior.
+
+**Evidence:** guard outputs only
+
+### M5-T20 — “Endpoint-bound action is enforced”
+
+**What it tests:** A token is valid only for the endpoint matching its action.
+
+**How:**
+- Premise: an IAM `read_project_summary` token and an IAM `create_story` token are minted.
+- Exercise: use the read token on `/mcp/jira/stories`, and the create token on `/mcp/jira/project-summary`.
+- Outcome: both are denied with reason `act_mismatch`.
+
+**Evidence:** `read_on_create.json`, `create_on_read.json` and their status files
+
+### M5-T21 — “Audience mismatch denies”
+
+**What it tests:** An M5 resource cannot be minted under a different audience.
+
+**How:**
+- Premise: capiss material is ready.
+- Exercise: mint `aud=jira-tool` with `act=read_project_summary` on `jira-mcp:/project:IAM`.
+- Outcome: the mint is refused with HTTP 400 or 403 (either is accepted; the test does not pin the reason).
+
+**Evidence:** `mint.json`, `status.txt`
+
+### M5-T22 — “Stolen token subject mismatch denies”
+
+**What it tests:** A token stolen from the adapter is useless to another workload.
+
+**How:**
+- Premise: an IAM read token is minted for the adapter.
+- Exercise: the rogue identity presents that token to the gateway's summary endpoint over its own mTLS connection.
+- Outcome: HTTP 403 with reason `subject_mismatch`.
+
+**Evidence:** `read_mint.json`, `response.json`, `status.txt`
+
+### M5-T23 — “Invalid token denies”
+
+**What it tests:** A malformed token is rejected before any upstream use.
+
+**How:**
+- Premise: the gateway is ready and the mock is reset.
+- Exercise: direct gateway call with the token `not-a-token`.
+- Outcome: HTTP 401 with reason `token_invalid`, and no upstream request.
+
+**Evidence:** `response.json`, `status.txt`, `mock_requests.json`
+
+### M5-T24 — “Direct app bypass is unavailable”
+
+**What it tests:** The gateway application cannot be reached without going through its Envoy boundary.
+
+**How:**
+- Premise: the M5 edge path is reachable.
+- Exercise: from the test harness, request `http://jira-mcp-gateway:8080/health` directly.
+- Outcome: the request fails with a name-resolution, timeout, no-route, or connection failure.
+
+**Evidence:** `direct_gateway.out`, `direct_gateway_rc.txt`
+
+### M5-T25 — “Only gateway calls mock upstream”
+
+**What it tests:** Every upstream request originates from the gateway.
+
+**How:**
+- Premise: the M5 path is ready and the mock is reset.
+- Exercise: make an allowed IAM summary call and a denied NAS summary call.
+- Outcome: the mock received at least one request, and every request carries the `jira-mcp-gateway` marker.
+
+**Evidence:** `iam.json`, `nas.json`, `mock_requests.json`
+
+### M5-T26 — “MCP responses contain no capiss tokens”
+
+**What it tests:** Codex never sees capability tokens or credentials.
+
+**How:**
+- Premise: the M5 path is ready.
+- Exercise: call `read_project_summary` and `create_story` through MCP.
+- Outcome: neither response contains `Bearer `, `token_type`, a `"token"` field, `Biscuit`, or `JIRA_API_TOKEN`.
+
+**Evidence:** `summary_mcp.json`, `create_mcp.json`
+
+### M5-T27 — “Adapter logs contain no bearer tokens”
+
+**What it tests:** The adapter's diagnostics carry decision metadata but no token material.
+
+**How:**
+- Premise: the M5 path is ready.
+- Exercise: call `read_project_summary` and keep the adapter's stderr.
+- Outcome: stderr contains an `adapter_decision` event and no `Bearer `, `"token"`, `token_type`, or `Biscuit`.
+
+**Evidence:** `summary_mcp.json`, `adapter.err`
+
+### M5-T28 — “Adapter environment has no Jira API key”
+
+**What it tests:** The Jira credential lives only in the gateway, never in the component Codex talks to.
+
+**How:**
+- Premise: the adapter container is running.
+- Exercise: capture the adapter container's environment.
+- Outcome: none of `JIRA_API_TOKEN`, `JIRA_EMAIL`, or `JIRA_BASE_URL` is set.
+
+**Evidence:** `adapter_env.txt`
+
+### M5-T30 — “Client auth headers are stripped upstream”
+
+**What it tests:** The caller's capability token is not forwarded to Jira.
+
+**How:**
+- Premise: the M5 path is ready and the mock is reset.
+- Exercise: create a story through MCP.
+- Outcome: in mock mode, every request the mock received has no `Authorization` header.
+
+**Evidence:** `create_mcp.json`, `mock_requests.json`
+
+### M5-T31 — “Summary participates in budget governance”
+
+**What it tests:** Read tokens have a use budget.
+
+**How:**
+- Premise: one IAM read token is minted.
+- Exercise: call the summary endpoint 11 times with the same token.
+- Outcome: exactly 10 calls return 200; the 11th returns 403 with reason `budget_exhausted`.
+
+**Evidence:** `statuses.txt`, `resp_1.json` … `resp_11.json`
+
+### M5-T32 — “Create consumes budget before upstream”
+
+**What it tests:** A successful create is recorded with its remaining budget by the gateway.
+
+**How:**
+- Premise: the M5 path is ready; a log start time is recorded.
+- Exercise: create a story through MCP; capture gateway logs since the start time.
+- Outcome: the gateway logged an `allow` decision for `story_create` with a numeric `budget_remaining`.
+
+**Evidence:** `create_mcp.json`, `gateway.log`
+
+### M5-T33 — “Budget exhaustion denies create”
+
+**What it tests:** Create tokens stop working once their budget is spent.
+
+**How:**
+- Premise: one IAM create token is minted.
+- Exercise: create 10 stories with it, then try an 11th.
+- Outcome: the 11th returns 403 with reason `budget_exhausted`.
+
+**Evidence:** `create_1.json` … `create_10.json`, `denied.json`, `denied_status.txt`
+
+### M5-T34 — “Pre-validation denials do not consume budget”
+
+**What it tests:** A request rejected for its payload does not block a following valid request.
+
+**How:**
+- Premise: one IAM create token is minted.
+- Exercise: send an invalid create (ADF description), then a valid create with the same token.
+- Outcome: the invalid one returns 400 and the valid one returns 201.
+- Note: with a budget of 10 this shows the rejection did not exhaust the token; it does not on its own prove the counter was left unchanged.
+
+**Evidence:** `invalid.json`, `valid.json` and their status files
+
+### M5-T35 — “Upstream create failure is not refunded”
+
+**What it tests:** An upstream failure after authorization is reported in a standard form.
+
+**How:**
+- Premise: one IAM create token is minted and the mock is armed to fail the next create.
+- Exercise: send an authorized create.
+- Outcome: HTTP 502 with reason `upstream_error`.
+- Note: the test does not read the budget afterwards, so "not refunded" is not directly asserted here.
+
+**Evidence:** `fail.json`, `fail_status.txt`
+
+### M5-T36 — “Read audit events correlate”
+
+**What it tests:** An allowed summary leaves both a mint event and a gateway event.
+
+**How:**
+- Premise: the M5 path is ready; a log start time is recorded.
+- Exercise: call `read_project_summary` for `IAM`; capture capiss and gateway logs since the start time.
+- Outcome: the gateway logged an `allow` for `project_summary` with `aud=jira-mcp-gateway` and `act=read_project_summary`, and capiss logged an `allow` mint for the same audience and action.
+- Note: the two events are checked for presence and matching audience/action; joining by correlation id is proven by the trace tests (M5-T49 onward).
+
+**Evidence:** `summary.json`, `capiss.log`, `gateway.log`
+
+### M5-T37 — “Create audit events correlate”
+
+**What it tests:** An allowed create leaves a gateway event naming the created issue.
+
+**How:**
+- Premise: the M5 path is ready; a log start time is recorded.
+- Exercise: create a story; capture gateway logs.
+- Outcome: the gateway logged an `allow` for `story_create` that includes the new `issue_key`.
+
+**Evidence:** `create.json`, `gateway.log`
+
+### M5-T38 — “Deny paths produce final decision evidence”
+
+**What it tests:** Denials are logged as decisions, not silently dropped.
+
+**How:**
+- Premise: an IAM create token is minted; a log start time is recorded.
+- Exercise: send a create with an ADF description; capture gateway logs.
+- Outcome: the gateway logged a `deny` decision with reason `payload_invalid`.
+
+**Evidence:** `response.json`, `status.txt`, `gateway.log`
+
+### M5-T39 — “Local errors avoid upstream existence leak”
+
+**What it tests:** A refused request reveals nothing about what exists upstream.
+
+**How:**
+- Premise: the mock's breadth report shows that project `NAS` exists.
+- Exercise: call `read_project_summary` for `NAS`.
+- Outcome: the error is `mint_denied` and carries no `project` or `issues` data.
+
+**Evidence:** `breadth.json`, `error.json`
+
+### M5-T40 — “Mock upstream breadth precondition”
+
+**What it tests:** The mock is genuinely broader than the agent's authority, so the narrowing tests mean something.
+
+**How:**
+- Premise: `jira-mcp-mock` resolves.
+- Exercise: read the mock's breadth report.
+- Outcome: projects are exactly `IAM` and `NAS`, with more than 75 IAM issues and at least 4 NAS issues.
+
+**Evidence:** `breadth.json`
+
+### M5-T41 — “Protected path narrows broad mock”
+
+**What it tests:** Through the protected path, that broad upstream narrows to IAM only.
+
+**How:**
+- Premise: the breadth report is captured and the M5 path is ready.
+- Exercise: call `read_project_summary` for `IAM` and for `NAS`.
+- Outcome: IAM returns `ok` for project `IAM`; NAS returns `mint_denied`.
+
+**Evidence:** `breadth.json`, `iam.json`, `nas.json`
+
+### M5-T42 — “Varambu capiss audit files”
+
+**What it tests:** The Varambu audit tailer writes every capiss mint decision for the session to a JSONL file and a readable log, with enriched fields and no secrets.
+
+**How:**
+- Premise: the M5 path is ready; a fresh audit session is created and marked current.
+- Exercise: start the capiss audit tailer; make four MCP calls (IAM read, IAM create, NAS read, NAS create); wait for four entries; render `varambu audit --json`.
+- Outcome:
+  - the file holds the decisions in request order: allow read, allow create, deny NAS, deny NAS;
+  - allowed rows carry the adapter subject, token and root-token ids, issued/expiry times in UTC and local time, TTL, and correlation id;
+  - denied rows carry reason `policy`, the NAS project, and no token-validity fields;
+  - no bearer token, `Basic` credential, or `JIRA_API_TOKEN` appears in the files or the CLI output;
+  - the human log shows `MINTED OK`, `DENIED: Reason Policy`, and `Logged At:`.
+
+**Evidence:** `capiss_audit.jsonl`, `capiss_audit.log`, `varambu_audit_json.out`, and the four MCP responses
+
+### M5-T43 — “Varambu audit active append without post-processing”
+
+**What it tests:** Audit entries are appended live as decisions happen, and the CLI shows exactly what was persisted.
+
+**How:**
+- Premise: an empty audit session is prepared.
+- Exercise: start the tailer; make one allowed call and snapshot the file; render `varambu audit --json`; make one denied call and snapshot again.
+- Outcome: the first snapshot has exactly one entry; the CLI output is byte-identical to that persisted entry; the second snapshot has two entries, allow then deny.
+
+**Evidence:** `after_first.jsonl`, `varambu_after_first.out`, `after_second.jsonl`
+
+### M5-T44 — “Varambu audit current session history and file access”
+
+**What it tests:** `varambu audit` shows the current session by default, every session with `--all`, and points to the real files.
+
+**How:**
+- Premise: two synthetic sessions exist — session 1 with an allowed record, session 2 with a denied record — and `current` points to session 2.
+- Exercise: run `varambu audit`, `varambu audit --all`, `varambu audit-file`, and `varambu audit-file --all`.
+- Outcome: the default view shows only the denied record; `--all` shows both records exactly once each (no merging); the reported file paths exist; `audit-file --all` lists both sessions' files.
+
+**Evidence:** `current.out`, `all.out`, `paths.out`, `paths_all.out`
+
+### M5-T45 — “Varambu audit secret exclusion in persisted evidence”
+
+**What it tests:** No credential material reaches any persisted audit artifact.
+
+**How:**
+- Premise: an audit session is prepared.
+- Exercise: start the tailer; make two allowed calls and one denied call; render the CLI output.
+- Outcome: no bearer token values in the JSONL; no `Bearer`/`Basic` in the human log or CLI output; no credentials in the tailer's diagnostics; token ids contain only hexadecimal characters and dashes.
+
+**Evidence:** `capiss_audit.jsonl`, `capiss_audit.log`, `audit_tailer.err`, `varambu_audit.out`
+
+### M5-T46 — “Varambu audit stale tailer warning and strict failure”
+
+**What it tests:** If the audit tailer has died, the operator is told — and strict mode fails.
+
+**How:**
+- Premise: a session with one record and a tailer PID that is not running.
+- Exercise: run `varambu audit`, then `varambu audit --strict`.
+- Outcome: the normal run prints a tailer warning on stderr and still shows the persisted record; the strict run exits non-zero.
+
+**Evidence:** `audit_warn.out`, `audit_warn.err`, `strict_rc.txt`
+
+### M5-T47 — “Varambu audit local and UTC timing semantics”
+
+**What it tests:** Audit times are unambiguous: UTC plus local time with its zone.
+
+**How:**
+- Premise: an audit session is prepared.
+- Exercise: start the tailer; make one allowed and one denied call.
+- Outcome:
+  - the allowed record has a UTC timestamp ending in `Z`, a local timestamp with a zone name, and a timezone field;
+  - it also has issued and expiry times in UTC and a positive TTL;
+  - the denied record has logged timestamps but no issued, expiry, or TTL fields;
+  - human log headers show a local date and time.
+
+**Evidence:** `capiss_audit.jsonl`, the session's `capiss_audit.log`
+
+### M5-T48 — “Varambu audit uniform capiss enrichment”
+
+**What it tests:** Every audit record has the same enriched shape regardless of outcome.
+
+**How:**
+- Premise: an audit session is prepared.
+- Exercise: start the tailer; make an IAM read, an IAM create, and a NAS read.
+- Outcome:
+  - every record has result, reason, UTC and local timestamps, timezone, policy id, and policy hash;
+  - allowed records add token validity fields, and denied records never do;
+  - no `Bearer` or `Basic` values appear.
+
+**Evidence:** `capiss_audit.jsonl`
+
+### M5-T49 — “Varambu trace full chain allowed”
+
+**What it tests:** For one allowed request, `varambu trace` shows all seven legs in order, joined by the request's correlation id.
+
+**How:**
+- Premise: the M5 path and mock are ready; a trace session is prepared and marked current.
+- Exercise:
+  - start the capiss and gateway tailers and make an allowed `create_story` call that writes the adapter's own audit legs;
+  - read the correlation id from the response;
+  - write a Codex session record (rollout) containing the user's exact prompt, the tool call, and its result;
+  - render the trace as JSON, and as text for this correlation id only.
+- Outcome:
+  - exactly one chain exists for the correlation id;
+  - its legs are, in order, `intent`, `action`, `adapter_request`, `mint`, `gateway`, `upstream`, `adapter_decision`, all present;
+  - the gateway leg is `allow` and the upstream leg shows status 201;
+  - the intent leg holds the prompt verbatim;
+  - the mint, gateway, and upstream legs carry the same correlation id;
+  - the text view shows the adapter, mint, and "return to Codex" rows and the prompt.
+
+**Evidence:** `trace.json`, `trace.txt`, `trace.jsonl`, `cid.txt`, `capiss_audit.jsonl`, `gateway_audit.jsonl`, `adapter_audit.jsonl`
+
+### M5-T50 — “Varambu trace denied mint partial chain”
+
+**What it tests:** A request refused at the mint shows an honest partial chain that ends at the denial.
+
+**How:**
+- Premise: a trace session is prepared.
+- Exercise: start the tailers; make a denied NAS `read_project_summary` call; write a rollout whose result is `ok: false`; render the trace (text view for this correlation id only).
+- Outcome:
+  - the trace renders without errors;
+  - the mint leg is present and `deny`;
+  - the gateway and upstream legs are absent;
+  - the adapter request leg is present;
+  - the text view marks missing legs as "not yet available" rather than as errors.
+
+**Evidence:** `trace.json`, `trace.txt`, `trace.err`, `capiss_audit.jsonl`, `adapter_audit.jsonl`
+
+### M5-T51 — “Varambu trace intent pending then converges”
+
+**What it tests:** If the agent's session record arrives late, the trace first shows the intent as pending and then fills it in.
+
+**How:**
+- Premise: a trace session is prepared.
+- Exercise: make an allowed `create_story` call and capture the in-boundary legs; render the trace before any rollout exists; then write the rollout and render again.
+- Outcome: the first render has no intent but does have the adapter request; the second render's intent for this correlation id holds the prompt verbatim.
+
+**Evidence:** `trace_before.json`, `trace_after.json`, `cid.txt`
+
+### M5-T52 — “Varambu trace multi tool-call attribution”
+
+**What it tests:** One user turn that triggers two tool calls produces two chains, each attributed to the same prompt.
+
+**How:**
+- Premise: a trace session is prepared.
+- Exercise: make an IAM read and an IAM create; write one rollout turn with the prompt followed by both calls and their results; render the trace.
+- Outcome: two distinct chains exist, one per correlation id; both carry the same verbatim prompt; the read chain's action is `read_project_summary` and the create chain's is `create_story`.
+
+**Evidence:** `trace.json`, `trace.jsonl`, `cid_a.txt`, `cid_b.txt`
+
+### M5-T53 — “Varambu trace secret hygiene and bounds”
+
+**What it tests:** Agent-supplied content is scrubbed and bounded before it is persisted in trace evidence.
+
+**How:**
+- Premise: a trace session is prepared.
+- Exercise:
+  - make an allowed create;
+  - write a hostile rollout: a 3,000-character prompt, a 1,500-character summary, tool arguments carrying a fake `token` and `Authorization: Bearer` value, a reasoning block, and shell-command output;
+  - render the trace.
+- Outcome:
+  - no bearer, basic, biscuit, cookie, or Jira secret values appear in the trace files or any audit source;
+  - `token` and `authorization` arguments are dropped;
+  - the prompt is truncated with a marker to at most about 2 KB, and the summary is truncated with a marker;
+  - no reasoning or shell-command content is persisted.
+
+**Evidence:** `trace.jsonl`, `trace.txt`, and the session's audit files
+
+### M5-T54 — “Varambu trace agent tamper detection”
+
+**What it tests:** An agent cannot rewrite history: if its session record claims success for a denied request, the in-boundary legs still show the truth.
+
+**How:**
+- Premise: a trace session is prepared.
+- Exercise: make a denied NAS read; write a forged rollout claiming `ok: true` for that correlation id; render the trace (text view for this correlation id only).
+- Outcome: the forged success is present in the rollout, but the mint leg is `deny`, the adapter's decision is `ok: false`, and the text view shows the denial.
+
+**Evidence:** `trace.json`, `trace.txt`, the session's rollout file
+
+### M5-T55 — “Varambu trace honest live upstream leg”
+
+**What it tests:** Against real Jira, the upstream leg is labelled as attested by the gateway and nothing pretends to be an independent upstream record.
+
+**How:**
+- Premise: reads the gateway's `JIRA_MCP_UPSTREAM_MODE` and records it (`upstream_mode.txt`); if the gateway cannot be inspected the test fails.
+- If the mode is not `live` (the default): the test writes `skip_reason.txt` (`env_gate=live_jira`), records a warning, and stops. `make qa-evidence` counts it as skipped, never as validated.
+- If the mode is `live`: make an allowed create against real Jira, write a rollout, and render the trace in live mode.
+- Outcome (live only): the upstream leg reads "gateway-attested, live", and no fabricated upstream event names appear.
+
+**Evidence:** `upstream_mode.txt`, and `skip_reason.txt` plus a warning in default runs; `trace.txt` in live runs
+
+### M5-T56 — “Varambu trace CLI surface and audit non-regression”
+
+**What it tests:** The `varambu trace` options behave as documented, and adding trace did not change `varambu audit`.
+
+**How:**
+- Premise: two isolated synthetic trace sessions with fixed correlation ids; `current` points to the second.
+- Exercise: run `varambu trace`, `trace --cid <id>`, `trace --all`, and `trace --json`; then `varambu audit`, `audit --all`, `audit --json`, and `audit-file`.
+- Outcome:
+  - the default view shows only the current session's chain;
+  - `--cid` selects exactly that chain, `--all` shows both sessions, and `--json` is machine-readable;
+  - `audit` still shows only the current session's record, `audit --json` parses, and `audit-file` resolves the capiss file paths.
+
+**Evidence:** `trace_default.out`, `trace_cid.out`, `trace_all.out`, `trace_json.out`, `audit.out`, `audit_all.out`, `audit_json.out`, `audit_file.out`
+
+### M5-T57 — “Varambu trace canonical ordering and join integrity”
+
+**What it tests:** With several requests in one session, every chain keeps its legs in the fixed order and never borrows another chain's legs.
+
+**How:**
+- Premise: a trace session is prepared.
+- Exercise: make two allowed creates; write two rollout turns; render the trace.
+- Outcome: every chain lists its legs in canonical order; legs are joined only by correlation id with no leakage between chains; two chains with distinct ids exist; every present leg keeps its own UTC timestamp and sequence number.
+
+**Evidence:** `trace.json`, `cid_a.txt`, `cid_b.txt`
+
+### M5-T58 — “Varambu trace anchor rule mint reuse and timestamps”
+
+**What it tests:** Only requests that entered through the adapter become chains, and the mint leg reuses capiss's own record.
+
+**How:**
+- Premise: a trace session is prepared.
+- Exercise:
+  - make an allowed create and write its rollout;
+  - after the tailers stop, add a capiss-only mint record for an unrelated non-M5 request (`agent-a` reading `tool-b`);
+  - render the trace in the `Europe/Berlin` timezone, as text for this correlation id only.
+- Outcome:
+  - the M5 request appears as exactly one chain, and the unrelated mint does not appear;
+  - the text view shows this request's own token id (taken from the capiss record with this correlation id) and its `create_story` grant;
+  - every present leg carries UTC time, local time, and a sequence number.
+
+**Evidence:** `trace.json`, `trace.txt`, `cid.txt`
+
+### M5-T59 — “Varambu trace separates gateway allow from upstream deny”
+
+**What it tests:** When Jira itself rejects a call the gateway allowed, the trace makes clear who said no.
+
+**How:**
+- Premise: a synthetic session in which the gateway allowed a request and the upstream returned 401.
+- Exercise: render the trace as JSON and text in live mode.
+- Outcome:
+  - the gateway leg is `allow`, and the upstream leg is `fail` with status 401;
+  - the text view shows the gateway row as ALLOW and the upstream row as 401 FAIL;
+  - the upstream leg is labelled "gateway-attested, live";
+  - Jira's error detail ("Unauthorized — the Jira credential was rejected") is shown verbatim, with no added interpretation.
+
+**Evidence:** `trace.json`, `trace.txt`
