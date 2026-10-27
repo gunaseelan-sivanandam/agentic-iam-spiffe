@@ -24,6 +24,33 @@ Redis is shown in multiple internal networks as the same shared state service at
 
 ![Network architecture diagram](architecture_diagram.svg)
 
+## Security model summary
+
+A one-page view of the trust model. The ARCH sections below are authoritative; this summary
+replaces the retired `docs/SECURITY_MODEL.md` (archived 2026-10-27).
+
+- **Identity comes from SPIRE.** Workloads receive SPIFFE SVIDs only through registered SPIRE
+  entries; a node or workload without a matching entry gets no identity (ARCH-001, ARCH-002).
+- **Every protected service sits behind its own Envoy.** `capability-issuer`, `tool-b`, `jira-tool`,
+  and `jira-mcp-gateway` are on private app networks that only their Envoy can reach. Envoy
+  terminates mTLS, verifies the client's SPIFFE ID, and injects `x-spiffe-id`; the apps trust that
+  header only because nothing else can reach them (ARCH-003).
+- **Identity is necessary but never sufficient.** Protected actions also need a capability: a
+  Biscuit token minted by `capability-issuer` (capiss) only after OPA allows the request.
+  OPA runs on capiss's private network with no published ports, and capiss fails closed when OPA is
+  unavailable or errors (ARCH-004, ARCH-012, ARCH-013).
+- **Every use is re-checked at the point of use.** Each tool verifies the token signature with the
+  capiss public key, binds the token subject to the caller's connection identity, checks audience,
+  action, resource, and expiry, and applies per-token budget and rate state in Redis (ARCH-005,
+  ARCH-006, ARCH-020).
+- **Signing key isolation — known gap.** capiss creates or loads its root signing key in the
+  `capiss_keys/` directory. Verifiers need only the public key, but the whole directory, private
+  key included, is currently mounted into the verifiers and the rogue test container, all running
+  as root. Tracked as OPL-005 in `docs/open_problem_log.md`.
+- **Denials are explicit.** Deny responses and audit events carry a reason code (for example
+  `policy`, `sub_mismatch`, `budget_exhausted`) so behavior is observable in this lab; a production
+  system would usually return less detail to callers.
+
 ## ARCH-001 Trust Bootstrap and Node Admission
 
 Type: Logical

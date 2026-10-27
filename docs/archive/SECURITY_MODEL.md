@@ -1,3 +1,7 @@
+> **Archived 2026-10-27.** Written for M1–M3 and not updated since. Superseded by the
+> "Security model summary" in `docs/architecture.md`. Its claim that "the private key never
+> leaves the issuer container" is false; see OPL-005 in `docs/open_problem_log.md`.
+
 ## Security Model
 
 This lab demonstrates the separation of identity (SPIFFE) and authority

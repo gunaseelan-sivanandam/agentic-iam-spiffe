@@ -1,8 +1,9 @@
 # Documentation Consolidation — Slice Plan
 
 ## Phase Status
-Phase 1 approved 2026-10-27 (decisions below). Increment 1 in progress.
-No runtime behavior changes in this slice; no requirement, architecture, DD, or test IDs change.
+Phase 1 approved 2026-10-27 (decisions below). Increments 1–3 implemented and verified 2026-10-27
+on branch `docs/consolidation`; PR to be opened by the owner.
+No runtime behavior changes in this slice; no requirement, architecture, DD, or E2E test IDs change.
 
 ## Problem (measured 2026-10-27)
 - 69 tracked Markdown files / 9,355 lines; three overlapping hand-written test specs, none covering
@@ -34,9 +35,8 @@ docs/
   test_spec.md         hand-written E2E spec (was test_spec_detailed.md)
   unit_test_spec.md    unit matrix (read by `make traceability-check`)
   open_problem_log.md  open runtime/trust problems
-  SECURITY_MODEL.md    pending review in Increment 3
   history/             implementation_log.md, REDTEAM_M3.md
-  archive/             retired test specs and unreferenced diagrams
+  archive/             retired test specs, SECURITY_MODEL.md, unreferenced diagram renders
   slices/              README index, _template/, current-format bundles, archive/ (legacy bundles)
 ```
 
@@ -54,6 +54,18 @@ None. No runtime, Redis, file, cache, or policy state is touched.
 3. **Content review.** Fold still-true parts of `SECURITY_MODEL.md` into `architecture.md` and archive
    the rest; add a `make docs-check` (links resolve, renders referenced, slice index complete, spec
    ID completeness) to CI.
+
+## Decisions taken during implementation (2026-10-27, owner offline)
+| # | Decision | Reason |
+| --- | --- | --- |
+| I1 | Every test heading in `docs/test_spec.md` uses the full harness ID (`### M3.S4-T2 — “…”`); the 62 existing headings were renamed mechanically. | Bare `T1` repeated across nine milestones; full IDs make the spec checkable and match `TEST_ONLY` and evidence directory names. |
+| I2 | The M5 section uses a compact per-test layout (what it tests / how / evidence) and adds a **Note** wherever a test's title claims more than its guards check (M5-T19, T21, T34, T35, T36). | Human-readable without code; honest about proof strength. |
+| I3 | `scripts/check_docs.py` checks only git-tracked images. | `docs/*.png` is gitignored; local renders must not fail the check, and CI sees only tracked files. |
+| I4 | The tracked but unreferenced `architecture_diagram.png` and `only_arch.png` were archived. | Duplicate renders of referenced SVGs. |
+| I5 | `docs-check` is part of `make qa-quality` and has its own CI job, together with a new `make tooling-test`. | Makes the documentation rules a gate rather than a convention. |
+| I6 | QA-tooling tests live in `tests/tools/` (16 negative controls for `check_docs.py`); the previously unwired `tests/shell/test_varambu_output.sh` now runs in `make tooling-test`. | The unit-test guard and DD rules are for product code under `services/`; the shell test existed but nothing ran it. |
+| I7 | `SECURITY_MODEL.md` became the "Security model summary" in `docs/architecture.md`; the original is archived with a banner. | One home per fact; the original's key-isolation claim proved false. |
+| I8 | The false key-isolation claim was recorded as **OPL-005** and not fixed here. | Fixing it changes runtime configuration and security behavior, which needs its own slice and owner approval. |
 
 ## In Scope / Out of Scope
 - In: documentation files, `.gitignore` entry for the old status folder, `CLAUDE.md`.

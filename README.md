@@ -197,7 +197,8 @@ make unit-mutation        # mutation score gate (capiss, tool-b)
 ```bash
 make qa-trace             # validate REQ → ARCH → DD → UT → E2E linkage
 make qa-evidence          # check that passing E2E tests produced PEO artifacts
-make qa-quality           # qa-trace + unit traceability check + unit guard check
+make qa-quality           # qa-trace + unit traceability + unit guard + docs-check
+make docs-check           # test spec covers every harness test; links, images, slice index
 ```
 
 Evidence artifacts land in `artifacts/rogue-tests/` after a run. The test

@@ -16,6 +16,7 @@ the repo in the same change — do not leave them disagreeing.
 | Where does the project stand right now? | [`docs/STATUS.md`](docs/STATUS.md) | current state |
 | What must the system do? | [`docs/requirements.md`](docs/requirements.md) | authoritative |
 | How is it built, which runtime state exists? | [`docs/architecture.md`](docs/architecture.md) | authoritative |
+| What is the trust model, on one page? | [`docs/architecture.md` — Security model summary](docs/architecture.md#security-model-summary) | summary of the ARCH sections |
 | Which test proves which requirement? | [`trace/tests.yaml`](trace/tests.yaml) | authoritative |
 | What does each E2E test do, in plain English? | [`docs/test_spec.md`](docs/test_spec.md) | hand-written spec |
 | Unit-test requirement matrix (M4 trust gates) | [`docs/unit_test_spec.md`](docs/unit_test_spec.md) | authoritative, read by `make traceability-check` |
@@ -69,9 +70,12 @@ Required for milestone and security-relevant changes. A slice bundle lives in
 3. **Implement.** Only approved behavior. Remove the dead code, stale paths, and artifacts that
    `plan.md` lists for retirement.
 4. **Verify and close.** All of the following, in the same change:
-   - run `make qa-trace`, `make qa-quality`, the full E2E suite on a clean stack, and `make qa-evidence`;
-   - **update `docs/test_spec.md` by hand** for every E2E test added or changed (what it tests,
-     steps, evidence) — plain English, not code;
+   - run `make qa-quality` (includes `qa-trace` and `docs-check`), the full E2E suite on a clean
+     stack, and `make qa-evidence`;
+   - **update `docs/test_spec.md` by hand** for every E2E test added or changed — plain English,
+     not code: what it tests, how (premise, exercise, outcome), and the evidence it leaves. Each
+     test gets a heading `### <harness ID> — “<name>”`; `make docs-check` fails on a missing or
+     stale heading, but it cannot judge the prose, so review it;
    - add a dated entry to `docs/history/implementation_log.md` (what changed, validation results,
      what was not run and why);
    - update `docs/STATUS.md` and the slice's row in `docs/slices/README.md`;
@@ -90,6 +94,8 @@ say so.
 | Gate | Command | Enforced by | Threshold |
 | --- | --- | --- | --- |
 | Trace model | `make qa-trace` | CI, every push/PR | zero structural failures |
+| Documentation | `make docs-check` | CI | every harness test has a `docs/test_spec.md` heading and vice versa; relative links and `#anchors` in live docs resolve; every tracked image in `docs/` is referenced and every `.puml` has its `.svg`; every slice bundle is in the slice index; `TEST_ONLY=` examples name real tests |
+| QA tooling tests | `make tooling-test` | CI | `tests/tools/` (pytest) and `tests/shell/` pass |
 | Unit guard integrity | `make unit-guard-check` | CI | every unit test has premise, exercise, outcome guards |
 | Unit trust bundle | `make unit-trust` | CI | total line coverage ≥ 85%; branch coverage ≥ 75% on `services/capability-issuer/app.py` and `services/tool-b/server.py`; unit traceability check; invariant, negative-control, hybrid-critical suites; invariant flake check ×5 |
 | Diff coverage | `make unit-diff-cov` | CI, PRs only | ≥ 90% of changed lines in `services/capability-issuer/` and `services/tool-b/` |
@@ -116,6 +122,8 @@ Standards that are **not** gated yet (follow them for new and changed code):
   owning document instead of creating a parallel one.
 - `docs/test_spec.md` is hand-written and must describe every E2E test the harness runs.
 - Implemented slice bundles are frozen records; do not rewrite them to match later reality.
+- Tests for QA tooling (`scripts/check_docs.py` and similar) live in `tests/tools/`; shell-level tests
+  live in `tests/shell/`. The unit-test rules in `tests/unit/AGENTS.md` apply only to `tests/unit/`.
 - Retire documents with `git mv` into `docs/archive/` (or `docs/slices/archive/`); never delete them.
 - Architecture diagrams use a C4-style, grid-aligned layout: group by trust boundary or network zone,
   flows left-to-right or top-to-bottom, orthogonal connectors with few crossings, planned components
@@ -180,12 +188,14 @@ After a full run, `make qa-evidence` validates the evidence. To inspect by hand:
 find artifacts/rogue-tests -maxdepth 1 -mindepth 1 -type d | sort
 grep -Eq 'Failed: [1-9]' test_report.log && find artifacts/rogue-tests -name fail_reason.txt -print -exec cat {} \;
 find artifacts/rogue-tests -name 'warning_reason_*.txt' -print -exec cat {} \;
+find artifacts/rogue-tests -name skip_reason.txt -print -exec cat {} \;
 ```
 - `fail_reason.txt`: terminal guard failure for that test.
 - `warning_reason_*.txt`: the test passed through an accepted alternate path; review the condition.
-- `M5-T55` needs live Jira and only records a warning in default runs, so `make qa-evidence` reports
-  it as missing evidence until `fix/m5-evidence-harness-hardening` merges (that branch adds declared
-  env-gated skips via `skip_reason.txt` and `env_gates` in `trace/tests.yaml`; update this section then).
+- `skip_reason.txt`: an env-gated test did not run its exercise (for example `M5-T55` without live
+  Jira). `make qa-evidence` counts it as skipped, never as validated, and only if the suite declares
+  the gate for that test in `trace/tests.yaml` (`env_gates`), the gate check left premise evidence,
+  and no exercise or outcome artifacts exist. The test still prints `PASS` in `test_report.log`.
 
 ## Docker guardrails
 - Never run Docker lifecycle commands in parallel. Serialize `scripts/clean_stack.sh` and

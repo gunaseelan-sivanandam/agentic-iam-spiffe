@@ -5,6 +5,28 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-10-27 Docs consolidation, Increments 2 and 3; harness PR merged
+
+- `fix/m5-evidence-harness-hardening` merged to `main` as PR #2 (`fe86c35`). Full E2E on `main`, clean
+  stack: 120/120, 3 warnings (M3.S2-T3, M3.S2-T5 accepted isolation; M5-T55 env-gated skip).
+  `make qa-evidence` PASSED (validated 119, skipped 1).
+- Increment 2: `docs/test_spec.md` now describes all 120 E2E tests. All 58 M5 tests were written by
+  hand from the guard code; five entries note where a title claims more than the guards check. All
+  headings use full harness IDs.
+- Increment 3:
+  - `scripts/check_docs.py` (`make docs-check`): spec covers every harness test and vice versa;
+    links and anchors in live docs resolve; tracked images are referenced and `.puml` sources have
+    their `.svg`; every slice bundle is indexed; `TEST_ONLY=` examples name real tests.
+  - `make docs-check` is in `make qa-quality` and a new CI job, with `make tooling-test`
+    (`tests/tools/`, 16 negative controls; `tests/shell/test_varambu_output.sh`, previously unwired).
+  - `SECURITY_MODEL.md` folded into a "Security model summary" in `docs/architecture.md` and archived.
+- Security finding while verifying the old security model: the capiss root signing key is readable as
+  root inside `tool-b`, `jira-tool`, `jira-mcp-gateway`, and the `rogue` test container. Recorded as
+  OPL-005 with evidence; not fixed (runtime change, needs its own slice).
+- Validation: `make qa-quality` PASSED (qa-trace unchanged at requirements=159, architecture=33,
+  design=131, tests=371; 348 unit tests; docs-check); `make tooling-test` PASSED; ruff clean;
+  no new function above complexity 10.
+
 ## 2026-10-27 Docs consolidation, Increment 1
 
 Slice bundle: `docs/slices/docs-consolidation/`.
