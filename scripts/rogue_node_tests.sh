@@ -3948,6 +3948,7 @@ M5_T42_test() {
 
 M5_T43_test() {
   begin_test_evidence "M5-T43" "varambu_audit_active_append"
+  echo "EVIDENCE_DIR=$EVDIR"
   session_dir="/repo/artifacts/varambu-demo/e2e-M5-T43"
   premise_guard "M5 path ready and empty audit session prepared" "m5_ready && jira_mcp_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && sleep 2 && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
   exercise_guard "start audit tailer" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; : >\"$session_dir/capiss_audit.jsonl\"; : >\"$session_dir/capiss_audit.log\"; python3 /repo/scripts/varambu_audit.py tail --since \"\$since\" --jsonl \"$session_dir/capiss_audit.jsonl\" --human \"$session_dir/capiss_audit.log\" --err \"$session_dir/audit_tailer.err\" >/dev/null 2>>\"$session_dir/audit_tailer.err\" & echo \$! >\"$session_dir/audit_tailer.pid\"; sleep 2; kill -0 \"\$(cat \"$session_dir/audit_tailer.pid\")\""
@@ -3964,6 +3965,7 @@ M5_T43_test() {
 
 M5_T44_test() {
   begin_test_evidence "M5-T44" "varambu_audit_session_and_history"
+  echo "EVIDENCE_DIR=$EVDIR"
   session1="/repo/artifacts/varambu-demo/e2e-M5-T44-s1"
   session2="/repo/artifacts/varambu-demo/e2e-M5-T44-s2"
   premise_guard "two synthetic sessions exist with distinct records and current points to session 2" "mkdir -p /repo/artifacts/varambu-demo && find /repo/artifacts/varambu-demo -mindepth 1 -maxdepth 1 -exec rm -rf {} + && mkdir -p \"$session1\" \"$session2\" && printf '{\"sequence\":1,\"result\":\"allow\",\"reason_code\":\"ok\"}\n' >\"$session1/capiss_audit.jsonl\" && printf '#1 MINTED OK  -\n' >\"$session1/capiss_audit.log\" && printf '{\"sequence\":1,\"result\":\"deny\",\"reason_code\":\"policy\"}\n' >\"$session2/capiss_audit.jsonl\" && printf '#1 DENIED: Reason Policy  -\n' >\"$session2/capiss_audit.log\" && ln -sfn \"$session2\" /repo/artifacts/varambu-demo/current"
@@ -3981,6 +3983,7 @@ M5_T44_test() {
 
 M5_T45_test() {
   begin_test_evidence "M5-T45" "varambu_audit_secret_exclusion"
+  echo "EVIDENCE_DIR=$EVDIR"
   session_dir="/repo/artifacts/varambu-demo/e2e-M5-T45"
   premise_guard "M5 path ready and audit session prepared" "m5_ready && jira_mcp_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
   exercise_guard "start audit tailer" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; : >\"$session_dir/capiss_audit.jsonl\"; : >\"$session_dir/capiss_audit.log\"; python3 /repo/scripts/varambu_audit.py tail --since \"\$since\" --jsonl \"$session_dir/capiss_audit.jsonl\" --human \"$session_dir/capiss_audit.log\" --err \"$session_dir/audit_tailer.err\" >/dev/null 2>>\"$session_dir/audit_tailer.err\" & echo \$! >\"$session_dir/audit_tailer.pid\"; sleep 2; kill -0 \"\$(cat \"$session_dir/audit_tailer.pid\")\""
@@ -3997,6 +4000,7 @@ M5_T45_test() {
 
 M5_T46_test() {
   begin_test_evidence "M5-T46" "varambu_audit_stale_tailer_warning"
+  echo "EVIDENCE_DIR=$EVDIR"
   session_dir="/repo/artifacts/varambu-demo/e2e-M5-T46"
   premise_guard "session with dead tailer PID prepared" "rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && printf '#1 MINTED OK  -\nLogged At:    -\n\n' >\"$session_dir/capiss_audit.log\" && printf '{\"sequence\":1,\"result\":\"allow\",\"reason_code\":\"ok\"}\n' >\"$session_dir/capiss_audit.jsonl\" && echo 99999999 >\"$session_dir/audit_tailer.pid\""
   exercise_guard "run non-strict audit with dead tailer" "bash /repo/varambu audit >\"$EVDIR/audit_warn.out\" 2>\"$EVDIR/audit_warn.err\""
@@ -4009,6 +4013,7 @@ M5_T46_test() {
 
 M5_T47_test() {
   begin_test_evidence "M5-T47" "varambu_audit_timing_semantics"
+  echo "EVIDENCE_DIR=$EVDIR"
   session_dir="/repo/artifacts/varambu-demo/e2e-M5-T47"
   premise_guard "M5 path ready and audit session prepared" "m5_ready && jira_mcp_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
   exercise_guard "start audit tailer" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; : >\"$session_dir/capiss_audit.jsonl\"; : >\"$session_dir/capiss_audit.log\"; python3 /repo/scripts/varambu_audit.py tail --since \"\$since\" --jsonl \"$session_dir/capiss_audit.jsonl\" --human \"$session_dir/capiss_audit.log\" --err \"$session_dir/audit_tailer.err\" >/dev/null 2>>\"$session_dir/audit_tailer.err\" & echo \$! >\"$session_dir/audit_tailer.pid\"; sleep 2; kill -0 \"\$(cat \"$session_dir/audit_tailer.pid\")\""
@@ -4023,6 +4028,7 @@ M5_T47_test() {
 
 M5_T48_test() {
   begin_test_evidence "M5-T48" "varambu_audit_uniform_enrichment"
+  echo "EVIDENCE_DIR=$EVDIR"
   session_dir="/repo/artifacts/varambu-demo/e2e-M5-T48"
   premise_guard "M5 path ready and audit session prepared" "m5_ready && jira_mcp_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
   exercise_guard "start audit tailer" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; : >\"$session_dir/capiss_audit.jsonl\"; : >\"$session_dir/capiss_audit.log\"; python3 /repo/scripts/varambu_audit.py tail --since \"\$since\" --jsonl \"$session_dir/capiss_audit.jsonl\" --human \"$session_dir/capiss_audit.log\" --err \"$session_dir/audit_tailer.err\" >/dev/null 2>>\"$session_dir/audit_tailer.err\" & echo \$! >\"$session_dir/audit_tailer.pid\"; sleep 2; kill -0 \"\$(cat \"$session_dir/audit_tailer.pid\")\""
@@ -4054,7 +4060,7 @@ M5_T49_test() {
   exercise_guard "wait for in-boundary legs and stop tailers" \
     "trace_wait_inboundary \"$session_dir\" 1; trace_stop_tailers \"$session_dir\"; cp \"$session_dir/capiss_audit.jsonl\" \"$EVDIR/capiss_audit.jsonl\"; cp \"$session_dir/gateway_audit.jsonl\" \"$EVDIR/gateway_audit.jsonl\"; cp \"$session_dir/adapter_audit.jsonl\" \"$EVDIR/adapter_audit.jsonl\""
   exercise_guard "render trace json and human" \
-    "python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock >\"$EVDIR/trace.txt\" 2>>\"$EVDIR/trace.err\"; cp \"$session_dir/trace.jsonl\" \"$EVDIR/trace.jsonl\""
+    "python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --cid \"\$(cat \"$EVDIR/cid.txt\")\" >\"$EVDIR/trace.txt\" 2>>\"$EVDIR/trace.err\"; cp \"$session_dir/trace.jsonl\" \"$EVDIR/trace.jsonl\""
   outcome_guard "exactly one chain for the correlation id" \
     "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '[.[] | select(.correlation_id==\$c)] | length==1' \"$EVDIR/trace.json\" >/dev/null"
   outcome_guard "legs render in fixed seven-leg canonical order" \
@@ -4064,7 +4070,7 @@ M5_T49_test() {
   outcome_guard "gateway leg is enforcement allow and upstream leg carries the upstream status" \
     "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '.[] | select(.correlation_id==\$c) | (.legs[]|select(.leg==\"gateway\")|.fields.leg_status==\"allow\") and (.legs[]|select(.leg==\"upstream\")|.fields.upstream_status==201)' \"$EVDIR/trace.json\" >/dev/null"
   outcome_guard "intent leg equals the verbatim prompt" \
-    "jq -e --arg p '$prompt' 'first(.[]) | .legs[] | select(.leg==\"intent\") | .fields.user_message==\$p' \"$EVDIR/trace.json\" >/dev/null"
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" --arg p '$prompt' '.[] | select(.correlation_id==\$c) | .legs[] | select(.leg==\"intent\") | .present==true and .fields.user_message==\$p' \"$EVDIR/trace.json\" >/dev/null"
   outcome_guard "mint, gateway, and upstream legs carry the same correlation id" \
     "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '.[] | select(.correlation_id==\$c) | (.legs[]|select(.leg==\"mint\")|.fields.correlation_id==\$c) and (.legs[]|select(.leg==\"gateway\")|.fields.correlation_id==\$c) and (.legs[]|select(.leg==\"upstream\")|.fields.correlation_id==\$c)' \"$EVDIR/trace.json\" >/dev/null"
   outcome_guard "human render shows the redesigned labels and verbatim intent" \
@@ -4090,7 +4096,7 @@ M5_T50_test() {
   exercise_guard "wait for capiss deny and stop tailers" \
     "trace_wait_inboundary \"$session_dir\" 0; trace_stop_tailers \"$session_dir\"; cp \"$session_dir/capiss_audit.jsonl\" \"$EVDIR/capiss_audit.jsonl\"; cp \"$session_dir/adapter_audit.jsonl\" \"$EVDIR/adapter_audit.jsonl\""
   exercise_guard "render trace json and human" \
-    "python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock >\"$EVDIR/trace.txt\" 2>>\"$EVDIR/trace.err\""
+    "python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --cid \"\$(cat \"$EVDIR/cid.txt\")\" >\"$EVDIR/trace.txt\" 2>>\"$EVDIR/trace.err\""
   outcome_guard "trace renders without error" \
     "test ! -s \"$EVDIR/trace.err\""
   outcome_guard "mint leg present and denied" \
@@ -4125,7 +4131,7 @@ M5_T51_test() {
   outcome_guard "first run shows in-boundary legs with intent not yet available" \
     "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '.[] | select(.correlation_id==\$c) | (.legs[]|select(.leg==\"intent\")|.present==false) and (.legs[]|select(.leg==\"adapter_request\")|.present==true)' \"$EVDIR/trace_before.json\" >/dev/null"
   outcome_guard "second run incorporates the verbatim intent" \
-    "jq -e --arg p '$prompt' 'first(.[]) | .legs[] | select(.leg==\"intent\") | .present==true and .fields.user_message==\$p' \"$EVDIR/trace_after.json\" >/dev/null"
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" --arg p '$prompt' '.[] | select(.correlation_id==\$c) | .legs[] | select(.leg==\"intent\") | .present==true and .fields.user_message==\$p' \"$EVDIR/trace_after.json\" >/dev/null"
   return 0
 }
 
@@ -4202,7 +4208,7 @@ M5_T54_test() {
   exercise_guard "forge a rollout output claiming success for the denied request" \
     "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; { rollout_user 'Read the NAS project summary.'; rollout_call read_project_summary call-X '{\"project_key\":\"NAS\"}'; rollout_output call-X \"\$cid\" true; } >\"$session_dir/codex-home/sessions/2026/06/19/rollout-1.jsonl\""
   exercise_guard "wait then render trace" \
-    "trace_wait_inboundary \"$session_dir\" 0; trace_stop_tailers \"$session_dir\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock >\"$EVDIR/trace.txt\" 2>>\"$EVDIR/trace.err\""
+    "trace_wait_inboundary \"$session_dir\" 0; trace_stop_tailers \"$session_dir\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz UTC --mode mock --cid \"\$(cat \"$EVDIR/cid.txt\")\" >\"$EVDIR/trace.txt\" 2>>\"$EVDIR/trace.err\""
   outcome_guard "forged success claim is present in the agent rollout" \
     "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -r 'select(.payload.type==\"function_call_output\") | .payload.output' \"$session_dir/codex-home/sessions/2026/06/19/rollout-1.jsonl\" | jq -e --arg c \"\$cid\" '.ok==true and .correlation_id==\$c' >/dev/null"
   outcome_guard "in-boundary mint leg reflects the true denial" \
@@ -4219,8 +4225,12 @@ M5_T55_test() {
   echo "EVIDENCE_DIR=$EVDIR"
   sess_rel="e2e-M5-T55"
   session_dir="/repo/artifacts/varambu-demo/$sess_rel"
-  upstream_mode="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' spiffe-jira-mcp-gateway 2>/dev/null | sed -n 's/^JIRA_MCP_UPSTREAM_MODE=//p')"
+  premise_guard "live Jira env gate evaluated from the running gateway" \
+    "gw_env=\"\$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' spiffe-jira-mcp-gateway)\" && printf '%s\n' \"\$gw_env\" | sed -n 's/^JIRA_MCP_UPSTREAM_MODE=//p' >\"$EVDIR/upstream_mode.txt\"" || return 0
+  upstream_mode="$(cat "$EVDIR/upstream_mode.txt")"
   if [ "${upstream_mode:-mock}" != "live" ]; then
+    # Env-gated skip: recorded as skip_reason.txt so qa-evidence counts it as skipped, never as validated.
+    printf 'env_gate=live_jira upstream_mode=%s\n' "${upstream_mode:-unset}" >"$EVDIR/skip_reason.txt"
     add_warning "M5-T55 skipped: gateway not in live Jira mode (JIRA_MCP_UPSTREAM_MODE=${upstream_mode:-unset}); live upstream leg not exercised"
     return 0
   fi
@@ -4315,15 +4325,15 @@ M5_T58_test() {
   exercise_guard "wait, stop tailers, then inject a non-M5 capiss-only mint" \
     "trace_wait_inboundary \"$session_dir\" 1; trace_stop_tailers \"$session_dir\"; jq -cn --arg c '$fakecid' '{event_type:\"capiss_mint_decision\",result:\"allow\",reason_code:\"ok\",subject_spiffe_id:\"spiffe://varambu.org/agent-a\",aud:\"tool-b\",act:\"read\",res:\"tool-b:/secret\",correlation_id:\$c,timestamp_utc:\"2026-06-19T09:00:00Z\",timestamp_local:\"2026-06-19 11:00:00 Europe/Berlin\",timezone:\"Europe/Berlin\"}' >>\"$session_dir/capiss_audit.jsonl\""
   exercise_guard "render trace json and human in a non-UTC zone" \
-    "python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz Europe/Berlin --mode mock --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz Europe/Berlin --mode mock >\"$EVDIR/trace.txt\" 2>>\"$EVDIR/trace.err\""
+    "python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz Europe/Berlin --mode mock --json >\"$EVDIR/trace.json\" 2>\"$EVDIR/trace.err\"; python3 /repo/scripts/varambu_audit.py trace --session \"$session_dir\" --tz Europe/Berlin --mode mock --cid \"\$(cat \"$EVDIR/cid.txt\")\" >\"$EVDIR/trace.txt\" 2>>\"$EVDIR/trace.err\""
   outcome_guard "the M5 request is surfaced as a chain" \
     "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '[.[]|select(.correlation_id==\$c)]|length==1' \"$EVDIR/trace.json\" >/dev/null"
   outcome_guard "the capiss-only non-M5 mint is NOT surfaced (anchor rule)" \
     "jq -e --arg c '$fakecid' '[.[]|select(.correlation_id==\$c)]|length==0' \"$EVDIR/trace.json\" >/dev/null"
   outcome_guard "mint leg presents the same capiss fields (full token id and grant) as the audit record" \
-    "tid=\"\$(jq -r 'select(.result==\"allow\") | .token_id' \"$session_dir/capiss_audit.jsonl\" | head -n1)\"; test -n \"\$tid\" && grep -Fq \"\$tid\" \"$EVDIR/trace.txt\" && grep -Fq 'MINT' \"$EVDIR/trace.txt\" && grep -Fq 'create_story' \"$EVDIR/trace.txt\""
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; tid=\"\$(jq -r --arg c \"\$cid\" 'select(.result==\"allow\" and .correlation_id==\$c) | .token_id' \"$session_dir/capiss_audit.jsonl\" | head -n1)\"; test -n \"\$tid\" && grep -Fq \"\$tid\" \"$EVDIR/trace.txt\" && grep -Fq 'MINT' \"$EVDIR/trace.txt\" && grep -Fq 'create_story' \"$EVDIR/trace.txt\""
   outcome_guard "json legs carry utc, local time, and sequence per leg" \
-    "jq -e 'first(.[]) | all(.legs[] | select(.present); has(\"timestamp_utc\") and has(\"timestamp_local\") and has(\"sequence\"))' \"$EVDIR/trace.json\" >/dev/null"
+    "cid=\"\$(cat \"$EVDIR/cid.txt\")\"; jq -e --arg c \"\$cid\" '[.[] | select(.correlation_id==\$c)] | length==1 and all(.[0].legs[] | select(.present); has(\"timestamp_utc\") and has(\"timestamp_local\") and has(\"sequence\"))' \"$EVDIR/trace.json\" >/dev/null"
   return 0
 }
 
