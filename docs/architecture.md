@@ -43,10 +43,18 @@ replaces the retired `docs/SECURITY_MODEL.md` (archived 2026-10-27).
   capiss public key, binds the token subject to the caller's connection identity, checks audience,
   action, resource, and expiry, and applies per-token budget and rate state in Redis (ARCH-005,
   ARCH-006, ARCH-020).
-- **Signing key isolation — known gap.** capiss creates or loads its root signing key in the
-  `capiss_keys/` directory. Verifiers need only the public key, but the whole directory, private
-  key included, is currently mounted into the verifiers and the rogue test container, all running
-  as root. Tracked as OPL-005 in `docs/open_problem_log.md`.
+- **Key and state isolation — known gaps.** These hold today only as design intent; the deployment
+  violates them (all containers run as root):
+  - capiss's root signing key: verifiers need only the public key, but the whole `capiss_keys/`
+    directory is mounted into the verifiers, `agent-a` and `rogue`. A forged capability was
+    accepted by tool-b's verifier on 2026-10-28 (OPL-005).
+  - the SPIRE agent's private key store sits inside the directory mounted into every workload for
+    the Workload API socket (OPL-006).
+  - Redis budget, rate and registry state accepts unauthenticated writes from every verifier
+    network (OPL-007).
+
+  All three are in `docs/open_problem_log.md`; the planned invariants are `REQ-SEC-K1`, `-K2` and
+  `-S1` in the [agentic-delivery-process](slices/agentic-delivery-process/plan.md) slice.
 - **Denials are explicit.** Deny responses and audit events carry a reason code (for example
   `policy`, `sub_mismatch`, `budget_exhausted`) so behavior is observable in this lab; a production
   system would usually return less detail to callers.

@@ -5,6 +5,22 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-10-28 OPL-005 verified by forgery; OPL-006, OPL-007 found; delivery-process slice planned
+
+- OPL-005 re-checked on the running stack at the user's request. The private key was read (hashes
+  only) in `capability-issuer`, `tool-b`, `jira-tool`, `jira-mcp-gateway` and a one-off `rogue`;
+  all match. A token forged inside `tool-b` with that key passed tool-b's own `verify_biscuit` once a
+  Redis budget existed for its root id. History traced to `07520d7` (2026-01-05) and the copied
+  volume blocks.
+- New: OPL-006 (SPIRE agent `data/keys.json` readable by every workload that mounts the agent
+  directory; `M2-T7` checks a container without that mount) and OPL-007 (Redis without
+  authentication, writable from every verifier network).
+- Root-cause review of why six layers missed OPL-005, followed by a grill-me that produced the
+  [agentic-delivery-process](../slices/agentic-delivery-process/plan.md) plan (D1–D15) and test plan.
+  The plan includes an audit of about 20 loose E2E assertions.
+- Not run: no code, harness or compose change was made, so no E2E or unit run was needed;
+  `make docs-check` and `make qa-trace` were run on the documentation changes.
+
 ## 2026-10-27 Docs consolidation, Increments 2 and 3; harness PR merged
 
 - `fix/m5-evidence-harness-hardening` merged to `main` as PR #2 (`fe86c35`). Full E2E on `main`, clean

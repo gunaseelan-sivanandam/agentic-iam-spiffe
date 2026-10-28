@@ -205,9 +205,24 @@ Usage:
 - `docker compose --profile tests run --rm --no-deps --entrypoint sh rogue -c 'id -u; test -r /var/lib/capiss/keys/root_key.b64'` returned uid `0` and "readable".
 - The key contents were not read or printed during this check.
 
+### Evidence (2026-10-28, forgery confirmed on the running stack)
+- The private key was read as uid 0 inside `capability-issuer`, `tool-b`, `jira-tool`, `jira-mcp-gateway`, and a one-off `rogue` container; all five SHA-256 hashes match. Only hashes were printed.
+- Inside `tool-b`, a script loaded the key and called tool-b's own `verify_biscuit` (the function the HTTP handler uses) with the real public key and the real Redis:
+  - the private key derives exactly the public key tool-b trusts, so it is the live signing key;
+  - a forged root token for `/secret` (`act=read`, subject `spiffe://varambu.org/agent-a`) with an unknown root id passed signature and chain checks and was refused only with `budget_exceeded` (no Redis budget for that id);
+  - the same forged token, with a budget for its root id present in Redis, was **allowed**.
+  - The script deleted the Redis keys it created; none remained.
+- The only non-cryptographic barrier is the Redis budget keyed on `root_token_id`. Redis has no authentication and every verifier can write it (OPL-007), so a compromised verifier can forge and fund any capability. `agent-a` and `rogue` are not on a Redis network; they could likely reuse the root id of a token they legitimately hold to forge a different `act`/`res`, but that path was not demonstrated.
+- tool-b still requires the token subject to match the caller's mTLS SPIFFE ID, so a forger acts under an identity it already has.
+
+### How it was introduced
+- `07520d7` (2026-01-05) mounted the whole `capiss_keys/` directory into `tool-b`, although the code already separated the keys (private `0600`, public `0644`, tool-b opens only the public file). Every container runs as root, so the file mode never protected anything.
+- The volume block was copied into `agent-a` and `rogue` (`4b808cb`, 2026-03-03), `jira-tool` (`16072e0`, 2026-05-15) and `jira-mcp-gateway` (`1b84bc4`, 2026-05-16).
+- No requirement named who may hold the signing key, no test inspected container filesystems, the M3 red team modelled only a network attacker, and the security model asserted the opposite. The process changes that respond to this are in the [agentic-delivery-process](slices/agentic-delivery-process/plan.md) slice.
+
 ### Current understanding
 - Verifiers only need the public key: `tool-b`, `jira-tool`, and `jira-mcp-gateway` open `CAPISS_PUBLIC_KEY_PATH` (`root_public_key.b64`) and nothing else.
-- It is unknown whether `agent-a` or `rogue` need anything from this directory.
+- Nothing in `agent-a` or `rogue` reads this directory; no script or harness code references it there.
 
 ### Meaningful fix options to evaluate
 1. Publish the public key separately (its own file mount or volume) and stop mounting `capiss_keys/` into anything except `capability-issuer` and `capability-issuer-no-opa`.
@@ -218,3 +233,61 @@ Usage:
 - The private key file exists only in the capiss containers.
 - An E2E test proves the rogue and the verifiers cannot read it, and the full suite still passes.
 - `docs/architecture.md` (security model summary) is updated to remove the caveat.
+
+## OPL-006: SPIRE agent private key store is readable by every workload that mounts the agent directory
+
+- Status: Open
+- First observed: 2026-10-28
+- Introduced: `bed2d0e` (2025-12-26), when the agent `data_dir` was placed inside the directory shared with workloads for the Workload API socket
+- Area: workload identity trust root / key isolation
+- Affected configuration:
+  - `spire/agent/agent.conf`: `data_dir = "/run/spire/agent/data"`, `socket_path = "/run/spire/agent/private/api.sock"`
+  - `compose/spiffe.compose.yml`: host `spire/agent/` is mounted at `/run/spire/agent` (read-only) into `tool-b`, `tool-b-envoy`, `jira-tool`, `jira-tool-envoy`, `jira-mcp-gateway`, `jira-mcp-envoy`, `capability-issuer-envoy`, `capability-issuer-no-opa-envoy`, `codex-jira-mcp-adapter`, `agent-a`, `rogue`, and `rogue-socket`
+- Related requirements:
+  - `REQ-M2-R5` (workload private key isolation) — violated; it has no E2E link (`E2E-M2-SUITE` lists no `source_requirements`)
+
+### Problem
+- Workloads need only the Workload API socket, but they receive the agent's whole runtime directory, including `data/keys.json` (the agent's private key store) and `data/agent-data.json`.
+- All containers run as root, so the directory mode `0750 root:root` does not protect it.
+- `M2-T7` ("Rogue cannot read SVIDs or keys") does not detect this: it starts a temporary rogue container *without* the agent mount and checks that one. The deployed `rogue` service does mount it.
+
+### Evidence (2026-10-28, running stack)
+- `/run/spire/agent/data/keys.json` was readable as uid 0 in `tool-b`, `jira-tool`, `jira-mcp-gateway`, `codex-jira-mcp-adapter`, and `tool-b-envoy`; all five SHA-256 hashes match (only hashes and the top-level JSON field name `keys` were printed).
+
+### Current understanding
+- With the agent's private key and its SVID, a container could likely act as the node agent towards the SPIRE server and obtain SVIDs for every workload registered under that node, which would defeat mTLS identity, not only authorization. This was not demonstrated.
+
+### Meaningful fix options to evaluate
+1. Mount only the socket directory (`/run/spire/agent/private`) into workloads, and keep `data_dir` outside any shared mount.
+2. Run services as non-root (REQ-SEC-D2).
+3. Correct `M2-T7` to check the deployed `rogue` container, and add the runtime invariant matrix for REQ-SEC-K2.
+
+### Closure criteria
+- `keys.json` and `agent-data.json` exist only in `spire-agent`.
+- An E2E test on the deployed containers proves no workload can read them, and the full suite still passes.
+
+## OPL-007: Redis authorization state accepts unauthenticated writes from every verifier network
+
+- Status: Open
+- First observed: 2026-10-28
+- Area: authorization state integrity (budgets, rate limits, discovery registry)
+- Affected configuration:
+  - `compose/spiffe.compose.yml`: `redis-server --save '' --appendonly no`, no `requirepass` or ACLs
+  - Redis is attached to `capiss_app_net`, `toolb_app_net`, `jiratool_app_net`, and `jiramcp_app_net`, so `capability-issuer`, `tool-b`, `jira-tool`, `jira-mcp-gateway`, their Envoys, `opa`, and `jira-mcp-mock` can reach it (plus the test-only `capability-issuer-no-opa` and its Envoy)
+- Related requirements: `REQ-M4-*` budget and rate enforcement (proposed `REQ-SEC-S1`)
+
+### Problem
+- Any process on those networks can create, raise, or delete `m4:budget:*`, `m4:rate:*`, and `m4:registry:*` keys. Budgets are meant to be created only by capiss at mint time.
+- Combined with OPL-005, a compromised verifier holds everything needed to forge and fund a capability.
+
+### Evidence (2026-10-28)
+- `redis-cli CONFIG GET requirepass` returned an empty value.
+- The OPL-005 forgery check wrote and deleted a budget key from inside `tool-b` without credentials.
+
+### Meaningful fix options to evaluate
+1. Redis ACL users per service: capiss may create budgets and registry entries; verifiers may only run the consume script on their own key patterns; the default user is disabled.
+2. Take Redis off networks that need no access (for example `jira-mcp-mock`, the Envoys, `opa`).
+
+### Closure criteria
+- Unauthenticated Redis commands are refused, and each service can perform only its documented operations.
+- An E2E test proves a verifier cannot create a budget, and the full suite still passes.
