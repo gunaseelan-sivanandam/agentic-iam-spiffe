@@ -128,7 +128,7 @@ Usage:
 - First observed: 2026-05-14
 - Area: capability issuance API lifecycle
 - Related slice:
-  - `docs/slices/m4a-jira-project-access/`
+  - `docs/slices/archive/m4a-jira-project-access/`
 - Related endpoint:
   - `/capabilities/mint`
   - `/capabilities/root-mint`
@@ -158,7 +158,7 @@ Usage:
 - First observed: 2026-05-14
 - Area: auditability / policy provenance
 - Related slice:
-  - `docs/slices/m4a-jira-project-access/`
+  - `docs/slices/archive/m4a-jira-project-access/`
 - Related audit event:
   - `capiss_mint_decision`
 
@@ -180,3 +180,41 @@ Usage:
 - Mint-decision audit events include a policy provenance value derived from actual policy content or a documented policy bundle revision.
 - The hash/version boundary is documented in architecture.
 - Tests prove the audit field changes when policy content or bundle revision changes.
+
+## OPL-005: capiss root signing key is readable by verifiers and by the rogue test container
+
+- Status: Open
+- First observed: 2026-10-27
+- Area: capability issuance trust root / key isolation
+- Affected configuration:
+  - `compose/spiffe.compose.yml`: the host directory `capiss_keys/` (holding both `root_key.b64` and `root_public_key.b64`) is bind-mounted read-only into `tool-b`, `jira-tool`, `jira-mcp-gateway`, `agent-a`, and `rogue`
+  - no service image sets a non-root `USER`
+- Related requirements:
+  - `REQ-M3-R22` (capability authenticity verification) and the M1/M2 rogue isolation requirements
+- Related document:
+  - the archived `docs/archive/SECURITY_MODEL.md` claimed "the private key never leaves the issuer container"; that claim is false
+
+### Problem
+- The capiss private signing key file is present in every verifier container and in the `rogue` test container, and all of them run as root, so the 0600 file mode does not protect it.
+- Anything that can read the private key can sign arbitrary Biscuit capabilities. That bypasses OPA and capiss entirely: a compromised verifier, or the rogue workload the suite models as an attacker, could mint any authority.
+- No E2E test covers this; `M2-T7` checks SVID key isolation, not the capiss signing key.
+
+### Evidence (2026-10-27, running stack after a clean full E2E run)
+- `capiss_keys/root_key.b64` on the host: owner `root`, mode `600`.
+- `docker exec <container> id -u` returned `0`, and `test -r /var/lib/capiss/keys/root_key.b64` succeeded, in `spiffe-tool-b`, `spiffe-jira-tool`, and `spiffe-jira-mcp-gateway`.
+- `docker compose --profile tests run --rm --no-deps --entrypoint sh rogue -c 'id -u; test -r /var/lib/capiss/keys/root_key.b64'` returned uid `0` and "readable".
+- The key contents were not read or printed during this check.
+
+### Current understanding
+- Verifiers only need the public key: `tool-b`, `jira-tool`, and `jira-mcp-gateway` open `CAPISS_PUBLIC_KEY_PATH` (`root_public_key.b64`) and nothing else.
+- It is unknown whether `agent-a` or `rogue` need anything from this directory.
+
+### Meaningful fix options to evaluate
+1. Publish the public key separately (its own file mount or volume) and stop mounting `capiss_keys/` into anything except `capability-issuer` and `capability-issuer-no-opa`.
+2. Run services as a non-root user so file permissions protect the private key as a second layer.
+3. Add an E2E negative test: the rogue and every verifier cannot read the private key, while verifiers can still read the public key.
+
+### Closure criteria
+- The private key file exists only in the capiss containers.
+- An E2E test proves the rogue and the verifiers cannot read it, and the full suite still passes.
+- `docs/architecture.md` (security model summary) is updated to remove the caveat.

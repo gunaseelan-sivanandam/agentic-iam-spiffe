@@ -3,7 +3,7 @@ uvicorn
 biscuit-python
 redis
 cryptography
-pytest
+pytest==9.1.1
 pytest-cov
 pytest-repeat
 diff-cover

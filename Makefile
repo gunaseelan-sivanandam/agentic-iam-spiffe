@@ -12,7 +12,7 @@ MIN_MUTATION_SCORE ?= 70
 BASE_REF ?= origin/main
 MUTATION_MAX_CHILDREN ?= 2
 
-.PHONY: unit unit-guard-check unit-invariants unit-boundary unit-negative-controls unit-hybrid-critical unit-flake unit-cov unit-diff-cov traceability-check unit-mutation unit-trust qa-trace qa-evidence qa-quality jira-live-smoke
+.PHONY: unit unit-guard-check unit-invariants unit-boundary unit-negative-controls unit-hybrid-critical unit-flake unit-cov unit-diff-cov traceability-check unit-mutation unit-trust qa-trace qa-evidence qa-quality docs-check tooling-test jira-live-smoke
 
 unit:
 	$(PYTEST) $(TEST_DIR)
@@ -80,7 +80,14 @@ qa-evidence:
 	  --test-report test_report.log \
 	  --report-json artifacts/quality/evidence_report.json
 
-qa-quality: qa-trace traceability-check unit-guard-check
+qa-quality: qa-trace traceability-check unit-guard-check docs-check
+
+docs-check:
+	$(PYTHON) scripts/check_docs.py
+
+tooling-test:
+	$(PYTEST) -q tests/tools
+	bash tests/shell/test_varambu_output.sh
 
 jira-live-smoke:
 	./scripts/jira_live_smoke.sh

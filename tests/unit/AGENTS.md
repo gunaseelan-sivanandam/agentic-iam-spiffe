@@ -10,12 +10,15 @@ Important:
 - Use unit tests to lock DD contracts and regressions after the slice plan and runtime proof model have already been authored.
 
 ## Scope
-- Applies only to unit tests in:
+- Applies to all unit tests under `tests/unit/`:
   - `tests/unit/capiss/`
   - `tests/unit/toolb/`
   - `tests/unit/jiratool/`
-  - shared unit helpers in `tests/unit/`
-- Integration/E2E harness guidance stays in the repo-root `AGENTS.md`.
+  - `tests/unit/jiramcp/`
+  - `tests/unit/shared/`
+  - `tests/unit/test_varambu_audit.py`, `tests/unit/test_varambu_trace.py`
+- This file is the unit-test appendix to the repo-root [`AGENTS.md`](../../AGENTS.md) rulebook,
+  which owns the workflow, traceability model, and E2E harness guidance.
 
 ## Required test style (hard rule)
 - Every unit test must use the `guard` fixture from `tests/unit/conftest.py`.
