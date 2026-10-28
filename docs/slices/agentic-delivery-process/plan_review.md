@@ -7,6 +7,7 @@ round with the command below.
 | Round | Date | Reviewer | Model | Inputs (SHA-256 of plan.md / test_plan.md) |
 | --- | --- | --- | --- | --- |
 | 1 | 2026-10-28 | Codex CLI 0.142.5, `codex exec --sandbox read-only --ephemeral` | `gpt-6.1-sol` (the configured `gpt-5.5` is refused for a ChatGPT login) | `09770c43f829…` / `482cf084ff85…` at `c21a934` |
+| 2 | 2026-10-28 | same | same | `83b3065bf28b…` / `574bb048873d…` at `914751a` |
 
 Reviewer inputs: the repository (read-only), the grill-me decision log and the compose inventory
 (env var names only). The prompt forbids reading the author's session data; the sandbox restricts
@@ -237,3 +238,157 @@ answered with "no change".
 - Actual credential contents and private-key files were not read.
 - The planned gates cannot be executed because they do not yet exist.
 - No files outside the repository and supplied extra input directory were read; no files were modified.
+## Round 2 — status: escalated to the user
+Round 2 judged 11 of the 20 round-1 findings closed and 9 partial, and raised 13 new ones (7
+blockers). Under D10 and D17 a finding raised a second time stops the review loop, and 9 findings
+came back as partial. The review therefore stops here and asks the user two questions before
+round 3: which threat model the delivery pipeline defends against, and whether the slice is split.
+
+## Round 2 — reviewer report (verbatim)
+
+### Round 2 report
+
+#### Round-1 findings
+
+References to `plan.md` and `test_plan.md` below mean the files in `docs/slices/agentic-delivery-process/`.
+
+| Finding | Verdict (closed / partial / open) | Reason (one or two sentences, cite file:line) |
+| --- | --- | --- |
+| PR-01 | partial | Removing the harness socket and separating verification helps, but K8 still permits a PR-built `spire-agent` to hold host-root authority. Arbitrary execution can also fabricate the statistics that `verify` consumes (`plan.md:194`, `plan.md:217`, `plan.md:263`). |
+| PR-02 | closed | Execution checks now have an assigned job, and candidate gates have a separate negative-control job (`plan.md:194`, `plan.md:196`; `test_plan.md:188`, `test_plan.md:197`). Their security limitations are addressed separately below. |
+| PR-03 | closed | M5-T21 now requires the actual pre-policy canonicalization rejection: 400/`bad_request`/`res` (`test_plan.md:100`; `services/capability-issuer/app.py:723`). |
+| PR-04 | closed | The replacement calibration changes only 503 to 403, which the old status assertion accepts and the tightened assertion rejects (`test_plan.md:209`; `scripts/rogue_node_tests.sh:2440`). |
+| PR-05 | closed | The denominator now includes untested and unsuccessful mutant categories, with explicit empty, incomplete and missing-module controls (`plan.md:137`; `test_plan.md:200`). |
+| PR-06 | partial | Assertion templates now exist, but they do not supply detection and positive controls for every asset they claim to cover; the matrix also excludes stopped containers (`test_plan.md:159`, `test_plan.md:165`). |
+| PR-07 | closed | K4–K8 explicitly add server state, administrative authority, join tokens, workload keys and Docker authority to the asset scope (`plan.md:252`). The proofs and isolation remain deficient, as reported below. |
+| PR-08 | partial | A separate agent identity is specified, but hooks are not an enforced credential boundary, and one approving review does not prohibit the agent from merging afterward (`plan.md:229`, `plan.md:233`; `test_plan.md:370`). |
+| PR-09 | partial | S1 now names operations, but assigns discovery writes to the wrong principal and assumes a script-only permission boundary that ordinary Redis ACLs do not provide (`plan.md:271`; `docs/architecture.md:291`). |
+| PR-10 | closed | Holder and operation semantics are compared with requirements, and explicit widening controls are specified (`plan.md:240`; `test_plan.md:149`). |
+| PR-11 | closed | Image defaults, named UID zero, runtime process identities and unknown identity are now explicitly addressed (`plan.md:278`; `test_plan.md:148`). |
+| PR-12 | partial | Approved candidate contract data has a source and comparison rule, but thresholds remain main-only despite approved threshold changes; the delta itself is absent from the review inputs (`plan.md:160`, `plan.md:210`). |
+| PR-13 | closed | Exceptions now have exact tuples, absolute expiry, OPL-closure invalidation and approval requirements, with corresponding controls (`plan.md:430`; `test_plan.md:150`). |
+| PR-14 | partial | Immutable phase comparisons and a ledger address final-tree deletion, but no independent producer authenticates events or prevents omissions. Forbidding force-push does not authenticate appended events (`plan.md:350`, `plan.md:444`; `test_plan.md:249`). |
+| PR-15 | closed | Authoritative reviewer output is separated from author answers, digested and invalidated by plan/test-plan changes; tampering controls are specified (`plan.md:170`; `test_plan.md:253`). The newly introduced delta is a separate review-input gap below. |
+| PR-16 | partial | T-42 rejects several false sources, but accepts any ancestor rather than the relevant approved baseline and provides no trusted producer for probe timestamps. A stale assertion or fabricated, backdated probe remains possible (`test_plan.md:201`, `test_plan.md:359`). |
+| PR-17 | closed | The cap now selects a lane and explicitly does not limit a full slice; boundary fixtures reflect that distinction (`plan.md:89`; `test_plan.md:181`). |
+| PR-18 | closed | The decrease policy is now explicit, and tests cover approved decreases, mandatory increases, the ceiling and missing history (`plan.md:143`; `test_plan.md:211`). Enforcement against the applicable threshold remains a separate issue below. |
+| PR-19 | closed | Calibration now has an initial floor, mandatory blocker detection and fail-closed handling of missing results (`plan.md:180`; `test_plan.md:246`). |
+| PR-20 | partial | Stop-limit success boundaries were added, but the appendix covers only tooling/pipeline rows and repeatedly uses unexplained `n/a`, contrary to the stated rule. This slice’s E2E rows and matrix templates still lack the required derivation fields (`test_plan.md:60`, `test_plan.md:72`, `test_plan.md:319`). |
+
+#### New findings
+
+##### PR-21 [blocker] The registered SPIRE agent preserves the runner takeover path
+- Lens: security
+- Where: `docs/slices/agentic-delivery-process/plan.md:199`, `plan.md:263`; `test_plan.md:203`
+- Finding: The isolation model exempts an existing Docker-socket holder without requiring its executable image and configuration to come from a trusted revision.
+- Evidence: `spire-agent` is built from repository files and mounts the Docker socket (`compose/spiffe.compose.yml:20`, `compose/spiffe.compose.yml:33`). A PR can change its wrapper or Dockerfile while retaining the approved service, mount and capability inventory. K8 explicitly authorizes that socket holder.
+- Why it matters: The modified agent can use the Docker API to mount the runner filesystem and alter evidence or trusted execution. If T-44 instead rejects every socket holder, the existing stack cannot start.
+- Suggested resolution: Separate trusted infrastructure from candidate workloads. Pin the socket-holding agent and its configuration to an approved immutable source, or isolate its daemon from the verifier runner. Test an unchanged Compose inventory with a malicious agent entrypoint.
+
+##### PR-22 [blocker] Fresh verification does not authenticate execution statistics
+- Lens: security
+- Where: `docs/slices/agentic-delivery-process/plan.md:194`, `plan.md:217`; `test_plan.md:199`
+- Finding: `verify` checks artifacts whose producer can fabricate their contents, including matching commit and run identifiers.
+- Evidence: The plan expressly permits PR execution to fabricate unit, coverage and mutation results. T-29 rejects mismatching identifiers, but has no control for fabricated current-run statistics. Recomputing on `main` executes the merged fabrication again.
+- Why it matters: A PR can omit tests, invent complete coverage and killed-mutant counts, and satisfy the verifier’s thresholds. Uploading existing E2E evidence early does not authenticate these other mandatory gates.
+- Suggested resolution: Put collection and result accounting under a trusted controller, isolate each candidate process from that controller and artifact publication, and require independently observed test/mutant completion. Add a fixture that forges valid-looking statistics with the correct identifiers.
+
+##### PR-23 [blocker] Existing tests cannot evolve under the new harness rule
+- Lens: consistency
+- Where: `docs/slices/agentic-delivery-process/plan.md:202`, `plan.md:207`; `test_plan.md:203`
+- Finding: An approved change to an existing behavioral contract is still judged by the old harness, while evidence from its replacement test is ignored.
+- Evidence: Every test on `main` runs against the candidate stack. T-44 gives `main`’s evidence precedence for an existing test ID. For example, an explicitly approved change from one HTTP denial signature to another necessarily fails the old assertion.
+- Why it matters: Legitimate full slices cannot change existing expected behavior. Renaming the test would evade identity-based ownership rather than solve the trust problem.
+- Suggested resolution: Define how approved replacement tests become eligible before merge, bound to reviewed test content and contract deltas. Test both an authorized signature change and an unauthorized weakening.
+
+##### PR-24 [blocker] Phase commits and escalation commits are prohibited by the close hook
+- Lens: consistency
+- Where: `docs/slices/agentic-delivery-process/plan.md:350`, `plan.md:365`; `test_plan.md:232`
+- Finding: The workflow requires intermediate commits while the hook prohibits commits until final close succeeds.
+- Evidence: Phase boundaries must be commits, including the tests-first phase. However, missing implementation must fail close (P-6), and a commit before `slice-close` passes must be refused (P-12). D10 also requires a WIP commit precisely when delivery has stopped.
+- Why it matters: The workflow cannot finish its test phase or preserve an escalation without bypassing its own mandatory hook.
+- Suggested resolution: Specify separate phase, ledger, WIP and final-delivery commit rules. Add success tests for a red test-phase commit and an incomplete escalation commit, alongside rejection of an unauthorized final handoff.
+
+##### PR-25 [blocker] Redis ACLs cannot supply the promised script-only authority
+- Lens: consistency
+- Where: `docs/slices/agentic-delivery-process/plan.md:272`, `plan.md:275`; `test_plan.md:171`
+- Finding: S1 requires the same verifier principal to execute budget decrements inside approved Lua while being forbidden from executing those decrements directly.
+- Evidence: The deployed Redis 7 configuration uses direct service clients. Redis checks commands invoked by Lua against the caller’s ACL permissions; permitting a command inside a script does not create a script-only grant. The existing consume script invokes `DECRBY` (`services/tool-b/server.py:77`).
+- Why it matters: Denying that command breaks legitimate consumption; allowing it permits direct calls and defeats the proposed integrity boundary. Testing only the approved script’s rejection of negative costs misses an alternative script.
+- Suggested resolution: Approve an enforceable mediation boundary or a different integrity contract before delegating ACL design to the pilot. Test direct commands, attacker-supplied Lua and alternate argument/key combinations using the verifier’s actual credentials.
+
+##### PR-26 [blocker] Matrix completeness does not establish asset detection
+- Lens: adequacy
+- Where: `docs/slices/agentic-delivery-process/test_plan.md:159`, `test_plan.md:165`, `test_plan.md:167`
+- Finding: The new templates claim K1–K8 coverage without specifying detectors for all those assets, and their scan domain omits stopped containers.
+- Evidence: K4’s datastore and K6’s join tokens have no holder-positive/detection procedure comparable to the private-key procedures. Copying a datastore or renamed join token into an unauthorized container need not match any listed scanner format. `spire-token-init` normally exits, so “every running container” excludes a real holder of mounted server state. Additionally, untrusted raw-key canaries conflict with discovery’s trusted-public-key matching rule (`plan.md:110`).
+- Why it matters: Generated rows can look complete while missing another root-state disclosure, or fail permanently on their own canary controls.
+- Suggested resolution: Define discovery and genuine-holder controls per asset class, including datastore and token copies; enumerate configured services across lifecycle states; and reconcile canary trust with the raw-key detection rule. Add one actual unauthorized-copy fixture per asset class.
+
+##### PR-27 [blocker] Universal check removal requires impossible E2E kills
+- Lens: adequacy
+- Where: `docs/slices/agentic-delivery-process/plan.md:131`; `test_plan.md:258`
+- Finding: Every enumerated decision point must be killed by an E2E test, including tooling branches and behaviorally equivalent removals, with no invalid-mutant or equivalence policy.
+- Evidence: Sensitive paths include QA validators. A branch in `scripts/check_docs.py:107` is exercised by documentation-tooling tests, not the runtime E2E harness. Removing it cannot be required to change a runtime HTTP signature. T-35 substitutes a status mutant for the original example but does not establish transformations or controls for every listed construct.
+- Why it matters: The nightly gate cannot satisfy its universal success criterion. An implementation must silently omit points, accept unrelated failures, or add an undocumented escape hatch.
+- Suggested resolution: Define executable transformations by language/construct, baseline-green requirements, invalid/equivalent-mutant handling and appropriate mapped test types. Include a QA-tool branch, a Rego rule, an Envoy route and an equivalent removal in runner controls.
+
+##### PR-28 [major] The approved Redis writer contract contradicts discovery
+- Lens: consistency
+- Where: `docs/slices/agentic-delivery-process/plan.md:271`; `test_plan.md:171`
+- Finding: S1 grants registry writes to capiss and gives verifiers only registry reads, reversing the existing discovery responsibility.
+- Evidence: The authoritative state inventory names tool-b as registry writer and capiss as reader (`docs/architecture.md:291`). Tool-b’s `record_discovery` performs the write (`services/tool-b/server.py:300`); capiss checks membership (`services/capability-issuer/app.py:456`).
+- Why it matters: Enforcing the approved contract breaks discovery-backed delegation. Moving publication into capiss would be an architectural change that this slice has not designed or tested.
+- Suggested resolution: Resolve the writer model explicitly against the existing discovery requirements and architecture. Add a successful discovery-to-child-mint test under the proposed permissions, plus unauthorized-writer controls.
+
+##### PR-29 [major] The ledger authenticates neither events nor their completeness
+- Lens: security
+- Where: `docs/slices/agentic-delivery-process/plan.md:350`, `plan.md:396`, `plan.md:444`; `test_plan.md:249`
+- Finding: The workflow writes the authoritative ledger, but nothing distinguishes authentic observations from fabricated or omitted events.
+- Evidence: A no-force-push/no-deletion ruleset preserves Git history; it does not prevent a fast-forward commit containing false phase boundaries, omitted TCRs or altered event files. P-29 tests force-push and slice-record deletion, not ordinary appended falsification or an unrecorded gate run.
+- Why it matters: Stop counts and role ownership can be green despite exceeded limits or unauthorized work.
+- Suggested resolution: Specify a trusted event producer, immutable event schema and sequencing, role identity, phase-SHA validation and reconciliation with actual executions. Test forged verdicts, omitted events, duplicate events and fast-forward alterations.
+
+##### PR-30 [major] Owner approval does not reserve the merge action to the owner
+- Lens: security
+- Where: `docs/slices/agentic-delivery-process/plan.md:228`, `plan.md:233`; `test_plan.md:251`
+- Finding: The agent’s inability to approve its own PR is incorrectly treated as an inability to merge it.
+- Evidence: The proposed identity can push branches. The specified protection requires one approval, but does not specify a restriction reserving updates to `main` to the owner. After an eligible approval and passing checks, an identity with merge permission can merge without approving itself.
+- Why it matters: D15 promises that implementation merges remain a separate human act. P-31 can pass before approval and miss the exact point where that promise fails.
+- Suggested resolution: Specify and verify permissions or branch restrictions that reserve merging to the owner. Test the agent’s merge attempt after owner approval and all required checks pass.
+
+##### PR-31 [major] The approved contract delta bypasses independent plan review
+- Lens: security
+- Where: `docs/slices/agentic-delivery-process/plan.md:160`, `plan.md:174`, `plan.md:213`; `test_plan.md:202`
+- Finding: The new machine-authoritative contract delta is neither a listed reviewer input nor explicitly included in review invalidation.
+- Evidence: D17 lists review inputs and invalidates on changes to `plan.md` or `test_plan.md`. T-43 checks equality with the merged delta, but does not check whether that delta was reviewed or agrees semantically with the prose. A delta-only revision can therefore retain an otherwise valid plan review.
+- Why it matters: The implementation gate may faithfully enforce unsafe or contradictory machine entries that the independent reviewer never saw.
+- Suggested resolution: Include the delta and its dependency versions in the reviewed input manifest and invalidation rules. Test delta-only edits and a prose/delta disagreement, including coordinated requirement/register widening.
+
+##### PR-32 [major] Candidate threshold changes are judged using the old threshold
+- Lens: consistency
+- Where: `docs/slices/agentic-delivery-process/plan.md:145`, `plan.md:210`; `test_plan.md:211`
+- Finding: Threshold changes are approved through contract deltas, but executable thresholds must still come exclusively from `main`.
+- Evidence: The contract-data list does not include thresholds. A slice can raise a threshold while its evidence passes only the previous threshold; conversely, an approved decrease remains subject to the old higher value. T-37 checks configuration/history changes without testing evidence against the resulting threshold.
+- Why it matters: The merged repository can immediately violate its newly declared adequacy floor, or an expressly approved decrease cannot take effect.
+- Suggested resolution: Separate trusted threshold-evaluation code from approved candidate threshold data and define which value applies before merge. Test evidence between the old and new thresholds for both increases and decreases.
+
+##### PR-33 [major] Increment 1B depends on later infrastructure and exposes unhandled violations
+- Lens: consistency
+- Where: `docs/slices/agentic-delivery-process/plan.md:321`, `plan.md:338`, `plan.md:430`; `test_plan.md:148`
+- Finding: Deployment acceptance requires a controller delivered in 1C and newly prohibited exposures whose disposition is absent from the bootstrap plan.
+- Evidence: T-11’s runtime-user proof uses the controller, but its delivery is assigned to 1C. K4 also prohibits `spire-token-init` from reading server keys/datastore, although it currently mounts the entire server directory (`compose/spiffe.compose.yml:17`). Removing that mount wholesale would break its existing admin-socket access (`spire/token-init/init.sh:5`). The stated pilot and exception discussion cover OPL-005/006/007, without resolving this additional bootstrap exposure.
+- Why it matters: 1B cannot meet its stated acceptance conditions without implementing later scope, weakening checks or approving additional security work.
+- Suggested resolution: Order the controller before its consumers and enumerate every existing violation introduced by K4–K8, with an explicit approved fix or precise exception and tests for each.
+
+#### Verdict
+Open: PR-01, PR-06, PR-08, PR-09, PR-12, PR-14, PR-16, PR-20, PR-21, PR-22, PR-23, PR-24, PR-25, PR-26, PR-27, PR-28, PR-29, PR-30, PR-31, PR-32, PR-33.
+
+#### Not checked
+
+- No files were modified; no Docker commands, services, network requests or live probes were run.
+- GitHub permissions, rulesets, required-check behavior, environment-secret isolation and CI timing were not verified live.
+- Redis ACL/script behavior, OPA execution, mutmut transformations and proposed orchestration hooks were not exercised against running tools.
+- Runtime image identities, filesystem contents and actual deployed asset reachability were not inspected.
+- Credential stores, private-key files and the plan author’s reasoning were not read.
+- Planned gates and registers are absent, so their proposed negative controls could only be reviewed as specifications.
