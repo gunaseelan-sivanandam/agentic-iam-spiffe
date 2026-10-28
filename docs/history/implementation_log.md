@@ -5,6 +5,19 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-10-28 CI mutation gate broken by pytest 9.2.0; pytest pinned
+
+- PR #3 (`docs/consolidation`) failed `unit-trust / mutation-trust` with
+  `AttributeError: 'Function' object has no attribute '_nodeid'` before any mutant ran.
+- Cause: `requirements-dev.txt` left `pytest` unpinned. pytest 9.2.0 (published 2026-10-27 21:30 UTC,
+  after `main`'s last green run at 20:09 UTC) removed the private `Node._nodeid`, which mutmut 3.5.0
+  reads directly. `main` is affected the same way.
+- Fix: `pytest==9.1.1`. Upgrading to mutmut 3.8.1 (2026-10-28, uses the public `item.nodeid`) is left
+  for a separate dependency change.
+- Validation in a fresh Python 3.11 virtualenv built from `requirements-dev.txt` (pytest 9.1.1, mutmut
+  3.5.0): `qa-trace`, `docs-check`, `tooling-test`, `unit-guard-check`, `unit-trust` and
+  `unit-mutation` (score 85.58%) all PASSED.
+
 ## 2026-10-27 Docs consolidation, Increments 2 and 3; harness PR merged
 
 - `fix/m5-evidence-harness-hardening` merged to `main` as PR #2 (`fe86c35`). Full E2E on `main`, clean
