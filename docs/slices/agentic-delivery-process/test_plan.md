@@ -9,7 +9,7 @@ refuses where the plan says it must. A gate without a failing negative control d
 delivered.
 
 ## Inputs
-- Approved [`plan.md`](plan.md): decisions D1–D16, lanes, the `REQ-SEC-*` requirements.
+- Approved [`plan.md`](plan.md): decisions D1–D17, lanes, the `REQ-SEC-*` requirements.
 - Existing requirement REQ-M2-R5.
 
 ## Expected-outcome table format (D4)
@@ -55,6 +55,22 @@ a kind is a full-slice contract change that ships with its wrong-failure fixture
 
 1A assigns every one of the 120 tests a kind. A test that fits none stops 1A with an escalation
 that proposes a new kind; it is not forced into the nearest one.
+
+## Test derivation checklist (D17)
+From Increment 1C on, every row of a slice `test_plan.md` (E2E, tooling and pipeline tests) also
+fills these columns, and `plan-lint` rejects an empty one ("n/a" needs a reason):
+
+| Column | Question |
+| --- | --- |
+| Catches | Which defect or bad input does this test exist for? |
+| Evasions | Was each of these considered: rename, delete, missing, empty, wrong source, wrong commit, wrong time? Which apply and which test covers them? |
+| Missing vs zero | Can an absent value, file, counter or service read as the expected value? |
+| Wrong-reason pass | What other failure could produce the same observable outcome? |
+| Wrong-reason fail | Could the test fail for a reason other than the defect (in red phase, or on base for a fix)? |
+| Boundary | Which limits apply, and are B-1, B and B+1 covered? |
+
+The rows in this test plan predate the checklist; the independent plan review (plan review note 8)
+checks them against it.
 
 ## E2E plan — Increment 1A: tighten the existing loose checks
 Every test gets an `expect:` block in 1A, not only the loose ones below. A test whose current
@@ -168,6 +184,12 @@ Also in 1A:
 - T-32 Plan-vs-diff (D16): a slice diff adding a mount, secret env var, key path or network not in the plan's asset table fails `slice-close`.
 - T-33 Gate registry: a gate in the Makefile or `scripts/` not in `scripts/gates.yaml`, or registered without a negative-control test, fails.
 - T-34 Gate mutation: mutation score of the gate code (lane classifier, `qa-evidence`, `qa-deploy`, `test-lint`, replay, `slice-close`, `plan-lint`) at or above 80%; each survivor justified.
+- T-35 Check removal: on a fixture where `opa_unavailable` is removed from capiss, the pre-1A `M3.S2-T4` (`403|503`) survives and the run fails; the tightened `M3.S2-T4` kills it and the run passes.
+- T-36 Mapping drift: a decision point killed only by a test not mapped to its file fails the nightly run until the mapping is corrected.
+- T-37 Mutation ratchet: a PR outside the full-slice lane that lowers a threshold in `scripts/gates.yaml` fails; raising one passes.
+- T-38 Escape corpus: a corpus fixture the suite does not catch fails; removing a fixture outside the full-slice lane fails.
+- T-39 Escape review: an OPL entry marked closed without a "why no test caught it" section and its checklist addition fails `docs-check`.
+- T-40 Derivation and complete sets: a `test_plan.md` row with an empty derivation column fails `plan-lint`; a test, service, decision point, kind or `REQ-SEC` missing from its enumerated coverage fails.
 
 ## Pipeline self-tests — Increment 2 (seeded faults, run on a fixture slice)
 Each seeded fault must end in a stop or a failure at the named point, never in a handoff.
@@ -197,20 +219,34 @@ Each seeded fault must end in a stop or a failure at the named point, never in a
 | P-21 | the agent's narrative contradicts the evidence (for example "0 TCRs" with 2 filed) | the report uses evidence values and flags the contradiction |
 | P-22 | the plan threat reviewer raises a question the plan does not answer | plan PR check fails |
 | P-23 | the implementation adds a key mount the plan's asset table does not list | `slice-close` fails (and `qa-deploy`) |
+| P-24 | the plan PR is opened while `plan_review.md` has an open finding, or without `plan_review.md` | `slice-grill` refuses; the plan PR check fails |
+| P-25 | the plan reviewer's input includes the author's reasoning or transcript, or the reviewer is the author's model | isolation check fails the review |
+| P-26 | a fixture plan with seeded gaps (a missing evasion, an untested decision, an unlisted asset, a contradiction with `requirements.md`) | the plan reviewer's detection rate is recorded; a drop below the last accepted rate blocks its use until investigated |
+| P-27 | the adversarial gate reviewer finds an evasion | handoff is blocked until a test for it exists and fails without the fix |
+| P-28 | the 4th plan review round, or the same plan finding twice | stop limit, `escalation.md` |
 
 ## Test adequacy
-A list of tests cannot show it is complete, so adequacy is also measured:
-- every gate is registered with its negative controls, and an unregistered gate fails (T-33);
-- the gate code is mutation-tested at 80%, a higher bar than the services' 70% because it is the
-  trust root (T-34; threshold for approval in this PR);
-- `test-lint` must find every loose check already known (T-22);
-- the deployment gates must find the defect that started this slice (T-10, T-26).
+A list of tests cannot show it is complete, so adequacy is measured by the faults it catches (D17):
+- removing any single decision point in a sensitive path must fail a mapped E2E test with its
+  declared signature (T-35, T-36);
+- mutation thresholds only rise: gate code 80%, services 75% after the pilot and +5 per full slice
+  until 85% (T-34, T-37);
+- every escaped defect stays in a corpus the suite must catch (T-38), and each closed OPL adds the
+  question that would have caught it (T-39);
+- every gate is registered with its negative controls (T-33), and `test-lint` must find every loose
+  check already known (T-22);
+- an independent reviewer checks the plan and test plan before the user does, and its detection
+  rate on seeded gaps is tracked (P-24..P-26).
 
 Known limits, stated so they are not taken for coverage:
 - The E2E harness in a PR is code under test. A harness changed to fabricate evidence is caught by
   the full-slice lane, the user's review and the replay controls; it is not made impossible.
-- The LLM reviewers (code-vs-plan, red team, plan threat review) are defence in depth, not gates. A
-  finding counts only once it becomes a test or a gate.
+- The LLM reviewers (independent plan review, adversarial gate review, code-vs-plan, red team) are
+  defence in depth, not gates. A finding counts only once it becomes a test, a gate or a plan
+  change; calibration (P-26) shows how much they catch, not that they catch everything.
+- Check removal covers the decision points it can enumerate. Behaviour that comes from
+  configuration values rather than a removable check (a timeout, a TTL) is covered by the mutation
+  ratchet and boundary rows instead.
 - The checklist and threat review make an omission in grill-me less likely. Asset discovery and the
   plan-vs-diff check catch omissions only for what they recognise: keys and credentials by content,
   mounts, env vars and networks. A secret in a format the scanner does not know still depends on a
