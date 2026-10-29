@@ -113,7 +113,7 @@ and answered wrongly.
 | Security branch | A fixed checklist in `security/grill_checklist.md`, walked for every slice, not skippable. For each asset the slice creates, reads, moves, mounts or passes: its class, its allowed holders, how it reaches each container, what a holder could do with it (forge, impersonate, replay, change state), and which runtime test proves its confinement. STRIDE over every new or changed trust boundary. Run by a repo skill `slice-grill` that wraps the global `grill-me`. | grill-me | 3 |
 | Plan gate | `plan.md` must contain an "Assets and trust" table (asset, class, holders, delivery path, `REQ-SEC` link, runtime proof). "None" needs a one-sentence reason. `make plan-lint` fails the plan PR otherwise. | CI on the plan PR | 2 |
 | Plan threat review | The security lens of the independent plan review (D17): the reviewer reads the plan, the register and the inventory, and lists assets and threats the plan does not address. Each must be answered in `plan.md` before the plan reaches the user. | before the plan PR | 3 |
-| Asset discovery | Scans every container's readable files and environment for key and credential material **by content, not by name or label**: one detector per asset class (see the test plan's matrix section), for example any 32- or 64-byte value that derives a public key in the run's trusted set. A hit outside the register's holder list fails `qa-deploy`, however the mount is classified. | `qa-deploy`, invariant matrix | 1 |
+| Asset discovery | Scans every running container for private-key material **by content, not by name or label** (PEM private keys, SPIRE `keys.json`, a raw Ed25519 key that derives the trusted public key), as a backstop to the static mount check. A hit outside the register's holder list fails `qa-deploy`, however the mount is classified. | `qa-deploy`, invariant matrix | 1 |
 | Plan-vs-diff check | A diff that adds or changes a mount, secret env var, key path or network not named in the plan's asset table fails `slice-close`. | `slice-close` | 2 |
 
 The first five layers make the question hard to skip. The last two catch the miss when it happens
@@ -127,8 +127,7 @@ luck with a method, a measurement and an independent reviewer.
 
 Delivered in slice 1: the derivation template, complete-set coverage for the E2E suite, mutation
 scoring, and this plan's own independent review (run by hand). Slice 2: check removal, the ratchet,
-the escape corpus, the escape review and `plan-lint`. Slice 3: review automation, CI binding of
-reviews, and calibration. The measurement and review designs below are the approved direction; the
+the escape corpus, the escape review and `plan-lint`. Slice 3: review automation. The measurement and review designs below are the approved direction; the
 later slices refine them in their own plans.
 
 **Derivation (how tests are written).**
@@ -148,17 +147,13 @@ later slices refine them in their own plans.
   an equivalent mutant (review finding PR-27). On a PR this runs for the decision points the PR touches;
   nightly it runs for all of them with the full suite, and a check killed only by an unmapped test
   fails until the mapping is corrected.
-- *Mutation scoring.* Score = killed ÷ (all generated mutants − individually justified
-  equivalent mutants). `no_tests`, `skipped`, timeouts and suspicious mutants count as not killed;
-  gate code is mutated with `mutate_only_covered_lines = false`. An empty selection, a module
-  missing from the run, or an incomplete run fails instead of scoring. (Today
+- *Mutation scoring.* `no_tests` and `skipped` mutants count as not killed, and an empty run fails
+  instead of scoring. (Today
   `scripts/mutation_gate.py` subtracts `skipped` and `no_tests` from the denominator, so 1 killed
   and 99 untested mutants scores 100%; this is fixed in 1A.)
-- *Mutation ratchet.* Gate code at least 80%. Services at least 75% after the pilot; each full
-  slice's close raises the service threshold by 5 points until 85%, and `slice-close` checks the
-  raise. Thresholds live in `scripts/gates.yaml` on `main`. A threshold is lowered only by a full
-  slice whose approved contract delta names the decrease and its reason (see "CI trust model" in [`later_slices.md`](later_slices.md));
-  any other decrease fails. Every surviving mutant has a reviewed justification.
+- *Mutation ratchet.* Gate code at least 80%. Services at least 75% after the pilot, raised toward
+  85% as later slices propose. A threshold is lowered only by a plan the user approves. Every
+  surviving mutant has a reviewed justification.
 - *Escaped-defect corpus.* `tests/escapes/` holds a fixture for every defect that passed the gates:
   the `07520d7` compose (OPL-005), the SPIRE agent mount (OPL-006), unauthenticated Redis (OPL-007),
   the pre-1A harness with its loose checks, and unpinned dev dependencies (the pytest 9.2.0 break).
@@ -181,13 +176,9 @@ later slices refine them in their own plans.
   escalation (D10). The report (`docs/slices/<id>/plan_review.md`: findings, resolutions, vendor or
   fallback, what was not checked) is part of the plan PR, and the plan PR check fails while any
   finding is open. The user reviews a plan that has already survived this.
-- *Where the authoritative review runs.* A report written on the author's machine can be edited by
-  the author, so the authoritative review is the CI `plan-review` job (see "CI trust model" in [`later_slices.md`](later_slices.md)): it
-  runs `main`'s review script on the PR's plan files as data, records the SHA-256 of every input
-  and of the reviewer's raw output, and derives "open" or "resolved" only from the reviewer's own
-  verdict in the last round. Any change to `plan.md` or `test_plan.md` after that round invalidates
-  it. Local runs are fast feedback; the author's answers live in a separate section the reviewer
-  re-reads.
+- *Report integrity.* `plan_review.md` records the SHA-256 of the files each round reviewed and
+  keeps the reviewer's report verbatim, with the author's answers in a separate section. A plan
+  changed after the last round says so, and the user decides whether that needs another round.
 - *Acceptance bar.* The reviewer judges the plan against the threat model (D18) and this plan's
   scope only. A finding blocks approval only if it is a **blocker** (a concrete false green, an
   OPL-005-class miss, or an infeasible step, each with a failure scenario inside the threat model)
@@ -201,10 +192,8 @@ later slices refine them in their own plans.
 - *Adversarial gate review, during delivery.* An independent reviewer gets each new gate's
   specification and tries to build an input that should fail but passes, or the reverse. Each
   success becomes a test before handoff; the PR body shows the attempts and how many found nothing.
-- *Reviewer calibration.* The plan reviewer is run on a fixture plan with seeded gaps. It must find
-  every seeded blocker-class gap (an unlisted key holder, a gate a PR can bypass, a test that cannot
-  fail) and at least 80% of the others; a lower rate, or a missing or unparsable result, blocks its
-  use. The accepted rate and the fixture live on `main`, and the rate is recorded in every report.
+- *Reviewer calibration* (optional; slice 3 decides). Run the reviewer once on a plan with seeded
+  gaps to see what it catches.
 
 ## Requirements
 Proposed security invariants, added to `docs/requirements.md` in Increment 1B. They are the
@@ -249,9 +238,8 @@ set or an operation means changing the requirement (resolves PR-10).
   env vars, runtime user, capabilities and images shall match the approved register; anything else
   fails.
 - **REQ-SEC-D2 — Non-root workloads.** Services shall run as non-root. Existing services are
-  grandfathered until 2027-01-31; new services have no grace period. The effective user is the UID
-  of every process in the running container; a user that cannot be established counts as root
-  (resolves PR-11).
+  grandfathered until 2027-01-31; new services have no grace period. The effective user is the
+  compose `user`, else the image's `USER`; a user that cannot be read counts as root (PR-11).
 
 Existing requirement this slice depends on: **REQ-M2-R5** (workload private key isolation), which
 gets its first E2E link through the invariant matrix.
@@ -260,12 +248,12 @@ gets its first E2E link through the invariant matrix.
 `qa-deploy` and the invariant matrix would fail on today's deployment. They start with exactly these
 exception tuples (review note 1); the expiry of each is 2026-12-31, valid through 23:59:59 UTC.
 
-| OPL | Asset | Services | Path or key family | Operation |
-| --- | --- | --- | --- | --- |
-| OPL-005 | K1 | `tool-b`, `jira-tool`, `jira-mcp-gateway`, `agent-a`, `rogue` | the `capiss_keys` mount (`root_key.b64`) | read |
-| OPL-006 | K2 | `rogue-socket`, `tool-b`, `tool-b-envoy`, `jira-tool`, `jira-tool-envoy`, `jira-mcp-gateway`, `jira-mcp-envoy`, `codex-jira-mcp-adapter`, `capability-issuer-envoy`, `capability-issuer-no-opa-envoy`, `agent-a`, `rogue` | `/run/spire/agent/data/` | read |
-| OPL-007 | S1 | every service on a network with Redis | all key families | unauthenticated read and write |
-| OPL-008 | K4 | `spire-token-init` | `/run/spire/server/data/keys.json`, `datastore.sqlite3` | read, write |
+| OPL | Asset | Services | Through |
+| --- | --- | --- | --- |
+| OPL-005 | K1 | `tool-b`, `jira-tool`, `jira-mcp-gateway`, `agent-a`, `rogue` | the `capiss_keys` mount (`root_key.b64`) |
+| OPL-006 | K2 | `rogue-socket`, `tool-b`, `tool-b-envoy`, `jira-tool`, `jira-tool-envoy`, `jira-mcp-gateway`, `jira-mcp-envoy`, `codex-jira-mcp-adapter`, `capability-issuer-envoy`, `capability-issuer-no-opa-envoy`, `agent-a`, `rogue` | the `spire/agent` mount (`data/`) |
+| OPL-007 | S1 | every service on a network with Redis | no authentication |
+| OPL-008 | K4 | `spire-token-init` | the `spire/server` mount (`data/keys.json`, `datastore.sqlite3`) |
 
 The first asset-discovery run in 1B, before the gate is switched on, reports every violation. Any
 not in this table (for example a workload key found outside its workload) gets an OPL entry and an
@@ -281,10 +269,10 @@ PR-33). The pilot (slice 3) fixes OPL-005 to OPL-008.
 3. `make qa-deploy` fails on any compose or image fact outside `security/invariants.yaml`. On the
    `07520d7` compose it reports the signing key in `tool-b`, and asset discovery fails there even
    when that mount is registered as public.
-4. The runtime invariant matrix covers every asset class × every configured service in every
-   lifecycle state, with holder-positive, non-holder and scan-sanity rows, and every violation it
-   finds is an approved tuple with an OPL.
-5. The mutation gate counts untested, skipped, timed-out and suspicious mutants as not killed;
+4. The runtime invariant matrix confirms on the running stack that non-holders cannot read the
+   registered key paths, its content scan finds its canary and no unlisted private key, and every
+   violation found is an approved tuple with an OPL.
+5. The mutation gate counts untested and skipped mutants as not killed;
    capiss and tool-b meet the 70% threshold under that rule, or the 1A PR adds tests or escalates.
 6. The full E2E suite passes on a clean stack and `make qa-evidence` passes.
 
@@ -308,10 +296,9 @@ PR-33). The pilot (slice 3) fixes OPL-005 to OPL-008.
   tuples; the register consistency gate.
 - A compose inventory script over every profile; Rego rules under `policy/deploy/` run by a pinned
   OPA binary or image; `make qa-deploy` with the non-root warning, expiry and lock.
-- The effective runtime user from the built image and from the running processes (`docker top`,
-  run by the harness).
-- Content-based asset discovery with one detector per asset class, and the generated runtime
-  invariant matrix in the E2E suite.
+- The effective runtime user from compose or the built image.
+- The runtime invariant matrix in the E2E suite (holder, non-holder path, content scan with one
+  canary, known violations).
 - The first discovery run and the known-violation table; the deployment allowlist in the
   `docs/architecture.md` state inventory.
 
@@ -353,8 +340,8 @@ PR-33). The pilot (slice 3) fixes OPL-005 to OPL-008.
 - No documents are archived.
 
 ## Review notes (approve or change in the plan PR)
-1. **Known violations.** An exception in `invariants.yaml` is an exact tuple (OPL id, asset,
-   service, path or key family, operation) with an absolute expiry. It is void as soon as its OPL is
+1. **Known violations.** An exception in `invariants.yaml` is a tuple (OPL id, asset, service)
+   with an absolute expiry. It is void as soon as its OPL is
    closed, and is added, widened or renewed only by a plan PR the user merges. The gate shows each
    one in every report and fails on any observed violation that does not match a tuple exactly. It
    is the only exception mechanism and not a baseline for test precision (D3) (resolves PR-13).

@@ -434,6 +434,31 @@ recommendation. All three were small, in-model and inside slice 1, so they were 
 | PR-36 image allowlist untested | T-8 extracts the image; T-9 adds an unregistered image or digest fixture and an approved-image pass | T-8, T-9 |
 | minor: wrong review-note number | corrected to note 4 | test_plan 1A intro |
 
+## PoC proportion pass (user decision, 2026-10-29)
+The user judged the key-ownership checks out of proportion for a PoC: keys stay in files, and the
+design that matters is that a key directory is mounted only into its owner, which the static
+`qa-deploy` check proves. The author then reviewed every earlier resolution it had made for the same
+problem. Trimmed:
+
+| Earlier resolution | Was | Now |
+| --- | --- | --- |
+| PR-35 key ownership per instance | fingerprint each key, one owning holder per fingerprint; K7 key-to-own-SVID match | dropped; listed as a known limit |
+| PR-34 stopped containers | `docker export` plus mount-source scans | dropped; exited and non-default services are covered by the static mount check |
+| PR-26 / PR-06 detectors | seven per-class detectors (datastore schema, join-token hashes, socket API probes, …), every lifecycle state | one content scan for private-key material in running containers, one canary; K5–K8 proved statically |
+| Matrix fault injection | test-only overlay mounting a canary into `tool-b` | the planted canary is the D5 fault-injection control |
+| PR-11 runtime user | UID of every process via `docker top` | compose `user`, else image `USER`; unknown counts as root |
+| PR-13 exception tuples | (OPL, asset, service, path or key family, operation) | (OPL, asset, service) |
+| PR-05 mutation scoring | also timeouts, suspicious, missing modules, incomplete runs, `mutate_only_covered_lines = false` | `no_tests` and `skipped` count as not killed; an empty run fails |
+| PR-18 ratchet | +5 per full slice enforced at close, decreases only via a contract delta | lowered only by a plan the user approves; raised as later slices propose |
+| PR-15 review binding | CI `plan-review` job with a model API key and output digests | digests of the reviewed files in this report |
+| PR-19 calibration | seeded-gap fixture, 80% floor, blocks the reviewer | optional; slice 3 decides |
+
+Kept, because each is a real false green or contradiction and cheap: M5-T21's outcome (PR-03), the
+corrected check-removal example (PR-04), mutation scoring of untested mutants (PR-05, reduced),
+REQ-SEC-S1 following the actual Redis writers (PR-28) and stating the ACL limit (PR-25), OPL-008
+and its exception (PR-33), and the unregistered-image fixture (PR-36). Slices 2 and 3 get the same
+pass as recommendations in `later_slices.md`.
+
 ## Round 3 — reviewer report (verbatim)
 
 ### Round 3 report

@@ -9,18 +9,21 @@ them are open and must be resolved, or answered by D18, in that slice's plan.
 ## Carried review findings
 IDs refer to [`plan_review.md`](plan_review.md).
 
-| Finding | Topic | Slice | Note |
+| Finding | Topic | Slice | PoC-proportion recommendation (2026-10-29) |
 | --- | --- | --- | --- |
-| PR-01, PR-21, PR-22 | PR code on the runner can take it over or forge results | 2 | Largely out of model under D18 (OPL-009); keep the cheap separations (static `qa-deploy` before bring-up, `verify` on a fresh runner, no credentials in jobs that run PR code) |
-| PR-12, PR-31, PR-32 | contract delta: review coverage, thresholds as approved data | 2 | the delta must be a review input and threshold changes need a defined value before merge |
-| PR-17, PR-18 | lane cap, ratchet | 2 | closed in round 2; keep the resolutions |
-| PR-23 | existing tests cannot evolve if `main`'s harness is authoritative | 2 | under D18 the "`main`'s harness runs existing tests" rule may be dropped |
-| PR-27 | check removal scope | 2 | partly addressed in D17 (tooling tests for QA tools, equivalence justification); transformations per construct still to design |
-| PR-08, PR-30 | agent identity, merge reserved to the owner | 3 | add a ruleset that reserves updates to `main` to the owner, verified after an owner approval |
-| PR-14, PR-29 | run ledger authenticity | 3 | under D18, guard against mistakes and shortcuts (clean tree, phase commits, counts from the ledger), not forgery |
-| PR-15, PR-19 | review binding, calibration | 3 | closed in round 2; keep the resolutions |
-| PR-24 | the commit hook forbids phase and WIP commits | 3 | separate rules for phase, ledger, WIP and final commits |
-| PR-25, PR-28, PR-09 | Redis mechanism for REQ-SEC-S1 | pilot | REQ-SEC-S1 now states the contract and the ACL limit; the pilot chooses the mechanism |
+| PR-01, PR-21, PR-22 | PR code on the runner can take it over or forge results | 2 | Out of model (D18, OPL-009). Drop the five-job model and the Docker controller below: one CI job that runs the full E2E suite and `qa-evidence` with no secrets is enough. |
+| PR-12, PR-31, PR-32 | contract delta: review coverage, thresholds as approved data | 2 | Drop `contract_delta.yaml`; the user reviews the plan and the implementation diff, and a threshold change is stated in the plan. |
+| PR-17, PR-18 | lane cap, ratchet | 2 | Keep the cap as a lane selector; the ratchet is already simplified in D17. |
+| PR-23 | existing tests cannot evolve if `main`'s harness is authoritative | 2 | Drop the "`main`'s harness runs existing tests" rule; the finding disappears with it. |
+| PR-27 | check removal scope | 2 | Start with the decision points a PR touches; nightly over everything is optional. |
+| PR-08, PR-30 | agent identity, merge reserved to the owner | 3 | Keep only "the agent cannot merge" (a ruleset reserving merges to the owner); a separate machine identity is optional. |
+| PR-14, PR-29 | run ledger authenticity | 3 | Drop the ledger branch; TCR, DEV and round counts live in the run records and are checked at the PR. |
+| PR-15, PR-19 | review binding, calibration | 3 | Digests in the report (done in slice 1); calibration optional. |
+| PR-24 | the commit hook forbids phase and WIP commits | 3 | Keep: a real contradiction, cheap to fix. |
+| PR-25, PR-28, PR-09 | Redis mechanism for REQ-SEC-S1 | pilot | Keep: the pilot chooses the mechanism. |
+
+The drafts below still describe the heavier designs; each slice's grill-me decides with these
+recommendations as the starting point.
 
 ## Slice 2 — `delivery-lanes-ci` (draft)
 

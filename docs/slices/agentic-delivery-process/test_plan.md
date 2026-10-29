@@ -138,7 +138,7 @@ Also in 1A:
   the edge container attached to `toolb_app_net` gets 200) and the network restored afterwards; a
   fault run with no flip or no restore fails.
 
-- T-41 Mutation scoring (PR-05): 1 killed and 99 `no_tests` fails; `skipped`, timeout and suspicious mutants count as not killed unless individually justified; total 0 fails; a module in the gate list missing from the run fails; an interrupted run fails; a justified equivalent mutant is excluded and listed.
+- T-41 Mutation scoring (PR-05): 1 killed and 99 `no_tests` fails; `skipped` mutants count as not killed; total 0 fails.
 - T-42 Outcome provenance (PR-16): the commit in `probe@<c>` and `existing@<c>` must be the PR's merge-base with `main`; a probe artifact must be committed in a commit whose diff from the merge-base touches nothing under `services/`, `compose/`, `policy/`, `spire/` or the Envoy configs, and which precedes every commit that does; `existing@<c>` fails when the harness at `c` does not contain that exact assertion or contains one `test-lint` rejects. Fixtures: another commit, a probe taken after a service change, a broad existing assertion.
 
 **1B — deployment**
@@ -149,57 +149,38 @@ Also in 1A:
   - a grandfathered root service is a warning on 2027-01-31 23:59:59 UTC and a failure at 2027-01-31 + 1 s (clock injected; one second earlier is also a warning);
   - a new root service fails;
   - a migrated service that reverts to root fails;
-  - effective user (PR-11): no compose `user` and image `USER root` is root; a named user that maps to UID 0 is root; an entrypoint that drops privileges is judged by the runtime UID of every process (`docker top`, run by the harness); missing image metadata or a `docker` error is "unknown", which counts as root.
+  - effective user (PR-11): taken from compose `user`, else the built image's `USER` (`docker image inspect`); `root` or UID 0 is root; a user that cannot be read counts as root.
 - T-12 Register consistency: a `REQ-SEC` with no `invariants.yaml` entry fails, and so does an entry with no `REQ-SEC`. Semantics (PR-10): `invariants.yaml` adding `tool-b` to K1's holders while REQ-SEC-K1's `Holders:` line is unchanged fails; widening an S1 operation the same way fails.
-- T-13 Known-violation exceptions (PR-13): an entry without an exact tuple (OPL id, asset, service, path or key family, operation) or expiry fails; an observed violation matching a tuple is reported as known; the same OPL with another service, asset, path or operation fails; an exception whose OPL is closed fails; a new, widened or renewed tuple without an approved plan change fails; expiry is valid at 2026-12-31 23:59:58 and 23:59:59 UTC and fails at 2027-01-01 00:00:00 UTC.
+- T-13 Known-violation exceptions (PR-13): an entry without a tuple (OPL id, asset, service) or expiry fails; an observed violation matching a tuple is reported as known; the same OPL with another service or asset fails; an exception whose OPL is closed fails; a new, widened or renewed tuple without an approved plan change fails; expiry is valid at 2026-12-31 23:59:58 and 23:59:59 UTC and fails at 2027-01-01 00:00:00 UTC.
 - T-26 Asset discovery (D16): on the `07520d7` compose with the `tool-b` key mount registered as
-  "public key", discovery still fails on `root_key.b64`. One unauthorized-copy fixture per asset
-  class K1–K8 (each detector in the matrix section) is found, including a renamed copy; also found:
-  an asset present only in a stopped container's bind mount, another agent's key-manager file inside
-  an allowed K2 holder, and another workload's private key copied without its certificate; a public
-  key alone is not reported; a canary key is found because its public key is in the run's trusted
-  set (resolves PR-26).
+  "public key", discovery still fails on `root_key.b64`; a renamed copy of a private key in a
+  non-holder is found; a public key alone is not reported; the planted canary is found.
 - T-27 Invariant matrix generation: a container added to compose gets matrix rows with no hand
   edit; a row removed by hand fails the consistency check.
 
-### Runtime invariant matrix (1B) — assertion templates (resolves PR-06, PR-26)
-Generated for every asset class in REQ-SEC-K1–K8 × every configured service in every profile and
-lifecycle state. Running containers are inspected through `docker exec`; exited ones (for example
-`spire-token-init`) through `docker export` of the stopped container **and** the contents of every
-mount source from the inventory, since an export omits mounts (PR-34); services that do not run by
-default through their mount sources, reported as "static only". An unreadable mount source is an
-error, never a pass. Each row records
-the container ID and image digest, checked against the compose project, so a row cannot pass by
-inspecting the wrong container.
+### Runtime invariant matrix (1B)
+Kept deliberately small for the PoC (user decision, 2026-10-29). The primary proof is static:
+`qa-deploy` checks that each protected key directory, socket and secret env var is mounted or passed
+only into its holders. The matrix only confirms that the running stack matches that compose file,
+plus one content scan as a backstop for a key that ends up under another name.
 
-Detectors work by content, never by file name:
-
-| Class | Detector | Genuine-holder check |
-| --- | --- | --- |
-| K1 issuer key | a 32- or 64-byte value (raw or base64) that derives a public key in the run's trusted set: the key verifiers trust plus this run's canary public keys | the holder's key derives the public key verifiers trust |
-| K2, K4 SPIRE keys | JSON with the SPIRE key-manager structure holding private keys | parses, and every key fingerprint appears in exactly one holder: the agent or server that owns that data directory (PR-35) |
-| K4 datastore | an SQLite file whose schema has SPIRE's registration-entry and node tables (any size) | opens and contains the bootstrap entries |
-| K3 credential | the SHA-256 of the injected value, across the environment and files up to 1 MiB | env var present, hash equal |
-| K6 join token | the SHA-256 of each token issued in this run (read from `spire-token-init`'s output), across files up to 1 MiB | present in the issuer and the agent |
-| K7 workload key | any PEM or DER private key that does not match the container's own SVID certificate and is not a registered asset; a key copied without its certificate is reported too (PR-35) | each workload's key matches its own SVID |
-| K5, K8 sockets | a Unix socket at any path that answers a SPIRE server API probe or Docker `/_ping` | answers in the holder |
-
-| Template | Applies to | Assertion | Wrong failure it rejects |
+| Row | Applies to | Assertion | Wrong failure it rejects |
 | --- | --- | --- | --- |
-| Holder positive | each allowed holder | the genuine-holder check passes | asset never generated; renamed file; empty env var |
-| Non-holder negative | every other service | the class detector finds nothing | scan of only the expected path; asset copied elsewhere |
-| Scan sanity | per run | one canary per class, planted in the test-only `rogue` container, is found; otherwise the matrix fails | blind detector; wrong container; empty filesystem view |
-| Known violation | listed tuples | a violation matching a tuple exactly is reported with its OPL and expiry; anything else fails | an exception hiding a new holder |
-| Fault injection (REQ-SEC tier) | K1–K8 | a test-only overlay mounts a canary into `tool-b`; the matrix fails, then passes once it is removed | a matrix that can never fail |
-| S1 | each service | unauthenticated `PING` → `NOAUTH`; each key family a service writes per ARCH-016 can be written (twin) and every other family cannot; the pilot adds rows for its budget-consumption mechanism, including a negative `DECRBY` and an attacker-supplied script run with the verifier's credentials | allowed by accident; denied for an unrelated reason (Redis down) |
+| Holder positive | each allowed holder of K1–K4 | the key or credential is present at its registered path (K1: it derives the public key verifiers trust) | asset never generated; wrong path in the register |
+| Non-holder path | every other running service | each registered key path of K1, K2 and K4 is absent or unreadable; K3 is not in the environment | a path check run in the wrong container (container ID recorded) |
+| Content scan | every running service | no private-key material outside its holders: PEM private keys, SPIRE `keys.json`, a raw Ed25519 key that derives the trusted public key | a key copied under another name |
+| Scan sanity | per run | a canary private key planted in the test-only `rogue` container is found; otherwise the matrix fails. This is the live fault-injection control D5 requires for `REQ-SEC` rows | a blind scan |
+| Known violation | the approved tuples | a violation matching a tuple is reported with its OPL and expiry; anything else fails | an exception hiding a new holder |
+| S1 | each service | unauthenticated `PING` → `NOAUTH`; the pilot adds the rows for its Redis design | — (pilot) |
 
-Until the pilot, the S1 rows run against the OPL-007 tuple.
+K5–K8 (admin socket, join tokens, workload keys, Docker socket) are proved by the static check
+alone: they reach a container only through a mount, which `qa-deploy` compares with the register.
+Until the pilot, the S1 row runs against the OPL-007 tuple.
 
 ## Test adequacy
 For this slice, adequacy is measured by:
 - `test-lint` finding exactly the loose checks already known (T-22);
-- the deployment gates finding the defect that started this programme (T-10, T-26), with one
-  unauthorized-copy fixture per asset class;
+- the deployment gates finding the defect that started this programme (T-10, T-26);
 - mutation scoring that cannot hide untested mutants (T-41);
 - the derivation appendix and the independent review under the D17 acceptance bar.
 
@@ -207,17 +188,19 @@ Check removal, the ratchet and the escape corpus arrive with slice 2.
 
 Known limits, stated so they are not taken for coverage:
 - A deliberately malicious harness or test change is outside the threat model (D18, OPL-009).
-- The detectors recognise the asset classes K1–K8; a secret in a format no detector knows still
-  depends on a register entry.
-- Services that do not run by default are checked through their mount sources only ("static only"
-  rows).
+- The runtime rows check running containers only; exited and non-default services are covered by
+  the static mount check.
+- The content scan recognises private-key formats only; any other secret depends on its register
+  entry and the static check.
+- A deliberate copy of one holder's key into another allowed holder is not detected (out of
+  proportion for the PoC; review finding PR-35).
 
 ## Assumptions and fixtures
 - Default E2E mode uses deterministic mocks; live Jira stays env-gated (`M5-T55`).
-- The fault injections attach or detach a container from a network (`docker network connect`/`disconnect`), stop a service, or mount a test-only overlay, and restore it in a trap. They run only in the `tests` profile.
+- The fault injections attach or detach a container from a network (`docker network connect`/`disconnect`) or stop a service, and restore it in a trap. They run only in the `tests` profile.
 - The time-dependent checks (non-root expiry, exception expiry) take an injectable clock.
 - The `07520d7` replay uses `git show` of the compose file; it does not check out old code.
-- Canary keys and tokens are generated per run, trusted by no verifier, and deleted at the end.
+- The canary key is generated per run, trusted by no verifier, and deleted at the end.
 
 ## Planned verification commands
 - `make tooling-test`, `make test-lint`, `make qa-deploy`
@@ -253,15 +236,15 @@ rename, **del** delete, **mis** missing, **emp** empty, **src** wrong source, **
 | T-23 | emp stream, wrong file, blind detector → fixtures | a missing stream fails | canary found in another stream → stream path compared | n/a — reads recorded streams | n/a — no numeric limit |
 | T-24 | mock down, counter missing → fixtures | missing is never zero: the point of the test | n/a — counts compared exactly | n/a — reads recorded counts | 0 vs 1 |
 | T-25 | no flip, no restore → fixtures | missing restore evidence fails | a flip caused by another change → only the injected fault differs between the two runs | n/a — reads recorded runs | n/a — no numeric limit |
-| T-41 | relabelled `skipped` or `no_tests`, partial run → fixtures | 0 total fails | n/a — arithmetic over the stats file | a missing stats file is an error, not a score | 1 of 100 killed with 99 `no_tests` fails; 70.00% passes, 69.99% fails |
+| T-41 | relabelled `skipped` or `no_tests` → fixtures | 0 total fails | n/a — arithmetic over the stats file | a missing stats file is an error, not a score | 1 of 100 killed with 99 `no_tests` fails; 70.00% passes, 69.99% fails |
 | T-42 | cmt (another commit), probe after a service change, broad existing assertion → fixtures | a missing probe artifact fails | n/a — commit-graph check | n/a — static | probe commit before the first service change passes, at or after it fails |
 | T-8 | profiles → all-profile config; override files → the same merged config the stack uses | a service missing from the inventory fails against the compose service list | n/a — fact extraction | a `docker compose config` failure is an error, not an empty inventory | n/a — no numeric limit |
 | T-9 | rn of a mount target → compared by source and target; mode change → fixture | a service without a register entry fails | n/a — default deny | n/a — static | n/a — no numeric limit |
 | T-10 | cmt → `git show` of a named commit, hash checked | a removed tuple must make it fail (asserted) | n/a — static replay | a `git show` failure is an error, not a pass | n/a — no numeric limit |
-| T-11 | src of the user (compose, image, process) → all three; tm → injected clock | unknown user counts as root | n/a — UID compared | a `docker` error is "unknown", reported | 2027-01-31 23:59:58 and 23:59:59 warn, +1 s fails |
+| T-11 | src of the user (compose, image) → both; tm → injected clock | unknown user counts as root | n/a — UID compared | an unreadable image is "unknown", reported | 2027-01-31 23:59:58 and 23:59:59 warn, +1 s fails |
 | T-12 | widened holder or operation without a requirement change → fixture | REQ without entry and entry without REQ both fail | n/a — set comparison | n/a — static | n/a — no numeric limit |
 | T-13 | widened, renewed or closed-OPL tuple → fixtures; tm → injected clock | a missing expiry fails | n/a — exact tuple match | n/a — static | 2026-12-31 23:59:58 and 23:59:59 valid, 2027-01-01 00:00:00 fails |
-| T-26 | rn of a key file, a "public" label → content detection; one unauthorized copy per class | a canary that is not found fails the run | a public key alone must not be reported (positive control) | n/a — detectors read content | 32- and 64-byte keys detected; 31 and 33 bytes are not keys |
+| T-26 | rn of a key file, a "public" label → content scan | a canary that is not found fails the run | a public key alone must not be reported (positive control) | n/a — the scan reads content | 32- and 64-byte keys detected; 31 and 33 bytes are not keys |
 | T-27 | a row deleted by hand → fixture | a missing service fails | n/a — generation check | n/a — static | n/a — no numeric limit |
 
 ### 1A E2E rows
@@ -279,12 +262,11 @@ rename, **del** delete, **mis** missing, **emp** empty, **src** wrong source, **
 | M4-T6 | tampering that leaves the signature valid → tamper bytes in the signed block | n/a — HTTP always returns a status | `sub_mismatch` → reason exact | n/a — any other outcome is a wrong reason, which the exact reason catches | n/a — no numeric limit |
 | M5-T21 | src (OPA denial) → reason `res` proves canonicalisation denied before OPA | n/a — HTTP always returns a status | 403 `policy` → status and reason exact | n/a — exact status and reason separate every other cause | n/a — no numeric limit |
 
-### Matrix templates
-| Template | Evasions considered → covered by | Missing vs zero | Wrong-reason pass | Wrong-reason fail | Boundary |
+### Matrix rows
+| Row | Evasions considered → covered by | Missing vs zero | Wrong-reason pass | Wrong-reason fail | Boundary |
 | --- | --- | --- | --- | --- | --- |
-| Holder positive | rn → content detector; src (wrong container) → container ID and image digest | an absent asset fails | a public key mistaken for a private key → derivation check | `docker exec` error → error, not pass | n/a — no numeric limit |
-| Non-holder negative | rn, copy elsewhere → full readable filesystem; stopped container → `docker export` | n/a — "found nothing" is the assertion, guarded by scan sanity | n/a — guarded by scan sanity | `docker` error → error, not pass | hash scan up to 1 MiB; SQLite and socket detectors unlimited |
-| Scan sanity | canary in the wrong container → canary location recorded | a canary not found fails | n/a — positive control | n/a — positive control | one canary per class |
+| Holder positive | wrong path in the register → the key must be found there | an absent asset fails | a public key taken for the private key → derivation check | `docker exec` error → error, not pass | n/a — no numeric limit |
+| Non-holder path | wrong container → container ID recorded | n/a — "absent" is the assertion, guarded by the content scan and its canary | n/a — guarded by scan sanity | `docker exec` error → error, not pass | n/a — no numeric limit |
+| Content scan | rn, copy under another name → scan by content | n/a — guarded by scan sanity | a public key → not reported (T-26) | `docker exec` error → error, not pass | key lengths as T-26 |
+| Scan sanity | canary in the wrong container → location recorded | a canary not found fails | n/a — positive control | n/a — positive control | one canary per run |
 | Known violation | widened tuple → exact match | n/a — matches recorded tuples | n/a — exact match | n/a — static | expiry as T-13 |
-| Fault injection | overlay left in place → second run must pass | n/a — compares two runs | n/a — compares two runs | overlay failed to mount → premise evidence | n/a — no numeric limit |
-| S1 | src (another service's credentials) → per-service credentials recorded | Redis down → `PING` premise fails first | denied for another reason → error text compared | Redis down → premise | n/a — no numeric limit |
