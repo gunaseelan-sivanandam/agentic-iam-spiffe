@@ -5,6 +5,31 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-10-29 Delivery-process plan reviewed, escalated and split into three slices
+
+- Plan PR #4 review comments addressed (terms, D16 security coverage of grill-me, lane home, CI
+  trust), then D17 (test adequacy, independent plan review before the user's review).
+- Independent review by Codex CLI (`gpt-6.1-sol`; the configured `gpt-5.5` is refused for a ChatGPT
+  login, and an expired login first failed every request with HTTP 401). Round 1: 20 findings, all
+  resolved. Round 2: 9 partial and 13 new; the repeated findings triggered the D10 stop and an
+  escalation.
+- User decisions: D18 threat model (fallible agent, not an attacker of the CI infrastructure;
+  residual accepted as OPL-009), D19 split into three slices, and an acceptance bar for reviews
+  (only in-model blockers and majors in scope are fixed; at most three rounds).
+- `plan.md` and `test_plan.md` now cover slice 1 only; slice 2 and 3 drafts and carried findings
+  are in `later_slices.md`. Real errors fixed: M5-T21's expected outcome, the mutation-gate
+  denominator, the Redis writer model and an unenforceable ACL rule, matrix detectors per asset
+  class. New OPL-008 (`spire-token-init` mounts the SPIRE server data directory); OPL-007's fix
+  option corrected.
+- PoC rules added to `AGENTS.md` ("PoC scope and proportion"): honest-mistake threat model,
+  accepted simplifications, ask before growing, few exceptions, which review findings block.
+- D20 lean cut of slice 1 (user decision): kept exact outcomes, twins, `test-lint`, the holder list
+  with `qa-deploy`, mutation scoring and the independent review. The runtime asset scan became a
+  one-time baseline look plus a review question; the replay tool became a test review question;
+  kinds, tiers, fault injection, provenance enforcement and the derivation checklist were deferred
+  to `later_slices.md`; REQ-SEC-S1 moved to the pilot.
+- Not run: documentation only; `make docs-check` and `make qa-trace` were run.
+
 ## 2026-10-28 CI mutation gate broken by pytest 9.2.0; pytest pinned
 
 - PR #3 (`docs/consolidation`) failed `unit-trust / mutation-trust` with
@@ -17,6 +42,22 @@ is first); every heading carries its date.
 - Validation in a fresh Python 3.11 virtualenv built from `requirements-dev.txt` (pytest 9.1.1, mutmut
   3.5.0): `qa-trace`, `docs-check`, `tooling-test`, `unit-guard-check`, `unit-trust` and
   `unit-mutation` (score 85.58%) all PASSED.
+
+## 2026-10-28 OPL-005 verified by forgery; OPL-006, OPL-007 found; delivery-process slice planned
+
+- OPL-005 re-checked on the running stack at the user's request. The private key was read (hashes
+  only) in `capability-issuer`, `tool-b`, `jira-tool`, `jira-mcp-gateway` and a one-off `rogue`;
+  all match. A token forged inside `tool-b` with that key passed tool-b's own `verify_biscuit` once a
+  Redis budget existed for its root id. History traced to `07520d7` (2026-01-05) and the copied
+  volume blocks.
+- New: OPL-006 (SPIRE agent `data/keys.json` readable by every workload that mounts the agent
+  directory; `M2-T7` checks a container without that mount) and OPL-007 (Redis without
+  authentication, writable from every verifier network).
+- Root-cause review of why six layers missed OPL-005, followed by a grill-me that produced the
+  [agentic-delivery-process](../slices/agentic-delivery-process/plan.md) plan (D1–D15) and test plan.
+  The plan includes an audit of about 20 loose E2E assertions.
+- Not run: no code, harness or compose change was made, so no E2E or unit run was needed;
+  `make docs-check` and `make qa-trace` were run on the documentation changes.
 
 ## 2026-10-27 Docs consolidation, Increments 2 and 3; harness PR merged
 

@@ -1,16 +1,29 @@
 # Project Status
 
-Last updated: 2026-10-27. Update this page at the end of every slice (see `AGENTS.md`, slice workflow step 4).
+Last updated: 2026-10-29. Update this page at the end of every slice (see `AGENTS.md`, slice workflow step 4).
 Detailed history: [`docs/history/implementation_log.md`](history/implementation_log.md).
 
 ## Where the project stands
 - **Implemented milestones:** M1, M2, M2.5, M3, M4 (reduced scope), M4a, M4b, M5.
   M5 covers the Codex → Jira MCP path, the `varambu` demo CLI with capiss audit, and the
   full-chain audit trace (`varambu trace`). See the milestone table in [`README.md`](../README.md#milestones).
-- **Highest-priority open problem:** [OPL-005](open_problem_log.md#opl-005-capiss-root-signing-key-is-readable-by-verifiers-and-by-the-rogue-test-container)
-  — the capiss root signing key is readable inside the verifier containers and the rogue test container.
-- **Next candidate slices:** a fix slice for OPL-005; the generic capability verifier
-  ([brainstorm](slices/m5-generic-verifier-architecture/brainstorm.md), not approved).
+- **Highest-priority open problems:** key and state isolation.
+  - [OPL-005](open_problem_log.md#opl-005-capiss-root-signing-key-is-readable-by-verifiers-and-by-the-rogue-test-container):
+    the capiss root signing key is readable in the verifiers, `agent-a` and `rogue`; a forged
+    capability was accepted by tool-b's verifier on 2026-10-28.
+  - [OPL-006](open_problem_log.md#opl-006-spire-agent-private-key-store-is-readable-by-every-workload-that-mounts-the-agent-directory):
+    the SPIRE agent's private key store is readable by every workload.
+  - [OPL-007](open_problem_log.md#opl-007-redis-authorization-state-accepts-unauthenticated-writes-from-every-verifier-network):
+    Redis authorization state accepts unauthenticated writes.
+  - [OPL-008](open_problem_log.md#opl-008-spire-token-init-mounts-the-whole-spire-server-data-directory):
+    the SPIRE bootstrap container can read the server's signing keys and datastore.
+- **Next slice:** [agentic-delivery-process](slices/agentic-delivery-process/plan.md) slice 1 of 3
+  (plan for review, lean scope D20): exact outcomes for the loose E2E checks and a key-holder
+  list checked against compose (`qa-deploy`). Slices 2 (lanes, CI
+  trust) and 3 (orchestration, then a pilot that fixes OPL-005 to OPL-008) are drafts in
+  [`later_slices.md`](slices/agentic-delivery-process/later_slices.md). Later: the
+  generic capability verifier ([brainstorm](slices/m5-generic-verifier-architecture/brainstorm.md),
+  not approved).
 - **Future milestones:** M6–M9 as listed in the README.
 
 ## Last verification
@@ -25,6 +38,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 | Branch | Purpose | State |
 | --- | --- | --- |
 | `docs/consolidation` | Documentation restructure, rulebook, complete E2E spec, `docs-check` in CI ([slice](slices/docs-consolidation/plan.md)) | Increments 1–3 committed; PR to be opened |
+| `slice/agentic-delivery-process` | Slice-1 plan and test plan, later-slice drafts, independent review record; OPL-005 forgery evidence; OPL-006 to OPL-009 | Plan PR #4 under review |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
@@ -33,10 +47,19 @@ Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
 - **OPL-003** Compatibility mint endpoint should be retired after root-mint migration.
 - **OPL-004** capiss policy hash is static rather than computed from the OPA policy source.
 - **OPL-005** capiss root signing key is readable by verifiers and by the rogue test container.
+- **OPL-006** SPIRE agent private key store is readable by every workload that mounts the agent directory.
+- **OPL-007** Redis authorization state accepts unauthenticated writes from every verifier network.
+- **OPL-008** spire-token-init mounts the whole SPIRE server data directory.
+- **OPL-009** The delivery pipeline does not resist a deliberately malicious PR (accepted, D18).
 
 ## Known gaps and debt
 - `M5-T55` (live Jira upstream) only runs with `JIRA_MCP_UPSTREAM_MODE=live`; default runs skip it.
   A skipped test still prints `PASS` in `test_report.log` (the harness has no SKIP status).
+- About 20 E2E assertions accept more than one outcome (for example `401|403`, `403|503`, or
+  "refused or timed out or no route"), so a broken service can pass as a correct denial. Listed
+  for tightening in the [agentic-delivery-process test plan](slices/agentic-delivery-process/test_plan.md).
+- `M2-T7` checks a temporary rogue container without the agent mount, not the deployed `rogue`
+  (OPL-006).
 - Some test titles claim more than their guards check (`M5-T19`, `M5-T21`, `M5-T34`, `M5-T35`,
   `M5-T36`); `docs/test_spec.md` notes each one.
 - Functions above the complexity target of 10 (`radon cc services scripts -n C`): 18, the worst being

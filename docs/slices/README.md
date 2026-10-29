@@ -13,6 +13,7 @@ The workflow that produces and closes a bundle is defined in [`AGENTS.md`](../..
 
 | Slice | Milestone | Status | Dates | Notes |
 | --- | --- | --- | --- | --- |
+| [agentic-delivery-process](agentic-delivery-process/) | — | Plan for review (slice 1 of 3) | 2026-10-29 | Slice 1 (lean, D20): exact E2E outcomes, key-holder list and `qa-deploy`; slices 2–3 drafted; decisions D1–D20 |
 | [docs-consolidation](docs-consolidation/) | — | Implemented, PR pending | 2026-10-27 | `AGENTS.md` rulebook, tracked status, complete E2E spec, `make docs-check` in CI |
 | [m5-generic-verifier-architecture](m5-generic-verifier-architecture/) | M5+ | Brainstorm, not approved | 2026-06-14 | Generic capability verifier; next candidate slice |
 | [m5-full-chain-audit-trace](m5-full-chain-audit-trace/) | M5 | Implemented | 2026-06-19 – 06-30 | `varambu trace`, `M5-T49..T59`; Increment 3 harness hardening merged 2026-10-27 (PR #2) |
