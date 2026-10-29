@@ -5,6 +5,31 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-10-29 Increment 1B: deployment register and qa-deploy
+
+- Slice `agentic-delivery-process` 1B on branch `slice/agentic-delivery-process-1b`, after 1A merged
+  as PR #5.
+- New `REQ-SEC-K1` to `-K8`, `-D1`, `-D2` in `docs/requirements.md`; `security/invariants.yaml`
+  (asset locations and holders, the per-service allowlist over every profile, three known-violation
+  rows for OPL-005, OPL-006 and OPL-008 expiring 2026-12-31); `scripts/qa_deploy.py` and
+  `make qa-deploy` (in `qa-quality`; in CI without image inspection); ARCH-034; tooling tests T-8 to
+  T-13 in `tests/tools/test_qa_deploy.py`, including the `07520d7` replay (reports the capiss key in
+  `tool-b`).
+- User decisions: `rogue-tests` is a declared test-only holder (whole-repo mount plus the Docker
+  socket), extended to K7 for the SVIDs it exports into `tmp_svid/`; Python instead of the planned
+  Rego.
+- Baseline look at Dockerfiles, entrypoints and scripts: no key copies other than the compose
+  mounts and the harness exports above (which the first pass missed; review finding C3).
+- `AGENTS.md`: quality-gate rows for `make test-lint` (missed in 1A) and `make qa-deploy`, the new
+  mutation rule, and the register in "Start here".
+- Independent review (Codex, two rounds, `review_1b.md`): C1–C4 fixed; round 2 "approvable". The
+  eight generic review questions were tried as part B.
+- Validation: full E2E on a clean stack at `ce465a8` 120/120 (1 warning, M5-T55 env-gated skip),
+  `make qa-evidence` PASSED; after the review fixes (no runtime or harness change) `make qa-quality`
+  PASSED (`qa-deploy`: 18 known violations, 22 root warnings), `make tooling-test` PASSED,
+  `ruff check services scripts` clean. Not rerun: the full E2E suite after the review fixes, since
+  they change only `qa-deploy`, the register and docs.
+
 ## 2026-10-29 Increment 1A: exact E2E outcomes, test-lint, mutation scoring
 
 - Slice `agentic-delivery-process` 1A on branch `slice/agentic-delivery-process-1a`, from the plan

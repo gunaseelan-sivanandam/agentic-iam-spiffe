@@ -19,8 +19,9 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
     the SPIRE bootstrap container can read the server's signing keys and datastore.
 - **Next slice:** [agentic-delivery-process](slices/agentic-delivery-process/plan.md) slice 1 of 3
   (plan approved, lean scope D20). Increment 1A (exact outcomes for the loose E2E checks,
-  `make test-lint`, mutation scoring) is implemented on `slice/agentic-delivery-process-1a`;
-  Increment 1B (key-holder list checked against compose, `qa-deploy`) is next. Slices 2 (lanes, CI
+  `make test-lint`, mutation scoring) is merged (PR #5). Increment 1B (`security/invariants.yaml`
+  and `make qa-deploy`: who may hold each key, socket and secret, and every service's allowlist) is
+  implemented on `slice/agentic-delivery-process-1b`; with it, slice 1 is complete. Slices 2 (lanes, CI
   trust) and 3 (orchestration, then a pilot that fixes OPL-005 to OPL-008) are drafts in
   [`later_slices.md`](slices/agentic-delivery-process/later_slices.md). Later: the
   generic capability verifier ([brainstorm](slices/m5-generic-verifier-architecture/brainstorm.md),
@@ -30,16 +31,16 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Last verification
 | Check | Date | Result |
 | --- | --- | --- |
-| Full E2E suite, clean stack, `slice/agentic-delivery-process-1a` at `2c22623` | 2026-10-29 | 120/120 passed; 1 warning (M5-T55 env-gated skip) |
+| Full E2E suite, clean stack, `slice/agentic-delivery-process-1b` at `ce465a8` (later 1B commits change only `qa-deploy`, the register and docs) | 2026-10-29 | 120/120 passed; 1 warning (M5-T55 env-gated skip) |
 | `make qa-evidence` after that run | 2026-10-29 | PASSED (validated 119, skipped 1) |
-| `make qa-quality` (qa-trace, unit traceability, unit guard, docs-check, test-lint) | 2026-10-29 | PASSED; qa-trace reports 122 non-blocking coverage gaps, incl. 87 requirements without E2E |
+| `make qa-quality` (qa-trace, unit traceability, unit guard, docs-check, test-lint, qa-deploy) | 2026-10-29 | PASSED; qa-deploy: 18 known violations (OPL-005, -006, -008), 22 root warnings; qa-trace reports 133 non-blocking coverage gaps, incl. 97 requirements without E2E (the 10 REQ-SEC are proved by tooling tests) |
 | `make unit-mutation` under the new scoring | 2026-10-29 | PASSED, 85.58% (1240 killed of 1449; 0 untested, 0 skipped) |
 | CI `unit-trust` | 2026-10-27 | passing on PR #2 and `main` |
 
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `slice/agentic-delivery-process-1a` | Increment 1A: exact E2E outcomes, `test-lint`, mutation scoring | implemented; PR to be opened |
+| `slice/agentic-delivery-process-1b` | Increment 1B: deployment register and `qa-deploy` | implemented; PR to be opened |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
