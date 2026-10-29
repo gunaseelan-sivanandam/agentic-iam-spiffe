@@ -168,6 +168,15 @@ Tests T-8 to T-13 are in `tests/tools/test_qa_deploy.py`; the register is
   an asset unseen. An explicit `image` on a build service is kept and is the image inspected (C2).
   Each service's `profiles` are part of its allowlist, so a test-only holder cannot start by default
   unnoticed (C4).
+- **How the REQ-SEC requirements are proved: statically** (user decision, 2026-10-29: static tests
+  are acceptable where they make sense). `make qa-deploy` checks each requirement against the
+  deployed compose on every PR, and T-8 to T-13 prove that `qa-deploy` fails on each kind of
+  violation. Trace: REQ-SEC → ARCH-034 → DD-925 to DD-930 (`scripts/qa_deploy.py`) and the
+  `IT-DEPLOY-*` integration cases in `trace/tests.yaml`. Today's trace model has no static-proof
+  kind for requirements, so the 10 REQ-SEC still show as "requirements without E2E" and DD-925 to
+  DD-930 as "design without UT" in the non-blocking coverage report; slice 2 adds that kind and the
+  gap ratchet. What stays unproved: K1, K2 and K4 are violated today (known violations) and D2 by 22
+  services in the grace period; a runtime proof for K1, K2 and K4 comes with their fixes (pilot).
 - **Not in this increment:** a runtime check of what processes do (deferred, D20); REQ-SEC-S1.
 
 ## Independent review at the implementation PR (D20)

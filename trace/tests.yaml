@@ -782,3 +782,57 @@ tests:
   evidence_prefixes:
   - M5-T59
   status: active
+- id: IT-DEPLOY-INVENTORY
+  type: integration_case
+  # T-8 inventory over every profile; static proof of the REQ-SEC requirements that ARCH-034 satisfies (make tooling-test).
+  source_architecture:
+  - ARCH-034
+  location:
+    file: tests/tools/test_qa_deploy.py
+    selector: test_live_inventory_covers_every_profile
+  status: active
+- id: IT-DEPLOY-DEFAULT-DENY
+  type: integration_case
+  # T-9 default deny; static proof of the REQ-SEC requirements that ARCH-034 satisfies (make tooling-test).
+  source_architecture:
+  - ARCH-034
+  location:
+    file: tests/tools/test_qa_deploy.py
+    selector: test_each_unregistered_fact_fails
+  status: active
+- id: IT-DEPLOY-ASSET-HOLDERS
+  type: integration_case
+  # T-10 assets reach only holders; 07520d7 replay; static proof of the REQ-SEC requirements that ARCH-034 satisfies (make tooling-test).
+  source_architecture:
+  - ARCH-034
+  location:
+    file: tests/tools/test_qa_deploy.py
+    selector: test_current_compose_reports_exactly_the_known_violations
+  status: active
+- id: IT-DEPLOY-NONROOT
+  type: integration_case
+  # T-11 non-root rule; static proof of the REQ-SEC requirements that ARCH-034 satisfies (make tooling-test).
+  source_architecture:
+  - ARCH-034
+  location:
+    file: tests/tools/test_qa_deploy.py
+    selector: test_grandfathered_root_warns_until_expiry
+  status: active
+- id: IT-DEPLOY-REGISTER-CONSISTENCY
+  type: integration_case
+  # T-12 register matches REQ-SEC; static proof of the REQ-SEC requirements that ARCH-034 satisfies (make tooling-test).
+  source_architecture:
+  - ARCH-034
+  location:
+    file: tests/tools/test_qa_deploy.py
+    selector: test_widened_holders_without_requirement_change_fails
+  status: active
+- id: IT-DEPLOY-KNOWN-VIOLATIONS
+  type: integration_case
+  # T-13 known violations; static proof of the REQ-SEC requirements that ARCH-034 satisfies (make tooling-test).
+  source_architecture:
+  - ARCH-034
+  location:
+    file: tests/tools/test_qa_deploy.py
+    selector: test_known_violation_expiry_boundary
+  status: active

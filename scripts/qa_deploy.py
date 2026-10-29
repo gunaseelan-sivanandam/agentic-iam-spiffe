@@ -189,6 +189,9 @@ def _privileges(spec: dict) -> tuple[str, ...]:
     return tuple(sorted(found))
 
 
+# DD: DD-925
+# Implements: ARCH-034
+# Title: inventory_from_config compose facts per service, environment values discarded
 def inventory_from_config(config: dict, root: Path) -> dict[str, Service]:
     inventory = {}
     for name, spec in sorted(config["services"].items()):
@@ -217,6 +220,9 @@ def load_register(path: Path) -> dict:
 # --- checks -------------------------------------------------------------------
 
 
+# DD: DD-926
+# Implements: ARCH-034
+# Title: check_allowlist default-deny comparison of every service with its register entry
 def check_allowlist(inventory: dict[str, Service], register: dict) -> list[str]:
     """Default deny: every deployed fact must be the registered one."""
     entries = register["services"]
@@ -271,6 +277,9 @@ def _reach(service: Service, location: dict) -> str | None:
     return None
 
 
+# DD: DD-927
+# Implements: ARCH-034
+# Title: asset_violations protected assets reaching services outside their holders
 def asset_violations(inventory: dict[str, Service], register: dict) -> list[Violation]:
     found: set[Violation] = set()
     for asset, spec in register["assets"].items():
@@ -308,6 +317,9 @@ def _row_problem(row: dict, opls: dict[str, str], now: datetime) -> str | None:
     return None
 
 
+# DD: DD-928
+# Implements: ARCH-034
+# Title: check_known_violations expiring exceptions tied to open OPLs
 def check_known_violations(violations: list[Violation], register: dict, opls: dict[str, str],
                            now: datetime) -> Report:
     report = Report()
@@ -345,6 +357,9 @@ def _is_root(user: str | None) -> bool:
     return uid in ("", "0", "root")
 
 
+# DD: DD-929
+# Implements: ARCH-034
+# Title: check_nonroot non-root rule with grandfathered baseline and grace date
 def check_nonroot(inventory: dict[str, Service], register: dict,
                   user_of: Callable[[Service], str | None], now: datetime,
                   unknown_is_root: bool = True) -> Report:
@@ -389,6 +404,9 @@ def _required_holders(requirements_text: str) -> dict[str, set[str]]:
     return required
 
 
+# DD: DD-930
+# Implements: ARCH-034
+# Title: check_register_consistency register holders equal the REQ-SEC Holders lines
 def check_register_consistency(register: dict, requirements_text: str) -> list[str]:
     """Each REQ-SEC-K* Holders line names exactly the holders the register lists for its asset."""
     required = _required_holders(requirements_text)

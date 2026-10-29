@@ -128,6 +128,54 @@ plan template; the two extra blocking items in the PoC section.
 **Interim (slice 1B):** the 1B review gets these questions informally, alongside the slice's two
 questions, to try them before slice 2 makes them a rule.
 
+### Review lenses and gates (input from the 1B review discussion, 2026-10-29)
+Not approved; the user is not yet sure the lenses and their jobs are the right ones, and slice 2's
+grill-me decides. Adds to the review template above.
+
+**Why.** After the generic questions were tried in 1B, the review still missed that the 10 new
+REQ-SEC requirements had no E2E proof. Causes: the review was anchored to an approved plan that
+already had the gap (the D20 cut removed the runtime proof and was not re-reviewed, on the reasoning
+that it "only removes checks"); `AGENTS.md` says coverage gaps do not fail the build, so the gap
+broke no repository rule; the generic questions were a brief side part of the prompt; and
+`qa-trace` reported the new gaps (87 → 97 requirements without E2E) but nothing compared them with
+`main`.
+
+**User decisions (2026-10-29):** static tests are acceptable wherever they make sense; reviews
+should use several reviewers, each with its own lens, because one generic reviewer will keep
+leaving gaps.
+
+**Layer 1, gates for facts a machine can see:**
+- `qa-trace` compares its coverage gaps with `main`'s and fails on a new gap (a requirement without
+  proof, an architecture section without design or integration test) unless the plan accepts it
+  with a reason;
+- a static-proof kind in `trace/tests.yaml`, so a requirement can be proved by a static check such
+  as `qa-deploy`, visibly labelled (the REQ-SEC requirements and DD-925 to DD-930 need it);
+- `docs-check` fails when a make gate is not listed in the `AGENTS.md` quality gates (1A missed
+  `test-lint` there).
+
+**Layer 2, reviewers with separate lenses** (proposal, not settled):
+
+| Lens | Job | Reads | Would have caught |
+| --- | --- | --- | --- |
+| Goal and evidence (product owner) | serves the PoC goal; challenges the plan itself; what is missing; which test proves each requirement and at which level; decisions recorded where future agents read them | plan, requirements, the trace-gap report, `AGENTS.md`, the change | unproved REQ-SEC; the review step missing from the rulebook |
+| Security (adversary) | threat model, assets, trust boundaries, new risks; builds a concrete bypass | change, register, compose, threat model | 1B C1, C3, C4; 1A false greens |
+| Engineering quality (maintainer) | design, simplicity, failure modes, test adequacy, ripple through code and CI | change and surrounding code | 1B C2; 1A B-series |
+
+- Different models for different lenses where it matters (for example Codex for security, a
+  clean-context Claude for the others), to reduce shared blind spots.
+- At most 3 blockers and 3 advisories per lens; one synthesis step removes duplicates, applies the
+  acceptance rule and gives the user one list, so more lenses do not mean endless findings.
+- Scaled by lane: a doc or patch change gets one combined review; a feature or security slice gets
+  every lens.
+- A plan change, including a removal, is re-reviewed with "which requirement or decision loses its
+  evidence?".
+- The reviewer receives the gate outputs, including the trace-gap difference.
+- An escaped defect sharpens the lens that should have caught it; no topic-specific questions.
+
+**Expected limits:** perspective-based review finds more distinct defects than one shared checklist,
+but lenses anchored to the same plan share its blind spots, and the same model with different
+prompts shares blind spots too. The aim is fewer and cheaper escapes caught before merge, not zero.
+
 ### CI trust model
 Resolves review findings PR-01, PR-02, PR-12 and PR-15. Every job definition comes from `main` via
 `pull_request_target`; the workspace root is a checkout of `main` and the PR is checked out into
