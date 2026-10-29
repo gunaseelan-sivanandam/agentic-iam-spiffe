@@ -77,7 +77,7 @@ the [derivation appendix](#derivation-appendix) (resolves PR-20).
 Every test gets an `expect:` block in 1A, not only the loose ones below. A test whose current
 assertion is already exact gets it copied as `existing@<commit>`; that list is generated in 1A and
 reviewed in the 1A PR. The table below covers the checks that change. Signatures marked *probe*
-are confirmed against the running stack in 1A and reviewed in the 1A PR (plan review note 3). All
+are confirmed against the running stack in 1A and reviewed in the 1A PR (plan review note 4). All
 others come from reading the service code. The lint baseline replay (T-22) may find loose checks
 this table misses (for example `M5-T46` asserts "the strict run exits non-zero"); each one found
 is added to the 1A PR with its row.
@@ -142,8 +142,8 @@ Also in 1A:
 - T-42 Outcome provenance (PR-16): the commit in `probe@<c>` and `existing@<c>` must be the PR's merge-base with `main`; a probe artifact must be committed in a commit whose diff from the merge-base touches nothing under `services/`, `compose/`, `policy/`, `spire/` or the Envoy configs, and which precedes every commit that does; `existing@<c>` fails when the harness at `c` does not contain that exact assertion or contains one `test-lint` rejects. Fixtures: another commit, a probe taken after a service change, a broad existing assertion.
 
 **1B — deployment**
-- T-8 Inventory: `docker compose config` facts are extracted per service (mounts and mode, networks, ports, secret env vars, user, capabilities), for services in every profile; a `tests`-profile service with a key mount is caught.
-- T-9 Default deny, one fixture each: an extra mount, network, port, secret env var or capability not in `invariants.yaml`; a mount changed from read-only to read-write; a user change; `privileged`, `network_mode: host`, `pid: host`, a Docker socket mount, `devices`.
+- T-8 Inventory: `docker compose config` facts are extracted per service (image, mounts and mode, networks, ports, secret env vars, user, capabilities), for services in every profile; a `tests`-profile service with a key mount is caught.
+- T-9 Default deny, one fixture each: an image reference or digest not in the register (an approved image passes, PR-36); an extra mount, network, port, secret env var or capability not in `invariants.yaml`; a mount changed from read-only to read-write; a user change; `privileged`, `network_mode: host`, `pid: host`, a Docker socket mount, `devices`.
 - T-10 Historical replay: run against `compose/spiffe.compose.yml` of `07520d7`, `qa-deploy` reports `capiss_keys` mounted into `tool-b`. Run against today's compose, it reports the OPL-005, OPL-006 and OPL-008 tuples as known violations, and fails if any tuple is removed.
 - T-11 Non-root rules:
   - a grandfathered root service is a warning on 2027-01-31 23:59:59 UTC and a failure at 2027-01-31 + 1 s (clock injected; one second earlier is also a warning);
@@ -154,7 +154,9 @@ Also in 1A:
 - T-13 Known-violation exceptions (PR-13): an entry without an exact tuple (OPL id, asset, service, path or key family, operation) or expiry fails; an observed violation matching a tuple is reported as known; the same OPL with another service, asset, path or operation fails; an exception whose OPL is closed fails; a new, widened or renewed tuple without an approved plan change fails; expiry is valid at 2026-12-31 23:59:58 and 23:59:59 UTC and fails at 2027-01-01 00:00:00 UTC.
 - T-26 Asset discovery (D16): on the `07520d7` compose with the `tool-b` key mount registered as
   "public key", discovery still fails on `root_key.b64`. One unauthorized-copy fixture per asset
-  class K1–K8 (each detector in the matrix section) is found, including a renamed copy; a public
+  class K1–K8 (each detector in the matrix section) is found, including a renamed copy; also found:
+  an asset present only in a stopped container's bind mount, another agent's key-manager file inside
+  an allowed K2 holder, and another workload's private key copied without its certificate; a public
   key alone is not reported; a canary key is found because its public key is in the run's trusted
   set (resolves PR-26).
 - T-27 Invariant matrix generation: a container added to compose gets matrix rows with no hand
@@ -163,8 +165,10 @@ Also in 1A:
 ### Runtime invariant matrix (1B) — assertion templates (resolves PR-06, PR-26)
 Generated for every asset class in REQ-SEC-K1–K8 × every configured service in every profile and
 lifecycle state. Running containers are inspected through `docker exec`; exited ones (for example
-`spire-token-init`) through `docker export` of the stopped container; services that do not run by
-default through their mount sources from the inventory, reported as "static only". Each row records
+`spire-token-init`) through `docker export` of the stopped container **and** the contents of every
+mount source from the inventory, since an export omits mounts (PR-34); services that do not run by
+default through their mount sources, reported as "static only". An unreadable mount source is an
+error, never a pass. Each row records
 the container ID and image digest, checked against the compose project, so a row cannot pass by
 inspecting the wrong container.
 
@@ -173,11 +177,11 @@ Detectors work by content, never by file name:
 | Class | Detector | Genuine-holder check |
 | --- | --- | --- |
 | K1 issuer key | a 32- or 64-byte value (raw or base64) that derives a public key in the run's trusted set: the key verifiers trust plus this run's canary public keys | the holder's key derives the public key verifiers trust |
-| K2, K4 SPIRE keys | JSON with the SPIRE key-manager structure holding private keys | parses and holds at least one private key |
+| K2, K4 SPIRE keys | JSON with the SPIRE key-manager structure holding private keys | parses, and every key fingerprint appears in exactly one holder: the agent or server that owns that data directory (PR-35) |
 | K4 datastore | an SQLite file whose schema has SPIRE's registration-entry and node tables (any size) | opens and contains the bootstrap entries |
 | K3 credential | the SHA-256 of the injected value, across the environment and files up to 1 MiB | env var present, hash equal |
 | K6 join token | the SHA-256 of each token issued in this run (read from `spire-token-init`'s output), across files up to 1 MiB | present in the issuer and the agent |
-| K7 workload key | a PEM or DER private key whose matching certificate's SPIFFE ID is not the container's own | each workload's key matches its own SVID |
+| K7 workload key | any PEM or DER private key that does not match the container's own SVID certificate and is not a registered asset; a key copied without its certificate is reported too (PR-35) | each workload's key matches its own SVID |
 | K5, K8 sockets | a Unix socket at any path that answers a SPIRE server API probe or Docker `/_ping` | answers in the holder |
 
 | Template | Applies to | Assertion | Wrong failure it rejects |

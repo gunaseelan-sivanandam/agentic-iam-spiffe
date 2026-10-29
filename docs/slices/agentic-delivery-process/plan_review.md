@@ -8,6 +8,7 @@ round with the command below.
 | --- | --- | --- | --- | --- |
 | 1 | 2026-10-28 | Codex CLI 0.142.5, `codex exec --sandbox read-only --ephemeral` | `gpt-6.1-sol` (the configured `gpt-5.5` is refused for a ChatGPT login) | `09770c43f829…` / `482cf084ff85…` at `c21a934` |
 | 2 | 2026-10-28 | same | same | `83b3065bf28b…` / `574bb048873d…` at `914751a` |
+| 3 | 2026-10-29 | same, slice 1 only, with the D17 acceptance bar in the prompt | same | `6e39c2fd0865…` / `f41352288af3…` at `a3a62a6` |
 
 Reviewer inputs: the repository (read-only), the grill-me decision log and the compose inventory
 (env var names only). The prompt forbids reading the author's session data; the sandbox restricts
@@ -416,3 +417,85 @@ Open: PR-01, PR-06, PR-08, PR-09, PR-12, PR-14, PR-16, PR-20, PR-21, PR-22, PR-2
 - Runtime image identities, filesystem contents and actual deployed asset reachability were not inspected.
 - Credential stores, private-key files and the plan author’s reasoning were not read.
 - Planned gates and registers are absent, so their proposed negative controls could only be reviewed as specifications.
+## Round 3 — result and closing status
+Round 3 reviewed slice 1 only, under the acceptance bar. It closed PR-09, PR-16, PR-20, PR-25,
+PR-28 and PR-33, and returned **"Approvable within the threat model: no — PR-34, PR-35, PR-36"**:
+two asset-confinement gaps and one missing negative test. PR-06 and PR-26 stayed open only through
+PR-34 and PR-35.
+
+Under the bar there is no fourth round: the remaining findings go to the user with the author's
+recommendation. All three were small, in-model and inside slice 1, so they were fixed directly.
+**These fixes were not re-reviewed by Codex**; the user's plan-PR review is the check.
+
+| Finding | Fix after round 3 | Where |
+| --- | --- | --- |
+| PR-34 stopped-container export omits mounts | exited containers are scanned through the export and every mount source; an unreadable source is an error | test_plan matrix intro; T-26 fixture |
+| PR-35 ownership per key instance | K2/K4: each key fingerprint in exactly one owning holder; K7: any private key not matching the container's own SVID is reported, with or without a certificate | test_plan matrix detectors; T-26 fixtures |
+| PR-36 image allowlist untested | T-8 extracts the image; T-9 adds an unregistered image or digest fixture and an approved-image pass | T-8, T-9 |
+| minor: wrong review-note number | corrected to note 4 | test_plan 1A intro |
+
+## Round 3 — reviewer report (verbatim)
+
+### Round 3 report
+
+#### Round-2 findings fixed in slice 1
+
+| Finding | Verdict (closed / open) | Reason (cite file:line) |
+| --- | --- | --- |
+| PR-06 | open | Detectors, controls and container identities are now specified, but the stopped-container inspection still misses mounted contents. See PR-34 (`test_plan.md:164–189`). |
+| PR-09 | closed | S1 names the writer families, corrects discovery ownership and acknowledges the Lua permission limit; mechanism selection remains with the pilot (`plan.md:238–247`; `test_plan.md:190–192`). |
+| PR-16 | closed | Sources must identify the merge-base; probe artifacts precede runtime changes; existing assertions are checked at that baseline. Fabricated backdating is outside D18 (`test_plan.md:142`). |
+| PR-20 | closed | The appendix now includes tooling, changed E2E rows and matrix templates, with explanations for “n/a” (`test_plan.md:237–286`). |
+| PR-25 | closed | The impossible script-only ACL promise is removed. The limit is explicit, and the pilot must choose the mechanism and add its tests (`plan.md:243–247`; `test_plan.md:190`). |
+| PR-26 | open | Per-class detectors and canary trust address much of the finding, but mounted contents and foreign-key ownership remain incomplete. See PR-34 and PR-35 (`test_plan.md:164–187`). |
+| PR-28 | closed | Tool-b now owns registry writes, matching ARCH-016 (`plan.md:240–242`; `docs/architecture.md:291–305`). |
+| PR-33 | closed | Runtime-user inspection belongs to the harness; OPL-008 has an explicit tuple; newly discovered violations require approval before activation (`plan.md:268–273`, `plan.md:311–312`; `test_plan.md:152`). |
+
+#### Blocking findings
+
+##### PR-34 [blocker] Stopped-container export omits mounted assets
+
+- Where: `docs/slices/agentic-delivery-process/test_plan.md:164–169`, `test_plan.md:282`.
+- Finding: The prescribed inspection of exited containers uses `docker export`, which excludes mounted volume contents. Checking mount sources is specified only for services that do not run by default. The stopped-container scan therefore does not cover the filesystem that the container could actually read.
+- Failure scenario (inside the threat model): A bootstrap helper accidentally leaves a key copy in an otherwise permitted shared bind mount and then exits. Exporting its container finds no copy; the canary in running `rogue` still passes. Content discovery can report confinement despite the exposure.
+- Evidence: `spire-token-init` mounts both the server and shared directories (`compose/spiffe.compose.yml:16–18`), and its bootstrap script terminates after registration (`spire/token-init/init.sh:69–79`). Its known K4 exposure is inside a mount, as documented in `docs/open_problem_log.md:301–309`.
+- Suggested resolution: Require inspection of mounted contents for exited containers as well as their exported root filesystem. Add a negative control with an unauthorized asset present only in a stopped container’s bind mount, plus a failure control for an unreadable mount source.
+
+##### PR-35 [blocker] Key detection does not establish individual ownership
+
+- Where: `docs/slices/agentic-delivery-process/plan.md:218–220`, `plan.md:233–234`; `docs/slices/agentic-delivery-process/test_plan.md:175–186`.
+- Finding: K2’s genuine-holder check establishes only that a key-manager file contains private keys, although each agent may hold only its own state. K7’s detector requires a matching certificate identifying another workload, leaving a foreign private key without its certificate outside the stated match. The required fixtures do not cover either case.
+- Failure scenario (inside the threat model): An agent copies the production agent’s key-manager file into the rogue agent’s existing data directory while troubleshooting bootstrap. Both services remain approved K2 holders and satisfy the structural check. Alternatively, it copies only tool-b’s SVID private key into another workload’s temporary directory; that workload retains its valid own SVID, while the copied key has no accompanying certificate for the K7 predicate.
+- Evidence: The plan explicitly requires “each its own” ownership, but the templates distinguish holders primarily by asset class. Separate agent directories already exist (`spire/agent/agent.conf:4`, `spire/rogue/agent.conf:4`). Workload certificates and keys are separate files (`services/tool-b/entrypoint.sh:31–34`).
+- Suggested resolution: Require ownership checks per key instance, including comparisons across allowed holders. Add negative controls for another agent’s key-manager file inside an allowed K2 holder and another workload’s private key copied alone. Missing certificate association must not establish permission to hold a private key.
+
+##### PR-36 [major] Image allowlisting lacks a negative test
+
+- Where: `docs/slices/agentic-delivery-process/plan.md:248–250`, `plan.md:281–283`; `docs/slices/agentic-delivery-process/test_plan.md:145–152`.
+- Finding: REQ-SEC-D1 and success criterion 3 explicitly require image allowlisting, but the deployment negative controls omit an unapproved image. Image-user checks and matching a container digest to Compose do not test agreement with the approved register.
+- Failure scenario (inside the threat model): An implementer changes an image reference and accidentally omits image comparison from the gate. The replacement preserves users, mounts and other checked facts. Every specified deployment control can pass while the approved image contract is unenforced.
+- Evidence: T-8 enumerates inventory dimensions without images; T-9 enumerates default-deny fixtures without an image change. The digest check at `test_plan.md:168–169` establishes that the inspected container matches Compose.
+- Suggested resolution: Add a negative control changing only the image reference or digest outside the register, and a corresponding approved-image passing control.
+
+#### Notes for the implementation PR
+
+- Pin detector fixtures to the deployed SPIRE formats and exercise the actual scan adapters.
+- Apply mutation exclusions only to individually justified equivalent mutants.
+- Keep discovery evidence to identifiers and detection results; do not emit secret contents.
+
+#### Minor (non-blocking, at most five)
+
+- `test_plan.md:80` references plan review note 3 for probes; the relevant note is 4 (`plan.md:363–364`).
+
+#### Verdict
+
+Approvable within the threat model: no — PR-34, PR-35, PR-36
+
+The revision resolves the Redis feasibility and sequencing issues without requiring later-slice implementation. Two asset-confinement gaps still permit false greens after ordinary mistakes, and the approved image contract lacks a negative test.
+
+#### Not checked
+
+- No files modified; no Docker commands, services, network requests or live probes run.
+- Runtime filesystem contents, image identities and installed Docker/SPIRE behavior were not exercised.
+- Planned gates, detectors, replay controls and mutation scoring were reviewed as specifications.
+- Slices 2 and 3, infrastructure attacks excluded by D18, credential contents and private-key files were not reviewed.
