@@ -22,7 +22,8 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
   `make test-lint`, mutation scoring) is merged (PR #5). Increment 1B (`security/invariants.yaml`
   and `make qa-deploy`: who may hold each key, socket and secret, and every service's allowlist) is
   implemented on `slice/agentic-delivery-process-1b`; with it, slice 1 is complete. Slices 2 (lanes, CI
-  trust) and 3 (orchestration, then a pilot that fixes OPL-005 to OPL-008) are drafts in
+  trust) and 3 (orchestration, then a pilot that fixes OPL-005 to OPL-008), and a proposed
+  `asset-classification` slice (classify every resource that enters a container), are drafts in
   [`later_slices.md`](slices/agentic-delivery-process/later_slices.md). Later: the
   generic capability verifier ([brainstorm](slices/m5-generic-verifier-architecture/brainstorm.md),
   not approved).

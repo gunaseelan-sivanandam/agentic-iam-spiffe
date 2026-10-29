@@ -39,6 +39,56 @@ slice picks one up only if the reviews or an escaped defect show it is needed, a
 | Live outcome guards | moving the 4 guards that call `docker` or `redis-cli` to evidence-only checks | unchanged |
 | Earlier test drafts | T-1 to T-6, T-21, T-23 to T-27, T-42 | — |
 
+## Proposed slice — `asset-classification` (draft, 2026-10-29)
+Not approved; it starts with its own short grill-me, before or alongside slice 2. It would replace
+the smaller idea of requiring only every `secret_env` name to be an asset.
+
+**Problem.** `qa-deploy` (1B) checks only the assets it is told about. A new service, mount, env var
+or privilege fails until it is registered, but a brand-new asset (a new key, socket or credential
+file in a new place) can be registered as an ordinary mount, and a secret env var can be registered
+as plain `secret_env`, without anything requiring holders or a `REQ-SEC`. A secret whose name does
+not match the secret pattern is not flagged at all. Recognising that something is an asset is left
+to grill-me, the review and the user.
+
+**Idea: classify everything that enters a container.** Unclassified fails, so nobody has to remember
+to add an asset; the author must choose a class. Field practice: an asset inventory with information
+classification (ISO 27001 asset inventory and classification, CIS Controls 1 and 3, FIPS 199 impact
+levels).
+
+- **Resources:** every mount source (path or socket), every env var name, every compose secret and
+  config; later, shared state stores such as Redis.
+- **Classes:**
+
+  | Class | Means | Examples | Required controls |
+  | --- | --- | --- | --- |
+  | `public` | harmless if anyone reads it | capiss public key, OPA policy, Envoy config | none |
+  | `internal` | not secret, not for outsiders | audit and log directories, mock data, URLs, `REDIS_URL` | per-service allowlist (as today) |
+  | `restricted` | confidential or grants authority | private keys, tokens, join tokens, SPIRE admin socket, Docker socket, Workload API socket | holders and a `REQ-SEC` requirement, consistency checked (as today) |
+
+- **Mechanical rules in `qa-deploy`:**
+  - completeness: a resource without a class fails;
+  - consistency: `restricted` without holders or a `REQ-SEC` fails; holders on a `public` resource
+    are inconsistent;
+  - plausibility (anti-downgrade): name heuristics (`*.key`, `*token*`, `*.sock`, `keys.json`,
+    `*SECRET*`, the Docker socket) and, locally, content heuristics (PEM private-key headers) give a
+    minimum class; declaring a lower class fails unless the entry carries a one-line reason. This
+    is the OPL-005 pattern: a key directory thought of as "the public key".
+- **Judgment by reviewers:** `qa-deploy` prints the resources added or reclassified by a change; that
+  list is an environment fact for the plan reviewer and the security lens, who judge each class.
+  Grill-me asks the author to classify what a slice will add.
+- **What remains:** a confident misclassification of a file whose name and content look harmless.
+  Under the honest-mistake threat model that is rare; forgetting, the common failure, is fully
+  covered by completeness.
+
+**Cost.** One-time classification of about 30 mount sources and 40 env names (most env vars are
+`internal`), proposed by the agent and approved by the user; then one register line per new
+resource. It changes the register's shape and `qa-deploy`'s rules.
+
+**Decisions for its grill-me:** the classes and their names; what counts as a resource (are
+networks and published ports resources, or stay allowlist facts?); the plausibility heuristics and
+the downgrade-reason rule; whether content heuristics run only locally; how state stores are
+classified and whether this slice or the pilot adds REQ-SEC-S1.
+
 ## Slice 2 — `delivery-lanes-ci` (draft)
 
 ### Lanes (D9)
