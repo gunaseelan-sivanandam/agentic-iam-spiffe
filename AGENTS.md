@@ -25,6 +25,38 @@ the repo in the same change — do not leave them disagreeing.
 | What happened, when? | [`docs/history/`](docs/history/) | history |
 | Retired documents | `docs/archive/`, `docs/slices/archive/` | archive, do not follow |
 
+## PoC scope and proportion
+
+This repo is a proof of concept. Its goal is in [`README.md`](README.md): show that workload identity
+is not permission, with tests that prove each boundary. It is not production hardening. The rules
+below apply to every agent that plans, implements or reviews here, and hold until the user changes
+them.
+
+- **Delivery threat model.** Agents make honest mistakes: loose or wrong tests, weakened checks,
+  skipped steps, stale evidence, wrong configuration. They do not deliberately attack CI, the
+  gates, the evidence or the repo; that residual is accepted
+  ([OPL-009](docs/open_problem_log.md)). This is about *how we deliver*. The *system under test*
+  still defends against rogue workloads; that is what the PoC demonstrates.
+- **Accepted PoC simplifications.** Keys and credentials live in files and environment variables
+  on one Docker host. A design where each secret is visible only to the services that hold it is
+  enough. KMS, HSM, Vault, per-key ownership proofs, CI-runner isolation and supply-chain controls
+  are out of scope unless the user asks.
+- **Ask before growing.** If a change makes the process bigger or more complex (a new gate, job,
+  document, register, exception class or review step), say so and ask the user first. Prefer the
+  smallest check that catches an honest mistake.
+- **Few exceptions.** Fix rather than except. Do not open an OPL, exception entry or plan note for a
+  finding outside the threat model; one line in the review report is enough. Every exception must
+  fit on one line and have an expiry.
+- **Review findings.** Give reviewers this section as context. Only these block:
+  - a concrete false green or an OPL-005-class miss inside the threat model, with a failure scenario;
+  - a contradiction;
+  - an approved decision without a test.
+
+  Everything else is advisory. It is listed once and is not fixed by default. Implementation details
+  become notes for the implementation PR. Reviewers should expect production-hardening ideas (see
+  the simplifications above) and report them as advisory at most. Stop after 3 review rounds; the
+  user decides what is good enough.
+
 ## Operating model (black-box first)
 - Treat the system as a black box first:
   - authored intent in `docs/requirements.md`

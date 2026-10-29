@@ -18,7 +18,8 @@ deployment facts (who holds which key, credential, socket and state) a checked c
 neither the OPL-005 class nor the ~20 loose checks can pass a green run again.
 
 ## Threat model (D18)
-The pipeline defends against a **fallible, reward-seeking agent**: one that makes mistakes, takes
+The repo-wide rule is [AGENTS.md — PoC scope and proportion](../../../AGENTS.md#poc-scope-and-proportion);
+this section applies it to the delivery pipeline. The pipeline defends against a **fallible, reward-seeking agent**: one that makes mistakes, takes
 shortcuts or optimises for a green result. In scope:
 - loose, wrong or vacuous tests; tests that pass for the wrong reason or fail for the wrong one;
 - weakened assertions, `expect:` blocks or thresholds; skipped steps;
