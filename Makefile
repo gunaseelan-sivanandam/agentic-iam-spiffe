@@ -12,7 +12,7 @@ MIN_MUTATION_SCORE ?= 70
 BASE_REF ?= origin/main
 MUTATION_MAX_CHILDREN ?= 2
 
-.PHONY: unit unit-guard-check unit-invariants unit-boundary unit-negative-controls unit-hybrid-critical unit-flake unit-cov unit-diff-cov traceability-check unit-mutation unit-trust qa-trace qa-evidence qa-quality docs-check tooling-test test-lint jira-live-smoke
+.PHONY: unit unit-guard-check unit-invariants unit-boundary unit-negative-controls unit-hybrid-critical unit-flake unit-cov unit-diff-cov traceability-check unit-mutation unit-trust qa-trace qa-evidence qa-quality docs-check tooling-test test-lint qa-deploy jira-live-smoke
 
 unit:
 	$(PYTEST) $(TEST_DIR)
@@ -80,13 +80,17 @@ qa-evidence:
 	  --test-report test_report.log \
 	  --report-json artifacts/quality/evidence_report.json
 
-qa-quality: qa-trace traceability-check unit-guard-check docs-check test-lint
+qa-quality: qa-trace traceability-check unit-guard-check docs-check test-lint qa-deploy
 
 docs-check:
 	$(PYTHON) scripts/check_docs.py
 
 test-lint:
 	$(PYTHON) scripts/test_lint.py
+
+# Locally the built images are inspected for their USER; CI passes QA_DEPLOY_ARGS=--skip-image-users.
+qa-deploy:
+	$(PYTHON) scripts/qa_deploy.py $(QA_DEPLOY_ARGS)
 
 tooling-test:
 	$(PYTEST) -q tests/tools

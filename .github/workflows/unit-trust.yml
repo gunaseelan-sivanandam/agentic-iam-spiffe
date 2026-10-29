@@ -60,6 +60,9 @@ jobs:
       - name: Lint E2E outcome checks
         run: make test-lint
 
+      - name: Check the deployment against the asset register
+        run: make qa-deploy QA_DEPLOY_ARGS=--skip-image-users
+
   unit-guard:
     needs: trace-model
     runs-on: ubuntu-latest

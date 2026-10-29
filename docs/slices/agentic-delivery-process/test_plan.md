@@ -133,6 +133,35 @@ Numbers are kept from earlier drafts; the gaps are tests D20 deferred.
   entry whose OPL is closed fails; expiry is valid at 2026-12-31 23:59:59 UTC and fails at
   2027-01-01 00:00:00 UTC.
 
+### 1B implementation notes (2026-10-29)
+Tests T-8 to T-13 are in `tests/tools/test_qa_deploy.py`; the register is
+`security/invariants.yaml`; the check is `scripts/qa_deploy.py` (`make qa-deploy`).
+
+- **Baseline look** (entrypoints, scripts, Dockerfiles): no key copies beyond the compose mounts.
+  No Dockerfile copies a key directory or the whole build context; every workload writes its SVID
+  key to its own `/run/spire/svid`, which no service mounts; only `capability-issuer` writes the
+  capiss key, into the `capiss_keys` mount.
+- **One holder the plan did not list** (user decision): `rogue-tests` mounts the whole repository
+  and holds the Docker socket, so it reaches K1, K2, K4, K5 and K6. It is a declared test-only
+  holder of those assets, not an exception, because a narrower mount would not reduce host-root
+  authority.
+- **Deviation: Python, not Rego** (user decision). The plan said Rego under `policy/deploy/` run by
+  a pinned OPA; one Python script does the same checks with no Docker or OPA needed for its tests.
+- **Deviation: known violations are one row per OPL** with a list of services (3 rows, 18 tuples),
+  so the register stays readable; matching is still per (asset, service).
+- **Asset locations are file-precise** (`capiss_keys/root_key.b64`, `spire/server/data/keys.json`,
+  …), so the narrower mounts the OPL fixes propose do not count as reaching the asset, while a
+  mount of any parent directory does.
+- **CI runs without image inspection** (`--skip-image-users`): images are not built there, so CI
+  checks only a compose `user`; local `make qa-deploy` (and `qa-quality`) inspects the built images.
+- **Register facts worth knowing:** `spire-agent` is allowlisted with `pid:host` (Docker workload
+  attestation); `opa` already runs as `1000:1000` and is locked as non-root; `opa` and `redis` use
+  floating tags (`latest`, `7-alpine`), recorded as they are; 22 services run as root and warn until
+  2027-01-31.
+- **Rulebook:** `AGENTS.md` now lists `make test-lint` (missed in 1A), `make qa-deploy` and the new
+  mutation rule in the quality gates, and `security/invariants.yaml` in "Start here".
+- **Not in this increment:** a runtime check of what processes do (deferred, D20); REQ-SEC-S1.
+
 ## Independent review at the implementation PR (D20)
 The 1A review record is [`review_1a.md`](review_1a.md).
 
