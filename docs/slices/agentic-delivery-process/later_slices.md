@@ -176,6 +176,40 @@ leaving gaps.
 but lenses anchored to the same plan share its blind spots, and the same model with different
 prompts shares blind spots too. The aim is fewer and cheaper escapes caught before merge, not zero.
 
+### Review misses after the 1B review (input, 2026-10-29)
+Not approved; slice 2's grill-me decides, together with the lenses above.
+
+**What was missed.** The user, not a reviewer, found that the new gates `test-lint` and `qa-deploy`
+ran hidden inside the CI job `docs-check`, that the workflow `unit-trust` had grown into every gate
+under a misleading name, and that the `main` ruleset required no status checks, so a red gate could
+still be merged although `AGENTS.md` said any failure blocks merge. All three are fixed (workflow
+`CI`, one job per make target; the user made the eight jobs required checks).
+
+**Why:** the author's prompt listed the files to review (the workflow was not among them) and
+narrowed the design question to "consistent with the other QA scripts"; the acceptance rule let only
+false greens, contradictions and missing tests block, so placement and naming could at best be one
+of a few advisories and were crowded out; the misleading name pre-dated the change and nothing asked
+whether the surroundings still fit; no question took the view of the person reading the PR checks;
+and the ruleset is outside the repository, where a read-only reviewer without network cannot see
+it. The author had read that ruleset earlier and did not connect it.
+
+**Six proposed changes** (the second and third are mechanical, the rest are review design):
+1. **Fixed prompt template, no author scoping.** The author supplies only the intent and the change,
+   never a list of files to focus on or narrowed questions; the reviewer decides where to look.
+2. **Environment facts as input.** A read-only script collects facts outside the repository: the
+   branch ruleset and its required checks, the latest CI run's jobs and results, and the `qa-trace`
+   gap difference against `main`. The reviewer judges the repository's claims against them.
+3. **Gate–job–check consistency as a mechanical check.** Every gate in the `AGENTS.md` quality-gates
+   table has a CI job of the same name, and every such job is a required check on `main` (the
+   ruleset part reads the environment facts above).
+4. **The generic questions are the review,** answered in depth, not a brief side part; where lenses
+   apply, each lens owns its questions.
+5. **An operator-usability and fit question:** "Are names, placement and structure what a newcomer
+   would expect? Can the user see what ran and what failed? After this change, do the surrounding
+   names, groupings and files still describe what they contain?"
+6. **A separate budget for quality and usability findings:** capped and fix-or-defer for the user to
+   decide, so they are neither crowded out by blockers nor allowed to become endless findings.
+
 ### CI trust model
 Resolves review findings PR-01, PR-02, PR-12 and PR-15. Every job definition comes from `main` via
 `pull_request_target`; the workspace root is a checkout of `main` and the PR is checked out into
