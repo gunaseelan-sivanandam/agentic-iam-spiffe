@@ -703,10 +703,12 @@ assert_app_answers_in_network() {
   return 0
 }
 
-# A successful MCP tool result: JSON-RPC 2.0, not isError, decoded text has ok=true.
+# A successful MCP tool result: one JSON-RPC 2.0 document, not isError, decoded text has ok=true.
 assert_mcp_ok() {
   file="$1"
-  if ! jq -e '.jsonrpc == "2.0" and ((.result.isError // false) == false)' "$file" >/dev/null 2>&1 \
+  # jq -e exits 0 on empty input, so first require exactly one JSON document.
+  if [ "$(jq -s 'length' "$file" 2>/dev/null)" != "1" ] \
+    || ! jq -e '.jsonrpc == "2.0" and ((.result.isError // false) == false)' "$file" >/dev/null 2>&1 \
     || ! jq -r '.result.content[0].text' "$file" 2>/dev/null | jq -e '.ok == true' >/dev/null 2>&1; then
     fail_with_body "expected a successful MCP result with ok=true" "$file"
     return 1
