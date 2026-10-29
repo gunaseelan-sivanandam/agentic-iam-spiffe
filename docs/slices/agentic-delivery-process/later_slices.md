@@ -25,6 +25,20 @@ IDs refer to [`plan_review.md`](plan_review.md).
 The drafts below still describe the heavier designs; each slice's grill-me decides with these
 recommendations as the starting point.
 
+## Deferred from slice 1 (D20, 2026-10-29)
+The user cut slice 1 to its core. These parts of the earlier slice-1 draft are not approved; a later
+slice picks one up only if the reviews or an escaped defect show it is needed, and asks first.
+
+| Item | What it was | Replaced for now by |
+| --- | --- | --- |
+| Runtime asset scan and invariant matrix | in-container checks that holders have their key, non-holders cannot read key paths, a content scan for private keys under other names, and a planted canary | the one-time baseline look and the key question in the implementation-PR review |
+| Wrong-failure replay and kind registry | an offline tool running each outcome check against recorded evidence of other failures, per outcome kind (16 kinds), with `expect:` blocks and `observed_signature.json` for every test | the test question in the implementation-PR review |
+| Tiers and fault injection | gate-derived controls per test; live runs that remove a protection and show the outcome flips | positive twins only |
+| Provenance enforcement | a gate checking that `probe@`/`existing@` commits are the merge-base and that probes precede service changes | the `Source` column, reviewed in the PR |
+| Derivation checklist | fixed evasion and wrong-reason columns for every test-plan row, with an appendix | the review questions |
+| Live outcome guards | moving the 4 guards that call `docker` or `redis-cli` to evidence-only checks | unchanged |
+| Earlier test drafts | T-1 to T-6, T-21, T-23 to T-27, T-42 | — |
+
 ## Slice 2 — `delivery-lanes-ci` (draft)
 
 ### Lanes (D9)
@@ -270,7 +284,8 @@ Each seeded fault must end in a stop or a failure at the named point, never in a
 - The pilot slice goes from grill-me to a pushed branch with no manual steps other than the plan
   PR merge.
 - Its own test plan uses the expected-outcome table, including the corrected `M2-T7` and the
-  invariant matrix rows for REQ-SEC-K1/K2/S1.
+  E2E tests on the deployed stack for REQ-SEC-K1, K2 and the Redis requirement (REQ-SEC-S1, added by
+  the pilot).
 - Every place the pipeline stopped, misbehaved or needed help is recorded and fixed or logged.
 
 

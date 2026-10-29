@@ -459,6 +459,24 @@ REQ-SEC-S1 following the actual Redis writers (PR-28) and stating the ACL limit 
 and its exception (PR-33), and the unregistered-image fixture (PR-36). Slices 2 and 3 get the same
 pass as recommendations in `later_slices.md`.
 
+## Lean cut (D20, user decision, 2026-10-29)
+The user then cut slice 1 to the parts that catch the two defects that started this programme.
+Kept: exact outcomes for the loose tests, positive twins, `test-lint`, the holder list with
+`qa-deploy` and its per-service allowlist (D7), mutation scoring of untested and skipped mutants,
+and the independent review. Replaced:
+
+| Was | Now |
+| --- | --- |
+| runtime invariant matrix, content scan and canary (PR-06, PR-26, PR-34, PR-35) | a one-time baseline look at entrypoints, scripts and Dockerfiles in 1B, and the key question in every implementation-PR review |
+| wrong-failure replay, kind registry, `expect:` blocks for all tests | the test question in every implementation-PR review |
+| tiers and fault injection | positive twins only |
+| provenance enforcement (PR-16) | the `Source` column, reviewed in the PR |
+| derivation checklist and appendix (PR-20) | the review questions |
+| REQ-SEC-S1 and the OPL-007 exception (PR-09, PR-25, PR-28) | moved to the pilot, which adds the requirement with its fix and tests |
+
+The deferred items are listed in `later_slices.md`. The cut only removes checks, so it was not
+re-reviewed; the user's PR review is the check.
+
 ## Round 3 — reviewer report (verbatim)
 
 ### Round 3 report

@@ -260,7 +260,7 @@ Usage:
 ### Meaningful fix options to evaluate
 1. Mount only the socket directory (`/run/spire/agent/private`) into workloads, and keep `data_dir` outside any shared mount.
 2. Run services as non-root (REQ-SEC-D2).
-3. Correct `M2-T7` to check the deployed `rogue` container, and add the runtime invariant matrix for REQ-SEC-K2.
+3. Correct `M2-T7` to check the deployed `rogue` container, as the E2E proof for REQ-SEC-K2.
 
 ### Closure criteria
 - `keys.json` and `agent-data.json` exist only in `spire-agent`.
@@ -313,7 +313,7 @@ Usage:
 2. Move token and entry bootstrap into the server container's entrypoint and drop `spire-token-init`.
 
 ### Closure criteria
-- The bootstrap step cannot read `keys.json` or the datastore, and the invariant matrix K4 row proves it on the deployed stack.
+- The bootstrap step cannot read `keys.json` or the datastore, and an E2E test proves it on the deployed stack.
 
 ## OPL-009: The delivery pipeline does not resist a deliberately malicious PR
 

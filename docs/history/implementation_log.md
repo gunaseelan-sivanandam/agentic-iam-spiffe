@@ -21,6 +21,13 @@ is first); every heading carries its date.
   denominator, the Redis writer model and an unenforceable ACL rule, matrix detectors per asset
   class. New OPL-008 (`spire-token-init` mounts the SPIRE server data directory); OPL-007's fix
   option corrected.
+- PoC rules added to `AGENTS.md` ("PoC scope and proportion"): honest-mistake threat model,
+  accepted simplifications, ask before growing, few exceptions, which review findings block.
+- D20 lean cut of slice 1 (user decision): kept exact outcomes, twins, `test-lint`, the holder list
+  with `qa-deploy`, mutation scoring and the independent review. The runtime asset scan became a
+  one-time baseline look plus a review question; the replay tool became a test review question;
+  kinds, tiers, fault injection, provenance enforcement and the derivation checklist were deferred
+  to `later_slices.md`; REQ-SEC-S1 moved to the pilot.
 - Not run: documentation only; `make docs-check` and `make qa-trace` were run.
 
 ## 2026-10-28 CI mutation gate broken by pytest 9.2.0; pytest pinned

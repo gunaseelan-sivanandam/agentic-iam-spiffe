@@ -18,7 +18,8 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
   - [OPL-008](open_problem_log.md#opl-008-spire-token-init-mounts-the-whole-spire-server-data-directory):
     the SPIRE bootstrap container can read the server's signing keys and datastore.
 - **Next slice:** [agentic-delivery-process](slices/agentic-delivery-process/plan.md) slice 1 of 3
-  (plan for review): exact E2E outcomes and checked deployment invariants. Slices 2 (lanes, CI
+  (plan for review, lean scope D20): exact outcomes for the loose E2E checks and a key-holder
+  list checked against compose (`qa-deploy`). Slices 2 (lanes, CI
   trust) and 3 (orchestration, then a pilot that fixes OPL-005 to OPL-008) are drafts in
   [`later_slices.md`](slices/agentic-delivery-process/later_slices.md). Later: the
   generic capability verifier ([brainstorm](slices/m5-generic-verifier-architecture/brainstorm.md),
