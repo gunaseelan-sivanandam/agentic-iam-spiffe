@@ -1,0 +1,118 @@
+# Quality gates for every pull request and every push to main. One job per gate, named after its
+# make target, so each check shows by name in the PR (see AGENTS.md "Quality gates").
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  qa-trace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-python-deps
+      - name: Validate the cross-layer traceability model
+        run: make qa-trace
+
+  docs-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-python-deps
+      - name: Check documentation completeness and links
+        run: make docs-check
+
+  tooling-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # tests/tools lint the harness and replay compose at fixed historical commits.
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-python-deps
+      - name: Run QA tooling and shell tests
+        run: make tooling-test
+
+  test-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-python-deps
+      - name: Lint E2E outcome checks
+        run: make test-lint
+
+  qa-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-python-deps
+      - name: Check the deployment against the asset register
+        # Images are not built in CI, so only a compose `user` is checked here.
+        run: make qa-deploy QA_DEPLOY_ARGS=--skip-image-users
+
+  unit-guard-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-python-deps
+      - name: Run unit guard integrity check
+        run: make unit-guard-check
+
+  unit-trust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-python-deps
+      - name: Run the unit trust bundle (coverage, traceability, invariants, flake check)
+        run: make unit-trust
+      - name: Fetch PR base for diff coverage
+        if: github.event_name == 'pull_request'
+        run: git fetch --no-tags origin "${{ github.base_ref }}"
+      - name: Run diff coverage gate (PR only)
+        if: github.event_name == 'pull_request'
+        run: make unit-diff-cov BASE_REF="origin/${{ github.base_ref }}"
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: unit-coverage
+          path: |
+            coverage.json
+            coverage.xml
+            diff-coverage.txt
+
+  unit-mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-python-deps
+      - name: Run mutation gate
+        run: make unit-mutation
+      - name: Upload mutation artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: mutation-report
+          path: |
+            mutants/mutmut-cicd-stats.json

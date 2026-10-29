@@ -124,6 +124,8 @@ say so.
 
 ## Quality gates
 
+Every CI gate is a job named after its make target in `.github/workflows/ci.yml` (workflow `CI`).
+
 | Gate | Command | Enforced by | Threshold |
 | --- | --- | --- | --- |
 | Trace model | `make qa-trace` | CI, every push/PR | zero structural failures |

@@ -35,7 +35,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 | `make qa-evidence` after that run | 2026-10-29 | PASSED (validated 119, skipped 1) |
 | `make qa-quality` (qa-trace, unit traceability, unit guard, docs-check, test-lint, qa-deploy) | 2026-10-29 | PASSED; qa-deploy: 18 known violations (OPL-005, -006, -008), 22 root warnings; qa-trace reports 138 non-blocking coverage gaps, incl. 97 requirements without E2E; the 10 REQ-SEC are proved statically (ARCH-034, DD-925 to DD-930, `IT-DEPLOY-*`), which the trace model cannot yet label |
 | `make unit-mutation` under the new scoring | 2026-10-29 | PASSED, 85.58% (1240 killed of 1449; 0 untested, 0 skipped) |
-| CI `unit-trust` | 2026-10-27 | passing on PR #2 and `main` |
+| CI (`.github/workflows/ci.yml`, one job per gate) | 2026-10-29 | `unit-trust` workflow passing on PR #6 (`72ff2e7`); renamed to `CI` in the same PR, which is its first run under the new name |
 
 ## Work in flight
 | Branch | Purpose | State |
