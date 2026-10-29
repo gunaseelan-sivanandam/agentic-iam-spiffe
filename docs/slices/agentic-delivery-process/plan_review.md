@@ -244,6 +244,30 @@ blockers). Under D10 and D17 a finding raised a second time stops the review loo
 came back as partial. The review therefore stops here and asks the user two questions before
 round 3: which threat model the delivery pipeline defends against, and whether the slice is split.
 
+## Round 2 — user decisions and triage (2026-10-29)
+The user answered the escalation: threat model D18 (fallible agent, not an attacker of the CI
+infrastructure), scope D19 (three slices; this plan is slice 1), and the D17 acceptance bar (only
+in-model blockers and majors inside this slice's scope are fixed; the rest is answered by D18 or
+carried to its slice, not designed now).
+
+| Finding | Class under the bar | Disposition |
+| --- | --- | --- |
+| PR-01 (partial) | out of model | answered by D18 and OPL-009; cheap separations carried to slice 2 |
+| PR-06 (partial) | in-model major, slice 1 | fixed: per-class detectors, every lifecycle state, container identity |
+| PR-08 (partial) | slice 3 | carried to `later_slices.md` |
+| PR-09 (partial) | in-model major, slice 1 | fixed: REQ-SEC-S1 rewritten |
+| PR-12 (partial) | slice 2 | carried |
+| PR-14 (partial) | slice 3; forgery part out of model | carried |
+| PR-16 (partial) | in-model (a probe of the wrong stack is a mistake) | fixed: probe and existing sources pinned to the merge-base; backdating is out of model |
+| PR-20 (partial) | minor under the bar (no false green) | done anyway, since it was cheap: appendix rows with reasons, E2E and matrix rows |
+| PR-21, PR-22, PR-29 | out of model | answered by D18 and OPL-009 |
+| PR-23, PR-27, PR-31, PR-32 | slice 2 | carried; PR-27 partly addressed in D17 (tooling tests for QA tools, equivalence justified) |
+| PR-24, PR-30 | slice 3 | carried |
+| PR-25 | in-model blocker (infeasible as specified) | fixed: S1 states the contract and the ACL limit; the pilot chooses the mechanism |
+| PR-26 | in-model blocker, slice 1 | fixed with PR-06; canary keys join the run's trusted set |
+| PR-28 | in-model major, slice 1 | fixed: writers follow ARCH-016 (tool-b writes the registry) |
+| PR-33 | in-model major, slice 1 | fixed: runtime user from the harness's `docker top`; OPL-008 logged with its tuple; first discovery run before activation |
+
 ## Round 2 — reviewer report (verbatim)
 
 ### Round 2 report

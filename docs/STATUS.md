@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-10-28. Update this page at the end of every slice (see `AGENTS.md`, slice workflow step 4).
+Last updated: 2026-10-29. Update this page at the end of every slice (see `AGENTS.md`, slice workflow step 4).
 Detailed history: [`docs/history/implementation_log.md`](history/implementation_log.md).
 
 ## Where the project stands
@@ -15,8 +15,12 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
     the SPIRE agent's private key store is readable by every workload.
   - [OPL-007](open_problem_log.md#opl-007-redis-authorization-state-accepts-unauthenticated-writes-from-every-verifier-network):
     Redis authorization state accepts unauthenticated writes.
-- **Next slice:** [agentic-delivery-process](slices/agentic-delivery-process/plan.md) (plan for
-  review): gates, an agent pipeline, and a pilot that fixes OPL-005/006/007 through it. Later: the
+  - [OPL-008](open_problem_log.md#opl-008-spire-token-init-mounts-the-whole-spire-server-data-directory):
+    the SPIRE bootstrap container can read the server's signing keys and datastore.
+- **Next slice:** [agentic-delivery-process](slices/agentic-delivery-process/plan.md) slice 1 of 3
+  (plan for review): exact E2E outcomes and checked deployment invariants. Slices 2 (lanes, CI
+  trust) and 3 (orchestration, then a pilot that fixes OPL-005 to OPL-008) are drafts in
+  [`later_slices.md`](slices/agentic-delivery-process/later_slices.md). Later: the
   generic capability verifier ([brainstorm](slices/m5-generic-verifier-architecture/brainstorm.md),
   not approved).
 - **Future milestones:** M6–M9 as listed in the README.
@@ -33,7 +37,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 | Branch | Purpose | State |
 | --- | --- | --- |
 | `docs/consolidation` | Documentation restructure, rulebook, complete E2E spec, `docs-check` in CI ([slice](slices/docs-consolidation/plan.md)) | Increments 1–3 committed; PR to be opened |
-| `slice/agentic-delivery-process` | Plan and test plan for the delivery-process slice; OPL-005 forgery evidence; OPL-006, OPL-007 (based on `docs/consolidation`) | Plan PR to be opened after `docs/consolidation` merges |
+| `slice/agentic-delivery-process` | Slice-1 plan and test plan, later-slice drafts, independent review record; OPL-005 forgery evidence; OPL-006 to OPL-009 | Plan PR #4 under review |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
@@ -44,6 +48,8 @@ Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
 - **OPL-005** capiss root signing key is readable by verifiers and by the rogue test container.
 - **OPL-006** SPIRE agent private key store is readable by every workload that mounts the agent directory.
 - **OPL-007** Redis authorization state accepts unauthenticated writes from every verifier network.
+- **OPL-008** spire-token-init mounts the whole SPIRE server data directory.
+- **OPL-009** The delivery pipeline does not resist a deliberately malicious PR (accepted, D18).
 
 ## Known gaps and debt
 - `M5-T55` (live Jira upstream) only runs with `JIRA_MCP_UPSTREAM_MODE=live`; default runs skip it.

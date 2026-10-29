@@ -5,6 +5,24 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-10-29 Delivery-process plan reviewed, escalated and split into three slices
+
+- Plan PR #4 review comments addressed (terms, D16 security coverage of grill-me, lane home, CI
+  trust), then D17 (test adequacy, independent plan review before the user's review).
+- Independent review by Codex CLI (`gpt-6.1-sol`; the configured `gpt-5.5` is refused for a ChatGPT
+  login, and an expired login first failed every request with HTTP 401). Round 1: 20 findings, all
+  resolved. Round 2: 9 partial and 13 new; the repeated findings triggered the D10 stop and an
+  escalation.
+- User decisions: D18 threat model (fallible agent, not an attacker of the CI infrastructure;
+  residual accepted as OPL-009), D19 split into three slices, and an acceptance bar for reviews
+  (only in-model blockers and majors in scope are fixed; at most three rounds).
+- `plan.md` and `test_plan.md` now cover slice 1 only; slice 2 and 3 drafts and carried findings
+  are in `later_slices.md`. Real errors fixed: M5-T21's expected outcome, the mutation-gate
+  denominator, the Redis writer model and an unenforceable ACL rule, matrix detectors per asset
+  class. New OPL-008 (`spire-token-init` mounts the SPIRE server data directory); OPL-007's fix
+  option corrected.
+- Not run: documentation only; `make docs-check` and `make qa-trace` were run.
+
 ## 2026-10-28 CI mutation gate broken by pytest 9.2.0; pytest pinned
 
 - PR #3 (`docs/consolidation`) failed `unit-trust / mutation-trust` with

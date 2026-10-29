@@ -285,9 +285,51 @@ Usage:
 - The OPL-005 forgery check wrote and deleted a budget key from inside `tool-b` without credentials.
 
 ### Meaningful fix options to evaluate
-1. Redis ACL users per service: capiss may create budgets and registry entries; verifiers may only run the consume script on their own key patterns; the default user is disabled.
+1. Redis ACL users per service, limited to the key families each service writes in the ARCH-016 state inventory (capiss: budget initialisation, mint rate, `m4:capiss_minted:*`; tool-b: `m4:registry:*`, budget consumption, request rate); the default user is disabled. Redis checks commands run inside a Lua script against the caller's own permissions, so ACLs alone cannot make budget consumption script-only: a service allowed `DECRBY` can also call it directly with a negative amount. Budget integrity needs mediation or an accepted residual (see proposed `REQ-SEC-S1`).
 2. Take Redis off networks that need no access (for example `jira-mcp-mock`, the Envoys, `opa`).
 
 ### Closure criteria
 - Unauthenticated Redis commands are refused, and each service can perform only its documented operations.
 - An E2E test proves a verifier cannot create a budget, and the full suite still passes.
+
+## OPL-008: spire-token-init mounts the whole SPIRE server data directory
+
+- Status: Open
+- First observed: 2026-10-29 (independent plan review, finding PR-33)
+- Area: SPIRE trust root confinement
+- Affected configuration:
+  - `compose/spiffe.compose.yml`: `spire-token-init` mounts `../spire/server:/run/spire/server` read-write
+  - `spire/token-init/init.sh` needs only the admin socket `/run/spire/server/data/private/api.sock`
+- Related requirements: proposed `REQ-SEC-K4` (server signing state) and `REQ-SEC-K5` (administration)
+
+### Problem
+- To reach the admin socket, `spire-token-init` also gets the server's signing keys (`data/keys.json`) and datastore (`data/datastore.sqlite3`), read-write.
+
+### Evidence (2026-10-29)
+- Compose line 17 mounts the directory; `init.sh` line 5 uses only the socket path inside it.
+
+### Meaningful fix options to evaluate
+1. Mount only the socket's directory (`data/private/`).
+2. Move token and entry bootstrap into the server container's entrypoint and drop `spire-token-init`.
+
+### Closure criteria
+- The bootstrap step cannot read `keys.json` or the datastore, and the invariant matrix K4 row proves it on the deployed stack.
+
+## OPL-009: The delivery pipeline does not resist a deliberately malicious PR
+
+- Status: Accepted (decision D18, 2026-10-29)
+- First observed: 2026-10-28 (independent plan review, findings PR-01, PR-21, PR-22, PR-29)
+- Area: delivery process trust
+- Related: [`plan.md` "Threat model"](slices/agentic-delivery-process/plan.md#threat-model-d18)
+
+### Problem
+- Code a PR runs during testing could, if written to do so, take over the test runner (for example through a Docker-socket-holding image), forge coverage or mutation statistics with matching identifiers, or append falsified run records.
+- The pipeline is designed against a fallible, reward-seeking agent, not a deliberate attacker of its own infrastructure; there is no current reason to expect the latter.
+
+### Mitigations
+- Changes to the harness, tests, test config, compose and gate code take the full-slice lane and the user's review (slice 2).
+- `main` reruns the full suite nightly (slice 2).
+- Credentials and merge rights are enforced by GitHub, not by agent instructions (slice 3).
+
+### Closure criteria
+- Re-confirmed at each programme review, or the threat model changes and the delivery infrastructure gains trusted builders, authenticated run records and per-job isolation.
