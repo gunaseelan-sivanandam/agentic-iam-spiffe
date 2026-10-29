@@ -21,6 +21,13 @@
   - exercise
   - outcome
   - required evidence artifacts
+- For every E2E test added or changed, fill the expected-outcome table. The harness asserts each row
+  exactly; `make test-lint` rejects loose checks (`assert_file_any`, `401|403`, broad error regexes,
+  `!= 200`, a non-zero exit alone, a test with only negative greps).
+
+| Test | By | Signature | Twin | Source | Replaces |
+| --- | --- | --- | --- | --- | --- |
+| harness ID | component that must produce the outcome | exact outcome: status + `reason`, curl exit code, exact log line | positive control on the same route: a test ID, or `internal` (a premise in the same test) | `plan`, `probe@<commit>` (observed before the change), `existing@<commit>` | the loose check it replaces, or — |
 
 ## Assumptions and fixtures
 - List mock, live, or environment assumptions needed by the tests.
@@ -36,3 +43,14 @@
 
 ## Review notes
 - Record any test-design assumptions that must be approved before implementation begins.
+
+## Independent review at the implementation PR
+A reviewer that is not the author (Codex, or a clean-context Claude) answers in the PR body:
+1. *Tests:* for each new or changed test, which wrong failure would still pass it (service down,
+   another status, the right status with another reason, another component answering, a missing
+   value or empty file read as success)? Does its assertion match the expected-outcome row?
+2. *Keys:* does the change make a key, socket or secret reachable by a service outside the holder
+   list, through a compose mount, an env var, a Dockerfile `COPY`, an entrypoint or script that
+   copies or writes it, or a shared volume?
+
+A "yes" to either blocks, under [AGENTS.md — PoC scope and proportion](../../../AGENTS.md#poc-scope-and-proportion).

@@ -48,7 +48,7 @@ Exercise guards
 Outcome guards
 
 1. attestation failed as expected  
-   - Confirms the rogue log contains “Starting node attestation” and a failure signal such as “attestation failed”, “permission denied”, “invalid token”, or “join token was not provided”.
+   - Confirms the rogue log contains “Starting node attestation” and exactly `nodeattestor(join_token): join token was not provided`: the rogue agent's join-token plugin refuses to attest without a token. Any other attestation error fails the test.
 
 ### Evidence produced
 
@@ -99,9 +99,9 @@ Exercise guards
 Outcome guards
 
 1. attestation failed as expected  
-   - Confirms the rogue log contains “Starting node attestation” and a failure signal such as “attestation failed”, “permission denied”, “invalid token”, or “join token does not exist”.
+   - Confirms the rogue log contains “Starting node attestation” and exactly `failed to attest: join token does not exist or has already been used`.
 2. server recorded attestation failure  
-   - Confirms SPIRE server logs show attestation activity and a “join token does not exist” or “has already been used” error.
+   - Confirms the SPIRE server log captured since this attempt started (`attest_start.txt`, `docker logs --since`) holds exactly one `AttestAgent` rejection `Invalid argument: failed to attest: join token does not exist or has already been used`, so the line cannot come from another test's attempt. SPIRE uses the same message for an unknown and an already-used token; the premise (a forged token for T2, the consumed real token for T3) is what separates the two tests.
 
 ### Evidence produced
 
@@ -163,9 +163,9 @@ Exercise guards
 Outcome guards
 
 1. attestation failed as expected  
-   - Confirms the rogue log contains “Starting node attestation” and a failure signal such as “attestation failed”, “permission denied”, “invalid token”, or “join token does not exist”.
+   - Confirms the rogue log contains “Starting node attestation” and exactly `failed to attest: join token does not exist or has already been used`.
 2. server recorded attestation failure  
-   - Confirms SPIRE server logs show attestation activity and a “join token does not exist” or “has already been used” error.
+   - Confirms the SPIRE server log captured since this attempt started (`attest_start.txt`, `docker logs --since`) holds exactly one `AttestAgent` rejection `Invalid argument: failed to attest: join token does not exist or has already been used`, so the line cannot come from another test's attempt. SPIRE uses the same message for an unknown and an already-used token; the premise (a forged token for T2, the consumed real token for T3) is what separates the two tests.
 
 ### Evidence produced
 
@@ -371,12 +371,12 @@ Outcome guards
 - $EVDIR/token.txt
 - $EVDIR/toolb_envoy_ip.txt
 
-### M2-T3 — “Rogue with expired client cert is rejected”
+### M2-T3 — “Rogue with expired cert from an untrusted CA is rejected”
 (derived directly from scripts/rogue_node_tests.sh)
 
 ### What it tests
 
-That a client presenting an expired client certificate is rejected by tool‑b‑envoy during mTLS.
+That a client presenting an expired certificate issued by a CA outside the SPIRE trust bundle is rejected by tool‑b‑envoy during mTLS. Envoy rejects it as an unknown CA (TLS alert 48) before it looks at expiry, so this test proves the trust-bundle check, not the expiry check. Expiry of a genuine SPIRE-issued SVID is proved by M2-T9 (`certificate expired`, alert 45). The name was corrected in slice agentic-delivery-process 1A, when the probe showed the alert.
 
 ### Step‑by‑step (as implemented)
 
@@ -400,10 +400,10 @@ Exercise guards
 
 Outcome guards
 
-1. expired client cert rejected  
+1. client cert from an untrusted CA rejected (unknown_ca)  
    - Requires non‑zero return code.  
    - Rejects generic network errors (DNS/no route/connection refused).  
-   - Confirms TLS failure matches “unknown ca” or “unable to get local issuer certificate”.
+   - Confirms the TLS output contains exactly `tlsv1 alert unknown ca`.
 
 ### Evidence produced
 
@@ -496,7 +496,7 @@ Outcome guards
 1. fetch denied without socket  
    - Requires non‑zero return code.  
    - Confirms no SVID file was produced.  
-   - Confirms error output mentions missing socket / Workload API failure.
+   - Confirms the error is exactly `dial unix /run/spire/agent/private/api.sock: connect: no such file or directory`: the socket is absent, not some other Workload API failure.
 
 ### Evidence produced
 
@@ -543,7 +543,7 @@ Outcome guards
 1. fetch denied without entry  
    - Requires non‑zero return code.  
    - Confirms no SVID file was produced.  
-   - Confirms error output indicates no identity issued / permission denied / unauthorized.
+   - Confirms the error is exactly `code = PermissionDenied desc = no identity issued`: the agent answered and refused, because no entry matches.
 
 ### Evidence produced
 
@@ -581,7 +581,7 @@ Outcome guards
 
 1. rogue cannot read SVID or keys  
    - Requires all read attempts to fail.  
-   - Confirms error output indicates “No such file”, “Permission denied”, or “not found”.
+   - Confirms each read error is `No such file or directory`. (This test inspects a temporary container rather than the deployed one; that is corrected with OPL-006.)
 
 ### Evidence produced
 
@@ -693,6 +693,11 @@ Premise guards
 2. pin tool-b app IP (toolb_app_net)  
    - Reads the tool‑b container’s app‑network IP and writes it to `toolb_ip.txt`.
 
+Control (premise)
+
+- control: tool-b answers on that IP inside toolb_app_net  
+   - From inside the `tool-b` container, `http://<pinned IP>:8080/health` returns 200. This proves the timeout from the edge is isolation, not tool-b being down or the IP being wrong.
+
 Exercise guards
 
 1. attempt direct tool-b app access from edge  
@@ -701,8 +706,8 @@ Exercise guards
 
 Outcome guards
 
-1. tool-b app not reachable from edge network  
-   - Requires a connection‑level failure such as “Connection refused”, “timed out”, or “No route to host”.
+1. tool-b app not reachable from edge network (timeout, exit 28)  
+   - Requires curl exit code 28 and `Connection timed out`. “Connection refused” or a DNS error fails the test, because neither shows network isolation.
 
 ### Evidence produced
 
@@ -918,18 +923,26 @@ Premise guards
 2. edge HTTP reachable  
    - Verifies a known edge‑reachable HTTP endpoint returns a successful response.
 
+Control (premise)
+
+- pin opa IP (capiss_app_net)  
+   - Reads the container's IP on `capiss_app_net` from Docker and writes `opa_ip.txt`.
+- control: opa answers inside capiss_app_net  
+   - From inside the `capability-issuer` container, `http://opa:8181/health` returns 200, so the failures below are isolation, not a stopped service.
+
 Exercise guards
 
-1. attempt to reach OPA from edge  
-   - Attempts to connect to `http://opa:8181/` (or decision path) from edge.  
-   - Captures stdout/stderr to evidence.
+1. attempt opa by name from edge  
+   - curl to `http://opa:8181` from the edge container; records the exit code (`opa_rc.txt`).
+2. attempt opa by pinned IP from edge  
+   - curl to the pinned IP on port 8181; records the exit code (`opa_ip_rc.txt`).
 
 Outcome guards
 
-1. OPA not reachable from edge  
-   - Requires failure to connect.  
-   - Accepts only network‑isolation errors (connection refused, timed out, no route, or host not found with prior edge DNS success).  
-   - Fails on success (HTTP 200) or harness errors.
+1. OPA does not resolve from edge (exit 6)  
+   - Requires exit code 6 and `Could not resolve host: opa`.
+2. OPA pinned IP times out from edge (exit 28)  
+   - Requires exit code 28: even with the address, the edge has no route into `capiss_app_net`. This replaces the earlier warning alternates, which accepted either DNS isolation or a connection error.
 
 ### Evidence produced
 
@@ -967,8 +980,8 @@ Outcome guards
 
 1. envoy handled mint request  
    - Confirms Envoy evidence is present in headers.
-2. opa unavailable denial  
-   - Requires status 403 or 503.
+2. mint denied 503  
+   - Requires status 503.
 3. opa unavailable body  
    - Confirms JSON contains `error == denied` and `reason == opa_unavailable`.
 
@@ -1003,18 +1016,26 @@ Premise guards
 2. edge HTTP reachable  
    - Verifies a known edge‑reachable HTTP endpoint returns a successful response.
 
+Control (premise)
+
+- pin capability-issuer IP (capiss_app_net)  
+   - Reads the container's IP on `capiss_app_net` from Docker and writes `capiss_app_ip.txt`.
+- control: capability-issuer answers inside capiss_app_net  
+   - From inside the `capability-issuer` container, `http://capability-issuer:8000/health` returns 200, so the failures below are isolation, not a stopped service.
+
 Exercise guards
 
-1. attempt to reach capiss app from edge  
-   - Attempts to connect directly to the capability‑issuer app endpoint from edge.  
-   - Captures stdout/stderr to evidence.
+1. attempt capability-issuer by name from edge  
+   - curl to `http://capability-issuer:8000` from the edge container; records the exit code (`capiss_app_rc.txt`).
+2. attempt capability-issuer by pinned IP from edge  
+   - curl to the pinned IP on port 8000; records the exit code (`capiss_app_ip_rc.txt`).
 
 Outcome guards
 
-1. issuer app not reachable from edge  
-   - Requires failure to connect.  
-   - Accepts only network‑isolation errors (connection refused, timed out, no route, or host not found with prior edge DNS success).  
-   - Fails on success (HTTP 200) or harness errors.
+1. capability-issuer app does not resolve from edge (exit 6)  
+   - Requires exit code 6 and `Could not resolve host: capability-issuer`.
+2. capability-issuer app pinned IP times out from edge (exit 28)  
+   - Requires exit code 28: even with the address, the edge has no route into `capiss_app_net`. This replaces the earlier warning alternates, which accepted either DNS isolation or a connection error.
 
 ### Evidence produced
 
@@ -1188,12 +1209,8 @@ Exercise guards
 
 Outcome guards
 
-1. no network/DNS errors  
-   - Ensures the failure is not due to DNS or network issues.
-2. deny status 401/403  
-   - Requires HTTP 401 or 403.
-3. reason missing_token  
-   - Confirms JSON reason is `missing_token`.
+1. denied 401 reason=missing_token  
+   - Requires HTTP 401 with JSON `error=denied`, `reason=missing_token` (tool-b's own denial body; a network error has no such body).
 
 ### Evidence produced
 
@@ -1240,13 +1257,11 @@ Outcome guards
    - Requires HTTP status 200 for the mint call.
 3. mint token present  
    - Confirms a token is present in the mint response.
-4. no network/DNS errors  
-   - Ensures the tool‑b call did not fail due to DNS or network issues.
-5. allow status 200  
+4. allow status 200  
    - Requires HTTP status 200 from tool‑b.
-6. secret value correct  
+5. secret value correct  
    - Confirms the response body contains the expected secret value.
-7. verified tool-b identity recorded
+6. verified tool-b identity recorded
    - Confirms the evidence records `spiffe://varambu.org/tool-b-envoy` and an `ok` verification result.
 
 ### Evidence produced
@@ -1292,10 +1307,8 @@ Exercise guards
 
 Outcome guards
 
-1. no network/DNS errors  
-   - Ensures the failure is not due to DNS or network issues.
-2. deny status 401/403  
-   - Requires HTTP 401 or 403.
+1. denied 401 reason=missing_token  
+   - Requires HTTP 401 with JSON `error=denied`, `reason=missing_token`: tool-b-envoy admits the rogue's SAN and tool-b denies for the missing token.
 
 ### Evidence produced
 
@@ -1343,12 +1356,8 @@ Outcome guards
    - Requires HTTP status 200 for the mint call.
 3. mint token present  
    - Confirms a token is present.
-4. no network/DNS errors  
-   - Ensures the tool‑b call did not fail due to DNS or network issues.
-5. deny status 401/403  
-   - Requires HTTP 401 or 403 from tool‑b.
-6. reason sub_mismatch or invalid_token  
-   - Confirms the response reason indicates sub mismatch or invalid token.
+4. denied 403 reason=sub_mismatch  
+   - Requires HTTP 403 with JSON `error=denied`, `reason=sub_mismatch`: the token is valid but bound to agent-a, not the rogue. `invalid_token` is no longer accepted.
 
 ### Evidence produced
 
@@ -1407,12 +1416,8 @@ Outcome guards
    - Requires HTTP status 200 for the mint call.
 3. mint token and expires_at present  
    - Confirms a token and `expires_at` were returned.
-4. no network/DNS errors  
-   - Ensures the tool‑b call did not fail due to DNS or network issues.
-5. deny status 401/403  
-   - Requires HTTP 401 or 403.
-6. reason expired  
-   - Confirms JSON reason is `expired`.
+4. denied 403 reason=expired  
+   - Requires HTTP 403 with JSON `error=denied`, `reason=expired`.
 
 ### Evidence produced
 
@@ -1750,9 +1755,7 @@ Outcome guards
 2. first ten requests allowed  
    - Requires status 200 for calls 1 through 10.
 3. eleventh request denied  
-   - Requires status 401 or 403 for call 11.
-4. denied for budget  
-   - Confirms call 11 response reason is `budget_exceeded`.
+   - Requires HTTP 403 with JSON `error=denied`, `reason=budget_exceeded` for call 11.
 
 ### Evidence produced
 
@@ -1801,9 +1804,7 @@ Outcome guards
 1. root mint allowed 200  
    - Requires HTTP status 200 for the original root mint.
 2. tampered token denied  
-   - Requires status 401 or 403 for the tampered-token request.
-3. invalid token reason  
-   - Confirms the denial reason is `invalid_token`.
+   - Requires HTTP 401 with JSON `error=denied`, `reason=invalid_token` for the tampered-token request.
 
 ### Evidence produced
 
@@ -2420,7 +2421,7 @@ Group overview:
 **How:**
 - Premise: the M5 path is ready.
 - Exercise: call `read_project_summary` for `IAM`.
-- Outcome: the returned summary contains none of `description`, `comments`, `assignee`, `sprint`, `board`, `raw_jql`, `atlassian.net`, `Bearer`, or `token` (case-insensitive).
+- Outcome: the summary is the IAM project summary (`ok` is true, `project.key` is `IAM`), so an empty or failed call cannot pass; and it contains none of `description`, `comments`, `assignee`, `sprint`, `board`, `raw_jql`, `atlassian.net`, `Bearer`, or `token` (case-insensitive).
 
 **Evidence:** `mcp_response.json`, `summary.json`
 
@@ -2608,7 +2609,7 @@ Group overview:
 **How:**
 - Premise: capiss material is ready.
 - Exercise: mint `aud=jira-tool` with `act=read_project_summary` on `jira-mcp:/project:IAM`.
-- Outcome: the mint is refused with HTTP 400 or 403 (either is accepted; the test does not pin the reason).
+- Outcome: HTTP 400 with `error=bad_request`, `reason=res`. The `jira-mcp:` resource fails canonicalization for `aud=jira-tool` before OPA is asked, so a 403 from policy would be a different defect and fails the test.
 
 **Evidence:** `mint.json`, `status.txt`
 
@@ -2641,7 +2642,7 @@ Group overview:
 **How:**
 - Premise: the M5 edge path is reachable.
 - Exercise: from the test harness, request `http://jira-mcp-gateway:8080/health` directly.
-- Outcome: the request fails with a name-resolution, timeout, no-route, or connection failure.
+- Outcome: curl exits 6 with `Could not resolve host: jira-mcp-gateway`: the gateway's name does not exist on the edge network.
 
 **Evidence:** `direct_gateway.out`, `direct_gateway_rc.txt`
 
@@ -2663,7 +2664,7 @@ Group overview:
 **How:**
 - Premise: the M5 path is ready.
 - Exercise: call `read_project_summary` and `create_story` through MCP.
-- Outcome: neither response contains `Bearer `, `token_type`, a `"token"` field, `Biscuit`, or `JIRA_API_TOKEN`.
+- Outcome: both responses are JSON-RPC results (`jsonrpc` is `2.0`) with text content, so a missing or empty response cannot pass; and neither contains `Bearer `, `token_type`, a `"token"` field, `Biscuit`, or `JIRA_API_TOKEN`.
 
 **Evidence:** `summary_mcp.json`, `create_mcp.json`
 
@@ -2685,7 +2686,7 @@ Group overview:
 **How:**
 - Premise: the adapter container is running.
 - Exercise: capture the adapter container's environment.
-- Outcome: none of `JIRA_API_TOKEN`, `JIRA_EMAIL`, or `JIRA_BASE_URL` is set.
+- Outcome: the captured environment is the adapter's (it contains `JIRA_MCP_GATEWAY_URL`), so an empty capture cannot pass; and none of `JIRA_API_TOKEN`, `JIRA_EMAIL`, or `JIRA_BASE_URL` is set.
 
 **Evidence:** `adapter_env.txt`
 
@@ -2880,9 +2881,9 @@ Group overview:
 **How:**
 - Premise: a session with one record and a tailer PID that is not running.
 - Exercise: run `varambu audit`, then `varambu audit --strict`.
-- Outcome: the normal run prints a tailer warning on stderr and still shows the persisted record; the strict run exits non-zero.
+- Outcome: the normal run prints a tailer warning on stderr and still shows the persisted record; the strict run exits 1 and prints `WARNING: audit tailer is not running; audit file may be stale.` on stderr.
 
-**Evidence:** `audit_warn.out`, `audit_warn.err`, `strict_rc.txt`
+**Evidence:** `audit_warn.out`, `audit_warn.err`, `audit_strict.err`, `strict_rc.txt`
 
 ### M5-T47 — “Varambu audit local and UTC timing semantics”
 
