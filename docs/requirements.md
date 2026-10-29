@@ -289,6 +289,62 @@ The project shall preserve the distinction between identity issuance, policy dec
 ## REQ-X-R7 — Operator-defined hygiene as security input
 The project shall treat topology shortcuts, duplicate authorization paths, permissive defaults, and policy drift as security-relevant conditions requiring explicit evaluation.
 
+## Deployment security invariants
+Who may hold each protected asset, and what every deployed service may be. Each asset requirement
+names its holders; `security/invariants.yaml` holds the same lists in machine form, and
+`make qa-deploy` checks both against the deployed compose (slice agentic-delivery-process, 1B).
+Widening a holder list means changing the requirement. A violation of an open problem passes only
+as an expiring known violation in the register.
+
+## REQ-SEC-K1 — Issuer signing key confinement
+The capiss root private key shall be readable only inside the issuer. Verifiers receive the public
+key only. Holders: `capability-issuer`, `capability-issuer-no-opa` (test-only), `rogue-tests` (test-only harness, see below).
+
+## REQ-SEC-K2 — SPIRE agent private state confinement
+Each SPIRE agent's data directory (`keys.json`, `agent-data.json`) shall be readable only by that
+agent. Workloads receive only the Workload API socket. Holders: `spire-agent`, `spire-rogue-agent` (each its own), `rogue-tests` (test-only harness).
+
+## REQ-SEC-K3 — Upstream credential confinement
+`JIRA_API_TOKEN` shall be present only in the services that call Jira upstream. Holders: `jira-tool`, `jira-mcp-gateway`.
+
+## REQ-SEC-K4 — SPIRE server signing state confinement
+The SPIRE server's signing keys (`data/keys.json`) and datastore (`data/datastore.sqlite3`) shall be
+readable only by the server. Holders: `spire-server`, `rogue-tests` (test-only harness).
+
+## REQ-SEC-K5 — SPIRE administration confinement
+The SPIRE server admin socket (`data/private/api.sock`) shall be reachable only by the server and by
+the declared administrative holder `spire-token-init`, limited to join-token generation and
+registration-entry management at bootstrap. Holders: `spire-server`, `spire-token-init`, `rogue-tests` (test-only harness).
+
+## REQ-SEC-K6 — Join token confinement
+A join token shall be readable only by the services that issue, store and use it. Holders: `spire-token-init` (writer), `spire-server`, `spire-agent`, `rogue-tests` (test-only, for the M1 replay test).
+
+## REQ-SEC-K7 — Workload key confinement
+A workload's SVID private key shall be readable only inside that workload's container: it is written
+to the container's own `/run/spire/svid`, which no service may mount. The only exception is the
+test harness, which exports workload SVIDs and keys into the repository's `tmp_svid/` to act as
+those workloads in tests. Holders: the workload itself, `rogue-tests` (test-only harness).
+
+## REQ-SEC-K8 — Docker socket confinement
+Holding the Docker socket is host-root authority (a read-only bind mount does not restrict the
+Docker API). Holders: `spire-agent` (Docker workload attestation), `rogue-tests` (test-only harness).
+
+The test-only harness `rogue-tests` (profile `tests`) mounts the whole repository and holds the
+Docker socket, so it can reach every repository-path asset; a narrower mount would not reduce that
+authority. It is therefore a declared holder of K1, K2, K4, K5, K6 and K7 rather than an exception
+(user decision, 2026-10-29). It never runs outside the `tests` profile.
+
+## REQ-SEC-D1 — Deployment allowlist
+Every service's image, runtime user, networks, published ports, mounts and their mode, secret
+environment variable names and privileges (privileged mode, host namespaces, added capabilities,
+devices) shall match the approved register; anything else fails.
+
+## REQ-SEC-D2 — Non-root workloads
+Services shall run as non-root. The services deployed on 2026-10-29 may run as root until
+2027-01-31; a new service has no grace period, and a service that has moved to non-root may not
+return to root. The effective user is the compose `user`, else the image's `USER`; a user that
+cannot be read counts as root.
+
 ---
 # 7. Milestone 4 Invariants — Checkpointed delegation with governance truth
 

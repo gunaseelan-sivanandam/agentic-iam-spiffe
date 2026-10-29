@@ -39,6 +39,56 @@ slice picks one up only if the reviews or an escaped defect show it is needed, a
 | Live outcome guards | moving the 4 guards that call `docker` or `redis-cli` to evidence-only checks | unchanged |
 | Earlier test drafts | T-1 to T-6, T-21, T-23 to T-27, T-42 | — |
 
+## Proposed slice — `asset-classification` (draft, 2026-10-29)
+Not approved; it starts with its own short grill-me, before or alongside slice 2. It would replace
+the smaller idea of requiring only every `secret_env` name to be an asset.
+
+**Problem.** `qa-deploy` (1B) checks only the assets it is told about. A new service, mount, env var
+or privilege fails until it is registered, but a brand-new asset (a new key, socket or credential
+file in a new place) can be registered as an ordinary mount, and a secret env var can be registered
+as plain `secret_env`, without anything requiring holders or a `REQ-SEC`. A secret whose name does
+not match the secret pattern is not flagged at all. Recognising that something is an asset is left
+to grill-me, the review and the user.
+
+**Idea: classify everything that enters a container.** Unclassified fails, so nobody has to remember
+to add an asset; the author must choose a class. Field practice: an asset inventory with information
+classification (ISO 27001 asset inventory and classification, CIS Controls 1 and 3, FIPS 199 impact
+levels).
+
+- **Resources:** every mount source (path or socket), every env var name, every compose secret and
+  config; later, shared state stores such as Redis.
+- **Classes:**
+
+  | Class | Means | Examples | Required controls |
+  | --- | --- | --- | --- |
+  | `public` | harmless if anyone reads it | capiss public key, OPA policy, Envoy config | none |
+  | `internal` | not secret, not for outsiders | audit and log directories, mock data, URLs, `REDIS_URL` | per-service allowlist (as today) |
+  | `restricted` | confidential or grants authority | private keys, tokens, join tokens, SPIRE admin socket, Docker socket, Workload API socket | holders and a `REQ-SEC` requirement, consistency checked (as today) |
+
+- **Mechanical rules in `qa-deploy`:**
+  - completeness: a resource without a class fails;
+  - consistency: `restricted` without holders or a `REQ-SEC` fails; holders on a `public` resource
+    are inconsistent;
+  - plausibility (anti-downgrade): name heuristics (`*.key`, `*token*`, `*.sock`, `keys.json`,
+    `*SECRET*`, the Docker socket) and, locally, content heuristics (PEM private-key headers) give a
+    minimum class; declaring a lower class fails unless the entry carries a one-line reason. This
+    is the OPL-005 pattern: a key directory thought of as "the public key".
+- **Judgment by reviewers:** `qa-deploy` prints the resources added or reclassified by a change; that
+  list is an environment fact for the plan reviewer and the security lens, who judge each class.
+  Grill-me asks the author to classify what a slice will add.
+- **What remains:** a confident misclassification of a file whose name and content look harmless.
+  Under the honest-mistake threat model that is rare; forgetting, the common failure, is fully
+  covered by completeness.
+
+**Cost.** One-time classification of about 30 mount sources and 40 env names (most env vars are
+`internal`), proposed by the agent and approved by the user; then one register line per new
+resource. It changes the register's shape and `qa-deploy`'s rules.
+
+**Decisions for its grill-me:** the classes and their names; what counts as a resource (are
+networks and published ports resources, or stay allowlist facts?); the plausibility heuristics and
+the downgrade-reason rule; whether content heuristics run only locally; how state stores are
+classified and whether this slice or the pilot adds REQ-SEC-S1.
+
 ## Slice 2 — `delivery-lanes-ci` (draft)
 
 ### Lanes (D9)
@@ -127,6 +177,88 @@ plan template; the two extra blocking items in the PoC section.
 
 **Interim (slice 1B):** the 1B review gets these questions informally, alongside the slice's two
 questions, to try them before slice 2 makes them a rule.
+
+### Review lenses and gates (input from the 1B review discussion, 2026-10-29)
+Not approved; the user is not yet sure the lenses and their jobs are the right ones, and slice 2's
+grill-me decides. Adds to the review template above.
+
+**Why.** After the generic questions were tried in 1B, the review still missed that the 10 new
+REQ-SEC requirements had no E2E proof. Causes: the review was anchored to an approved plan that
+already had the gap (the D20 cut removed the runtime proof and was not re-reviewed, on the reasoning
+that it "only removes checks"); `AGENTS.md` says coverage gaps do not fail the build, so the gap
+broke no repository rule; the generic questions were a brief side part of the prompt; and
+`qa-trace` reported the new gaps (87 → 97 requirements without E2E) but nothing compared them with
+`main`.
+
+**User decisions (2026-10-29):** static tests are acceptable wherever they make sense; reviews
+should use several reviewers, each with its own lens, because one generic reviewer will keep
+leaving gaps.
+
+**Layer 1, gates for facts a machine can see:**
+- `qa-trace` compares its coverage gaps with `main`'s and fails on a new gap (a requirement without
+  proof, an architecture section without design or integration test) unless the plan accepts it
+  with a reason;
+- a static-proof kind in `trace/tests.yaml`, so a requirement can be proved by a static check such
+  as `qa-deploy`, visibly labelled (the REQ-SEC requirements and DD-925 to DD-930 need it);
+- `docs-check` fails when a make gate is not listed in the `AGENTS.md` quality gates (1A missed
+  `test-lint` there).
+
+**Layer 2, reviewers with separate lenses** (proposal, not settled):
+
+| Lens | Job | Reads | Would have caught |
+| --- | --- | --- | --- |
+| Goal and evidence (product owner) | serves the PoC goal; challenges the plan itself; what is missing; which test proves each requirement and at which level; decisions recorded where future agents read them | plan, requirements, the trace-gap report, `AGENTS.md`, the change | unproved REQ-SEC; the review step missing from the rulebook |
+| Security (adversary) | threat model, assets, trust boundaries, new risks; builds a concrete bypass | change, register, compose, threat model | 1B C1, C3, C4; 1A false greens |
+| Engineering quality (maintainer) | design, simplicity, failure modes, test adequacy, ripple through code and CI | change and surrounding code | 1B C2; 1A B-series |
+
+- Different models for different lenses where it matters (for example Codex for security, a
+  clean-context Claude for the others), to reduce shared blind spots.
+- At most 3 blockers and 3 advisories per lens; one synthesis step removes duplicates, applies the
+  acceptance rule and gives the user one list, so more lenses do not mean endless findings.
+- Scaled by lane: a doc or patch change gets one combined review; a feature or security slice gets
+  every lens.
+- A plan change, including a removal, is re-reviewed with "which requirement or decision loses its
+  evidence?".
+- The reviewer receives the gate outputs, including the trace-gap difference.
+- An escaped defect sharpens the lens that should have caught it; no topic-specific questions.
+
+**Expected limits:** perspective-based review finds more distinct defects than one shared checklist,
+but lenses anchored to the same plan share its blind spots, and the same model with different
+prompts shares blind spots too. The aim is fewer and cheaper escapes caught before merge, not zero.
+
+### Review misses after the 1B review (input, 2026-10-29)
+Not approved; slice 2's grill-me decides, together with the lenses above.
+
+**What was missed.** The user, not a reviewer, found that the new gates `test-lint` and `qa-deploy`
+ran hidden inside the CI job `docs-check`, that the workflow `unit-trust` had grown into every gate
+under a misleading name, and that the `main` ruleset required no status checks, so a red gate could
+still be merged although `AGENTS.md` said any failure blocks merge. All three are fixed (workflow
+`CI`, one job per make target; the user made the eight jobs required checks).
+
+**Why:** the author's prompt listed the files to review (the workflow was not among them) and
+narrowed the design question to "consistent with the other QA scripts"; the acceptance rule let only
+false greens, contradictions and missing tests block, so placement and naming could at best be one
+of a few advisories and were crowded out; the misleading name pre-dated the change and nothing asked
+whether the surroundings still fit; no question took the view of the person reading the PR checks;
+and the ruleset is outside the repository, where a read-only reviewer without network cannot see
+it. The author had read that ruleset earlier and did not connect it.
+
+**Six proposed changes** (the second and third are mechanical, the rest are review design):
+1. **Fixed prompt template, no author scoping.** The author supplies only the intent and the change,
+   never a list of files to focus on or narrowed questions; the reviewer decides where to look.
+2. **Environment facts as input.** A read-only script collects facts outside the repository: the
+   branch ruleset and its required checks, the latest CI run's jobs and results, and the `qa-trace`
+   gap difference against `main`. The reviewer judges the repository's claims against them.
+3. **Gate–job–check consistency as a mechanical check.** Every gate in the `AGENTS.md` quality-gates
+   table has a CI job of the same name, and every such job is a required check on `main` (the
+   ruleset part reads the environment facts above).
+4. **The generic questions are the review,** answered in depth, not a brief side part; where lenses
+   apply, each lens owns its questions.
+5. **An operator-usability and fit question:** "Are names, placement and structure what a newcomer
+   would expect? Can the user see what ran and what failed? After this change, do the surrounding
+   names, groupings and files still describe what they contain?"
+6. **A separate budget for quality and usability findings:** capped and fix-or-defer for the user to
+   decide, so they are neither crowded out by blockers nor allowed to become endless findings.
 
 ### CI trust model
 Resolves review findings PR-01, PR-02, PR-12 and PR-15. Every job definition comes from `main` via

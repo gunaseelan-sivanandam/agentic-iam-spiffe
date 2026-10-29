@@ -1,0 +1,14 @@
+name: Set up Python and dev dependencies
+description: Python 3.11 with pip cache and requirements-dev.txt installed.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v6
+      with:
+        python-version: "3.11"
+        cache: pip
+        cache-dependency-path: requirements-dev.txt
+    - shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-dev.txt

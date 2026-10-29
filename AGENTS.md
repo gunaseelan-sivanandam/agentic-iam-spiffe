@@ -21,6 +21,7 @@ the repo in the same change — do not leave them disagreeing.
 | What does each E2E test do, in plain English? | [`docs/test_spec.md`](docs/test_spec.md) | hand-written spec |
 | Unit-test requirement matrix (M4 trust gates) | [`docs/unit_test_spec.md`](docs/unit_test_spec.md) | authoritative, read by `make traceability-check` |
 | Known unfixed runtime/trust problems | [`docs/open_problem_log.md`](docs/open_problem_log.md) | authoritative |
+| Who may hold which key, socket or secret; what each service may be | [`security/invariants.yaml`](security/invariants.yaml) with the `REQ-SEC` requirements | authoritative, checked by `make qa-deploy` |
 | How was a past slice designed? | [`docs/slices/`](docs/slices/README.md) | frozen records |
 | What happened, when? | [`docs/history/`](docs/history/) | history |
 | Retired documents | `docs/archive/`, `docs/slices/archive/` | archive, do not follow |
@@ -102,7 +103,7 @@ Required for milestone and security-relevant changes. A slice bundle lives in
 3. **Implement.** Only approved behavior. Remove the dead code, stale paths, and artifacts that
    `plan.md` lists for retirement.
 4. **Verify and close.** All of the following, in the same change:
-   - run `make qa-quality` (includes `qa-trace` and `docs-check`), the full E2E suite on a clean
+   - run `make qa-quality` (includes `qa-trace`, `docs-check`, `test-lint` and `qa-deploy`), the full E2E suite on a clean
      stack, and `make qa-evidence`;
    - **update `docs/test_spec.md` by hand** for every E2E test added or changed — plain English,
      not code: what it tests, how (premise, exercise, outcome), and the evidence it leaves. Each
@@ -123,15 +124,19 @@ say so.
 
 ## Quality gates
 
+Every CI gate is a job named after its make target in `.github/workflows/ci.yml` (workflow `CI`).
+
 | Gate | Command | Enforced by | Threshold |
 | --- | --- | --- | --- |
 | Trace model | `make qa-trace` | CI, every push/PR | zero structural failures |
 | Documentation | `make docs-check` | CI | every harness test has a `docs/test_spec.md` heading and vice versa; relative links and `#anchors` in live docs resolve; every tracked image in `docs/` is referenced and every `.puml` has its `.svg`; every slice bundle is in the slice index; `TEST_ONLY=` examples name real tests |
 | QA tooling tests | `make tooling-test` | CI | `tests/tools/` (pytest) and `tests/shell/` pass |
+| E2E outcome lint | `make test-lint` | CI | no outcome guard in `scripts/rogue_node_tests.sh` accepts several outcomes (`assert_file_any`, broad error regexes, `!= 200`), swallows failure (`\|\| true`), checks only a non-zero exit, or is a test of negative greps only; a multi-outcome guard needs `# test-lint: alternate: <reason>` |
+| Deployment register | `make qa-deploy` | CI (without image inspection) | every service's image, user, networks, ports, mounts, secret env names and privileges match `security/invariants.yaml`; every protected asset reaches only its holders, except unexpired known violations of open OPLs; register holders equal the `REQ-SEC` `Holders:` lines; non-root except the grandfathered baseline until 2027-01-31 |
 | Unit guard integrity | `make unit-guard-check` | CI | every unit test has premise, exercise, outcome guards |
 | Unit trust bundle | `make unit-trust` | CI | total line coverage ≥ 85%; branch coverage ≥ 75% on `services/capability-issuer/app.py` and `services/tool-b/server.py`; unit traceability check; invariant, negative-control, hybrid-critical suites; invariant flake check ×5 |
 | Diff coverage | `make unit-diff-cov` | CI, PRs only | ≥ 90% of changed lines in `services/capability-issuer/` and `services/tool-b/` |
-| Mutation | `make unit-mutation` | CI | score ≥ 70% (capiss and tool-b) |
+| Mutation | `make unit-mutation` | CI | score ≥ 70% (capiss and tool-b), counting untested and skipped mutants as not killed; an empty run fails |
 | Full E2E suite | see [Test commands](#test-commands) | local, required in step 4 | all pass; warnings reviewed |
 | E2E evidence | `make qa-evidence` | local, after the E2E run | every test has premise/exercise/outcome evidence and a PASS line |
 
@@ -199,14 +204,17 @@ Standards that are **not** gated yet (follow them for new and changed code):
   ```
 - Specific test IDs:
   ```bash
-  docker compose --profile tests -f compose/spiffe.compose.yml run --rm \
+  docker compose --profile tests -f compose/spiffe.compose.yml run --rm --build \
     -e TEST_ONLY=M3.S3-T3,M3.S4-T2 rogue-tests
   ```
 - Selected milestones:
   ```bash
-  docker compose --profile tests -f compose/spiffe.compose.yml run --rm \
+  docker compose --profile tests -f compose/spiffe.compose.yml run --rm --build \
     -e TEST_MILESTONES=m1,m2,m25,m3 rogue-tests
   ```
+- Keep `--build`: `scripts/rogue_node_tests.sh` is copied into the `rogue-tests` image, so without it
+  a run silently uses the harness from the last build. (The `varambu` wrapper is bind-mounted and needs
+  no rebuild.)
 - A targeted run overwrites `test_report.log`, so `make qa-evidence` needs a full run to pass.
 - Live Jira tests (`M5-T55`, `make jira-live-smoke`) need explicit live configuration; default runs
   use deterministic mocks.

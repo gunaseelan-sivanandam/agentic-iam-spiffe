@@ -1,0 +1,331 @@
+# Deployment register: who may hold each protected asset, and the approved facts of every service.
+# Checked by `make qa-deploy` (scripts/qa_deploy.py) against `docker compose config` over every
+# profile. Authoritative together with the REQ-SEC requirements in docs/requirements.md; each
+# requirement's `Holders:` line must name exactly the holders listed here. Change this file only
+# through a slice plan the user approves (slice agentic-delivery-process, decisions D6, D7, D20).
+#
+# Asset locations: `path` is a repo-relative file or directory (or an absolute host path); a bind
+# mount of that path or any parent reaches it. `env` is an environment variable name.
+# `container_path` is a path inside a container that no mount may cover.
+# `rogue-tests` is a declared test-only holder of the repo-path assets: it mounts the whole repo and
+# holds the Docker socket (host root), so a narrower mount would not reduce its authority
+# (user decision, 2026-10-29).
+
+assets:
+  K1:
+    requirement: REQ-SEC-K1
+    locations:
+      - path: capiss_keys/root_key.b64
+        holders: [capability-issuer, capability-issuer-no-opa, rogue-tests]
+  K2:
+    requirement: REQ-SEC-K2
+    locations:
+      - path: spire/agent/data
+        holders: [spire-agent, rogue-tests]
+      - path: spire/rogue/data
+        holders: [spire-rogue-agent, rogue-tests]
+  K3:
+    requirement: REQ-SEC-K3
+    locations:
+      - env: JIRA_API_TOKEN
+        holders: [jira-tool, jira-mcp-gateway]
+  K4:
+    requirement: REQ-SEC-K4
+    locations:
+      - path: spire/server/data/keys.json
+        holders: [spire-server, rogue-tests]
+      - path: spire/server/data/datastore.sqlite3
+        holders: [spire-server, rogue-tests]
+  K5:
+    requirement: REQ-SEC-K5
+    locations:
+      - path: spire/server/data/private/api.sock
+        holders: [spire-server, spire-token-init, rogue-tests]
+  K6:
+    requirement: REQ-SEC-K6
+    locations:
+      - path: spire/shared/join_token
+        holders: [spire-token-init, spire-server, spire-agent, rogue-tests]
+  K7:
+    requirement: REQ-SEC-K7
+    locations:
+      - container_path: /run/spire/svid
+        holders: []
+      # The test harness exports workload SVIDs and keys here to act as those workloads in tests.
+      - path: tmp_svid
+        holders: [rogue-tests]
+  K8:
+    requirement: REQ-SEC-K8
+    locations:
+      - path: /var/run/docker.sock
+        holders: [spire-agent, rogue-tests]
+
+# Open OPLs the deployment violates today; each row is void once its OPL is closed or expires
+# (valid through 23:59:59 UTC on `expires`). Added, widened or renewed only by an approved plan.
+known_violations:
+  - opl: OPL-005
+    asset: K1
+    services: [tool-b, jira-tool, jira-mcp-gateway, agent-a, rogue]
+    expires: 2026-12-31
+  - opl: OPL-006
+    asset: K2
+    services: [rogue-socket, tool-b, tool-b-envoy, jira-tool, jira-tool-envoy, jira-mcp-gateway,
+               jira-mcp-envoy, codex-jira-mcp-adapter, capability-issuer-envoy,
+               capability-issuer-no-opa-envoy, agent-a, rogue]
+    expires: 2026-12-31
+  - opl: OPL-008
+    asset: K4
+    services: [spire-token-init]
+    expires: 2026-12-31
+
+# Per-service allowlist (D7), default deny. `image` is "build <context> <dockerfile>" or an image
+# reference; `mounts` are "<source>:<target>:<ro|rw>"; `secret_env` lists env var names that look
+# like secrets; `privileges` lists anything beyond a plain container (pid:host, cap_add:..., ...).
+# `root: grandfathered` allows root with a warning until 2027-01-31 (baseline services only);
+# `root: forbidden` fails on root or an unreadable user.
+services:
+  agent-a:
+    image: build agents/agent-a Dockerfile
+    profiles: [clients, tests]
+    networks: [capiss_edge_net, jiratool_edge_net, toolb_edge_net]
+    ports: []
+    mounts:
+      - spire/agent:/run/spire/agent:ro
+      - capiss_keys:/var/lib/capiss/keys:ro
+    secret_env: []
+    privileges: []
+    root: grandfathered
+  capability-issuer:
+    image: build . services/capability-issuer/Dockerfile
+    profiles: []
+    networks: [capiss_app_net]
+    ports: []
+    mounts:
+      - capiss_keys:/var/lib/capiss/keys:rw
+    secret_env: []
+    privileges: []
+    root: grandfathered
+  capability-issuer-envoy:
+    image: build services/capability-issuer-envoy Dockerfile
+    profiles: []
+    networks: [capiss_app_net, capiss_edge_net]
+    ports: ["9443:9443/tcp"]
+    mounts:
+      - spire/agent:/run/spire/agent:ro
+    secret_env: []
+    privileges: []
+    root: grandfathered
+  capability-issuer-no-opa:
+    image: build . services/capability-issuer/Dockerfile
+    profiles: [tests]
+    networks: [capiss_app_net]
+    ports: []
+    mounts:
+      - capiss_keys:/var/lib/capiss/keys:rw
+    secret_env: []
+    privileges: []
+    root: grandfathered
+  capability-issuer-no-opa-envoy:
+    image: build services/capability-issuer-envoy Dockerfile
+    profiles: [tests]
+    networks: [capiss_app_net, capiss_edge_net]
+    ports: []
+    mounts:
+      - spire/agent:/run/spire/agent:ro
+      - services/capability-issuer-envoy/envoy-no-opa.yaml:/etc/envoy/envoy.yaml:ro
+    secret_env: []
+    privileges: []
+    root: grandfathered
+  codex-jira-mcp-adapter:
+    image: build . services/codex-jira-mcp-adapter/Dockerfile
+    profiles: []
+    networks: [capiss_edge_net, jiramcp_edge_net]
+    ports: []
+    mounts:
+      - spire/agent:/run/spire/agent:ro
+      - artifacts/varambu-demo:/var/audit:rw
+    secret_env: []
+    privileges: []
+    root: grandfathered
+  jira-mcp-envoy:
+    image: build services/jira-mcp-envoy Dockerfile
+    profiles: []
+    networks: [jiramcp_app_net, jiramcp_edge_net]
+    ports: ["11443:11443/tcp"]
+    mounts:
+      - spire/agent:/run/spire/agent:ro
+    secret_env: []
+    privileges: []
+    root: grandfathered
+  jira-mcp-gateway:
+    image: build . services/jira-mcp-gateway/Dockerfile
+    profiles: []
+    networks: [jiramcp_app_net]
+    ports: []
+    mounts:
+      - capiss_keys:/var/lib/capiss/keys:ro
+      - spire/agent:/run/spire/agent:ro
+    secret_env: [JIRA_API_TOKEN]
+    privileges: []
+    root: grandfathered
+  jira-mcp-mock:
+    image: build . services/jira-mcp-mock/Dockerfile
+    profiles: []
+    networks: [jiramcp_app_net, jiramcp_upstream_net]
+    ports: []
+    mounts: []
+    secret_env: []
+    privileges: []
+    root: grandfathered
+  jira-mock:
+    image: build . services/jira-mock/Dockerfile
+    profiles: []
+    networks: [jiratool_upstream_net]
+    ports: []
+    mounts: []
+    secret_env: []
+    privileges: []
+    root: grandfathered
+  jira-tool:
+    image: build . services/jira-tool/Dockerfile
+    profiles: []
+    networks: [jiratool_app_net, jiratool_upstream_net]
+    ports: []
+    mounts:
+      - capiss_keys:/var/lib/capiss/keys:ro
+      - spire/agent:/run/spire/agent:ro
+    secret_env: [JIRA_API_TOKEN]
+    privileges: []
+    root: grandfathered
+  jira-tool-envoy:
+    image: build services/jira-tool-envoy Dockerfile
+    profiles: []
+    networks: [jiratool_app_net, jiratool_edge_net]
+    ports: ["10443:10443/tcp"]
+    mounts:
+      - spire/agent:/run/spire/agent:ro
+    secret_env: []
+    privileges: []
+    root: grandfathered
+  opa:
+    image: openpolicyagent/opa:latest
+    profiles: []
+    networks: [capiss_app_net]
+    ports: []
+    mounts:
+      - services/opa:/policies:ro
+    secret_env: []
+    privileges: []
+    root: forbidden
+  redis:
+    image: redis:7-alpine
+    profiles: []
+    networks: [capiss_app_net, jiramcp_app_net, jiratool_app_net, toolb_app_net]
+    ports: []
+    mounts: []
+    secret_env: []
+    privileges: []
+    root: grandfathered
+  rogue:
+    image: build agents/rogue Dockerfile
+    profiles: [clients, tests]
+    networks: [capiss_edge_net, jiramcp_edge_net, jiratool_edge_net, toolb_edge_net]
+    ports: []
+    mounts:
+      - spire/agent:/run/spire/agent:ro
+      - capiss_keys:/var/lib/capiss/keys:ro
+    secret_env: []
+    privileges: []
+    root: grandfathered
+  rogue-socket:
+    image: build agents/rogue Dockerfile
+    profiles: [tests]
+    networks: [default]
+    ports: []
+    mounts:
+      - spire/agent:/run/spire/agent:ro
+    secret_env: []
+    privileges: []
+    root: grandfathered
+  rogue-tests:
+    image: build . spire/rogue-tests/Dockerfile
+    profiles: [tests]
+    networks: [capiss_edge_net, default, jiramcp_edge_net, jiramcp_upstream_net, jiratool_edge_net, jiratool_upstream_net, toolb_edge_net]
+    ports: []
+    mounts:
+      - spire/rogue:/run/spire/rogue:rw
+      - spire/shared:/run/spire/shared:ro
+      - .:/repo:rw
+      - artifacts/rogue-tests:/tmp/rogue-tests:rw
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    secret_env: []
+    privileges: []
+    root: grandfathered
+  spire-agent:
+    image: build spire/agent-wrapper Dockerfile
+    profiles: []
+    networks: [default]
+    ports: []
+    mounts:
+      - spire/agent:/run/spire/agent:rw
+      - spire/agent/agent.conf:/run/spire/agent/agent.conf:ro
+      - spire/shared:/run/spire/shared:rw
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    secret_env: []
+    privileges: [pid:host]
+    root: grandfathered
+  spire-rogue-agent:
+    image: ghcr.io/spiffe/spire-agent:1.9.0
+    profiles: [tests]
+    networks: [default]
+    ports: []
+    mounts:
+      - spire/rogue:/run/spire/rogue:rw
+      - spire/rogue/agent.conf:/run/spire/rogue/agent.conf:ro
+    secret_env: []
+    privileges: []
+    root: grandfathered
+  spire-server:
+    image: ghcr.io/spiffe/spire-server:1.9.0
+    profiles: []
+    networks: [default]
+    ports: []
+    mounts:
+      - spire/server:/run/spire/server:rw
+      - spire/server/server.conf:/run/spire/server/server.conf:ro
+      - spire/shared:/run/spire/shared:rw
+    secret_env: []
+    privileges: []
+    root: grandfathered
+  spire-token-init:
+    image: build spire/token-init Dockerfile
+    profiles: []
+    networks: [default]
+    ports: []
+    mounts:
+      - spire/server:/run/spire/server:rw
+      - spire/shared:/run/spire/shared:rw
+    secret_env: []
+    privileges: []
+    root: grandfathered
+  tool-b:
+    image: build . services/tool-b/Dockerfile
+    profiles: []
+    networks: [toolb_app_net]
+    ports: []
+    mounts:
+      - capiss_keys:/var/lib/capiss/keys:ro
+      - spire/agent:/run/spire/agent:ro
+    secret_env: []
+    privileges: []
+    root: grandfathered
+  tool-b-envoy:
+    image: build services/tool-b-envoy Dockerfile
+    profiles: []
+    networks: [toolb_app_net, toolb_edge_net]
+    ports: ["8443:8443/tcp"]
+    mounts:
+      - spire/agent:/run/spire/agent:ro
+    secret_env: []
+    privileges: []
+    root: grandfathered

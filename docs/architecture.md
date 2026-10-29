@@ -53,8 +53,13 @@ replaces the retired `docs/SECURITY_MODEL.md` (archived 2026-10-27).
   - Redis budget, rate and registry state accepts unauthenticated writes from every verifier
     network (OPL-007).
 
-  All three are in `docs/open_problem_log.md`; the planned invariants are `REQ-SEC-K1`, `-K2` and
-  `-S1` in the [agentic-delivery-process](slices/agentic-delivery-process/plan.md) slice.
+  All three are in `docs/open_problem_log.md`. The SPIRE bootstrap container can also read the
+  server's signing state (OPL-008).
+- **Deployment invariants are checked.** `security/invariants.yaml` lists who may hold each key,
+  socket and secret (`REQ-SEC-K1` to `-K8`) and the approved facts of every service (`REQ-SEC-D1`,
+  `-D2`); `make qa-deploy` fails on any compose fact outside it. OPL-005, OPL-006 and OPL-008 pass
+  only as expiring known violations (ARCH-034). The Redis invariant (`REQ-SEC-S1`) arrives with its
+  fix.
 - **Denials are explicit.** Deny responses and audit events carry a reason code (for example
   `policy`, `sub_mismatch`, `budget_exhausted`) so behavior is observable in this lab; a production
   system would usually return less detail to callers.
@@ -623,3 +628,40 @@ Authoritative State:
 | --- | --- | --- | --- | --- | --- | --- |
 | Persisted intent triple | `artifacts/varambu-demo/<timestamp>/trace.jsonl` | `varambu trace` (on read) | operators/tests | Per-session; rewritten idempotently | Durable, scrubbed, bounded verbatim-intent and result evidence joined by correlation ID | Evidence copy (derived from untrusted agent rollout) |
 | Assembled trace chain | `varambu trace` output (not persisted unless redirected) | `varambu trace` | operators/auditors | Recomputed each invocation | Presents the end-to-end M5 chain; agent-tamper detectable by cross-source comparison | Derived view |
+
+## ARCH-034 Deployment Register and qa-deploy
+
+Type: Logical
+Satisfies: REQ-SEC-K1, REQ-SEC-K2, REQ-SEC-K3, REQ-SEC-K4, REQ-SEC-K5, REQ-SEC-K6, REQ-SEC-K7, REQ-SEC-K8, REQ-SEC-D1, REQ-SEC-D2
+
+Overview:
+The deployment is a checked contract. `security/invariants.yaml` names, for every protected asset,
+where it lives (a repository path, a host path, an environment variable, or a container path no
+mount may cover) and which services may hold it; and, for every service in every compose profile,
+its image, compose profiles, runtime user, networks, published ports, mounts and mode (compose
+`secrets` and `configs` count as read-only mounts of their file), secret environment variable names
+and privileges (including `volumes_from`). `scripts/qa_deploy.py` (`make qa-deploy`) reads the merged compose
+(`docker compose config` over every profile, environment values discarded on read) and fails on
+any fact not in the register (default deny), on any asset reaching a service outside its holders,
+on root where it is not allowed, and on any difference between the register's holders and the
+`Holders:` lines of the REQ-SEC requirements.
+
+Trust/Responsibility:
+It is a static control: it sees what compose grants (mounts, environment, privileges), not what a
+process does at runtime. A key copied inside a container or into a shared volume at runtime is
+outside its view; the implementation-PR review asks that question instead. A mount of a path's
+parent reaches the path, so mounting a whole directory to get one socket counts as holding
+everything in it. Open problems that violate the register pass only as known violations: one row
+per OPL with its asset, services and an expiry, void once the OPL is closed or expired.
+
+Interactions:
+Runs locally in `make qa-quality`, where it also inspects built images for their `USER`, and in the
+CI documentation job with `--skip-image-users` (images are not built there, so only a compose `user`
+is checked). Its negative controls are in `tests/tools/test_qa_deploy.py`, including a replay of the
+`07520d7` compose, which reports the capiss signing key in `tool-b` (OPL-005).
+
+Authoritative State:
+| State | Store/System | Writer | Reader | TTL/Lifecycle | Decision Impact | Classification |
+| --- | --- | --- | --- | --- | --- | --- |
+| Asset holders and service allowlist | `security/invariants.yaml` | slice PRs the user merges | `qa-deploy`, reviewers | Permanent; changed only through an approved plan | Decides whether a deployment passes | Authoritative, with the REQ-SEC requirements |
+| Known violations | `known_violations` in `security/invariants.yaml` | slice PRs the user merges | `qa-deploy` | Until the OPL is closed or the row expires | Lets a listed open problem pass until then | Authoritative, time-bounded |

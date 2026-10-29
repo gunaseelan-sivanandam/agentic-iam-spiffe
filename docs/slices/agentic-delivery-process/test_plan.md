@@ -133,6 +133,52 @@ Numbers are kept from earlier drafts; the gaps are tests D20 deferred.
   entry whose OPL is closed fails; expiry is valid at 2026-12-31 23:59:59 UTC and fails at
   2027-01-01 00:00:00 UTC.
 
+### 1B implementation notes (2026-10-29)
+Tests T-8 to T-13 are in `tests/tools/test_qa_deploy.py`; the register is
+`security/invariants.yaml`; the check is `scripts/qa_deploy.py` (`make qa-deploy`).
+
+- **Baseline look** (entrypoints, scripts, Dockerfiles). No Dockerfile copies a key directory or
+  the whole build context; every workload writes its SVID key to its own `/run/spire/svid`, which no
+  service mounts; only `capability-issuer` writes the capiss key, into the `capiss_keys` mount. One
+  copy the first pass missed (it left out the harness; review finding C3): the test harness exports
+  workload SVIDs and keys (`prepare_client_material`, `prepare_toolb_material`) into the
+  repository's `tmp_svid/` to act as those workloads. `tmp_svid` is now a K7 location that only
+  `rogue-tests` may reach, under the same holder decision.
+- **One holder the plan did not list** (user decision): `rogue-tests` mounts the whole repository
+  and holds the Docker socket, so it reaches K1, K2, K4, K5 and K6, and it exports K7 keys. It is a declared test-only
+  holder of those assets, not an exception, because a narrower mount would not reduce host-root
+  authority.
+- **Deviation: Python, not Rego** (user decision). The plan said Rego under `policy/deploy/` run by
+  a pinned OPA; one Python script does the same checks with no Docker or OPA needed for its tests.
+- **Deviation: known violations are one row per OPL** with a list of services (3 rows, 18 tuples),
+  so the register stays readable; matching is still per (asset, service).
+- **Asset locations are file-precise** (`capiss_keys/root_key.b64`, `spire/server/data/keys.json`,
+  …), so the narrower mounts the OPL fixes propose do not count as reaching the asset, while a
+  mount of any parent directory does.
+- **CI runs without image inspection** (`--skip-image-users`): images are not built there, so CI
+  checks only a compose `user`; local `make qa-deploy` (and `qa-quality`) inspects the built images.
+- **Register facts worth knowing:** `spire-agent` is allowlisted with `pid:host` (Docker workload
+  attestation); `opa` already runs as `1000:1000` and is locked as non-root; `opa` and `redis` use
+  floating tags (`latest`, `7-alpine`), recorded as they are; 22 services run as root and warn until
+  2027-01-31.
+- **Rulebook:** `AGENTS.md` now lists `make test-lint` (missed in 1A), `make qa-deploy` and the new
+  mutation rule in the quality gates, and `security/invariants.yaml` in "Start here".
+- **Grants outside `volumes`** (review finding C1): compose `secrets` and `configs` are inventoried
+  as read-only mounts of their source file, and `volumes_from` as a privilege, so neither can reach
+  an asset unseen. An explicit `image` on a build service is kept and is the image inspected (C2).
+  Each service's `profiles` are part of its allowlist, so a test-only holder cannot start by default
+  unnoticed (C4).
+- **How the REQ-SEC requirements are proved: statically** (user decision, 2026-10-29: static tests
+  are acceptable where they make sense). `make qa-deploy` checks each requirement against the
+  deployed compose on every PR, and T-8 to T-13 prove that `qa-deploy` fails on each kind of
+  violation. Trace: REQ-SEC → ARCH-034 → DD-925 to DD-930 (`scripts/qa_deploy.py`) and the
+  `IT-DEPLOY-*` integration cases in `trace/tests.yaml`. Today's trace model has no static-proof
+  kind for requirements, so the 10 REQ-SEC still show as "requirements without E2E" and DD-925 to
+  DD-930 as "design without UT" in the non-blocking coverage report; slice 2 adds that kind and the
+  gap ratchet. What stays unproved: K1, K2 and K4 are violated today (known violations) and D2 by 22
+  services in the grace period; a runtime proof for K1, K2 and K4 comes with their fixes (pilot).
+- **Not in this increment:** a runtime check of what processes do (deferred, D20); REQ-SEC-S1.
+
 ## Independent review at the implementation PR (D20)
 The 1A review record is [`review_1a.md`](review_1a.md).
 
