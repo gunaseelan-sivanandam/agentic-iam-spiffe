@@ -1,7 +1,12 @@
 # Independent plan review — agentic-delivery-process
 
-Manual run under plan review note 8; the CI `plan-review` job does not exist yet, so this report is
-produced on the author's machine and is **not** bound the way D17 requires. Anyone can reproduce a
+**Current status (2026-10-29):** three Codex rounds, then two user-directed reductions after
+round 3: the PoC proportion pass and the lean cut (D20). The plan under review is the lean
+slice 1. Neither reduction was re-reviewed by Codex, because both only remove checks; the user's
+plan-PR review is the check (plan review note 7). Round-3 findings PR-34 and PR-35 are answered by
+D20; PR-36 is fixed (T-9).
+
+The report is produced by hand on the author's machine (plan review note 7). Anyone can reproduce a
 round with the command below.
 
 | Round | Date | Reviewer | Model | Inputs (SHA-256 of plan.md / test_plan.md) |
@@ -9,6 +14,7 @@ round with the command below.
 | 1 | 2026-10-28 | Codex CLI 0.142.5, `codex exec --sandbox read-only --ephemeral` | `gpt-6.1-sol` (the configured `gpt-5.5` is refused for a ChatGPT login) | `09770c43f829…` / `482cf084ff85…` at `c21a934` |
 | 2 | 2026-10-28 | same | same | `83b3065bf28b…` / `574bb048873d…` at `914751a` |
 | 3 | 2026-10-29 | same, slice 1 only, with the D17 acceptance bar in the prompt | same | `6e39c2fd0865…` / `f41352288af3…` at `a3a62a6` |
+| — | 2026-10-29 | not reviewed: post-round-3 fixes, PoC proportion pass, lean cut (D20) | — | `266ada8749b5…` / `8c9c445f9576…` at `47e11c2` |
 
 Reviewer inputs: the repository (read-only), the grill-me decision log and the compose inventory
 (env var names only). The prompt forbids reading the author's session data; the sandbox restricts
