@@ -204,14 +204,17 @@ Standards that are **not** gated yet (follow them for new and changed code):
   ```
 - Specific test IDs:
   ```bash
-  docker compose --profile tests -f compose/spiffe.compose.yml run --rm \
+  docker compose --profile tests -f compose/spiffe.compose.yml run --rm --build \
     -e TEST_ONLY=M3.S3-T3,M3.S4-T2 rogue-tests
   ```
 - Selected milestones:
   ```bash
-  docker compose --profile tests -f compose/spiffe.compose.yml run --rm \
+  docker compose --profile tests -f compose/spiffe.compose.yml run --rm --build \
     -e TEST_MILESTONES=m1,m2,m25,m3 rogue-tests
   ```
+- Keep `--build`: `scripts/rogue_node_tests.sh` is copied into the `rogue-tests` image, so without it
+  a run silently uses the harness from the last build. (The `varambu` wrapper is bind-mounted and needs
+  no rebuild.)
 - A targeted run overwrites `test_report.log`, so `make qa-evidence` needs a full run to pass.
 - Live Jira tests (`M5-T55`, `make jira-live-smoke`) need explicit live configuration; default runs
   use deterministic mocks.

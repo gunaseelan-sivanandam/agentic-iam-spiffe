@@ -141,3 +141,107 @@ Approvable within the threat model: no — B5.
 #### Verdict
 
 Approvable within the threat model: no — B6.
+
+## Reviewer prompts (verbatim)
+Recorded so a review can be rerun the same way. Command, from the repository root:
+`codex exec -m gpt-6.1-sol --sandbox read-only --ephemeral -C . [--add-dir <dir with earlier reports>] -o round.md - < PROMPT.md`.
+
+### Round 1
+
+````markdown
+You are the independent reviewer of an implementation change in the repository at the current
+working directory. You did not write it. Review it read-only: do not modify files, run docker,
+start services or use the network. Never print key material, tokens or env var values.
+
+## What to review
+The commit range `main..HEAD` (run `git diff main..HEAD` and `git log main..HEAD`). It is
+Increment 1A of slice `agentic-delivery-process`: exact outcomes for loose E2E checks in
+`scripts/rogue_node_tests.sh`, a new lint `scripts/test_lint.py` (`make test-lint`), and mutation
+scoring in `scripts/mutation_gate.py`. The approved contract is
+`docs/slices/agentic-delivery-process/plan.md` and `test_plan.md` (the expected-outcome table,
+the probe record and the deviations listed there).
+
+## Rules for findings
+Read `AGENTS.md`, section "PoC scope and proportion", first. This is a proof of concept. The threat
+model is honest mistakes by an agent, not deliberate attacks on CI or the gates. Only these block:
+a concrete false green (a test that can pass while what it protects is broken), a contradiction
+with the approved test plan, or an approved decision without a test. Everything else is advisory:
+list it once, briefly. Production-hardening ideas are advisory at most. Do not invent work.
+
+## Answer exactly these two questions
+1. **Tests.** For each E2E test changed in the diff, which wrong failure would still pass its new
+   outcome check: the service down, another status, the right status with another reason, another
+   component answering, a missing value or an empty or missing evidence file read as success?
+   Does the assertion match its row in the test plan's expected-outcome table? Also check the new
+   in-test controls (premise guards) for the network isolation tests, `scripts/test_lint.py` against
+   its tests in `tests/tools/test_test_lint.py`, and `scripts/mutation_gate.py` against
+   `tests/tools/test_mutation_gate.py`.
+2. **Keys.** Does the change make a key, socket or secret reachable by a service that should not
+   hold it, through a compose mount, an env var, a Dockerfile `COPY`, an entrypoint or script that
+   copies or writes it, or a shared volume? Does any new evidence file or log record a token, key or
+   credential value?
+
+## Output
+Markdown only, in this structure:
+
+# Independent review — Increment 1A
+
+## 1. Tests
+A table: Test | Wrong failure that still passes (or "none found") | Matches the test-plan row (yes/no).
+Then any finding about the lint or the mutation gate.
+
+## 2. Keys
+"No" with one line of reasoning, or each finding.
+
+## Blocking findings
+Each with: where (file:line), the failure scenario, and the smallest fix. "None" if none.
+
+## Advisory (at most five)
+
+## Verdict
+"Approvable within the threat model: yes" or "no — <finding ids>".
+
+## Not checked
+````
+
+### Round 2
+
+````markdown
+You are the independent reviewer of Increment 1A in the repository at the current working
+directory (read-only: no file changes, no docker, no network; never print key material or tokens).
+In round 1 you reported four blocking findings on commit f9c6741 (your report is in the extra
+directory as round1.md). The author's fixes are in commit HEAD (`git show HEAD`).
+
+Rules: AGENTS.md "PoC scope and proportion". Re-check only B1, B2, B3 and B4. In this round a new
+finding is allowed only if it is a blocker (a concrete false green inside the honest-mistake threat
+model, with a failure scenario). Do not repeat advisories.
+
+Output, markdown only:
+# Independent review — Increment 1A, round 2
+## Round-1 findings
+Table: Finding | closed/open | reason (file:line)
+## New blocking findings
+"None", or each with where, failure scenario and smallest fix.
+## Verdict
+"Approvable within the threat model: yes" or "no — <ids>".
+````
+
+### Round 3
+
+````markdown
+You are the independent reviewer of Increment 1A in the repository at the current working
+directory (read-only: no file changes, no docker, no network; never print key material or tokens).
+Your round-2 report (round2.md in the extra directory) found B5. The fix is commit HEAD
+(`git show HEAD`). Rules: AGENTS.md "PoC scope and proportion". Re-check only B5. This is the last
+round: a new finding is allowed only if it is a blocker with a concrete failure scenario.
+
+Output, markdown only:
+# Independent review — Increment 1A, round 3
+## B5
+closed/open, with reason (file:line)
+## New blocking findings
+"None", or each with where, failure scenario and smallest fix.
+## Verdict
+"Approvable within the threat model: yes" or "no — <ids>".
+````
+

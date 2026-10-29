@@ -144,3 +144,93 @@ None
 #### Verdict
 
 Approvable within the threat model: yes
+
+## Reviewer prompts (verbatim)
+Recorded so a review can be rerun the same way. Command, from the repository root:
+`codex exec -m gpt-6.1-sol --sandbox read-only --ephemeral -C . [--add-dir <dir with earlier reports>] -o round.md - < PROMPT.md`.
+
+### Round 1
+
+````markdown
+You are the independent reviewer of an implementation change in the repository at the current
+working directory. You did not write it. Review read-only: do not modify files, run docker, start
+services or use the network. Never print key material, tokens or environment variable values.
+
+## What to review
+The commit range `main..HEAD` (`git diff main..HEAD`, `git log main..HEAD`): Increment 1B of slice
+`agentic-delivery-process`, the deployment register `security/invariants.yaml`, the check
+`scripts/qa_deploy.py` (`make qa-deploy`), its tests `tests/tools/test_qa_deploy.py`, the
+`REQ-SEC` requirements in `docs/requirements.md`, ARCH-034, and rulebook changes in `AGENTS.md`.
+The approved intent is `docs/slices/agentic-delivery-process/plan.md` (Increment 1B, REQ-SEC,
+known violations, success criteria) and `test_plan.md` (T-8 to T-13 and "1B implementation notes",
+which record the user's decisions and the deviations). You may read the whole repository, including
+`compose/spiffe.compose.yml`, Dockerfiles, entrypoints and `docs/open_problem_log.md`.
+
+## Rules for findings
+Read `AGENTS.md`, section "PoC scope and proportion", first. This is a proof of concept; the threat
+model is honest mistakes by an agent, not deliberate attacks on CI or the gates. Only these block: a
+concrete false green (the check can pass while what it protects is broken), a contradiction with the
+approved plan or the user's recorded decisions, or an approved decision without a test. Everything
+else is advisory: list it once, briefly. Production-hardening ideas are advisory at most.
+
+## Part A: the slice's two questions
+1. Tests: for each tooling test and for `qa-deploy` itself, which wrong input would still pass (a
+   compose fact, mount, env var or privilege that should fail but does not; a missing or empty
+   input read as success)? Does each test match its T-8..T-13 description?
+2. Keys: does the change make a key, socket or secret reachable by a service outside the holder
+   list, or does the register or a requirement declare a holder the plan and the recorded decisions
+   do not support? Does any output, test or file record a secret value?
+
+## Part B: generic questions (a trial for a future review template; answer each briefly)
+1. Intent: does it do what was approved, no more and no less?
+2. Claims and evidence: for each claim (docs, requirements, comments), what proves it, and could the
+   proof hold while the claim is false?
+3. Design and quality: simplest design that fits, readable, consistent with the repo's other QA
+   scripts; relevant qualities no worse.
+4. Failure and change: behaviour on unreadable or malformed input, missing docker, an image that is
+   not built; fails safe?
+5. Rules and new risks: keeps AGENTS.md rules and existing requirements; adds anything that should
+   itself be registered?
+6. Ripple: what else depends on what changed (CI, Makefile, docs, other slices), and is it updated?
+7. Durability: anything decided or learned that lives only somewhere temporary?
+8. Blind spots: what did you not check?
+
+## Output (markdown only)
+# Independent review — Increment 1B
+## A1. Tests
+## A2. Keys
+## B. Generic questions
+(one short paragraph or "none" per question)
+## Blocking findings
+Each with id (C1, C2, ...), where (file:line), failure scenario, smallest fix. "None" if none.
+## Advisory (at most five)
+## Verdict
+"Approvable within the threat model: yes" or "no — <ids>".
+## Not checked
+````
+
+### Round 2
+
+````markdown
+You are the independent reviewer of Increment 1B in the repository at the current working
+directory (read-only: no file changes, no docker, no network; never print key material, tokens or
+env values). Your round-1 report is round1.md in the extra directory; it found C1-C4. The author's
+fixes are in commit HEAD (`git show HEAD`). For C3, the author applied the user's recorded holder
+decision for `rogue-tests` (test_plan.md, "1B implementation notes") to K7 as well, with the same
+reason, and registered `tmp_svid` as a K7 location; judge whether that is consistent with the
+recorded decision and the requirement text, and flag it for the user if not.
+
+Rules: AGENTS.md "PoC scope and proportion". Re-check only C1-C4. In this round a new finding is
+allowed only if it is a blocker (a concrete false green inside the honest-mistake threat model, with
+a failure scenario). Do not repeat advisories.
+
+Output, markdown only:
+# Independent review — Increment 1B, round 2
+## Round-1 findings
+Table: Finding | closed/open | reason (file:line)
+## New blocking findings
+"None", or each with id, where, failure scenario and smallest fix.
+## Verdict
+"Approvable within the threat model: yes" or "no — <ids>".
+````
+
