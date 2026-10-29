@@ -18,8 +18,9 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
   - [OPL-008](open_problem_log.md#opl-008-spire-token-init-mounts-the-whole-spire-server-data-directory):
     the SPIRE bootstrap container can read the server's signing keys and datastore.
 - **Next slice:** [agentic-delivery-process](slices/agentic-delivery-process/plan.md) slice 1 of 3
-  (plan for review, lean scope D20): exact outcomes for the loose E2E checks and a key-holder
-  list checked against compose (`qa-deploy`). Slices 2 (lanes, CI
+  (plan approved, lean scope D20). Increment 1A (exact outcomes for the loose E2E checks,
+  `make test-lint`, mutation scoring) is implemented on `slice/agentic-delivery-process-1a`;
+  Increment 1B (key-holder list checked against compose, `qa-deploy`) is next. Slices 2 (lanes, CI
   trust) and 3 (orchestration, then a pilot that fixes OPL-005 to OPL-008) are drafts in
   [`later_slices.md`](slices/agentic-delivery-process/later_slices.md). Later: the
   generic capability verifier ([brainstorm](slices/m5-generic-verifier-architecture/brainstorm.md),
@@ -29,16 +30,16 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Last verification
 | Check | Date | Result |
 | --- | --- | --- |
-| Full E2E suite, clean stack, `main` at `fe86c35` | 2026-10-27 | 120/120 passed; 3 warnings (M3.S2-T3, M3.S2-T5 accepted isolation; M5-T55 env-gated skip) |
-| `make qa-evidence` after that run | 2026-10-27 | PASSED (validated 119, skipped 1) |
-| `make qa-quality` (qa-trace, unit traceability, unit guard, docs-check) | 2026-10-27 | PASSED; qa-trace reports 122 non-blocking coverage gaps, incl. 87 requirements without E2E |
+| Full E2E suite, clean stack, `slice/agentic-delivery-process-1a` at `2c22623` | 2026-10-29 | 120/120 passed; 1 warning (M5-T55 env-gated skip) |
+| `make qa-evidence` after that run | 2026-10-29 | PASSED (validated 119, skipped 1) |
+| `make qa-quality` (qa-trace, unit traceability, unit guard, docs-check, test-lint) | 2026-10-29 | PASSED; qa-trace reports 122 non-blocking coverage gaps, incl. 87 requirements without E2E |
+| `make unit-mutation` under the new scoring | 2026-10-29 | PASSED, 85.58% (1240 killed of 1449; 0 untested, 0 skipped) |
 | CI `unit-trust` | 2026-10-27 | passing on PR #2 and `main` |
 
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `docs/consolidation` | Documentation restructure, rulebook, complete E2E spec, `docs-check` in CI ([slice](slices/docs-consolidation/plan.md)) | Increments 1–3 committed; PR to be opened |
-| `slice/agentic-delivery-process` | Slice-1 plan and test plan, later-slice drafts, independent review record; OPL-005 forgery evidence; OPL-006 to OPL-009 | Plan PR #4 under review |
+| `slice/agentic-delivery-process-1a` | Increment 1A: exact E2E outcomes, `test-lint`, mutation scoring | implemented; PR to be opened |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).

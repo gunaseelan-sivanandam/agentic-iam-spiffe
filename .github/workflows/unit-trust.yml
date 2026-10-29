@@ -37,6 +37,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          # tests/tools/test_test_lint.py lints the harness at a fixed baseline commit.
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -53,6 +56,9 @@ jobs:
 
       - name: Run QA tooling and shell tests
         run: make tooling-test
+
+      - name: Lint E2E outcome checks
+        run: make test-lint
 
   unit-guard:
     needs: trace-model

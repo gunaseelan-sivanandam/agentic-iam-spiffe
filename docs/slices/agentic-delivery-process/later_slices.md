@@ -66,6 +66,68 @@ reference), root cause vs symptom, what the reproduction test asserts and its si
 why, and what was not checked — each with the agent's answer and the reviewer's verdict.
 
 
+### Review template (input from the 1A review discussion, 2026-10-29)
+Not approved; slice 2's grill-me decides it together with the lanes, because each lane says which
+review it gets. Slice 3 then runs the reviewer automatically from the same template.
+
+**Why.** The 1A review showed the reviews were short-sighted: the prompts asked about this slice's
+topics (wrong failures, keys) and only inside the plan or diff, and from round 2 only re-checked
+earlier findings. Nothing asked whether a decision reached the place future agents read. Gaps found:
+- the slice workflow in `AGENTS.md` (steps 1 and 4) does not say that plans and implementations get
+  an independent review, who reviews, or what the reviewer may see; that lives only in this slice's
+  `plan.md` (D11, D17, D20);
+- the reviewer prompts used for the plan and 1A are not in the repository;
+- the plan template's "Authored source changes" has no line for rulebook (`AGENTS.md`) changes, so
+  no step asks whether a decision changes how every future slice works;
+- the blocking list in `AGENTS.md` "PoC scope and proportion" does not name a security defect in the
+  system under test or a correctness bug.
+
+**Proposed generic questions**, one template for every review (plan, feature, patch, doc, process),
+so that the specific checks come from the repository's own rules rather than from the prompt:
+
+*Entry (author):* automated gates pass; the author reviewed their own change; the change is small
+enough to review, otherwise split.
+
+1. **Intent.** Does it do what was asked or approved, no more and no less?
+2. **Claims and evidence.** For each claim (test, doc, PR text, requirement), what proves it? Could
+   the proof hold while the claim is false? Is each requirement verifiable and unambiguous?
+3. **Design and quality.** Simplest design that fits, consistent with its surroundings, readable and
+   maintainable; real alternatives considered; each relevant quality (reliability, performance,
+   operability and diagnosability, usability of docs or CLI, compatibility) no worse than before.
+4. **Failure and change.** Behaviour on invalid input, dependency failure, partial failure, timing or
+   concurrency; fails safe; can be rolled back or migrated.
+5. **Rules and new risks.** Keeps every standing rule and invariant (`AGENTS.md`, requirements, asset
+   holder list, open problems); registers and threat-checks any new asset, trust boundary, data
+   flow, dependency or rule it adds.
+6. **Ripple.** What depends on what changed, and is each dependent still correct or updated?
+7. **Durability.** Does anything decided or learned live only somewhere temporary (chat, scratch, a
+   frozen slice record, a PR comment)? Where must it live?
+8. **Blind spots.** What was not checked, and could it matter?
+
+Severity: 1, 2, 4 and 5 can block, with a concrete failure inside the threat model; 3, 6 and 7 are
+fix-or-defer and the user decides; 8 is information. Every question is answered; "n/a" needs a
+reason. The 3-round limit and the threat model in `AGENTS.md` apply. The reviewer reads the intent
+source, the change, `AGENTS.md` and the whole repository (read-only), never the author's reasoning.
+When a defect escapes, the escape review asks which question should have caught it and sharpens that
+question; it never adds a topic-specific question.
+
+**Field practice it draws on:** Google engineering practices for code review (design, complexity,
+tests, consistency, docs); ISO/IEC 25010 quality characteristics; failure-mode thinking (SRE
+production-readiness reviews, FMEA); threat modelling (STRIDE, OWASP) for new boundaries; IEEE 29148
+requirement qualities; IEEE 1028 and Fagan inspections (entry and exit criteria, checklists that
+learn from defects); review-size findings (about 200–400 lines per review, author self-review first);
+architecture decision records; blameless escape analysis. Not adopted for the PoC: separate reviewer
+passes per perspective (a second, security-focused pass is an option for security-relevant slices)
+and review metrics.
+
+**Proposed homes:** the template as `docs/review_prompt.md`, approved by the user; `AGENTS.md` slice
+workflow steps 1 and 4 run it on the plan and on the implementation, and lanes outside a full slice
+run it too; a "Rulebook (`AGENTS.md`): process rules this slice adds or changes, or none" line in the
+plan template; the two extra blocking items in the PoC section.
+
+**Interim (slice 1B):** the 1B review gets these questions informally, alongside the slice's two
+questions, to try them before slice 2 makes them a rule.
+
 ### CI trust model
 Resolves review findings PR-01, PR-02, PR-12 and PR-15. Every job definition comes from `main` via
 `pull_request_target`; the workspace root is a checkout of `main` and the PR is checked out into

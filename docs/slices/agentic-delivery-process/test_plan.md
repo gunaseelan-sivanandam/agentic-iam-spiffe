@@ -33,12 +33,12 @@ exits non-zero"), the 1A PR adds its row.
 
 | Test | By | Signature | Twin | Source | Replaces |
 | --- | --- | --- | --- | --- | --- |
-| M1-T1 missing_join_token | spire-server | exact rejection log line for a missing token | positive attestation test (named in 1A; new if none exists) | probe | regex `attestation.*fail\|fail.*attest\|…` |
-| M1-T2 forged_token | spire-server | exact rejection log line for an unknown token | same | probe | same regex |
-| M1-T3 replayed_token | spire-server | exact rejection log line for a used token | same | probe | same regex |
-| M2.5-T1 toolb_app_not_reachable | network (edge → toolb_app_net) | curl to the pinned tool-b IP times out (exit 28); never "refused" | new: the same request from a container on `toolb_app_net` returns 200 | probe | `refused\|timed out\|no route` |
-| M3.S2-T3 opa_unreachable | edge network | `opa` does not resolve from the edge, **and** a request to OPA's pinned IP times out | new: `opa` resolves and answers from `capiss_app_net` | probe | DNS-vs-TCP warning alternate |
-| M3.S2-T5 issuer_app_not_reachable | edge network | `capability-issuer` does not resolve from the edge, **and** its pinned IP times out | new: resolves and answers from `capiss_app_net` | probe | DNS-vs-TCP warning alternate |
+| M1-T1 missing_join_token | rogue agent (join_token plugin) | `nodeattestor(join_token): join token was not provided` | M1-T5 (every node container attested) | probe | regex `attestation.*fail\|fail.*attest\|…` |
+| M1-T2 forged_token | spire-server | `failed to attest: join token does not exist or has already been used` in the rogue log, and exactly one such `AttestAgent` rejection in the server log since the attempt | same | probe | same regex |
+| M1-T3 replayed_token | spire-server | the same message as M1-T2 (SPIRE does not distinguish unknown from used); the premise separates them | same | probe | same regex |
+| M2.5-T1 toolb_app_not_reachable | network (edge → toolb_app_net) | curl to the pinned tool-b IP times out in the connect phase (exit 28, `Connection timed out`); never "refused" | internal (premise): tool-b answers 200 on that IP from inside `toolb_app_net` | probe | `refused\|timed out\|no route` |
+| M3.S2-T3 opa_unreachable | edge network | `opa` does not resolve from the edge (exit 6), **and** a request to OPA's pinned IP times out in the connect phase (exit 28, `Connection timed out`) | internal (premise): `opa` answers 200 from inside `capiss_app_net` | probe | DNS-vs-TCP warning alternate |
+| M3.S2-T5 issuer_app_not_reachable | edge network | `capability-issuer` does not resolve from the edge (exit 6), **and** its pinned IP times out in the connect phase (exit 28, `Connection timed out`) | internal (premise): `capability-issuer` answers 200 from inside `capiss_app_net` | probe | DNS-vs-TCP warning alternate |
 | M3.S2-T4 opa_unavailable | capability-issuer | 503, `error=denied`, `reason=opa_unavailable` | M3.S2-T1 | plan | `403\|503` |
 | M3.S4-T1 identity_only_denied | tool-b | 401, `reason=missing_token` | M3.S4-T2 | plan | `401\|403` + "no network error" grep |
 | M3.S4-T3 rogue_no_token_denied | tool-b | 401, `reason=missing_token` (tool-b-envoy admits the rogue SAN) | M3.S4-T2 | plan, probe confirms | `401\|403` + grep |
@@ -47,10 +47,45 @@ exits non-zero"), the 1A PR adds its row.
 | M3.S4-T2 agent_a_token_access | tool-b | 200, expected secret body | — | plan | "no network error" grep |
 | M4-T5 budget_enforced_per_root_token | tool-b | 11th call: 403, `reason=budget_exceeded`; calls 1–10: 200 | internal | plan | `401\|403` |
 | M4-T6 tampered_token_denied | tool-b | 401, `reason=invalid_token` | M3.S4-T2 | plan | `401\|403` |
-| M5-T21 audience_mismatch_denied | capability-issuer | 400, `error=bad_request`, `reason=res`: `aud=jira-tool` with a `jira-mcp:` resource fails resource canonicalization (`canonicalize_resource`) before OPA is called | M5 root-mint allow test (named in 1A) | plan (from code) | `400\|403` |
+| M5-T21 audience_mismatch_denied | capability-issuer | 400, `error=bad_request`, `reason=res`: `aud=jira-tool` with a `jira-mcp:` resource fails resource canonicalization (`canonicalize_resource`) before OPA is called | M5-T3 (IAM summary: the allowed mint and call on the M5 route) | plan (from code) | `400\|403` |
+| M2-T3 expired_client_cert (renamed: untrusted CA) | tool-b-envoy | `tlsv1 alert unknown ca` (alert 48); the test never reaches expiry, which M2-T9 proves | M2-T9 | probe | `(alert unknown ca\|unknown ca\|unable to get local issuer certificate\|verify error…)` |
+| M2-T5 no_workload_socket | Workload API client | `dial unix /run/spire/agent/private/api.sock: connect: no such file or directory` | M3.S4-T2 premise: agent-a fetches its SVID through the Workload API (`prepare_client_material`) | probe | `(No such file\|…\|connect\|failed\|unable\|Workload API)` |
+| M2-T6 socket_no_entry | spire-agent | `code = PermissionDenied desc = no identity issued` | as M2-T5 | probe | `(No identity issued\|…\|permission denied\|unauthorized\|denied)` |
+| M2-T7 no_svid_or_keys | rogue container | `No such file or directory` for each of the four paths (wrong container until OPL-006; plan review note 3) | — | probe | `(No such file\|Permission denied\|not found)` |
+| M5-T4 summary_allowed_fields | jira-mcp-gateway | `ok` true and `project.key` `IAM`, then the forbidden-field grep | — | plan | negative grep only |
+| M5-T24 direct_app_bypass_unavailable | edge network | exit 6, `Could not resolve host: jira-mcp-gateway` | M5-T3 | probe | `(Could not resolve\|timed out\|No route\|Failed to connect)` |
+| M5-T26 mcp_responses_no_tokens | adapter | both calls succeed (JSON-RPC 2.0, not `isError`, decoded `ok` true), then the token grep | — | plan | negative grep only |
+| M5-T28 adapter_env_no_jira_secret | adapter | the capture contains `JIRA_MCP_GATEWAY_URL=`, then the credential grep | — | plan | negative grep only |
+| M5-T46 varambu_audit_stale_tailer_warning | varambu CLI | strict run exits 1 with `WARNING: audit tailer is not running; audit file may be stale.` | non-strict run in the same test | probe | non-zero exit only |
 
-Also in 1A: `M5-T55`'s skip stays env-gated as today; the other `add_warning` alternates become
-exact checks above, or declared alternates with a reason.
+Also in 1A: `M5-T55`'s skip stays env-gated as today; the other `add_warning` alternates became
+exact checks above. No declared alternate was needed.
+
+### Probe record (1A, stack at `f6a9524`, 2026-10-29)
+The stack was built clean from `main` at the plan merge and the unchanged harness run on every row
+above (all passed). Observed values, which the rows pin (no token or key values recorded):
+- M1: rogue log errors as in the table; server log `Invalid argument: failed to attest: join token
+  does not exist or has already been used`, `method=AttestAgent`, for both T2 and T3.
+- M2-T3 `tlsv1 alert unknown ca` (alert 48); M2-T9 `certificate expired` (alert 45).
+- M2-T5, M2-T6, M2-T7: the messages in the table; every exit code 1.
+- M2.5-T1 exit 28 `Connection timed out after 2018 milliseconds`.
+- M3.S2-T3, T5: by name exit 6 `Could not resolve host: opa` / `capability-issuer`; by IP on
+  `capiss_app_net` (OPA 8181, issuer 8000) exit 28; tool-b by IP on `toolb_app_net` exit 28.
+- HTTP rows: exactly the statuses and `error`/`reason` in the table.
+- M5-T24 exit 6 `Could not resolve host: jira-mcp-gateway`; M5-T46 strict exit 1 with the warning line.
+
+### Deviations found in 1A (minor; recorded here for the PR review)
+- **Twins are in-test controls** (premise guards) instead of new test IDs. They run in the same
+  test, so they cannot be skipped or run separately; no new tests or trace entries were needed.
+- **M2-T3 tested the wrong thing.** Its certificate comes from a throwaway CA, so Envoy rejects it as
+  an unknown CA before checking expiry. The test now asserts that exactly and is renamed
+  "Rogue with expired cert from an untrusted CA is rejected"; expiry stays proved by M2-T9.
+- **M1-T2 and M1-T3 share one message**, because SPIRE uses the same error for an unknown and a used
+  token. The server log is now read from the attempt's start time, so a line from another test
+  cannot satisfy it.
+- **Redundant guards removed:** the "no network error" greps (the exact denial body replaces them)
+  and the separate reason checks that `assert_denial` now covers, including M3.S4-T4's
+  `sub_mismatch|invalid_token` alternation.
 
 ## Tooling tests (`tests/tools/`, each with a negative control)
 Numbers are kept from earlier drafts; the gaps are tests D20 deferred.
@@ -66,8 +101,8 @@ Numbers are kept from earlier drafts; the gaps are tests D20 deferred.
 
   It accepts `|| true` in evidence-writing plumbing outside guard strings, and a declared alternate
   with a reason.
-- T-22 Lint on the old harness: `test-lint` on the harness at `20c074e` flags every row of the 1A
-  table; after 1A it flags nothing.
+- T-22 Lint on the old harness: `test-lint` on the harness at `20c074e` flags exactly the tests in
+  the 1A table (the 15 planned rows and the 9 the lint found); after 1A it flags nothing.
 - T-41 Mutation scoring: 1 killed and 99 `no_tests` fails; `skipped` mutants count as not killed;
   a total of 0 fails; 70.00% passes and 69.99% fails.
 
@@ -99,6 +134,8 @@ Numbers are kept from earlier drafts; the gaps are tests D20 deferred.
   2027-01-01 00:00:00 UTC.
 
 ## Independent review at the implementation PR (D20)
+The 1A review record is [`review_1a.md`](review_1a.md).
+
 Each of the 1A and 1B PRs carries the reviewer's answers to the two questions in
 [`plan.md`](plan.md#independent-review-d17-d20): which wrong failure would still pass each new or
 changed test, and whether the change makes a key, socket or secret reachable outside the holder
@@ -111,6 +148,10 @@ Stated so they are not taken for coverage:
 - The review is judgment, not a mechanical guarantee.
 - A deliberately malicious change is outside the threat model (D18, OPL-009).
 - Mutation testing mutates covered lines only (`mutate_only_covered_lines = true`).
+- `test-lint` is a pattern check on outcome guards. It finds generic failure words, `assert_file_any`,
+  `!= 200`, `|| true`, exit-code-only and negative-only tests; it does not understand an alternation of
+  specific codes (for example the removed `^(sub_mismatch|invalid_token)$`) or checks inside helpers.
+  The test review question covers those.
 
 ## Assumptions and fixtures
 - Default E2E mode uses deterministic mocks; live Jira stays env-gated (`M5-T55`).

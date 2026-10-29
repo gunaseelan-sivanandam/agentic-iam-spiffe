@@ -29,16 +29,16 @@ def main() -> int:
     skipped = int(stats.get("skipped", 0))
     no_tests = int(stats.get("no_tests", 0))
 
-    denominator = total - skipped - no_tests
-    if denominator <= 0:
+    # Untested (no_tests) and skipped mutants count as not killed, so they lower the score.
+    if total <= 0:
         print(
-            "[mutation-gate] invalid denominator for mutation score "
+            "[mutation-gate] no mutants in the run "
             f"(total={total}, skipped={skipped}, no_tests={no_tests})",
             file=sys.stderr,
         )
         return 2
 
-    score = (killed / denominator) * 100.0
+    score = (killed / total) * 100.0
     if score < args.min_score:
         print(
             "[mutation-gate] FAILED "

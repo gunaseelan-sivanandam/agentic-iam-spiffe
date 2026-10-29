@@ -12,7 +12,7 @@ MIN_MUTATION_SCORE ?= 70
 BASE_REF ?= origin/main
 MUTATION_MAX_CHILDREN ?= 2
 
-.PHONY: unit unit-guard-check unit-invariants unit-boundary unit-negative-controls unit-hybrid-critical unit-flake unit-cov unit-diff-cov traceability-check unit-mutation unit-trust qa-trace qa-evidence qa-quality docs-check tooling-test jira-live-smoke
+.PHONY: unit unit-guard-check unit-invariants unit-boundary unit-negative-controls unit-hybrid-critical unit-flake unit-cov unit-diff-cov traceability-check unit-mutation unit-trust qa-trace qa-evidence qa-quality docs-check tooling-test test-lint jira-live-smoke
 
 unit:
 	$(PYTEST) $(TEST_DIR)
@@ -80,10 +80,13 @@ qa-evidence:
 	  --test-report test_report.log \
 	  --report-json artifacts/quality/evidence_report.json
 
-qa-quality: qa-trace traceability-check unit-guard-check docs-check
+qa-quality: qa-trace traceability-check unit-guard-check docs-check test-lint
 
 docs-check:
 	$(PYTHON) scripts/check_docs.py
+
+test-lint:
+	$(PYTHON) scripts/test_lint.py
 
 tooling-test:
 	$(PYTEST) -q tests/tools

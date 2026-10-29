@@ -5,6 +5,32 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-10-29 Increment 1A: exact E2E outcomes, test-lint, mutation scoring
+
+- Slice `agentic-delivery-process` 1A on branch `slice/agentic-delivery-process-1a`, from the plan
+  merged as PR #4 (`f6a9524`).
+- Probed the unchanged harness on a clean stack at `f6a9524` (all rows passed) and pinned the
+  observed outcomes; the probe record is in the slice `test_plan.md`.
+- Tightened 24 E2E outcome checks to exact statuses, reasons, exit codes and messages: the 15
+  planned rows plus 9 that the new lint found (M2-T3, M2-T5, M2-T6, M2-T7, M5-T4, M5-T24, M5-T26,
+  M5-T28, M5-T46). `assert_file_any` and the "no network error" greps are gone; the M3.S2-T3/T5
+  warning alternates became "does not resolve" plus "pinned IP times out in the connect phase".
+  The network isolation tests got in-test positive controls (the app answers 200 from inside its
+  network). M1-T2/T3 read the server log from the attempt's start time.
+- Found and corrected: M2-T3 never tested expiry (its certificate is from an untrusted CA, so Envoy
+  answers `unknown ca`); renamed to what it tests, expiry stays with M2-T9. M5-T4, M5-T26 and M5-T28
+  could pass on a missing or empty evidence file; each now checks a positive anchor first.
+- New `scripts/test_lint.py` and `make test-lint` (in `qa-quality` and the CI docs-check job, which
+  now fetches full history for the baseline test); tooling tests T-7, T-22, T-41 in `tests/tools/`.
+- `scripts/mutation_gate.py` counts `no_tests` and `skipped` as not killed and fails an empty run.
+  Score under the new rule: 85.58% (1240 of 1449; 0 untested, 0 skipped), unchanged, because
+  `mutate_only_covered_lines = true` never creates mutants for uncovered lines.
+- Independent review (Codex, three rounds, `review_1a.md`): B1–B6 fixed; B6 after the round limit,
+  checked offline, not re-reviewed. Key question answered "no" in round 1.
+- Validation: full E2E on a clean stack 120/120 (1 warning, the M5-T55 env-gated skip; the two
+  M3.S2 warnings are gone), `make qa-evidence` PASSED, `make qa-quality` PASSED, `make tooling-test`
+  PASSED, `make unit-mutation` PASSED, `ruff check services scripts` clean.
+
 ## 2026-10-29 Delivery-process plan reviewed, escalated and split into three slices
 
 - Plan PR #4 review comments addressed (terms, D16 security coverage of grill-me, lane home, CI
