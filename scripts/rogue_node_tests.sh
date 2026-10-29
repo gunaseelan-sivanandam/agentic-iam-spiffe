@@ -703,6 +703,17 @@ assert_app_answers_in_network() {
   return 0
 }
 
+# A successful MCP tool result: JSON-RPC 2.0, not isError, decoded text has ok=true.
+assert_mcp_ok() {
+  file="$1"
+  if ! jq -e '.jsonrpc == "2.0" and ((.result.isError // false) == false)' "$file" >/dev/null 2>&1 \
+    || ! jq -r '.result.content[0].text' "$file" 2>/dev/null | jq -e '.ok == true' >/dev/null 2>&1; then
+    fail_with_body "expected a successful MCP result with ok=true" "$file"
+    return 1
+  fi
+  return 0
+}
+
 # IP of a container on one named compose network (the network name ends with the given suffix).
 container_ip_on() {
   docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{$v.IPAddress}}{{"\n"}}{{end}}' "$1" \
@@ -2302,9 +2313,9 @@ T7_test() {
   premise_guard "no SVID or agent data mounts" \
     "mounts=\"\$(docker inspect -f '{{range .Mounts}}{{.Destination}} {{end}}' \"${temp_rogue}\" 2>/dev/null || true)\"; ! text_contains_str \"\$mounts\" \"/run/spire/svid\" && ! text_contains_str \"\$mounts\" \"/run/spire/agent/data\""
   exercise_guard "attempt read of SVID and keys" \
-    "set +e; docker exec \"${temp_rogue}\" cat /run/spire/svid/svid.pem >/tmp/rogue_svid_out 2>&1; rc_cert=\$?; docker exec \"${temp_rogue}\" cat /run/spire/svid/svid.key >/tmp/rogue_svid_key 2>&1; rc_key=\$?; docker exec \"${temp_rogue}\" cat /run/spire/agent/data/svid.0.pem >/tmp/rogue_node_svid 2>&1; rc_node_cert=\$?; docker exec \"${temp_rogue}\" cat /run/spire/agent/data/keys.json >/tmp/rogue_node_keys 2>&1; rc_node_key=\$?; set -e; echo \"\$rc_cert \$rc_key \$rc_node_cert \$rc_node_key\" >\"$EVDIR/rcs.txt\"; cat /tmp/rogue_svid_out >\"$EVDIR/rogue_svid_out.txt\" 2>/dev/null || true; cat /tmp/rogue_node_svid >\"$EVDIR/rogue_node_svid.txt\" 2>/dev/null || true; cat /tmp/rogue_node_keys >\"$EVDIR/rogue_node_keys.txt\" 2>/dev/null || true"
+    "set +e; docker exec \"${temp_rogue}\" cat /run/spire/svid/svid.pem >/tmp/rogue_svid_out 2>&1; rc_cert=\$?; docker exec \"${temp_rogue}\" cat /run/spire/svid/svid.key >/dev/null 2>\"$EVDIR/rogue_svid_key_err.txt\"; rc_key=\$?; docker exec \"${temp_rogue}\" cat /run/spire/agent/data/svid.0.pem >/tmp/rogue_node_svid 2>&1; rc_node_cert=\$?; docker exec \"${temp_rogue}\" cat /run/spire/agent/data/keys.json >/tmp/rogue_node_keys 2>&1; rc_node_key=\$?; set -e; echo \"\$rc_cert \$rc_key \$rc_node_cert \$rc_node_key\" >\"$EVDIR/rcs.txt\"; cat /tmp/rogue_svid_out >\"$EVDIR/rogue_svid_out.txt\" 2>/dev/null || true; cat /tmp/rogue_node_svid >\"$EVDIR/rogue_node_svid.txt\" 2>/dev/null || true; cat /tmp/rogue_node_keys >\"$EVDIR/rogue_node_keys.txt\" 2>/dev/null || true"
   outcome_guard "rogue cannot read SVID or keys" \
-    "set -- \$(cat \"$EVDIR/rcs.txt\" 2>/dev/null || echo 0 0 0 0); rc_cert=\$1; rc_key=\$2; rc_node_cert=\$3; rc_node_key=\$4; [ \"\$rc_cert\" -ne 0 ] && [ \"\$rc_key\" -ne 0 ] && [ \"\$rc_node_cert\" -ne 0 ] && [ \"\$rc_node_key\" -ne 0 ] && assert_text_contains \"$EVDIR/rogue_svid_out.txt\" 'No such file or directory' && assert_text_contains \"$EVDIR/rogue_node_svid.txt\" 'No such file or directory' && assert_text_contains \"$EVDIR/rogue_node_keys.txt\" 'No such file or directory'"
+    "set -- \$(cat \"$EVDIR/rcs.txt\" 2>/dev/null || echo 0 0 0 0); rc_cert=\$1; rc_key=\$2; rc_node_cert=\$3; rc_node_key=\$4; [ \"\$rc_cert\" -ne 0 ] && [ \"\$rc_key\" -ne 0 ] && [ \"\$rc_node_cert\" -ne 0 ] && [ \"\$rc_node_key\" -ne 0 ] && assert_text_contains \"$EVDIR/rogue_svid_out.txt\" 'No such file or directory' && assert_text_contains \"$EVDIR/rogue_svid_key_err.txt\" 'No such file or directory' && assert_text_contains \"$EVDIR/rogue_node_svid.txt\" 'No such file or directory' && assert_text_contains \"$EVDIR/rogue_node_keys.txt\" 'No such file or directory'"
   if [ -n "${temp_rogue:-}" ]; then
     docker rm -f "$temp_rogue" >/dev/null 2>&1 || true
   fi
@@ -2462,7 +2473,7 @@ M3S2_T3_test() {
   outcome_guard "OPA does not resolve from edge (exit 6)" \
     "assert_file_eq \"$EVDIR/opa_rc.txt\" 6 && assert_text_contains \"$EVDIR/opa_err.txt\" 'Could not resolve host: opa'"
   outcome_guard "OPA pinned IP times out from edge (exit 28)" \
-    "assert_file_eq \"$EVDIR/opa_ip_rc.txt\" 28"
+    "assert_file_eq \"$EVDIR/opa_ip_rc.txt\" 28 && assert_text_contains \"$EVDIR/opa_ip_err.txt\" 'Connection timed out'"
   return 0
 }
 
@@ -2509,7 +2520,7 @@ M3S2_T5_test() {
   outcome_guard "capability-issuer app does not resolve from edge (exit 6)" \
     "assert_file_eq \"$EVDIR/capiss_app_rc.txt\" 6 && assert_text_contains \"$EVDIR/capiss_app_err.txt\" 'Could not resolve host: capability-issuer'"
   outcome_guard "capability-issuer app pinned IP times out from edge (exit 28)" \
-    "assert_file_eq \"$EVDIR/capiss_app_ip_rc.txt\" 28"
+    "assert_file_eq \"$EVDIR/capiss_app_ip_rc.txt\" 28 && assert_text_contains \"$EVDIR/capiss_app_ip_err.txt\" 'Connection timed out'"
   return 0
 }
 
@@ -3824,7 +3835,7 @@ M5_T26_test() {
   echo "EVIDENCE_DIR=$EVDIR"
   premise_guard "M5 path ready" "m5_ready"
   exercise_guard "call summary and create" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/summary_mcp.json\" \"$EVDIR/summary.err\"; mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":\"d\"}' \"$EVDIR/create_mcp.json\" \"$EVDIR/create.err\""
-  outcome_guard "both MCP responses are JSON-RPC results with text" "for f in \"$EVDIR/summary_mcp.json\" \"$EVDIR/create_mcp.json\"; do assert_json_eq \"\$f\" '.jsonrpc' 2.0 && assert_json_present \"\$f\" '.result.content[0].text' || exit 1; done"
+  outcome_guard "both MCP calls succeeded (ok=true, not isError)" "assert_mcp_ok \"$EVDIR/summary_mcp.json\" && assert_mcp_ok \"$EVDIR/create_mcp.json\""
   outcome_guard "Codex-visible stdout contains no bearer token material" "! grep -Eiq 'Bearer |token_type|\"token\"|Biscuit|JIRA_API_TOKEN' \"$EVDIR/summary_mcp.json\" \"$EVDIR/create_mcp.json\""
   return 0
 }

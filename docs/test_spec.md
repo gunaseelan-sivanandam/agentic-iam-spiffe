@@ -581,7 +581,7 @@ Outcome guards
 
 1. rogue cannot read SVID or keys  
    - Requires all read attempts to fail.  
-   - Confirms each read error is `No such file or directory`. (This test inspects a temporary container rather than the deployed one; that is corrected with OPL-006.)
+   - Confirms each of the four read errors (workload certificate and key, node certificate, agent `keys.json`) is `No such file or directory`. For the workload key only the error stream is kept, so a successful read could not put key material into evidence. (This test inspects a temporary container rather than the deployed one; that is corrected with OPL-006.)
 
 ### Evidence produced
 
@@ -942,13 +942,15 @@ Outcome guards
 1. OPA does not resolve from edge (exit 6)  
    - Requires exit code 6 and `Could not resolve host: opa`.
 2. OPA pinned IP times out from edge (exit 28)  
-   - Requires exit code 28: even with the address, the edge has no route into `capiss_app_net`. This replaces the earlier warning alternates, which accepted either DNS isolation or a connection error.
+   - Requires exit code 28 with `Connection timed out` (the connect phase, not a stalled response after connecting): even with the address, the edge has no route into `capiss_app_net`. This replaces the earlier warning alternates, which accepted either DNS isolation or a connection error.
 
 ### Evidence produced
 
-- $EVDIR/edge_dns.txt  
-- $EVDIR/edge_http.txt  
-- $EVDIR/opa_unreachable.out
+- $EVDIR/opa_ip.txt (pinned IP on `capiss_app_net`)
+- $EVDIR/opa_rc.txt, $EVDIR/opa_err.txt (by-name attempt)
+- $EVDIR/opa_ip_rc.txt, $EVDIR/opa_ip_err.txt (by-IP attempt)
+- $EVDIR/premise_edge_dns_*.txt, $EVDIR/premise_toolb_status.txt, $EVDIR/premise_toolb_body.txt (edge context)
+- $EVDIR/toolb_envoy_ip.txt
 
 ### M3.S2-T4 — “Fail closed when OPA is unavailable”
 (derived directly from scripts/rogue_node_tests.sh)
@@ -1035,22 +1037,15 @@ Outcome guards
 1. capability-issuer app does not resolve from edge (exit 6)  
    - Requires exit code 6 and `Could not resolve host: capability-issuer`.
 2. capability-issuer app pinned IP times out from edge (exit 28)  
-   - Requires exit code 28: even with the address, the edge has no route into `capiss_app_net`. This replaces the earlier warning alternates, which accepted either DNS isolation or a connection error.
+   - Requires exit code 28 with `Connection timed out` (the connect phase, not a stalled response after connecting): even with the address, the edge has no route into `capiss_app_net`. This replaces the earlier warning alternates, which accepted either DNS isolation or a connection error.
 
 ### Evidence produced
 
-- $EVDIR/edge_dns.txt  
-- $EVDIR/edge_http.txt  
-- $EVDIR/issuer_unreachable.out
-- $EVDIR/mint_body.json
-- $EVDIR/mint_headers.txt
-- $EVDIR/mint_request.json
-- $EVDIR/mint_status.txt
-- $EVDIR/response.json
-- $EVDIR/status.txt
+- $EVDIR/capiss_app_ip.txt (pinned IP on `capiss_app_net`)
+- $EVDIR/capiss_app_rc.txt, $EVDIR/capiss_app_err.txt (by-name attempt)
+- $EVDIR/capiss_app_ip_rc.txt, $EVDIR/capiss_app_ip_err.txt (by-IP attempt)
+- $EVDIR/premise_edge_dns_*.txt, $EVDIR/premise_toolb_status.txt, $EVDIR/premise_toolb_body.txt (edge context)
 - $EVDIR/toolb_envoy_ip.txt
-
-## M3.S3 — Biscuit minting
 
 ### M3.S3-T1 — “mint returns non-empty token”
 (derived directly from scripts/rogue_node_tests.sh)
@@ -2664,7 +2659,7 @@ Group overview:
 **How:**
 - Premise: the M5 path is ready.
 - Exercise: call `read_project_summary` and `create_story` through MCP.
-- Outcome: both responses are JSON-RPC results (`jsonrpc` is `2.0`) with text content, so a missing or empty response cannot pass; and neither contains `Bearer `, `token_type`, a `"token"` field, `Biscuit`, or `JIRA_API_TOKEN`.
+- Outcome: both calls succeeded (JSON-RPC 2.0, not `isError`, decoded text has `ok` true), so a missing response or an MCP error result such as gateway-unavailable cannot pass; and neither contains `Bearer `, `token_type`, a `"token"` field, `Biscuit`, or `JIRA_API_TOKEN`.
 
 **Evidence:** `summary_mcp.json`, `create_mcp.json`
 

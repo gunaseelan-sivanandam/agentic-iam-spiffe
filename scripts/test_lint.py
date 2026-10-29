@@ -22,7 +22,8 @@ GENERIC_FAILURE_RE = re.compile(
     r"|could not resolve|connect|unable|not found|no such file|not known)"
 )
 SUBSTITUTION_RE = re.compile(r"\\?\$\([^()]*\)")
-REGEX_GROUP_RE =re.compile(r"'\(([^']*\|[^']*)\)'")
+# A single-quoted pattern with alternatives, parenthesised or not: '(a|b)' or 'a|b'.
+REGEX_GROUP_RE = re.compile(r"'\(?([^'()]*\|[^'()]*)\)?'")
 EXIT_NONZERO_RE = re.compile(r'-ne 0\b|!= \\?"?0\\?"?(?=\s|\])')
 NOT_200_RE = re.compile(r'!= \\?"?200|-ne 200\b')
 POSITIVE_CHECK_RE = re.compile(r"(?<!! )\b(grep|text_matches|assert_\w+|jq -e)\b")

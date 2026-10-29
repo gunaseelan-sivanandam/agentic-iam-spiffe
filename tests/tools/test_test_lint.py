@@ -50,6 +50,7 @@ def _rules(text: str) -> list[str]:
         ('"rc=\\$(cat \\"$EVDIR/rc.txt\\"); [ \\"\\$rc\\" -ne 0 ]"', "exit-code-only"),
         ('"assert_file_any \\"$EVDIR/status.txt\\" \\"401\\" \\"403\\""', "any-of"),
         ("\"grep -Eq '(error|fail)' \\\"$f\\\"\"", "broad-regex"),
+        ("\"grep -Eq 'error|fail' \\\"$f\\\"\"", "broad-regex"),
         ("\"grep -Eq '(Connection refused|timed out|No route to host)' \\\"$f\\\"\"", "broad-regex"),
         ('"[ \\"\\$status\\" != \\"200\\" ]"', "not-200"),
     ],

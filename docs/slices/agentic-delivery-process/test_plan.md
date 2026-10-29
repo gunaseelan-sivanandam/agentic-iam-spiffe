@@ -36,9 +36,9 @@ exits non-zero"), the 1A PR adds its row.
 | M1-T1 missing_join_token | rogue agent (join_token plugin) | `nodeattestor(join_token): join token was not provided` | M1-T5 (every node container attested) | probe | regex `attestation.*fail\|fail.*attest\|…` |
 | M1-T2 forged_token | spire-server | `failed to attest: join token does not exist or has already been used` in the rogue log, and exactly one such `AttestAgent` rejection in the server log since the attempt | same | probe | same regex |
 | M1-T3 replayed_token | spire-server | the same message as M1-T2 (SPIRE does not distinguish unknown from used); the premise separates them | same | probe | same regex |
-| M2.5-T1 toolb_app_not_reachable | network (edge → toolb_app_net) | curl to the pinned tool-b IP times out (exit 28); never "refused" | internal (premise): tool-b answers 200 on that IP from inside `toolb_app_net` | probe | `refused\|timed out\|no route` |
-| M3.S2-T3 opa_unreachable | edge network | `opa` does not resolve from the edge, **and** a request to OPA's pinned IP times out | internal (premise): `opa` answers 200 from inside `capiss_app_net` | probe | DNS-vs-TCP warning alternate |
-| M3.S2-T5 issuer_app_not_reachable | edge network | `capability-issuer` does not resolve from the edge, **and** its pinned IP times out | internal (premise): `capability-issuer` answers 200 from inside `capiss_app_net` | probe | DNS-vs-TCP warning alternate |
+| M2.5-T1 toolb_app_not_reachable | network (edge → toolb_app_net) | curl to the pinned tool-b IP times out in the connect phase (exit 28, `Connection timed out`); never "refused" | internal (premise): tool-b answers 200 on that IP from inside `toolb_app_net` | probe | `refused\|timed out\|no route` |
+| M3.S2-T3 opa_unreachable | edge network | `opa` does not resolve from the edge (exit 6), **and** a request to OPA's pinned IP times out in the connect phase (exit 28, `Connection timed out`) | internal (premise): `opa` answers 200 from inside `capiss_app_net` | probe | DNS-vs-TCP warning alternate |
+| M3.S2-T5 issuer_app_not_reachable | edge network | `capability-issuer` does not resolve from the edge (exit 6), **and** its pinned IP times out in the connect phase (exit 28, `Connection timed out`) | internal (premise): `capability-issuer` answers 200 from inside `capiss_app_net` | probe | DNS-vs-TCP warning alternate |
 | M3.S2-T4 opa_unavailable | capability-issuer | 503, `error=denied`, `reason=opa_unavailable` | M3.S2-T1 | plan | `403\|503` |
 | M3.S4-T1 identity_only_denied | tool-b | 401, `reason=missing_token` | M3.S4-T2 | plan | `401\|403` + "no network error" grep |
 | M3.S4-T3 rogue_no_token_denied | tool-b | 401, `reason=missing_token` (tool-b-envoy admits the rogue SAN) | M3.S4-T2 | plan, probe confirms | `401\|403` + grep |
@@ -51,10 +51,10 @@ exits non-zero"), the 1A PR adds its row.
 | M2-T3 expired_client_cert (renamed: untrusted CA) | tool-b-envoy | `tlsv1 alert unknown ca` (alert 48); the test never reaches expiry, which M2-T9 proves | M2-T9 | probe | `(alert unknown ca\|unknown ca\|unable to get local issuer certificate\|verify error…)` |
 | M2-T5 no_workload_socket | Workload API client | `dial unix /run/spire/agent/private/api.sock: connect: no such file or directory` | M3.S4-T2 premise: agent-a fetches its SVID through the Workload API (`prepare_client_material`) | probe | `(No such file\|…\|connect\|failed\|unable\|Workload API)` |
 | M2-T6 socket_no_entry | spire-agent | `code = PermissionDenied desc = no identity issued` | as M2-T5 | probe | `(No identity issued\|…\|permission denied\|unauthorized\|denied)` |
-| M2-T7 no_svid_or_keys | rogue container | `No such file or directory` for each path (wrong container until OPL-006; plan review note 3) | — | probe | `(No such file\|Permission denied\|not found)` |
+| M2-T7 no_svid_or_keys | rogue container | `No such file or directory` for each of the four paths (wrong container until OPL-006; plan review note 3) | — | probe | `(No such file\|Permission denied\|not found)` |
 | M5-T4 summary_allowed_fields | jira-mcp-gateway | `ok` true and `project.key` `IAM`, then the forbidden-field grep | — | plan | negative grep only |
 | M5-T24 direct_app_bypass_unavailable | edge network | exit 6, `Could not resolve host: jira-mcp-gateway` | M5-T3 | probe | `(Could not resolve\|timed out\|No route\|Failed to connect)` |
-| M5-T26 mcp_responses_no_tokens | adapter | both responses are JSON-RPC 2.0 results with text, then the token grep | — | plan | negative grep only |
+| M5-T26 mcp_responses_no_tokens | adapter | both calls succeed (JSON-RPC 2.0, not `isError`, decoded `ok` true), then the token grep | — | plan | negative grep only |
 | M5-T28 adapter_env_no_jira_secret | adapter | the capture contains `JIRA_MCP_GATEWAY_URL=`, then the credential grep | — | plan | negative grep only |
 | M5-T46 varambu_audit_stale_tailer_warning | varambu CLI | strict run exits 1 with `WARNING: audit tailer is not running; audit file may be stale.` | non-strict run in the same test | probe | non-zero exit only |
 
