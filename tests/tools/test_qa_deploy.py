@@ -24,7 +24,7 @@ OPLS = {"OPL-005": "Open", "OPL-006": "Open", "OPL-001": "Closed"}
 
 def _svc(name: str, **overrides: object) -> "qa.Service":
     base: dict[str, object] = {
-        "name": name, "image": f"build . services/{name}/Dockerfile", "user": None,
+        "name": name, "image": f"build . services/{name}/Dockerfile", "user": None, "profiles": (),
         "networks": ("app_net",), "ports": (), "mounts": (), "env": ("REDIS_URL",), "privileges": (),
     }
     base.update(overrides)
@@ -33,7 +33,8 @@ def _svc(name: str, **overrides: object) -> "qa.Service":
 
 def _entry(service: "qa.Service", root: str = "grandfathered") -> dict[str, object]:
     return {
-        "image": service.image, "user": service.user, "networks": list(service.networks),
+        "image": service.image, "user": service.user, "profiles": list(service.profiles),
+        "networks": list(service.networks),
         "ports": list(service.ports), "mounts": list(service.mounts), "secret_env": [],
         "privileges": list(service.privileges), "root": root,
     }
@@ -47,7 +48,8 @@ def _register(*services: "qa.Service", **extra: object) -> dict[str, object]:
             "K3": {"requirement": "REQ-SEC-K3", "locations": [
                 {"env": "JIRA_API_TOKEN", "holders": ["jira-tool"]}]},
             "K7": {"requirement": "REQ-SEC-K7", "locations": [
-                {"container_path": "/run/spire/svid", "holders": []}]},
+                {"container_path": "/run/spire/svid", "holders": []},
+                {"path": "tmp_svid", "holders": ["harness"]}]},
         },
         "services": {s.name: _entry(s) for s in services},
         "known_violations": [],
@@ -81,7 +83,34 @@ def test_inventory_extracts_every_fact_and_no_env_values() -> None:
     assert service.mounts == ("capiss_keys:/k:ro", "/var/run/docker.sock:/var/run/docker.sock:rw")
     assert service.env == ("JIRA_API_TOKEN", "REDIS_URL")
     assert service.privileges == ("cap_add:NET_ADMIN", "pid:host", "privileged")
+    assert service.profiles == ("tests",)
     assert "s3cr3t-value" not in repr(service)
+
+
+def test_secrets_configs_and_volumes_from_are_inventoried() -> None:
+    # Review finding C1: grants outside `volumes` must not be invisible.
+    config = {"name": "compose",
+              "secrets": {"k": {"file": str(ROOT / "capiss_keys" / "root_key.b64")}},
+              "configs": {"c": {"file": str(ROOT / "services" / "opa" / "policy.rego")}},
+              "services": {"mock": {"image": "mock:1", "secrets": [{"source": "k", "target": "key"}],
+                                    "configs": [{"source": "c"}], "volumes_from": ["capability-issuer:ro"]}}}
+    service = qa.inventory_from_config(config, ROOT)["mock"]
+    assert "capiss_keys/root_key.b64:/run/secrets/key:ro" in service.mounts
+    assert "services/opa/policy.rego:/c:ro" in service.mounts
+    assert "volumes_from:capability-issuer:ro" in service.privileges
+    found = {(v.asset, v.service) for v in qa.asset_violations({"mock": service}, _register())}
+    assert ("K1", "mock") in found
+
+
+def test_explicit_image_on_a_build_service_is_kept_and_inspected() -> None:
+    # Review finding C2.
+    config = {"name": "compose", "services": {"tool-b": {
+        "build": {"context": str(ROOT), "dockerfile": "Dockerfile"}, "image": "evil/tool-b:1"}}}
+    service = qa.inventory_from_config(config, ROOT)["tool-b"]
+    assert service.image == "build . Dockerfile image evil/tool-b:1"
+    assert qa.image_ref(service, "compose") == "evil/tool-b:1"
+    assert qa.image_ref(_svc("tool-b"), "compose") == "compose-tool-b"
+    assert qa.image_ref(_svc("redis", image="redis:7-alpine"), "compose") == "redis:7-alpine"
 
 
 def test_live_inventory_covers_every_profile() -> None:
@@ -121,10 +150,13 @@ def test_matching_register_passes() -> None:
         ({"privileges": ("cap_add:SYS_ADMIN",)}, "privilege"),
         ({"privileges": ("device:/dev/kmsg",)}, "privilege"),
         ({"env": ("REDIS_URL", "JIRA_API_TOKEN")}, "secret env"),
+        ({"profiles": ()}, "profile"),
     ],
 )
 def test_each_unregistered_fact_fails(change: dict[str, object], fragment: str) -> None:
-    registered = _svc("tool-b")
+    # A test-only service losing its profile would start by default (review finding C4).
+    registered = _svc("tool-b", profiles=("tests",))
+    change.setdefault("profiles", ("tests",))
     deployed = _svc("tool-b", **change)
     errors = _errors({"tool-b": deployed}, _register(registered))
     assert any(fragment in error for error in errors), errors
@@ -158,9 +190,10 @@ def test_asset_reached_by_ancestor_mount_and_env_and_container_path() -> None:
         "pubonly": _svc("pubonly", mounts=("capiss_keys/root_public_key.b64:/k/pub:ro",)),
         "gw": _svc("gw", env=("JIRA_API_TOKEN",)),
         "shared": _svc("shared", mounts=("tmp:/run/spire/svid:rw",)),
+        "exported": _svc("exported", mounts=("tmp_svid/agent-a_out:/svid:ro",)),
     }
     found = {(v.asset, v.service) for v in qa.asset_violations(inventory, _register())}
-    assert found == {("K1", "tool-b"), ("K1", "harness"), ("K3", "gw"), ("K7", "shared")}
+    assert found == {("K1", "tool-b"), ("K1", "harness"), ("K3", "gw"), ("K7", "shared"), ("K7", "exported")}
 
 
 def _compose_at(commit: str) -> dict[str, "qa.Service"]:
@@ -246,7 +279,7 @@ Readable only inside the issuer. Holders: `issuer`.
 Holders: `jira-tool`.
 
 ## REQ-SEC-K7 — Workload key confinement
-Holders: none (never mounted).
+Holders: `harness` (exports keys for tests).
 """
 
 

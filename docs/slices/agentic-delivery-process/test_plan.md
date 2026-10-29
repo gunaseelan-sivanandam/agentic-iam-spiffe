@@ -137,12 +137,15 @@ Numbers are kept from earlier drafts; the gaps are tests D20 deferred.
 Tests T-8 to T-13 are in `tests/tools/test_qa_deploy.py`; the register is
 `security/invariants.yaml`; the check is `scripts/qa_deploy.py` (`make qa-deploy`).
 
-- **Baseline look** (entrypoints, scripts, Dockerfiles): no key copies beyond the compose mounts.
-  No Dockerfile copies a key directory or the whole build context; every workload writes its SVID
-  key to its own `/run/spire/svid`, which no service mounts; only `capability-issuer` writes the
-  capiss key, into the `capiss_keys` mount.
+- **Baseline look** (entrypoints, scripts, Dockerfiles). No Dockerfile copies a key directory or
+  the whole build context; every workload writes its SVID key to its own `/run/spire/svid`, which no
+  service mounts; only `capability-issuer` writes the capiss key, into the `capiss_keys` mount. One
+  copy the first pass missed (it left out the harness; review finding C3): the test harness exports
+  workload SVIDs and keys (`prepare_client_material`, `prepare_toolb_material`) into the
+  repository's `tmp_svid/` to act as those workloads. `tmp_svid` is now a K7 location that only
+  `rogue-tests` may reach, under the same holder decision.
 - **One holder the plan did not list** (user decision): `rogue-tests` mounts the whole repository
-  and holds the Docker socket, so it reaches K1, K2, K4, K5 and K6. It is a declared test-only
+  and holds the Docker socket, so it reaches K1, K2, K4, K5 and K6, and it exports K7 keys. It is a declared test-only
   holder of those assets, not an exception, because a narrower mount would not reduce host-root
   authority.
 - **Deviation: Python, not Rego** (user decision). The plan said Rego under `policy/deploy/` run by
@@ -160,6 +163,11 @@ Tests T-8 to T-13 are in `tests/tools/test_qa_deploy.py`; the register is
   2027-01-31.
 - **Rulebook:** `AGENTS.md` now lists `make test-lint` (missed in 1A), `make qa-deploy` and the new
   mutation rule in the quality gates, and `security/invariants.yaml` in "Start here".
+- **Grants outside `volumes`** (review finding C1): compose `secrets` and `configs` are inventoried
+  as read-only mounts of their source file, and `volumes_from` as a privilege, so neither can reach
+  an asset unseen. An explicit `image` on a build service is kept and is the image inspected (C2).
+  Each service's `profiles` are part of its allowlist, so a test-only holder cannot start by default
+  unnoticed (C4).
 - **Not in this increment:** a runtime check of what processes do (deferred, D20); REQ-SEC-S1.
 
 ## Independent review at the implementation PR (D20)

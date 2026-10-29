@@ -51,6 +51,9 @@ assets:
     locations:
       - container_path: /run/spire/svid
         holders: []
+      # The test harness exports workload SVIDs and keys here to act as those workloads in tests.
+      - path: tmp_svid
+        holders: [rogue-tests]
   K8:
     requirement: REQ-SEC-K8
     locations:
@@ -83,6 +86,7 @@ known_violations:
 services:
   agent-a:
     image: build agents/agent-a Dockerfile
+    profiles: [clients, tests]
     networks: [capiss_edge_net, jiratool_edge_net, toolb_edge_net]
     ports: []
     mounts:
@@ -93,6 +97,7 @@ services:
     root: grandfathered
   capability-issuer:
     image: build . services/capability-issuer/Dockerfile
+    profiles: []
     networks: [capiss_app_net]
     ports: []
     mounts:
@@ -102,6 +107,7 @@ services:
     root: grandfathered
   capability-issuer-envoy:
     image: build services/capability-issuer-envoy Dockerfile
+    profiles: []
     networks: [capiss_app_net, capiss_edge_net]
     ports: ["9443:9443/tcp"]
     mounts:
@@ -111,6 +117,7 @@ services:
     root: grandfathered
   capability-issuer-no-opa:
     image: build . services/capability-issuer/Dockerfile
+    profiles: [tests]
     networks: [capiss_app_net]
     ports: []
     mounts:
@@ -120,6 +127,7 @@ services:
     root: grandfathered
   capability-issuer-no-opa-envoy:
     image: build services/capability-issuer-envoy Dockerfile
+    profiles: [tests]
     networks: [capiss_app_net, capiss_edge_net]
     ports: []
     mounts:
@@ -130,6 +138,7 @@ services:
     root: grandfathered
   codex-jira-mcp-adapter:
     image: build . services/codex-jira-mcp-adapter/Dockerfile
+    profiles: []
     networks: [capiss_edge_net, jiramcp_edge_net]
     ports: []
     mounts:
@@ -140,6 +149,7 @@ services:
     root: grandfathered
   jira-mcp-envoy:
     image: build services/jira-mcp-envoy Dockerfile
+    profiles: []
     networks: [jiramcp_app_net, jiramcp_edge_net]
     ports: ["11443:11443/tcp"]
     mounts:
@@ -149,6 +159,7 @@ services:
     root: grandfathered
   jira-mcp-gateway:
     image: build . services/jira-mcp-gateway/Dockerfile
+    profiles: []
     networks: [jiramcp_app_net]
     ports: []
     mounts:
@@ -159,6 +170,7 @@ services:
     root: grandfathered
   jira-mcp-mock:
     image: build . services/jira-mcp-mock/Dockerfile
+    profiles: []
     networks: [jiramcp_app_net, jiramcp_upstream_net]
     ports: []
     mounts: []
@@ -167,6 +179,7 @@ services:
     root: grandfathered
   jira-mock:
     image: build . services/jira-mock/Dockerfile
+    profiles: []
     networks: [jiratool_upstream_net]
     ports: []
     mounts: []
@@ -175,6 +188,7 @@ services:
     root: grandfathered
   jira-tool:
     image: build . services/jira-tool/Dockerfile
+    profiles: []
     networks: [jiratool_app_net, jiratool_upstream_net]
     ports: []
     mounts:
@@ -185,6 +199,7 @@ services:
     root: grandfathered
   jira-tool-envoy:
     image: build services/jira-tool-envoy Dockerfile
+    profiles: []
     networks: [jiratool_app_net, jiratool_edge_net]
     ports: ["10443:10443/tcp"]
     mounts:
@@ -194,6 +209,7 @@ services:
     root: grandfathered
   opa:
     image: openpolicyagent/opa:latest
+    profiles: []
     networks: [capiss_app_net]
     ports: []
     mounts:
@@ -203,6 +219,7 @@ services:
     root: forbidden
   redis:
     image: redis:7-alpine
+    profiles: []
     networks: [capiss_app_net, jiramcp_app_net, jiratool_app_net, toolb_app_net]
     ports: []
     mounts: []
@@ -211,6 +228,7 @@ services:
     root: grandfathered
   rogue:
     image: build agents/rogue Dockerfile
+    profiles: [clients, tests]
     networks: [capiss_edge_net, jiramcp_edge_net, jiratool_edge_net, toolb_edge_net]
     ports: []
     mounts:
@@ -221,6 +239,7 @@ services:
     root: grandfathered
   rogue-socket:
     image: build agents/rogue Dockerfile
+    profiles: [tests]
     networks: [default]
     ports: []
     mounts:
@@ -230,6 +249,7 @@ services:
     root: grandfathered
   rogue-tests:
     image: build . spire/rogue-tests/Dockerfile
+    profiles: [tests]
     networks: [capiss_edge_net, default, jiramcp_edge_net, jiramcp_upstream_net, jiratool_edge_net, jiratool_upstream_net, toolb_edge_net]
     ports: []
     mounts:
@@ -243,6 +263,7 @@ services:
     root: grandfathered
   spire-agent:
     image: build spire/agent-wrapper Dockerfile
+    profiles: []
     networks: [default]
     ports: []
     mounts:
@@ -255,6 +276,7 @@ services:
     root: grandfathered
   spire-rogue-agent:
     image: ghcr.io/spiffe/spire-agent:1.9.0
+    profiles: [tests]
     networks: [default]
     ports: []
     mounts:
@@ -265,6 +287,7 @@ services:
     root: grandfathered
   spire-server:
     image: ghcr.io/spiffe/spire-server:1.9.0
+    profiles: []
     networks: [default]
     ports: []
     mounts:
@@ -276,6 +299,7 @@ services:
     root: grandfathered
   spire-token-init:
     image: build spire/token-init Dockerfile
+    profiles: []
     networks: [default]
     ports: []
     mounts:
@@ -286,6 +310,7 @@ services:
     root: grandfathered
   tool-b:
     image: build . services/tool-b/Dockerfile
+    profiles: []
     networks: [toolb_app_net]
     ports: []
     mounts:
@@ -296,6 +321,7 @@ services:
     root: grandfathered
   tool-b-envoy:
     image: build services/tool-b-envoy Dockerfile
+    profiles: []
     networks: [toolb_app_net, toolb_edge_net]
     ports: ["8443:8443/tcp"]
     mounts:

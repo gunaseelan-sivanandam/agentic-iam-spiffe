@@ -43,7 +43,7 @@ GRANDFATHERED_BASELINE = frozenset({
     "rogue-socket", "rogue-tests", "spire-agent", "spire-rogue-agent", "spire-server",
     "spire-token-init", "tool-b", "tool-b-envoy",
 })
-FIELDS = (("image", "image"), ("user", "user"), ("networks", "network"), ("ports", "port"),
+FIELDS = (("image", "image"), ("user", "user"), ("profiles", "profile"), ("networks", "network"), ("ports", "port"),
           ("mounts", "mount"), ("privileges", "privilege"))
 
 
@@ -56,6 +56,7 @@ class Service:
     name: str
     image: str
     user: str | None
+    profiles: tuple[str, ...]
     networks: tuple[str, ...]
     ports: tuple[str, ...]
     mounts: tuple[str, ...]
@@ -124,13 +125,36 @@ def _relative(source: str, root: Path) -> str:
 
 def _image(spec: dict, root: Path) -> str:
     build = spec.get("build")
-    if build:
-        return f"build {_relative(build.get('context', '.'), root)} {build.get('dockerfile', 'Dockerfile')}"
-    return str(spec.get("image", ""))
+    if not build:
+        return str(spec.get("image", ""))
+    image = f"build {_relative(build.get('context', '.'), root)} {build.get('dockerfile', 'Dockerfile')}"
+    return f"{image} image {spec['image']}" if spec.get("image") else image
 
 
-def _mounts(spec: dict, root: Path) -> tuple[str, ...]:
-    mounts = []
+def image_ref(service: Service, project: str) -> str:
+    """The image the container runs: an explicit `image`, else compose's <project>-<service> name."""
+    if not service.image.startswith("build "):
+        return service.image
+    _, _, explicit = service.image.partition(" image ")
+    return explicit or f"{project}-{service.name}"
+
+
+def _file_grants(spec: dict, config: dict, root: Path, kind: str, default_dir: str) -> list[str]:
+    """Compose `secrets` and `configs` grants, as read-only mounts of their source file."""
+    grants = []
+    for grant in spec.get(kind) or []:
+        name = grant if isinstance(grant, str) else grant.get("source", "")
+        target = name if isinstance(grant, str) else grant.get("target") or name
+        target = target if target.startswith("/") else f"{default_dir}{target}"
+        source = (config.get(kind) or {}).get(name, {}).get("file", f"{kind}:{name}")
+        grants.append(f"{_relative(source, root)}:{target}:ro")
+    return grants
+
+
+def _mounts(spec: dict, root: Path, config: dict | None = None) -> tuple[str, ...]:
+    config = config or {}
+    mounts = _file_grants(spec, config, root, "secrets", "/run/secrets/")
+    mounts += _file_grants(spec, config, root, "configs", "/")
     for volume in spec.get("volumes") or []:
         mode = "ro" if volume.get("read_only") else "rw"
         kind = volume.get("type", "bind")
@@ -148,11 +172,19 @@ def _device(dev: str | dict) -> str:
     return f"device:{dev if isinstance(dev, str) else dev.get('source', '')}"
 
 
+# Compose list keys that grant something beyond a plain container, and how each item is shown.
+PRIVILEGE_LISTS: tuple[tuple[str, Callable[[object], str]], ...] = (
+    ("cap_add", lambda cap: f"cap_add:{cap}"),
+    ("devices", _device),  # type: ignore[arg-type]
+    ("security_opt", lambda opt: f"security_opt:{opt}"),
+    ("volumes_from", lambda source: f"volumes_from:{source}"),
+)
+HOST_NAMESPACES = ("network_mode", "pid", "ipc", "userns_mode")
+
+
 def _privileges(spec: dict) -> tuple[str, ...]:
-    found = [f"cap_add:{cap}" for cap in spec.get("cap_add") or []]
-    found += [_device(dev) for dev in spec.get("devices") or []]
-    found += [f"security_opt:{opt}" for opt in spec.get("security_opt") or []]
-    found += [f"{key}:host" for key in ("network_mode", "pid", "ipc", "userns_mode") if spec.get(key) == "host"]
+    found = [show(item) for key, show in PRIVILEGE_LISTS for item in spec.get(key) or []]
+    found += [f"{key}:host" for key in HOST_NAMESPACES if spec.get(key) == "host"]
     found += ["privileged"] if spec.get("privileged") else []
     return tuple(sorted(found))
 
@@ -164,9 +196,10 @@ def inventory_from_config(config: dict, root: Path) -> dict[str, Service]:
             name=name,
             image=_image(spec, root),
             user=spec.get("user"),
+            profiles=tuple(sorted(spec.get("profiles") or [])),
             networks=tuple(sorted(spec.get("networks") or {})),
             ports=_ports(spec),
-            mounts=_mounts(spec, root),
+            mounts=_mounts(spec, root, config),
             env=tuple(sorted(spec.get("environment") or {})),
             privileges=_privileges(spec),
         )
@@ -217,7 +250,9 @@ def _reaches_path(mount: str, location: str) -> bool:
         return False
     if source == ".":
         return not location.startswith("/")
-    return location == source or location.startswith(source.rstrip("/") + "/")
+    # The mount is the asset, a parent of it, or a part of an asset directory.
+    return (location == source or location.startswith(source.rstrip("/") + "/")
+            or source.startswith(location.rstrip("/") + "/"))
 
 
 def _reaches_container_path(mount: str, path: str) -> bool:
@@ -402,8 +437,7 @@ def run(args: argparse.Namespace) -> Report:
     def user_of(service: Service) -> str | None:
         if args.skip_image_users:
             return service.user
-        image = f"{project}-{service.name}" if service.image.startswith("build ") else service.image
-        return effective_user(service, lambda _ref: docker_image_user(image))
+        return effective_user(service, lambda _ref: docker_image_user(image_ref(service, project)))
 
     if args.skip_image_users:
         report.warnings.append("image USER not inspected (--skip-image-users): only a compose `user` is checked")

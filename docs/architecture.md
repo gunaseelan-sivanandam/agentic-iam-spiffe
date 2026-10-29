@@ -638,8 +638,9 @@ Overview:
 The deployment is a checked contract. `security/invariants.yaml` names, for every protected asset,
 where it lives (a repository path, a host path, an environment variable, or a container path no
 mount may cover) and which services may hold it; and, for every service in every compose profile,
-its image, runtime user, networks, published ports, mounts and mode, secret environment variable
-names and privileges. `scripts/qa_deploy.py` (`make qa-deploy`) reads the merged compose
+its image, compose profiles, runtime user, networks, published ports, mounts and mode (compose
+`secrets` and `configs` count as read-only mounts of their file), secret environment variable names
+and privileges (including `volumes_from`). `scripts/qa_deploy.py` (`make qa-deploy`) reads the merged compose
 (`docker compose config` over every profile, environment values discarded on read) and fails on
 any fact not in the register (default deny), on any asset reaching a service outside its holders,
 on root where it is not allowed, and on any difference between the register's holders and the

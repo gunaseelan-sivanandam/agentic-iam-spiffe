@@ -321,8 +321,9 @@ A join token shall be readable only by the services that issue, store and use it
 
 ## REQ-SEC-K7 — Workload key confinement
 A workload's SVID private key shall be readable only inside that workload's container: it is written
-to the container's own `/run/spire/svid`, which no service may mount. Holders: none beyond the
-workload itself.
+to the container's own `/run/spire/svid`, which no service may mount. The only exception is the
+test harness, which exports workload SVIDs and keys into the repository's `tmp_svid/` to act as
+those workloads in tests. Holders: the workload itself, `rogue-tests` (test-only harness).
 
 ## REQ-SEC-K8 — Docker socket confinement
 Holding the Docker socket is host-root authority (a read-only bind mount does not restrict the
@@ -330,7 +331,7 @@ Docker API). Holders: `spire-agent` (Docker workload attestation), `rogue-tests`
 
 The test-only harness `rogue-tests` (profile `tests`) mounts the whole repository and holds the
 Docker socket, so it can reach every repository-path asset; a narrower mount would not reduce that
-authority. It is therefore a declared holder of K1, K2, K4, K5 and K6 rather than an exception
+authority. It is therefore a declared holder of K1, K2, K4, K5, K6 and K7 rather than an exception
 (user decision, 2026-10-29). It never runs outside the `tests` profile.
 
 ## REQ-SEC-D1 — Deployment allowlist
