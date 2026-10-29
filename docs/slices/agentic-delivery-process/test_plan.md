@@ -47,7 +47,7 @@ exits non-zero"), the 1A PR adds its row.
 | M3.S4-T2 agent_a_token_access | tool-b | 200, expected secret body | — | plan | "no network error" grep |
 | M4-T5 budget_enforced_per_root_token | tool-b | 11th call: 403, `reason=budget_exceeded`; calls 1–10: 200 | internal | plan | `401\|403` |
 | M4-T6 tampered_token_denied | tool-b | 401, `reason=invalid_token` | M3.S4-T2 | plan | `401\|403` |
-| M5-T21 audience_mismatch_denied | capability-issuer | 400, `error=bad_request`, `reason=res`: `aud=jira-tool` with a `jira-mcp:` resource fails resource canonicalization (`canonicalize_resource`) before OPA is called | M5 root-mint allow test (named in 1A) | plan (from code) | `400\|403` |
+| M5-T21 audience_mismatch_denied | capability-issuer | 400, `error=bad_request`, `reason=res`: `aud=jira-tool` with a `jira-mcp:` resource fails resource canonicalization (`canonicalize_resource`) before OPA is called | M5-T3 (IAM summary: the allowed mint and call on the M5 route) | plan (from code) | `400\|403` |
 | M2-T3 expired_client_cert (renamed: untrusted CA) | tool-b-envoy | `tlsv1 alert unknown ca` (alert 48); the test never reaches expiry, which M2-T9 proves | M2-T9 | probe | `(alert unknown ca\|unknown ca\|unable to get local issuer certificate\|verify error…)` |
 | M2-T5 no_workload_socket | Workload API client | `dial unix /run/spire/agent/private/api.sock: connect: no such file or directory` | M3.S4-T2 premise: agent-a fetches its SVID through the Workload API (`prepare_client_material`) | probe | `(No such file\|…\|connect\|failed\|unable\|Workload API)` |
 | M2-T6 socket_no_entry | spire-agent | `code = PermissionDenied desc = no identity issued` | as M2-T5 | probe | `(No identity issued\|…\|permission denied\|unauthorized\|denied)` |
@@ -134,6 +134,8 @@ Numbers are kept from earlier drafts; the gaps are tests D20 deferred.
   2027-01-01 00:00:00 UTC.
 
 ## Independent review at the implementation PR (D20)
+The 1A review record is [`review_1a.md`](review_1a.md).
+
 Each of the 1A and 1B PRs carries the reviewer's answers to the two questions in
 [`plan.md`](plan.md#independent-review-d17-d20): which wrong failure would still pass each new or
 changed test, and whether the change makes a key, socket or secret reachable outside the holder

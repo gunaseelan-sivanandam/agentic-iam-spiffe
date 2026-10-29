@@ -30,7 +30,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Last verification
 | Check | Date | Result |
 | --- | --- | --- |
-| Full E2E suite, clean stack, `slice/agentic-delivery-process-1a` at `f9c6741` | 2026-10-29 | 120/120 passed; 1 warning (M5-T55 env-gated skip) |
+| Full E2E suite, clean stack, `slice/agentic-delivery-process-1a` at `2c22623` | 2026-10-29 | 120/120 passed; 1 warning (M5-T55 env-gated skip) |
 | `make qa-evidence` after that run | 2026-10-29 | PASSED (validated 119, skipped 1) |
 | `make qa-quality` (qa-trace, unit traceability, unit guard, docs-check, test-lint) | 2026-10-29 | PASSED; qa-trace reports 122 non-blocking coverage gaps, incl. 87 requirements without E2E |
 | `make unit-mutation` under the new scoring | 2026-10-29 | PASSED, 85.58% (1240 killed of 1449; 0 untested, 0 skipped) |
