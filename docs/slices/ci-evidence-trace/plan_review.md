@@ -1273,3 +1273,291 @@ Reviewed SHA-256 values:
 | --- | --- |
 | `plan.md` | `980d07bc586f2c8580a9f119f60476bdbe09f6bfad29b99a29e8284ee494c3e8` |
 | `test_plan.md` | `6ba7fcb9ed8ea9ef73e8261eee97a04b6e793a12892d3709d32cde8069d7ef58` |````
+
+## Round 5 (2026-10-30)
+Reviewed files (SHA-256, at commit `d52776a`):
+- `plan.md` `befdbf0bf2d3636e75d25e190b53f807fd351bdf3d5e5dda1cb7dfc4225c2c6e`
+- `test_plan.md` `125043339619f1809d627bf9baaf923626b15f99e0989a66d8cf34f76e2e2d3b`
+
+Verdict: **no** — R5-B1. R4-B1, R4-B2 and the round-4 advisories fixed.
+
+### Author answers, round 5, and the author's simplification pass
+| Item | Answer | Where |
+| --- | --- | --- |
+| R5-B1 secret check excludes part of the published files | Fixed: the publication set (`test_report.log`, `artifacts/rogue-tests/`, `artifacts/quality/`) is defined once and used by both the secret check and the upload step; fixtures for a token only in the report and only in a quality JSON file. | plan D1, D3; test_plan V2 |
+| (author) key change-over | Changed after the user's 8D review of how rounds 1–4 were answered: `clean_stack.sh` empties `capiss_keys/` (a clean local stack starts like CI), replacing the regenerate-plus-redeploy text of round 4. A plain conversion was weighed; it needs a root conversion step and leaves the key surviving clean runs. | plan D12, Hidden-state, Retirement; test_plan V13 |
+| (author) status computed twice | Changed: status comes only from `qa-trace` (register); the `qa-deploy` report keeps verdict, violations, inspection flag and digests; the report-versus-register cross-check is removed. | plan D5; test_plan V5, V6, V7 |
+| (author) gap-identity rule | Removed: redundant, since both sides are computed by the head's code. | plan D7; test_plan V9 |
+| (author) environment facts | Probed and recorded (file ownership, ruleset access, verifier key caching, mutation selection). | plan Environment facts |
+
+The 8D itself (why rounds 1–4 answered every finding by adding, and why a simpler design came from
+the user) is recorded in the session; its standing lesson for authors is: fix inside the agreed
+decisions, consider the upstream cause and several approaches before choosing, and prefer removing a
+mechanism over adding one.
+
+### Round 5 prompt (verbatim)
+````markdown
+You are the independent plan reviewer for a slice plan in the repository at the current working
+directory. You did not write it. Review read-only: do not modify files, run docker, start services
+or use the network. Never print key material, tokens or environment variable values.
+
+## What is under review
+The slice plan `docs/slices/ci-evidence-trace/plan.md` and its test plan
+`docs/slices/ci-evidence-trace/test_plan.md` (commit `HEAD`; `git log -6`; the change since your round-4 report is `git diff HEAD~1`; the D12 change as a whole is `git diff HEAD~2`). They are the plan for slice 2 of the agentic-delivery-process programme. The user
+has not seen them yet; your review comes first.
+
+The intent they must serve: the user's decisions from the slice's grill-me, recorded in the plan's
+decision table (D1–D11), and the repository's rules in `AGENTS.md`. Earlier input for this slice is
+`docs/slices/agentic-delivery-process/later_slices.md`; the plan says which parts of it were moved
+to slice 3, and that move is a user decision.
+
+You may read the whole repository. Decide yourself where to look; you are not given a list of files.
+
+## This is round 5
+Round 4 reviewed D12 and found R4-B1 and R4-B2; the author's answers are in
+`docs/slices/ci-evidence-trace/plan_review.md` (Round 4). Say whether each round-4 finding is fixed
+correctly and completely, and review whatever the fixes affect. A new finding counts only if it
+meets the blocking criteria; do not repeat advisories.
+
+## How to judge
+Read `AGENTS.md` first, in particular "PoC scope and proportion" (threat model, blocking criteria,
+review loop) and "Slice workflow". Then read the plan's section "Threat model for this plan and its
+reviews": it is the threat model you judge against. A finding blocks only if it meets the blocking
+criteria there, with a concrete failure scenario. Everything else is advisory.
+
+## Environment facts (collected by the author on 2026-10-30; facts outside the repository)
+- The `main` ruleset `basic` requires these status checks: docs-check, qa-trace, unit-guard-check,
+  tooling-test, test-lint, qa-deploy, unit-mutation, unit-trust; strict; 0 approving reviews.
+- Latest CI runs: `CI` on push to `main` at `62d6b0c` (PR #7 merge): success. `E2E trial` (a
+  throwaway workflow on branch `ci-trial/e2e`, since deleted): run `40999541906` failure (both jobs:
+  the suite passed 120/120, then `make qa-evidence` failed with PermissionError on the root-owned
+  `artifacts/` directory); run `41000278717` success after adding `sudo chown` of `artifacts/` and
+  `test_report.log` before `qa-evidence` (both jobs: build 15–18 s, suite 177–188 s, 120/120 passed,
+  `qa-evidence` PASSED, validated 119, skipped 1 for M5-T55). The trial uploaded evidence as public
+  artifacts; it contains expired capability tokens.
+- The ruleset can be read without authentication from the public GitHub API
+  (`GET /repos/{owner}/{repo}/rulesets/{id}` returned HTTP 200 unauthenticated).
+- `make qa-trace` on `main` today: coverage gaps 138 (requirements_without_e2e 97,
+  architecture_without_dd 13, dd_without_ut 24, e2e_tests_without_requirements 4).
+- `make qa-deploy` with image inspection on the local stack: PASSED (18 known violations, 22 warnings,
+  all 22 "grandfathered until 2027-01-31").
+- PR #8 (open, docs only) removes the review round limit; this branch is based on it, so `AGENTS.md`
+  here already contains the review loop the user decided.
+
+## Questions (answer each in depth; "n/a" needs a reason)
+1. Intent: do the plan and test plan do what the decisions say, no more and no less? Is any decision
+   missing, contradicted or quietly widened?
+2. Claims and evidence: for each claim (success criteria, threat-model rows M1–M10, the "caught by"
+   column, requirement proofs), what in the test plan proves it? Could that proof pass while the
+   claim is false? Is each requirement verifiable and unambiguous?
+3. Design and quality: is each mechanism the simplest that fits? Consistent with how the repository
+   already does similar things? Are names, placement and structure what a newcomer would expect, and
+   will the user be able to see what ran and what failed?
+4. Failure and change: behaviour when an input is missing, malformed or unreadable (ruleset API,
+   reports, base commit, evidence); fails closed? Ordering between the two increments; can each be
+   rolled back?
+5. Rules and new risks: does it keep every rule in `AGENTS.md`, the requirements, the register and
+   the open problems? Does it add an asset, trust boundary, data flow or rule without registering it?
+6. Ripple: what depends on what changes (CI, Makefile, `docs-check`, `qa-trace`, `qa-evidence`,
+   `test_spec.md`, the harness, the register, other slices), and does the plan account for it?
+7. Durability: does anything decided live only somewhere temporary? Where must it live?
+8. Blind spots: what did you not check, and could it matter?
+
+## Output (markdown only)
+# Plan review — ci-evidence-trace, round 5
+## Round-4 findings
+(one line each: fixed / not fixed, with the reason)
+## Answers
+(one section per question above; brief where nothing changed since round 1)
+## Blocking findings
+New only, each with id (R5-B1, ...), where (file:line), the blocking criterion it meets, failure
+scenario, smallest fix. "None" if none.
+## Advisory
+New only, each with id (R5-A1, ...), one or two lines. No limit, but list each point once.
+## Verdict
+"Approvable within the threat model: yes" or "no — <ids>".
+## Not checked
+````
+
+### Round 5 report (verbatim)
+````markdown
+# Plan review — ci-evidence-trace, round 5
+
+Reviewed by Codex as the independent, read-only reviewer at `HEAD` (`d52776a`). Examined `git log -6`, the round-4 fix (`HEAD~1`) and the complete D12 change (`HEAD~2`).
+
+## Round-4 findings
+
+- **R4-B1 — fixed:** D3 explicitly detects Base64-encoded PEM private keys; V2 requires rejection in text and JSON, with diagnostics that omit the value.
+- **R4-B2 — fixed:** Scope now permits D12, K1 has the required state record, and coordinated upgrade/rollback and key rotation are documented.
+- **R4-A1 — fixed:** The unit plan uses an independent PKCS#8 parser and selects the tests for mutation testing.
+- **R4-A2 — fixed:** V13 covers legacy-file removal, preservation of current files, cleanup failure and non-mutating `--check`.
+- **R4-A3 — fixed:** V2 instruments scanner reads and rejects unreadable evidence. Its permitted read scope introduces the separate publication gap below.
+- **R4-A4 — fixed:** D4 and D12 have separate decision rows; test-plan inputs include D12.
+- **R4-A5 — fixed:** The plan schedules OPL-005’s current filename update while preserving historical evidence.
+
+These are fixes to the planned contracts; their implementation remains to be verified.
+
+## Answers
+
+### 1. Intent
+
+D1–D11 retain their reviewed meaning. The two increments, continued local verification, static proof model, gap comparison and gate consistency remain explicit. Review design and lanes stay deferred to slice 3, consistently with the recorded user decision in `later_slices.md`.
+
+D12 authorizes a narrow issuer change: private-key filename and serialization, without changing authorization APIs or public-key encoding. The independent-parser, malformed-file, existing-file and concurrent-creator tests support that scope.
+
+The remaining mismatch is between D1’s publication set and D3’s tested protection. D1 publishes three paths, while V2 expressly confines secret scanning to the evidence directory. That leaves an ordinary secret-bearing report outside the promised M6 protection: **R5-B1**.
+
+### 2. Claims and evidence
+
+The success criteria map to planned proofs as follows:
+
+| Success criterion | Planned proof | Assessment |
+| --- | --- | --- |
+| 1. Required CI E2E runs successfully | V1, implementation-PR CI, ruleset update and local clean-stack acceptance | Adequate at plan level. Actual triggers and required-check configuration need implementation acceptance. The declared result includes M5-T55’s skip. |
+| 2. Evidence contains no tokens/private keys | V2, harness changes and full-run scanning | V2 now covers R4-B1. It still does not establish secrecy of every published path: R5-B1. |
+| 3. Honest static statuses | V5, V6, V7 | Covers report production, report validation and artifact-independent trace status. Known violations and grace remain gaps. |
+| 4. New gaps fail | V9, V12 | Covers categories, unchanged-count gap swaps, expiry, stale entries, unavailable bases and the historical miss. |
+| 5. ARCH declarations and retirement | V8, V11 and review of the thirteen sections | Existence checks prove the named files exist. Semantic implementation still needs the expressly planned review. |
+| 6. Gate consistency | V10 and implementation acceptance | Covers disagreement, wrong commands and unreadable/malformed ruleset input. |
+| 7. PKCS#8 storage and unchanged signing | D12 unit cases, independent parser and full E2E | Adequate for the specified create/load/reject behavior and signing compatibility. |
+
+For every threat-model row and its “caught by” claim:
+
+| Row | Proof | Could it pass while the stated mistake survives? |
+| --- | --- | --- |
+| M1 | V9’s category fixtures; V12’s historical replay | No additional plan-level counterexample established. |
+| M2 | V9’s expiry, missing-field and stale-entry fixtures | Controls the recorded acceptance lifecycle; continued relevance of the written reason requires review. |
+| M3 | V5/V7 status derivation; V6 disagreement rejection | Known violations cannot become proved merely through static mappings. |
+| M4 | V6’s missing, unreadable, malformed, incomplete, inspection-skipped and digest-mismatched reports | Covers the specified compose/register binding. It does not claim universal execution provenance. |
+| M5 | V10’s list and command fixtures | Fits the narrowed claim. Makefile-only gates remain explicitly excluded. |
+| M6 | V2 and harness secret removal | **Yes:** a secret in `test_report.log` can survive all specified scanner fixtures and be uploaded. |
+| M7 | Required `e2e`, workflow review and implementation-PR execution | Adequate subject to checking the actual workflow and ruleset. |
+| M8 | V3’s exact-tag and disagreement fixtures | Covers OPA/Redis compose tags. Floating Dockerfile bases remain outside this claim. |
+| M9 | V8’s missing-file fixture | Directly covers the stated mistake. |
+| M10 | V1’s failing harness stub; workflow review | Harness failure propagation is tested. Review must also verify later tooling failures and publication conditions. |
+
+The requirement proofs remain understandable and verifiable:
+
+| Requirement | Planned proof and limitation |
+| --- | --- |
+| REQ-T-R9 / EVID-T1 | V2 establishes the listed detection shapes and non-disclosing diagnostics. The publication-scope omission prevents the general evidence claim from being established. |
+| REQ-SEC-K1 | Existing deployment negatives plus V5–V7; D12 changes the location, without resolving OPL-005. |
+| REQ-SEC-K2 | Existing ancestor-mount confinement controls plus honest known-violation status for OPL-006. |
+| REQ-SEC-K3 | Existing credential-environment and holder-consistency controls; report output excludes environment values. |
+| REQ-SEC-K4 | Existing signing-state mount controls plus OPL-008 status. |
+| REQ-SEC-K5 | Existing administration-socket reachability and holder controls. |
+| REQ-SEC-K6 | Existing join-token path/holder controls. These are confinement proofs; the scanner’s UUID limitation remains explicit. |
+| REQ-SEC-K7 | Existing container-path and exported-test-key mount controls. |
+| REQ-SEC-K8 | Existing Docker-socket mount and holder controls. |
+| REQ-SEC-D1 | Existing default-deny deployment fixtures, with V3 preserving tag agreement. |
+| REQ-SEC-D2 | Existing user/grace controls and V5–V7’s distinction between inspected, skipped and grace statuses. |
+| REQ-M4B-W8; REQ-M5-CJ2 | Their evidence clauses remain unchanged. Scratch storage, redaction and fingerprint evidence must preserve the existing authorization assertions. |
+
+The static specifications must identify the actual negative-control selectors, as the test plan requires. An overall `qa-deploy` PASS is appropriately distinguished from each requirement holding.
+
+### 3. Design and quality
+
+The mechanisms generally fit the repository: extend existing validators, tooling tests, Make targets, trace mappings and the existing test specification. Register-derived structural status avoids depending on local artifacts during PR/base comparison.
+
+D12’s fixed Ed25519 PKCS#8 representation is proportionate. The independent parser prevents a matching encoder/decoder mistake from falsely proving standards compliance. Public-key consumers retain their existing format.
+
+Named jobs, per-requirement statuses, gap identities and retained reports should let the user see what ran and why it failed. The publication gap can be fixed by extending the existing scan’s input contract; it needs no additional job, register or review process.
+
+### 4. Failure and change
+
+The planned failure behavior is sound for:
+
+- **Ruleset input:** unreadable or malformed input fails V10.
+- **PR base:** unresolved or unreadable input fails V9; no fallback to push mode.
+- **Deployment reports:** V6 rejects missing, unreadable, malformed, incomplete, inspection-skipped or inconsistent evidence.
+- **Evidence:** existing validation requires evidence directories, guard artifacts and report results; V2 now rejects unreadable scanned files.
+- **Issuer key:** missing PEM creates a key; valid PEM is preserved; malformed PEM raises without regeneration. The concurrent-creator path loads the other creator’s file.
+
+The evidence failure contract remains incomplete for uploaded files outside the scanner’s permitted directory.
+
+A-before-B is correct: publication starts only with secret removal and checking. B can be reverted while retaining A, with coordinated required-check changes. Reverting A requires unwinding B’s dependencies and removing publication before restoring token-bearing evidence.
+
+The new lifecycle note correctly requires coordinated redeployment rather than issuer-only recreation. Existing verifiers cache the public key; retaining those processes across rotation can break verification. V13 appropriately preserves current key files during routine cleanup; cleanup is not a general key-conversion mechanism.
+
+### 5. Rules and new risks
+
+The plan retains user approval through the plan merge, tests-first implementation, independent review, local clean-stack verification and hand-written evidence descriptions.
+
+R4-B2’s mandatory hidden-state omission is resolved. K1’s format, store, writer, readers, persistence, signing authority and authoritative classification are now recorded. The new file stays within the existing mounted directory and holder model.
+
+CI publication, retention, scratch storage, reports and external required checks are recorded process state. No additional service or holder is introduced. OPL-005/006/008 remain open; changing key encoding does not fix confinement. OPL-009 remains the accepted deliberate-attack residual.
+
+**R5-B1 is an honest diagnostic/publication mistake within M6**, rather than a malicious-PR or runner-isolation concern.
+
+### 6. Ripple
+
+The plan accounts for the principal dependencies:
+
+| Change | Affected dependents |
+| --- | --- |
+| D12 key format | Issuer bootstrap, DD-111 unit tests/helpers, mutation selection, K1 register location, architecture and lifecycle documentation |
+| Legacy retirement | `clean_stack.sh`, V13 and upgrade/rollback instructions |
+| Token relocation/redaction | Harness writers/readers, fingerprint comparisons and hand-written evidence lists |
+| Static proof type | Trace schema/parser, `docs-check`, `test_spec.md`, deployment reports and evidence validation |
+| Gap gate | Historical trace inputs, full Git history, merge-base handling and stable gap identities |
+| CI checks | Makefile, workflow, rulebook table and external ruleset |
+| Programme decisions | OPL-009 mitigation text and preserved slice-3 input |
+
+The uncovered dependency is the **complete upload set → secret scan** relationship. Report validation checks structure and status, which does not establish that the report contains no secrets.
+
+### 7. Durability
+
+The intended durable homes are suitable: `AGENTS.md`, requirements, architecture, register, trace mappings, test specifications, STATUS and the live OPL.
+
+K1’s runtime-state and rotation consequences must reach the authored architecture and operational documentation during implementation. The scanner contract lands with A; B later supplies its static trace/specification entry.
+
+Required checks remain external authoritative state, checked through the planned API read. Expiring trial artifacts are neither decision records nor test fixtures. Frozen records and historical OPL evidence remain unchanged.
+
+The publication-scope correction belongs in A’s scanner contract and V2, then in B’s EVID-T1 specification.
+
+### 8. Blind spots
+
+This review establishes plan adequacy, not implementation correctness. Scanner traversal, actual upload configuration, workflow failure propagation, historical snapshot handling and key lifecycle behavior still need implementation review and acceptance runs.
+
+I treated the recorded decisions as authoritative intent and the supplied external environment facts as inputs. I did not independently reconstruct grill-me or verify external facts.
+
+## Blocking findings
+
+### R5-B1 — Secret validation excludes part of the published evidence
+
+**Where:** `docs/slices/ci-evidence-trace/plan.md:82` and `:42`; `docs/slices/ci-evidence-trace/test_plan.md:54`.
+
+**Blocking criterion:** Concrete M6 false green, contradicting the evidence non-disclosure claim and planned REQ-T-R9.
+
+**Failure scenario:** An author saves a diagnostic mint response containing a capability token in `test_report.log`. The per-test evidence directory remains clean and all tests pass.
+
+D1 uploads `test_report.log`, `artifacts/rogue-tests/` and `artifacts/quality/`. V2, however, explicitly prohibits scanner reads outside the evidence directory. Its fixtures therefore cannot detect the secret in the separately uploaded report.
+
+The existing report parser checks PASS mappings and failure counts, not secrecy. An in-memory check confirmed that appending synthetic token-bearing JSON preserves both results. Consequently, the specified controls can pass and publish the token without any deliberate gate evasion.
+
+**Smallest fix:** Explicitly apply the existing secret check to the complete publication set before upload, including reports produced by validation. Replace V2’s evidence-directory-only read boundary with an explicit permitted publication-input set that still excludes secret-source files. Add negative controls for a secret appearing only in `test_report.log` and only in a published quality JSON file, including unreadable-input failure.
+
+## Advisory
+
+None new.
+
+## Verdict
+
+Approvable within the threat model: no — R5-B1.
+
+## Not checked
+
+- No files modified, Docker invoked, services started or network accessed.
+- No runtime secret files, key material, real token values or environment values inspected.
+- No tooling, unit, mutation, E2E or historical-replay suites executed.
+- No live ruleset, CI-run or artifact verification.
+- No exhaustive service-security audit.
+
+Read-only verification: `python3 -B scripts/check_docs.py` passed; both reviewed diffs passed whitespace checks. The synthetic report-parser check used memory only. Working tree remained clean.
+
+Reviewed SHA-256 values:
+
+| File | SHA-256 |
+| --- | --- |
+| `plan.md` | `befdbf0bf2d3636e75d25e190b53f807fd351bdf3d5e5dda1cb7dfc4225c2c6e` |
+| `test_plan.md` | `125043339619f1809d627bf9baaf923626b15f99e0989a66d8cf34f76e2e2d3b` |````
