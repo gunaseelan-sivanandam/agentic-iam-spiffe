@@ -18,7 +18,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
   - [OPL-008](open_problem_log.md#opl-008-spire-token-init-mounts-the-whole-spire-server-data-directory):
     the SPIRE bootstrap container can read the server's signing keys and datastore.
 - **Next slice:** [agentic-delivery-process](slices/agentic-delivery-process/plan.md) slice 2 of 3,
-  [`ci-evidence-trace`](slices/ci-evidence-trace/plan.md) (grill-me done 2026-10-30, plan in review). Slice 1 is complete: Increment 1A (exact
+  [`ci-evidence-trace`](slices/ci-evidence-trace/plan.md) (grill-me done and plan reviewed 2026-10-30; plan PR open). Slice 1 is complete: Increment 1A (exact
   outcomes for the loose E2E checks, `make test-lint`, mutation scoring) merged in PR #5, Increment 1B
   (`security/invariants.yaml` and `make qa-deploy`: who may hold each key, socket and secret, and
   every service's allowlist) in PR #6. Its standing rules (twins, probe sources, independent review)
@@ -43,7 +43,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 | Branch | Purpose | State |
 | --- | --- | --- |
 | `docs/review-loop` | Remove the review round limit; the author may reject findings with a checkable reason | PR open |
-| `slice/ci-evidence-trace-plan` | Slice 2 plan: CI E2E, evidence without secrets, trace model | draft, in plan review |
+| `slice/ci-evidence-trace-plan` | Slice 2 plan: CI E2E, evidence without secrets, trace model | plan reviewed (approvable, 3 rounds); plan PR open |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
