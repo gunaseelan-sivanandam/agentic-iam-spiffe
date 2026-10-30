@@ -1,0 +1,178 @@
+# Slice Test Plan — ci-evidence-trace
+
+Status: **draft for plan review** with [`plan.md`](plan.md) (2026-10-30).
+
+## Goal
+Prove that each check this slice adds fails on the honest mistake it exists to catch (M1–M10 in the
+plan's threat model), with a negative control per check, and that the CI E2E job produces the same
+verdict as the local run.
+
+## Inputs
+- [`plan.md`](plan.md): decisions D1–D12, the threat model and blocking criteria, REQ-T-R9, the
+  `REQ-SEC` static tests.
+- The CI trial of 2026-10-30 (runs `40999541906`, failed in `qa-evidence` on root-owned output;
+  `41000278717`, passed after taking ownership).
+
+## Unit test plan
+One service function changes: capiss `load_or_create_root_private_key` (DD-111, D12). Its unit
+tests in `tests/unit/capiss/` change with it, under the unit-test rules (`tests/unit/AGENTS.md`):
+- no key file: a new key is written to `root_key.pem` as PKCS#8 PEM with mode `0600`; an
+  independent parser (`cryptography`'s `load_pem_private_key`, a dev dependency) reads it as the same
+  Ed25519 key, and a token signed with it verifies under the exported public key;
+- an existing valid `root_key.pem` is loaded, not replaced;
+- an existing `root_key.pem` that is not valid PKCS#8 PEM — raw base64 (the old format), a PEM
+  block of another type, a wrong DER prefix, a wrong key length — makes the function raise, and no
+  new key is written (fail closed);
+- the concurrent-creator path (`FileExistsError`) loads the PEM the other creator wrote;
+- `root_key.b64` is never read or written.
+
+These tests carry the `invariant` marker, so the mutation run selects them.
+
+The capiss diff-coverage (≥ 90%) and mutation (≥ 70%) gates apply. QA tooling is tested in
+`tests/tools/`, below.
+
+## Tooling tests (`tests/tools/`, each with a negative control)
+IDs V1–V13 are local to this test plan.
+
+**Increment A — CI evidence**
+- **V1 `make e2e` output ownership** (D1, M10): after the target, `artifacts/` (including
+  `artifacts/rogue-tests/`) and `test_report.log` are owned by the invoking user, and
+  `make qa-evidence` can create `artifacts/quality/` (the trial's failure); the target exits with the harness's exit code,
+  so a failed suite fails the target (fixture: a harness stub exiting 1).
+- **V2 Evidence secret check** (D3, REQ-T-R9, M6), one fixture each, all fail `qa-evidence`:
+  - a Biscuit-shaped token (base64url, the length of a real capiss token) in a `.txt` file;
+  - the same token inside a JSON field;
+  - a PEM `PRIVATE KEY` block;
+  - a `JIRA_API_TOKEN=` or `Authorization: Bearer` line with a value;
+  - a synthetic capiss root key in its new format (`root_key.pem`, PKCS#8 PEM);
+  - the same PEM file base64-encoded (about 160 characters), in a `.txt` file and inside a JSON
+    field;
+  - a base64 PKCS#8 DER private key inside JSON, as SPIRE's key stores hold them, one fixture for
+    an Ed25519 key and one for an EC P-256 key;
+  - an Atlassian-style API token (synthetic, with the prefix);
+  - a token only in `test_report.log`, and one only in a JSON file under `artifacts/quality/`
+    (the whole publication set is checked, D1).
+
+  The check reads no file outside the publication set: asserted by instrumenting file opens during
+  the check, which fails the test on any other path. A file of the set that cannot be read fails the
+  check (fail closed). The upload step and the check use the same set definition (asserted).
+
+  The failure message names the file and the kind of secret, never the value (asserted).
+
+  Accepted (positive controls): a SHA-256 hex fingerprint; a PEM `CERTIFICATE` block (SVID
+  certificates); SPIRE `request_id` and correlation IDs; a 3000-character run of one repeated
+  character (M5-T53's padding). Boundaries of the shape rule (plan D3): a varied run of 199
+  characters is accepted, 200 and 201 are rejected; a 200-character run with 19 distinct
+  characters is accepted, with 20 rejected.
+- **V3 Pinned tags** (D2, M8 as narrowed): `security/invariants.yaml` and compose name the same
+  exact tags for `opa` and `redis`, and neither is `latest`; `qa-deploy` reports a compose tag that differs from the register (existing
+  default-deny rule, one fixture).
+
+- **V13 Key directory reset** (D12): with a Docker stub, `scripts/clean_stack.sh` empties
+  `capiss_keys/` (private key, public key and a legacy `root_key.b64`); a failed removal is reported,
+  not silent; `--check` changes nothing.
+
+**Increment B — trace model**
+- **V4 Static test entries** (D4, D5): a static entry that links `source_requirements` and names a
+  gate and its negative-control tests passes; a listed test file or selector that does not exist is
+  a structural failure; a static entry with no `test_spec.md` heading fails `docs-check`, and so
+  does a static heading with no entry.
+- **V5 `qa-deploy` report** (D5, M4): the report holds the verdict, the violations found, whether
+  image users were inspected, and the compose and register digests; with `--skip-image-users` it
+  says image users were not inspected. It contains no env values and no per-requirement status
+  (that is `qa-trace`'s, V7).
+- **V6 Static evidence in `qa-evidence`** (D5, M4), each fails: a missing report; an unreadable
+  report; malformed JSON;
+  a report whose verdict is a failure; a report made with `--skip-image-users` (matching digests,
+  inspection skipped); a compose or register digest that differs from the files on disk. A passing,
+  inspected, matching report passes.
+- **V7 Trace status** (D5, M3): `qa-trace` takes the status from the register, never from a run
+  report. A requirement whose only proof is a static test and whose asset has a `known_violations`
+  row appears as "not proved: known violation OPL-xxx" and counts as a gap; without such a row it
+  counts as proved statically; D2 before its grace date is "not proved: grace" and counts as a
+  gap. On today's register: K1, K2, K4 "not proved: known violation" (OPL-005, -006, -008), D2
+  "not proved: grace", the other six proved statically. Clean-checkout case: with no
+  `artifacts/` directory at all, `qa-trace` gives the same statuses, on the head and on the
+  merge-base fixture.
+- **V8 Config-implemented ARCH** (D6, M9): an ARCH section with `Implemented by:` naming existing
+  files counts as implemented; a named file that does not exist is a structural failure; a section
+  with neither a DD nor `Implemented by:` stays a gap.
+- **V9 Gap gate** (D7, M1, M2), on base/head fixture pairs:
+  - head adds a gap in each category, one fixture each — a requirement without proof, an ARCH
+    section without DD or `Implemented by:`, a DD without UT, a test linked to no requirement →
+    fails, naming the gap;
+  - head closes one old gap and adds a different one (total unchanged) → fails;
+  - the same with an `accepted_gaps` entry → passes;
+  - the entry is valid through its expiry date (23:59:59 UTC) and fails one second later (clock
+    injected);
+  - an entry whose gap does not exist on head (stale) fails;
+  - an entry without a reason or expiry fails;
+  - head closes an old gap → passes;
+  - a gap present on base and head → passes (old gaps do not fail);
+  - `--mode push` reports and passes;
+  - `--mode pr` with a base that cannot be resolved (shallow history, unknown ref) or whose trace
+    inputs cannot be read → fails, never falls back to push mode;
+  - diverged history: the base is the merge-base, not the tip of `main`.
+- **V10 Gate consistency** (D8, M5), one fixture each, all fail:
+  - a gate the `AGENTS.md` table marks as CI with no job of that name in `ci.yml`;
+  - a job in `ci.yml` that is not in the table;
+  - a job that is not a required check in a ruleset fixture;
+  - a job with a gate's name whose steps run another make target (for example `qa-deploy` running
+    `make docs-check`);
+  - a ruleset fixture that cannot be read or parsed (fails closed, never passes).
+
+  Positive control: today's table, workflow and ruleset after this slice's changes and the user's
+  ruleset update.
+- **V11 Retirement** (D6): `qa-trace` on the merged result reports no DD-925 to DD-930 tags and no
+  `IT-DEPLOY-*` entries, and the retired IDs are marked retired, not reused.
+- **V12 Historical replay of the 1B miss** (D7, M1): `qa-trace` gap comparison of 1B's head
+  (`0dbd27b`) against its base (`8faeea9`), run on those commits' trace inputs, fails on the ten new
+  `REQ-SEC` gaps.
+
+## E2E test plan
+No E2E test changes its premise, exercise or outcome; the expected-outcome table has no rows. The
+tests that write token values into evidence change only where they keep the token: every test that
+writes `token.txt`, `token1.txt`, `token2.txt`, `create_token.txt`, `read_token.txt`,
+`tampered_token.txt` or a `*_mint.json` with a `token` field (M3, M4, M4b and M5 tests; the exact
+list is in the Increment A PR). For each, `docs/test_spec.md` names the fingerprint instead of the
+token file.
+
+| Test | By | Signature | Twin | Source | Replaces |
+| --- | --- | --- | --- | --- | --- |
+| — | — | — | — | — | — |
+
+**Static tests** (spec entries in `docs/test_spec.md`, Increment B):
+- `DEPLOY-K1` … `DEPLOY-K8`, `DEPLOY-D1`, `DEPLOY-D2`: what each requirement demands, how
+  `qa-deploy` checks it on every PR, which `tests/tools/test_qa_deploy.py` tests show the gate fails
+  on each kind of violation, and the report status that is the result.
+- `EVID-T1` (Increment B; its check lands in A): the `qa-evidence` secret check over every run's
+  evidence; its negative controls are V2.
+
+## Assumptions and fixtures
+- Default E2E mode uses deterministic mocks; `M5-T55` stays env-gated and is skipped in CI.
+- Ruleset fixtures are JSON copies of the GitHub API response; the live read happens only in CI.
+- Time-dependent checks (accepted-gap expiry, D2 grace) take an injectable clock.
+- All secret fixtures are synthetic (random values made by the test); no fixture is derived from
+  the trial artifacts or a real key.
+- V12 reads the trace inputs of old commits with `git show`; it does not check out old code.
+
+## Planned verification commands
+- `make tooling-test`, `make qa-trace`, `make docs-check`, `make qa-deploy`, `make test-lint`
+- `make qa-quality`
+- Full E2E on a clean stack locally, `make qa-evidence`
+- The `e2e` and gate-consistency jobs green on the implementation PRs (GitHub)
+
+## Review notes
+- V2's shape rule is fixed in plan D3; the Increment A PR states it in the `AGENTS.md` gate row of
+  `qa-evidence`, and Increment B in `docs/test_spec.md` under `EVID-T1`.
+
+## Independent review at the implementation PR
+A reviewer that is not the author (Codex, or a clean-context Claude) answers in the PR body:
+1. *Tests:* for each new or changed test, which wrong failure would still pass it (service down,
+   another status, the right status with another reason, another component answering, a missing
+   value or empty file read as success)? Does its assertion match the expected-outcome row?
+2. *Keys:* does the change make a key, socket or secret reachable by a service outside the holder
+   list, through a compose mount, an env var, a Dockerfile `COPY`, an entrypoint or script that
+   copies or writes it, or a shared volume?
+
+A "yes" to either blocks, under [AGENTS.md — PoC scope and proportion](../../../AGENTS.md#poc-scope-and-proportion).
