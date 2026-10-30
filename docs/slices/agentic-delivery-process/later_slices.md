@@ -6,6 +6,27 @@ Each slice starts with its own grill-me, which uses this file as input, and gets
 model. The designs below are the state reached in the slice-1 review; the findings listed against
 them are open and must be resolved, or answered by D18, in that slice's plan.
 
+## Slice 2 grill-me outcome (2026-10-30)
+Slice 2 became [`ci-evidence-trace`](../ci-evidence-trace/plan.md): CI E2E as a required check,
+no secrets in evidence, and the trace model (static tests, config-implemented ARCH, gap gate, gate
+consistency). Two parts of the slice 2 draft below moved to **slice 3** as input, with the user's
+answers:
+- **Review design** (review template, lenses, environment facts, agent count, synthesis). User:
+  industry practice is for a reviewer to take the role that fits the artifact under review
+  (requirements, architecture, security, tests, overall quality); it is not clear how three lenses
+  or three agents map onto that. Slice 3's grill-me starts from this question, not from the
+  three-lens draft.
+- **Lanes.** User decision: one process for every change for now (`AGENTS.md`); lanes return when
+  automation makes small changes frequent. The user's gaps list for a future lane design: gate, CI
+  and lane-rule changes are always a full slice, and a gate never decides the lane of a change to
+  itself; adding a dependency is new surface (full slice), the dependency lane covers bumps only; a
+  minor bump on a `0.x` version counts as major; crypto, JWT and TLS libraries go to full slice
+  regardless of version; lockfile lines do not count toward the cap; the reproduction test is
+  gate-checked to fail on the base commit and pass after the fix; a fix touching sensitive code is
+  flagged for the user, and a fix whose reproduction test turns a denial into an allow is a
+  loosening and goes to full slice; the contract documents are listed explicitly (requirements,
+  architecture, threat model, test plan, `invariants.yaml`) and a docs-lane PR touches nothing else.
+
 ## Carried review findings
 IDs refer to [`plan_review.md`](plan_review.md).
 
