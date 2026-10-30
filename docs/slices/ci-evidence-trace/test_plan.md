@@ -56,13 +56,19 @@ IDs V1–V12 are local to this test plan.
   With `--skip-image-users`, D2 is `not_checked` and the report says image users were not
   inspected. The report contains no env values. On today's compose with image inspection: K1, K2,
   K4 `known_violation` (OPL-005, -006, -008), D2 `grace`, the other six `holds`.
-- **V6 Static evidence in `qa-evidence`** (D5, M4), each fails: a missing report; malformed JSON;
+- **V6 Static evidence in `qa-evidence`** (D5, M4), each fails: a missing report; an unreadable
+  report; malformed JSON;
   a report missing a `REQ-SEC`; an unknown status; a report made with `--skip-image-users`
   (matching digests, inspection skipped); a compose or register digest that differs from the files
-  on disk. A complete, matching report passes.
-- **V7 Trace status** (D5, M3): a requirement whose only proof is a static test with status
-  `known_violation` appears as "not proved: known violation OPL-xxx" in the `qa-trace` report and
-  counts as a gap; with status `holds` it counts as proved statically.
+  on disk; a report whose status for a requirement disagrees with the register (for example K1
+  `holds` while the register has an OPL-005 row). A complete, matching report passes.
+- **V7 Trace status** (D5, M3): `qa-trace` takes the status from the register, never from a run
+  report. A requirement whose only proof is a static test and whose asset has a `known_violations`
+  row appears as "not proved: known violation OPL-xxx" and counts as a gap; without such a row it
+  counts as proved statically; D2 before its grace date is "not proved: grace" and counts as a
+  gap. Clean-checkout case: with no
+  `artifacts/` directory at all, `qa-trace` gives the same statuses, on the head and on the
+  merge-base fixture.
 - **V8 Config-implemented ARCH** (D6, M9): an ARCH section with `Implemented by:` naming existing
   files counts as implemented; a named file that does not exist is a structural failure; a section
   with neither a DD nor `Implemented by:` stays a gap.
@@ -82,6 +88,8 @@ IDs V1–V12 are local to this test plan.
   - `--mode pr` with a base that cannot be resolved (shallow history, unknown ref) or whose trace
     inputs cannot be read → fails, never falls back to push mode;
   - diverged history: the base is the merge-base, not the tip of `main`.
+  - the head renames a gap category (as Increment B does): an old gap under its new category name
+    still matches its base entry and passes.
 - **V10 Gate consistency** (D8, M5), one fixture each, all fail:
   - a gate the `AGENTS.md` table marks as CI with no job of that name in `ci.yml`;
   - a job in `ci.yml` that is not in the table;

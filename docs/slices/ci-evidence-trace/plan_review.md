@@ -383,3 +383,297 @@ Approvable within the threat model: **no — R1-B1, R1-B2, R1-B3, R1-B4, R1-B5, 
 - No secret-bearing files or runtime environment values inspected.
 - No independent reconstruction of the grill-me conversation; D1–D11 were treated as the authoritative decisions.
 - No exhaustive service-code security audit. Existing runtime vulnerabilities remain governed by their requirements and open problems.````
+
+## Round 2 (2026-10-30)
+Reviewed files (SHA-256, at commit `b1879e0`):
+- `plan.md` `d71716fdfc340f6c3be5c80a97aff16b5da9e509d7a97db6d87abf7c1a7a2ccd`
+- `test_plan.md` `70c550f2c1e7fb3e34829677e49921de8512ea3347ae3f1687a374c9ff4c11f0`
+
+Verdict: **no** — R1-B5 (partly fixed), R2-B1. Rejections of R1-A1, R1-A5, R1-A11 accepted.
+
+### Author answers, round 2
+| Finding | Answer | Where |
+| --- | --- | --- |
+| R1-B5 how `qa-trace` gets static results in a clean checkout | Fixed: `qa-trace` never reads a run report. A static link counts as proof structurally (as an E2E link does), and the status comes from the register: a `known_violations` row gives "not proved: known violation OPL-xxx", D2 within its grace date "not proved: grace"; both are gaps. `qa-evidence` checks that the run's report agrees with the register. Clean-checkout fixture added. | plan D5, success criterion 3; test_plan V6, V7 |
+| R2-B1 Makefile-only gate not observable | Fixed by narrowing M5 to the `AGENTS.md` CI table, as suggested. A wider rule (every `qa-quality` prerequisite has a row) is listed under Known limits: it would flag `traceability-check` at once and needs its own decision. | plan M5, Known limits |
+| R1-A2 unreadable report | Taken. | test_plan V6 |
+| R1-A4 exact upload paths | Taken. | plan D1 |
+| (author) gap identity across categories | Added: both sides computed by the PR's `qa-trace` on a merge-base checkout; a gap is identified by kind and ID, so recategorised old gaps do not look new. | plan D7; test_plan V9 |
+
+### Round 2 prompt (verbatim)
+````markdown
+You are the independent plan reviewer for a slice plan in the repository at the current working
+directory. You did not write it. Review read-only: do not modify files, run docker, start services
+or use the network. Never print key material, tokens or environment variable values.
+
+## What is under review
+The slice plan `docs/slices/ci-evidence-trace/plan.md` and its test plan
+`docs/slices/ci-evidence-trace/test_plan.md` (commit `HEAD`; `git log -3` and `git diff HEAD~2` show the plan commit and the round-1 changes). They are the plan for slice 2 of the agentic-delivery-process programme. The user
+has not seen them yet; your review comes first.
+
+The intent they must serve: the user's decisions from the slice's grill-me, recorded in the plan's
+decision table (D1–D11), and the repository's rules in `AGENTS.md`. Earlier input for this slice is
+`docs/slices/agentic-delivery-process/later_slices.md`; the plan says which parts of it were moved
+to slice 3, and that move is a user decision.
+
+You may read the whole repository. Decide yourself where to look; you are not given a list of files.
+
+## This is round 2
+Round 1's prompt, report and the author's answers are in
+`docs/slices/ci-evidence-trace/plan_review.md`. For each round-1 finding: say whether the fix is
+correct and complete; for each rejected finding, accept the rejection or re-raise it with new
+evidence. From this round, a new finding counts only if it meets the blocking criteria; do not add
+advisories that are not new.
+
+## How to judge
+Read `AGENTS.md` first, in particular "PoC scope and proportion" (threat model, blocking criteria,
+review loop) and "Slice workflow". Then read the plan's section "Threat model for this plan and its
+reviews": it is the threat model you judge against. A finding blocks only if it meets the blocking
+criteria there, with a concrete failure scenario. Everything else is advisory.
+
+## Environment facts (collected by the author on 2026-10-30; facts outside the repository)
+- The `main` ruleset `basic` requires these status checks: docs-check, qa-trace, unit-guard-check,
+  tooling-test, test-lint, qa-deploy, unit-mutation, unit-trust; strict; 0 approving reviews.
+- Latest CI runs: `CI` on push to `main` at `62d6b0c` (PR #7 merge): success. `E2E trial` (a
+  throwaway workflow on branch `ci-trial/e2e`, since deleted): run `40999541906` failure (both jobs:
+  the suite passed 120/120, then `make qa-evidence` failed with PermissionError on the root-owned
+  `artifacts/` directory); run `41000278717` success after adding `sudo chown` of `artifacts/` and
+  `test_report.log` before `qa-evidence` (both jobs: build 15–18 s, suite 177–188 s, 120/120 passed,
+  `qa-evidence` PASSED, validated 119, skipped 1 for M5-T55). The trial uploaded evidence as public
+  artifacts; it contains expired capability tokens.
+- The ruleset can be read without authentication from the public GitHub API
+  (`GET /repos/{owner}/{repo}/rulesets/{id}` returned HTTP 200 unauthenticated).
+- `make qa-trace` on `main` today: coverage gaps 138 (requirements_without_e2e 97,
+  architecture_without_dd 13, dd_without_ut 24, e2e_tests_without_requirements 4).
+- `make qa-deploy` with image inspection on the local stack: PASSED (18 known violations, 22 warnings,
+  all 22 "grandfathered until 2027-01-31").
+- PR #8 (open, docs only) removes the review round limit; this branch is based on it, so `AGENTS.md`
+  here already contains the review loop the user decided.
+
+## Questions (answer each in depth; "n/a" needs a reason)
+1. Intent: do the plan and test plan do what the decisions say, no more and no less? Is any decision
+   missing, contradicted or quietly widened?
+2. Claims and evidence: for each claim (success criteria, threat-model rows M1–M10, the "caught by"
+   column, requirement proofs), what in the test plan proves it? Could that proof pass while the
+   claim is false? Is each requirement verifiable and unambiguous?
+3. Design and quality: is each mechanism the simplest that fits? Consistent with how the repository
+   already does similar things? Are names, placement and structure what a newcomer would expect, and
+   will the user be able to see what ran and what failed?
+4. Failure and change: behaviour when an input is missing, malformed or unreadable (ruleset API,
+   reports, base commit, evidence); fails closed? Ordering between the two increments; can each be
+   rolled back?
+5. Rules and new risks: does it keep every rule in `AGENTS.md`, the requirements, the register and
+   the open problems? Does it add an asset, trust boundary, data flow or rule without registering it?
+6. Ripple: what depends on what changes (CI, Makefile, `docs-check`, `qa-trace`, `qa-evidence`,
+   `test_spec.md`, the harness, the register, other slices), and does the plan account for it?
+7. Durability: does anything decided live only somewhere temporary? Where must it live?
+8. Blind spots: what did you not check, and could it matter?
+
+## Output (markdown only)
+# Plan review — ci-evidence-trace, round 2
+## Round-1 findings
+(one line per finding: fixed / not fixed, or rejection accepted / re-raised, with the reason)
+## Answers
+(one section per question above; brief where nothing changed since round 1)
+## Blocking findings
+New only, each with id (R2-B1, ...), where (file:line), the blocking criterion it meets, failure
+scenario, smallest fix. "None" if none.
+## Advisory
+New only, each with id (R2-A1, ...), one or two lines. No limit, but list each point once.
+## Verdict
+"Approvable within the threat model: yes" or "no — <ids>".
+## Not checked
+````
+
+### Round 2 report (verbatim)
+````markdown
+# Plan review — ci-evidence-trace, round 2
+
+Reviewed independently by Codex, read-only and offline, at `b1879e0bb5338d4d00f7682be9bf3c1c7f54f63e`. External environment facts are accepted as supplied.
+
+## Round-1 findings
+
+- **R1-B1 — fixed:** D8 now checks the executed make target; V10 includes a same-name/wrong-command fixture.
+- **R1-B2 — fixed:** D3 and V2 now cover the registered raw Base64 issuer key through exact-value matching, including its Base64 encoding, with synthetic fixtures and diagnostics that omit values.
+- **R1-B3 — fixed:** V9 now exercises requirement, ARCH, DD and unlinked-test gaps separately.
+- **R1-B4 — fixed:** Explicit PR/push modes, full history, unreadable/unresolvable-base failures and a merge-base fixture address the fallback scenario.
+- **R1-B5 — not fixed completely:** Inspection completeness and rejection of partial reports are correctly specified; delivery of validated results to `qa-trace`, and clean-checkout verification of that dependency, remain unspecified.
+- **R1-B6 — fixed:** M8 now covers only the two compose images selected by D2; floating Dockerfile bases are explicitly outside that claim.
+- **R1-A1 — rejection accepted:** V1 checks target failure propagation; implementation review can verify ordinary workflow failure semantics without testing GitHub itself.
+- **R1-A2 — partly fixed:** V6 adds malformed, incomplete and unknown-status reports; unreadable-report rejection is not explicitly exercised. This remains the existing advisory.
+- **R1-A3 — fixed:** V1 includes parent-directory ownership and creation of `artifacts/quality/`.
+- **R1-A4 — partly fixed:** Successful secret validation is explicitly required before publication, and diagnostics are tested; exact upload paths remain unspecified.
+- **R1-A5 — rejection accepted:** Manual implementation review can verify D9’s documentary replacement; an automated prose check is unnecessary.
+- **R1-A6 — fixed in the plan:** Increment B explicitly updates OPL-009’s obsolete lane/nightly mitigations.
+- **R1-A7 — fixed:** D6 now includes scripts without DD-tagged functions; each uncovered ARCH section is reviewed rather than automatically exempted.
+- **R1-A8 — fixed:** The job and target are named `gate-consistency`.
+- **R1-A9 — fixed:** Fixtures must be synthetic and independent of trial artifacts.
+- **R1-A10 — fixed:** Increment A documents the scanner contract in `AGENTS.md`, before B adds `EVID-T1`.
+- **R1-A11 — rejection accepted:** Reverts plus coordinated required-check changes suffice at this scale; rollback dependencies are explained below.
+- **R1-A12 — disposition accepted:** Enumerating affected harness IDs in A’s PR is already explicit in the test plan.
+- **R1-A13 — fixed:** The assets section acknowledges the move into scratch.
+- **R1-A14 — fixed:** V9 includes a gap swap with unchanged aggregate count.
+
+## Answers
+
+### 1. Intent
+
+The revised plan preserves the main decisions:
+
+| Decisions | Assessment |
+| --- | --- |
+| D1–D3 | CI E2E, continued local verification, two pinned images, scratch token hand-offs, fingerprints and publication after secret validation are represented. |
+| D4–D5 | Static mappings and per-requirement results are represented, but the result-consumption path remains incomplete under R1-B5. |
+| D6 | File-backed ARCH implementation and retirement have direct controls in V8/V11. |
+| D7 | Gap identities, accepted gaps, expiry, stale entries and explicit PR-base failure now have appropriate fixtures. |
+| D8 | Three-list agreement and job commands are tested. M5 still promises additional Makefile coverage absent from that mechanism: R2-B1. |
+| D9 | The universal workflow replacement is explicit and can be checked in implementation review. |
+| D10 | Review design and lanes remain deferred; `later_slices.md` preserves the user’s input without importing its older draft as approved scope. |
+| D11 | A precedes B, and the scanner precedes publication. The later introduction of `REQ-T-R9`/`EVID-T1` is explicit. |
+
+The expanded scanner contract directly addresses R1-B2. Its documented limits avoid introducing an unrestricted secret-classification programme.
+
+### 2. Claims and evidence
+
+**Success criteria**
+
+| Criterion | Planned proof | Could proof pass while the claim is false? |
+| --- | --- | --- |
+| 1: Required CI E2E, deployment inspection and evidence validation | V1, implementation-PR CI runs, required-check update, local full run | Tooling fixtures alone cannot prove live triggers or required checks; operational acceptance must inspect those settings and job steps. |
+| 2: Secret-free evidence | V2, changed harness evidence, full-run `qa-evidence` | Covered for D3’s declared detection contract. Arbitrary unregistered, unrecognisable credentials remain an explicitly documented limit. |
+| 3: Accurate static requirement statuses | V5 produces statuses; V7 interprets them; V6 validates reports | Yes: fixtures supply a report, while the actual `qa-trace` execution has no specified report-delivery path. R1-B5 remains open. |
+| 4: New-gap rejection and accepted-gap handling | V9 and historical replay V12 | The listed category, identity and date controls address the original misses. |
+| 5: ARCH review and retirement | V8/V11 plus review of the thirteen sections | File existence cannot prove semantic implementation; reviewing each declaration remains necessary and is explicitly planned. |
+| 6: Gate consistency | V10 and the post-update positive control | Adequate for the three named lists and commands; insufficient for M5’s Makefile-only addition claim. |
+
+**Threat-model claims**
+
+| Row | Evidence and assessment |
+| --- | --- |
+| M1 | V9 covers each stated addition category; V12 reproduces the historical requirement miss. Static-result availability remains relevant under R1-B5. |
+| M2 | V9 covers missing reasons/expiry, expiry boundaries and stale acceptances. |
+| M3 | V5/V7 cover known violations when a report is supplied. They do not establish correct behaviour when the real trace job lacks that report. |
+| M4 | V6 rejects missing, malformed, incomplete, partial and digest-mismatched deployment reports in `qa-evidence`. This matches the specifically stated compose/register freshness claim. |
+| M5 | V10 now catches wrong commands as well as name disagreement. It does not observe Makefile-only additions: R2-B1. |
+| M6 | V2 covers token shapes, PEM keys, credential lines, registered raw key values, encoding and non-disclosing diagnostics. Full-run verification checks the resulting evidence. |
+| M7 | The required `e2e` check and live workflow acceptance provide the proof. Unit fixtures cannot substitute for checking the external ruleset. |
+| M8 | V3 checks the two exact image tags and compose/register agreement. The narrowed claim is consistent with D2. |
+| M9 | V8 directly tests existing and missing implementation files. |
+| M10 | V1 tests harness failure propagation. Workflow review must confirm subsequent tooling commands remain failure-propagating and uploads require successful validation. The rejection of R1-A1 is acceptable. |
+
+**Requirement proofs**
+
+- **REQ-T-R9:** V2 provides concrete negative and positive controls for the declared scanner contract; `EVID-T1` supplies its trace/specification home. This is a bounded detection mechanism, not exhaustive recognition of every possible credential.
+- **REQ-SEC-K1, K2 and K4:** V5/V7 must preserve their known-violation statuses and gap classification. Merely mapping them to static tests must never make them proved.
+- **REQ-SEC-K3 and K5–K8:** Existing deployment tests cover environment grants, ancestor mounts, container paths and holder consistency. The planned static entries must identify the relevant existing negative-control selectors, as the test plan requires.
+- **REQ-SEC-D1:** Existing default-deny fixtures cover registered service facts; reusing them is proportionate.
+- **REQ-SEC-D2:** V5/V6 now distinguish inspected results from `not_checked`; existing controls cover effective-user selection, forbidden root, unknown users and grace expiry. V7 does not explicitly exercise rendering `grace` or `not_checked`; that remains implementation-review detail unless the missing-result problem is resolved by defaulting to proof.
+- **REQ-M4B-W8 and REQ-M5-CJ2:** Their evidence clauses remain intact. Scratch storage, redacted mint responses and evidence validation address the admitted leak without changing authorization outcomes.
+
+Requirements are otherwise sufficiently concrete for this slice. The unresolved distinction is between **a valid proof mapping** and **a validated execution result** in `qa-trace`.
+
+### 3. Design and quality
+
+The mechanisms remain proportionate: existing make targets and validators are extended; tooling tests stay in `tests/tools/`; static specifications stay in `docs/test_spec.md`; accepted gaps stay beside trace mappings.
+
+Separate job names and per-requirement statuses should make failures understandable. Known violations and grace must remain visible despite an overall deployment-gate PASS.
+
+R1-B5 prevents approval of the current result flow. The existing `qa-trace` job is independent (`.github/workflows/ci.yml:20`), and `qa-quality` currently lists `qa-trace` before `qa-deploy` (`Makefile:83`). Naming `e2e` as the producer does not deliver its files to another job.
+
+The smallest resolution is to specify where validated results are consumed and how standalone structural tracing behaves without them. No additional reporting framework is needed.
+
+### 4. Failure and change
+
+The revised contracts correctly reject:
+
+- An unreadable or unparsable ruleset response.
+- An unavailable PR base or unreadable historical trace input.
+- Missing, malformed, incomplete, unknown-status, inspection-skipped or digest-mismatched deployment evidence.
+- An existing registered asset that cannot be read.
+
+Evidence-reading errors must likewise prevent publication; silently skipping unreadable evidence would violate D3.
+
+The remaining R1-B5 scenario is concrete: a clean CI `qa-trace` job has neither the `e2e` report nor an inspected local deployment. Treating static entries as proved in that situation can hide K1/K2/K4’s known violations while V5–V7 still pass on supplied fixtures. Failing instead avoids that false green but leaves the advertised successful CI path unspecified.
+
+Specify that flow and add a clean-checkout acceptance case, including missing-result behaviour and how the base/head comparison obtains comparable inputs.
+
+A-before-B is sound. B can be reverted while retaining A’s scanner and E2E job, with corresponding required-check changes. Removing A while B remains requires unwinding B’s dependencies first. Any rollback restoring token-writing evidence must disable publication in the same operation. These are coordination steps, not grounds for a new migration mechanism.
+
+### 5. Rules and new risks
+
+The plan retains the local full E2E run, tests-first implementation, independent review, authored trace changes and frozen-record model. No service authorization behaviour or asset holder is intentionally changed.
+
+New process state and flows are documented: CI artifacts and retention, deployment reports, accepted gaps, external required checks and scratch storage. The Docker-socket holder is already registered. The scanner’s additional reads are described without proposing new service access.
+
+The register changes remain limited to two image tags. Known runtime problems are not represented as fixed, and OPL-009’s mitigation text is scheduled for correction.
+
+Two obligations remain unresolved: D4/D5’s checked-result flow under R1-B5, and M5’s overstatement under R2-B1. I found no basis for adding production-hardening requirements.
+
+### 6. Ripple
+
+Most dependencies are accounted for:
+
+| Change | Dependents covered |
+| --- | --- |
+| Evidence layout | Harness readers, fingerprints, mint JSON, scanner and hand-written evidence descriptions |
+| Static tests | Trace schema/parser, specification headings, `docs-check`, deployment/evidence reports |
+| ARCH implementation declarations | Trace parser, reviewed declarations and retirement |
+| Gap gate | Historical inputs, full Git history, PR context and accepted-gap validation |
+| CI gates | Make targets, workflow, rulebook table and external required checks |
+| Process changes | D9’s workflow replacement, OPL-009 and deferred slice-3 input |
+
+The missing dependency is report production **through to trace consumption**, including CI workspace separation and clean local execution. R1-B5’s fix is therefore only partial.
+
+### 7. Durability
+
+Decisions have appropriate intended homes: authoritative requirements/architecture, `AGENTS.md`, `trace/tests.yaml`, `docs/test_spec.md`, compose/register and the live OPL. Deferred user input is preserved in `later_slices.md`.
+
+Synthetic fixtures eliminate dependence on expiring trial artifacts. A now has a durable scanner contract before B introduces its static specification. Exact required-check configuration remains external authoritative state, appropriately documented and checked by D8.
+
+The report-consumption contract must live in the revised plan/test plan and then the relevant gate documentation, rather than being settled only in implementation discussion.
+
+Reviewed hashes:
+
+| File | SHA-256 |
+| --- | --- |
+| `plan.md` | `d71716fdfc340f6c3be5c80a97aff16b5da9e509d7a97db6d87abf7c1a7a2ccd` |
+| `test_plan.md` | `70c550f2c1e7fb3e34829677e49921de8512ea3347ae3f1687a374c9ff4c11f0` |
+
+### 8. Blind spots
+
+This review establishes plan adequacy, not implementation correctness. Future verification must establish actual scanner traversal, scratch/upload separation, workflow failure propagation, image selections and report handling.
+
+I inspected repository rules, both plans and revisions, round-1 responses, deferred input, workflow, Makefile, trace/evidence/deployment validators, deployment tooling tests, relevant requirements/architecture, the register and OPLs, and harness evidence handling.
+
+The read-only command `python3 -B scripts/check_docs.py` passed. It does not establish the proposed gates’ behaviour.
+
+## Blocking findings
+
+### R2-B1 — M5 promises detection of Makefile-only gates that D8 cannot observe
+
+**Where:** `docs/slices/ci-evidence-trace/plan.md:41`, `plan.md:87`; `docs/slices/ci-evidence-trace/test_plan.md:85`.
+
+**Blocking criterion:** Concrete M5 false green; contradiction between the “caught by” claim and the mechanism.
+
+**Failure scenario:** An honest change adds a new quality-gate target to the Makefile but forgets its rulebook row, CI job and required check. D8’s three lists remain identical, and every V10 fixture can pass. The command check examines existing jobs, so it cannot discover the omitted gate. M5 expressly promises to catch a gate added to the Makefile.
+
+**Smallest fix:** Narrow M5 to gates declared in the `AGENTS.md` CI table, matching D8’s approved mechanism. If Makefile-only discovery is intended, specify how gate targets are distinguished from helper targets and add the missing negative fixture.
+
+R1-B5 remains open as explained above; it is not repeated as a new finding.
+
+## Advisory
+
+None new.
+
+## Verdict
+
+Approvable within the threat model: no — R1-B5, R2-B1.
+
+## Not checked
+
+- No file modifications, Docker commands, service starts or network access.
+- No secret-bearing runtime files or environment variable values inspected.
+- No live ruleset verification, CI execution or artifact downloads.
+- No tooling, unit, E2E or historical-replay execution; some existing tooling tests invoke Docker.
+- No independent reconstruction of grill-me; D1–D11 and the recorded deferrals were treated as authoritative intent.
+- No exhaustive runtime security audit or verification of the proposed implementation, which does not yet exist.````
