@@ -42,7 +42,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `docs/durable-slice1-rules` | Move slice 1's standing rules from the frozen slice records into `AGENTS.md` and the templates | PR open |
+| `docs/review-loop` | Remove the review round limit; the author may reject findings with a checkable reason | PR open |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
