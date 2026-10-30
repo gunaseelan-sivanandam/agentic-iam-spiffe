@@ -38,11 +38,11 @@ mistakes in good faith. This slice's checks must catch these:
 | M2 | A gap is accepted and forgotten, or its acceptance outlives its reason | `accepted_gaps` expiry and stale-entry check (D7) |
 | M3 | A requirement is reported as proved while it is violated under an accepted known violation | per-requirement static status (D5) |
 | M4 | A stale `qa-deploy` report (from another compose or register) is read as evidence | input digests in the report, checked by `qa-evidence` (D5) |
-| M5 | A gate is added to the Makefile or `AGENTS.md` without a CI job or required check, or a job runs a gate under another name | gate consistency (D8) |
-| M6 | A secret (capability token, private key) is written into evidence and uploaded | harness fix and evidence secret check (D3) |
+| M5 | A gate is added to the Makefile or `AGENTS.md` without a CI job or required check, or a job of a gate's name runs another command | gate consistency, including each job's command (D8) |
+| M6 | A secret (capability token, a registered key or credential) is written into evidence and uploaded | harness fix and evidence secret check: token and private-key shapes, and the exact values of the register's restricted assets (D3) |
 | M7 | E2E is not run, or run on the author's machine only, before merge | `e2e` required check (D1) |
-| M8 | CI and the local run test different images because a tag floats | pinned tags (D2) |
-| M9 | An ARCH section claims a configuration file that does not exist | config-implemented ARCH check (D6) |
+| M8 | CI and the local run use different OPA or Redis images because their compose tag floats | pinned tags (D2). Not covered: Dockerfile base images (`python:3.11-slim`, `alpine:3.19`) still float within their minor version; see Known limits |
+| M9 | An ARCH section claims an implementing file that does not exist | `Implemented by:` check (D6) |
 | M10 | A CI job fails in a tooling step and is reported as passed | the job's own conclusion is the result; no step swallows a failure |
 
 **Delivery threat: deliberate attack (out of model).** A PR written to defeat the gates — editing the
@@ -79,12 +79,12 @@ after the next round goes to the user.
 | --- | --- | --- |
 | D1 | CI E2E | A `make e2e` target (build every image, run the full suite, take ownership of the root-owned output) and a CI job `e2e` that runs it, then `make qa-deploy` with image inspection, then `make qa-evidence`, and uploads the evidence (14 days). It runs on every PR and every push to `main` and is a required check. Step 4 of the slice workflow **also** keeps the local full run on a clean stack. |
 | D2 | Floating images | Pin `openpolicyagent/opa:latest` and `redis:7-alpine` to exact version tags (compose and register). Tags, not digests. |
-| D3 | Tokens in evidence | Token hand-offs between guards move to a per-test scratch directory outside `artifacts/rogue-tests/`. Evidence keeps a SHA-256 fingerprint where a test needs one (for example "two mints differ"); saved mint JSON has its `token` replaced by the fingerprint. `qa-evidence` fails on a secret-shaped value in evidence, so the mistake cannot come back. `docs/test_spec.md` evidence lists follow. |
+| D3 | Tokens in evidence | Token hand-offs between guards move to a per-test scratch directory outside `artifacts/rogue-tests/`. Evidence keeps a SHA-256 fingerprint where a test needs one (for example "two mints differ"); saved mint JSON has its `token` replaced by the fingerprint. `qa-evidence` fails on a secret in evidence, so the mistake cannot come back. It looks for two things: token and private-key shapes — a base64 or base64url run of at least 200 characters with at least 20 distinct characters outside PEM `CERTIFICATE` blocks (capiss tokens are 600 or more; other evidence stays under 100, and M5-T53's long single-character padding is not a token), a PEM private-key block, a credential line (`JIRA_API_TOKEN=`, `Authorization:` with a value) — and the exact values of the restricted assets `security/invariants.yaml` lists that are readable where it runs (for example the capiss `root_key.b64`, which is raw base64 and has no recognisable shape), in plain and base64 form. It never prints a matched value. Evidence is uploaded only after this check passes. `docs/test_spec.md` evidence lists follow. |
 | D4 | Trace model | Every requirement is traced the same way: requirement → test ID in `trace/tests.yaml` → entry in the test specification → implementation → stored, checked result. |
-| D5 | Static tests | A new entry type for tests that prove a requirement statically. The ten `REQ-SEC` get one static test each, `DEPLOY-K1` … `DEPLOY-K8`, `DEPLOY-D1`, `DEPLOY-D2`, each with a spec entry. `make qa-deploy` writes a report with a status per requirement: `holds`, `known_violation` (with its OPL) or `grace` (D2's non-root grace period). The gate verdict does not change. A requirement whose only proof has status `known_violation` is reported as "not proved: known violation OPL-xxx", never as proved. The report records the SHA-256 of the compose file and register it checked; `qa-evidence` recomputes them. |
-| D6 | Config-implemented ARCH | An ARCH section implemented by configuration rather than functions (Envoys, SPIRE, the deployment register) names its files on an `Implemented by:` line. `qa-trace` checks those files exist and counts the section as implemented instead of expecting a DD. ARCH-034 is reworded as the deployment-register architecture. DD-925 to DD-930 are retired (QA gates carry no DD tags, like every other gate) and `IT-DEPLOY-*` are replaced by the static tests, which name `tests/tools/test_qa_deploy.py` as the gate's negative controls. The tooling tests do not change. |
-| D7 | Gap gate | On a PR, `qa-trace` computes the coverage gaps of the PR and of its merge-base with `main`, and fails on a gap the PR adds. An intended gap is an `accepted_gaps` entry in `trace/tests.yaml`: gap ID, reason, expiry, one line. An expired entry fails, and so does an entry whose gap no longer exists. On a push to `main` the comparison is reported, not enforced. |
-| D8 | Gate consistency | A CI job checks three lists agree: the gates `AGENTS.md` says CI enforces, the jobs in `.github/workflows/ci.yml`, and the required checks of the `main` ruleset (read from the public GitHub API, no token). A failure to read the ruleset fails the job. `unit-diff-cov` gets its own job. |
+| D5 | Static tests | A new entry type for tests that prove a requirement statically. The ten `REQ-SEC` get one static test each, `DEPLOY-K1` … `DEPLOY-K8`, `DEPLOY-D1`, `DEPLOY-D2`, each with a spec entry. `make qa-deploy` writes a report with a status per requirement: `holds`, `known_violation` (with its OPL) or `grace` (D2's non-root grace period). The gate verdict does not change. A requirement whose only proof has status `known_violation` is reported as "not proved: known violation OPL-xxx", never as proved. The report records the SHA-256 of the compose file and register it checked, and whether image users were inspected; with `--skip-image-users`, D2's status is `not_checked`. `qa-evidence` accepts only a complete report (every `REQ-SEC` present with a known status, image users inspected, digests matching the files on disk). The `e2e` job and the local step-4 run produce it; the `qa-deploy` job's report (without image inspection) is not evidence. |
+| D6 | Config-implemented ARCH | An ARCH section implemented by files that carry no DD-tagged functions — configuration (Envoys, SPIRE, the deployment register) or a test or demo script (the harness, `agent-a`) — names those files on an `Implemented by:` line. `qa-trace` checks those files exist and counts the section as implemented instead of expecting a DD. ARCH-034 is reworded as the deployment-register architecture. DD-925 to DD-930 are retired (QA gates carry no DD tags, like every other gate) and `IT-DEPLOY-*` are replaced by the static tests, which name `tests/tools/test_qa_deploy.py` as the gate's negative controls. The tooling tests do not change. |
+| D7 | Gap gate | On a PR, `qa-trace` computes the coverage gaps of the PR and of its merge-base with `main`, and fails on a gap the PR adds, in every gap category (requirements, ARCH, DD, unlinked tests). The mode is explicit (`--mode pr --base <ref>` or `--mode push`): in PR mode, a base that cannot be resolved or read fails, never falls back to push mode; the CI job fetches full history. An intended gap is an `accepted_gaps` entry in `trace/tests.yaml`: gap ID, reason, expiry, one line. An expired entry fails, and so does an entry whose gap no longer exists. On a push to `main` the comparison is reported, not enforced. |
+| D8 | Gate consistency | A CI job `gate-consistency` (`make gate-consistency`) checks three lists agree: the gates `AGENTS.md` says CI enforces, the jobs in `.github/workflows/ci.yml`, and the required checks of the `main` ruleset (read from the public GitHub API, no token). Each such job must run `make <its own name>`. A failure to read the ruleset fails the job. `unit-diff-cov` gets its own job. |
 | D9 | One process | `AGENTS.md`: every change follows the slice workflow, scaled to its size; this replaces "required for milestone and security-relevant changes". |
 | D10 | Moved to slice 3 | All review design (template, lenses or roles, environment facts, agent count, synthesis) and lanes, with the user's input recorded in [`later_slices.md`](../agentic-delivery-process/later_slices.md). |
 | D11 | Increments | Two PRs. **A — CI evidence** (D1, D2, D3). **B — trace model** (D4 to D9). A goes first, because CI must not upload evidence before the token fix. REQ-T-R9 and its static test `EVID-T1` land in B, which adds the static test type; the secret check they trace to lands in A. |
@@ -108,8 +108,9 @@ after the next round goes to the user.
    "not proved: known violation" with OPL-005, OPL-006 and OPL-008, and D2 as "grace".
 4. `make qa-trace` fails on a PR fixture that adds a requirement without proof, passes with a valid
    `accepted_gaps` entry, and fails on an expired or stale one.
-5. The 13 config-implemented ARCH sections and ARCH-034 name their files and are no longer
-   "architecture without DD"; DD-925 to DD-930 and `IT-DEPLOY-*` are retired.
+5. Each of the 13 ARCH sections without a DD is reviewed: those implemented by files without
+   DD-tagged functions name them on `Implemented by:`; any left is still reported as a gap. ARCH-034
+   names the register and compose; DD-925 to DD-930 and `IT-DEPLOY-*` are retired.
 6. The gate-consistency job fails when any of the three lists differs, and passes on the merged
    result.
 
@@ -118,7 +119,8 @@ after the next round goes to the user.
 - `make e2e`; the `e2e` CI job (D1).
 - Pinned `opa` and `redis` tags in compose and `security/invariants.yaml` (D2).
 - Harness token hand-offs through a scratch directory, fingerprints, redacted mint JSON; the
-  `qa-evidence` secret check; `test_spec.md` evidence lists (D3).
+  `qa-evidence` secret check, its contract stated in the `AGENTS.md` gate row of `qa-evidence`;
+  `test_spec.md` evidence lists (D3).
 
 **Increment B — trace model**
 - The static test type in `trace/tests.yaml` and `qa-trace`; `DEPLOY-*`; REQ-T-R9 with `EVID-T1`
@@ -131,6 +133,8 @@ after the next round goes to the user.
 - The gap gate and `accepted_gaps` (D7).
 - The gate-consistency job; `unit-diff-cov` as its own job (D8).
 - `AGENTS.md`: one process (D9); the trace model and allowed links; the quality-gates table.
+- `docs/open_problem_log.md` OPL-009 mitigations: lanes and a nightly run are no longer planned;
+  every change goes through the slice workflow and the `e2e` job runs on every push to `main`.
 
 ## Out of scope
 - Review design and lanes (D10), automation of reviews (slice 3).
@@ -141,7 +145,10 @@ after the next round goes to the user.
 - The older coverage gaps already on `main` (they do not fail; D7 only stops new ones).
 
 ## Assets and holders
-- **Keys, sockets, secrets touched:** none added or moved. `rogue-tests` holds the Docker socket on
+- **Keys, sockets, secrets touched:** capability tokens the harness handles move from the evidence
+  directory to a harness-local scratch directory that is never uploaded. The evidence secret check
+  reads the restricted assets the register lists, to compare, and prints no value. No holder
+  changes. `rogue-tests` holds the Docker socket on
   the CI runner as it does locally (declared holder). The CI jobs have no secrets
   (`permissions: contents: read`); the ruleset is read without a token.
 - **Removed exposure:** capability token values leave the evidence (D3) before CI uploads it.
@@ -177,6 +184,14 @@ after the next round goes to the user.
 - `test_spec.md` is renamed in its title from "E2E Test Specification" to "Test Specification"; the
   file path stays.
 - No documents are archived.
+
+## Known limits
+- Dockerfile base images (`python:3.11-slim` for 7 images, `alpine:3.19` for 4) float within their
+  minor version, so CI and a cached local build can differ there. Pinning them is not decided.
+- The secret check finds token and key shapes and the values of registered assets readable where it
+  runs; a secret that is neither (an unregistered credential with no recognisable shape) is left to
+  the review question on keys.
+- `qa-deploy` sees compose and image facts only (as in slice 1).
 
 ## Review notes (approve or change in the plan PR)
 1. **User actions:** merge PR #8 (the review loop this plan's review follows). At the implementation PRs, add

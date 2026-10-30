@@ -21,21 +21,28 @@ None. This slice changes QA tooling and the harness, not services; QA tooling is
 IDs V1–V12 are local to this test plan.
 
 **Increment A — CI evidence**
-- **V1 `make e2e` output ownership** (D1, M10): after the target, `artifacts/rogue-tests/` and
-  `test_report.log` are owned by the invoking user; the target exits with the harness's exit code,
+- **V1 `make e2e` output ownership** (D1, M10): after the target, `artifacts/` (including
+  `artifacts/rogue-tests/`) and `test_report.log` are owned by the invoking user, and
+  `make qa-evidence` can create `artifacts/quality/` (the trial's failure); the target exits with the harness's exit code,
   so a failed suite fails the target (fixture: a harness stub exiting 1).
 - **V2 Evidence secret check** (D3, REQ-T-R9, M6), one fixture each, all fail `qa-evidence`:
   - a Biscuit-shaped token (base64url, the length of a real capiss token) in a `.txt` file;
   - the same token inside a JSON field;
   - a PEM `PRIVATE KEY` block;
-  - a `JIRA_API_TOKEN=` or `Authorization: Bearer` line with a value.
+  - a `JIRA_API_TOKEN=` or `Authorization: Bearer` line with a value;
+  - the exact value of a registered restricted asset (a synthetic `root_key.b64`: raw base64 of 32
+    random bytes, no recognisable shape) in plain form, and the same value base64-encoded;
+  - a registered asset file that exists but cannot be read (fails closed).
+
+  The failure message names the file and the kind of secret, never the value (asserted).
 
   Accepted (positive controls): a SHA-256 hex fingerprint; a PEM `CERTIFICATE` block (SVID
-  certificates); SPIRE `request_id` and correlation IDs; the evidence of the trial run after the
-  harness fix. Length boundary: the base64url-run threshold is stated in the implementation and
-  tested at threshold − 1 (accepted), threshold and threshold + 1 (rejected).
-- **V3 Pinned tags** (D2, M8): `security/invariants.yaml` and compose name the same exact tags for
-  `opa` and `redis`; `qa-deploy` reports a compose tag that differs from the register (existing
+  certificates); SPIRE `request_id` and correlation IDs; a 3000-character run of one repeated
+  character (M5-T53's padding). Boundaries of the shape rule (plan D3): a varied run of 199
+  characters is accepted, 200 and 201 are rejected; a 200-character run with 19 distinct
+  characters is accepted, with 20 rejected.
+- **V3 Pinned tags** (D2, M8 as narrowed): `security/invariants.yaml` and compose name the same
+  exact tags for `opa` and `redis`, and neither is `latest`; `qa-deploy` reports a compose tag that differs from the register (existing
   default-deny rule, one fixture).
 
 **Increment B — trace model**
@@ -46,10 +53,13 @@ IDs V1–V12 are local to this test plan.
 - **V5 `qa-deploy` report** (D5, M3, M4): on fixtures, the report gives `holds` for a requirement
   with no violation, `known_violation` with its OPL for one covered by a known-violation row, and
   `grace` for D2 with a grandfathered root service before 2027-01-31 (and an error after, as today).
-  The report contains no env values. On today's compose: K1, K2, K4 `known_violation` (OPL-005,
-  -006, -008), D2 `grace`, the other six `holds`.
-- **V6 Static evidence in `qa-evidence`** (D5, M4): a missing report fails; a report whose compose
-  or register digest differs from the files on disk fails; a matching report passes.
+  With `--skip-image-users`, D2 is `not_checked` and the report says image users were not
+  inspected. The report contains no env values. On today's compose with image inspection: K1, K2,
+  K4 `known_violation` (OPL-005, -006, -008), D2 `grace`, the other six `holds`.
+- **V6 Static evidence in `qa-evidence`** (D5, M4), each fails: a missing report; malformed JSON;
+  a report missing a `REQ-SEC`; an unknown status; a report made with `--skip-image-users`
+  (matching digests, inspection skipped); a compose or register digest that differs from the files
+  on disk. A complete, matching report passes.
 - **V7 Trace status** (D5, M3): a requirement whose only proof is a static test with status
   `known_violation` appears as "not proved: known violation OPL-xxx" in the `qa-trace` report and
   counts as a gap; with status `holds` it counts as proved statically.
@@ -57,7 +67,10 @@ IDs V1–V12 are local to this test plan.
   files counts as implemented; a named file that does not exist is a structural failure; a section
   with neither a DD nor `Implemented by:` stays a gap.
 - **V9 Gap gate** (D7, M1, M2), on base/head fixture pairs:
-  - head adds a requirement without proof → fails, naming the gap;
+  - head adds a gap in each category, one fixture each — a requirement without proof, an ARCH
+    section without DD or `Implemented by:`, a DD without UT, a test linked to no requirement →
+    fails, naming the gap;
+  - head closes one old gap and adds a different one (total unchanged) → fails;
   - the same with an `accepted_gaps` entry → passes;
   - the entry is valid through its expiry date (23:59:59 UTC) and fails one second later (clock
     injected);
@@ -65,11 +78,16 @@ IDs V1–V12 are local to this test plan.
   - an entry without a reason or expiry fails;
   - head closes an old gap → passes;
   - a gap present on base and head → passes (old gaps do not fail);
-  - push mode (no PR base) reports and passes.
+  - `--mode push` reports and passes;
+  - `--mode pr` with a base that cannot be resolved (shallow history, unknown ref) or whose trace
+    inputs cannot be read → fails, never falls back to push mode;
+  - diverged history: the base is the merge-base, not the tip of `main`.
 - **V10 Gate consistency** (D8, M5), one fixture each, all fail:
   - a gate the `AGENTS.md` table marks as CI with no job of that name in `ci.yml`;
   - a job in `ci.yml` that is not in the table;
   - a job that is not a required check in a ruleset fixture;
+  - a job with a gate's name whose steps run another make target (for example `qa-deploy` running
+    `make docs-check`);
   - a ruleset fixture that cannot be read or parsed (fails closed, never passes).
 
   Positive control: today's table, workflow and ruleset after this slice's changes and the user's
@@ -103,6 +121,8 @@ token file.
 - Default E2E mode uses deterministic mocks; `M5-T55` stays env-gated and is skipped in CI.
 - Ruleset fixtures are JSON copies of the GitHub API response; the live read happens only in CI.
 - Time-dependent checks (accepted-gap expiry, D2 grace) take an injectable clock.
+- All secret fixtures are synthetic (random values made by the test); no fixture is derived from
+  the trial artifacts or a real key.
 - V12 reads the trace inputs of old commits with `git show`; it does not check out old code.
 
 ## Planned verification commands
@@ -112,8 +132,8 @@ token file.
 - The `e2e` and gate-consistency jobs green on the implementation PRs (GitHub)
 
 ## Review notes
-- V2's threshold and patterns are fixed in the Increment A PR, stated in `docs/test_spec.md` under
-  `EVID-T1`.
+- V2's shape rule is fixed in plan D3; the Increment A PR states it in the `AGENTS.md` gate row of
+  `qa-evidence`, and Increment B in `docs/test_spec.md` under `EVID-T1`.
 
 ## Independent review at the implementation PR
 A reviewer that is not the author (Codex, or a clean-context Claude) answers in the PR body:
