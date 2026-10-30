@@ -29,6 +29,9 @@
 | --- | --- | --- | --- | --- | --- |
 | harness ID | component that must produce the outcome | exact outcome: status + `reason`, curl exit code, exact log line | positive control on the same route: a test ID, or `internal` (a premise in the same test) | `plan`, `probe@<commit>` (observed before the change), `existing@<commit>` | the loose check it replaces, or — |
 
+Every negative test has a twin. A `probe@` value is observed before any change; if it contradicts a
+`plan` value, stop for the user instead of changing the row (`AGENTS.md`, slice workflow step 2).
+
 ## Assumptions and fixtures
 - List mock, live, or environment assumptions needed by the tests.
 - State the default mode and any explicit opt-in mode.

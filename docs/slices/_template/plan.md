@@ -20,6 +20,10 @@
 ## Out of scope
 - List what this slice does not change.
 
+## Assets and holders
+- Which keys, sockets and secrets this slice touches, adds or moves, and who may hold each one
+  (`security/invariants.yaml` and the `REQ-SEC` requirements). If none, say so explicitly.
+
 ## Hidden-state and trust decisions
 - If the slice depends on hidden state, list:
   - state/key name
@@ -35,6 +39,7 @@
 - Requirements:
 - Architecture:
 - Runtime proof:
+- Rulebook (`AGENTS.md`): process rules this slice adds or changes, or none.
 
 ## Retirement and compatibility
 - List what old logic, compatibility behavior, docs, tests, or artifacts must be removed or kept temporarily.

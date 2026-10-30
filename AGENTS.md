@@ -94,12 +94,27 @@ Required for milestone and security-relevant changes. A slice bundle lives in
 [slice index](docs/slices/README.md).
 
 1. **Plan and review.** Run the `grill-me` skill and resolve design choices one branch at a time.
-   Write `plan.md` (decisions, requirements to add or change, hidden-state decisions, scope,
-   out-of-scope, retirement) and `test_plan.md` (UT and E2E derived from the decisions). Do not
-   implement before review.
+   Grill-me always asks which keys, sockets and secrets the slice touches and who may hold them,
+   against the holders in `security/invariants.yaml`.
+   Write `plan.md` (decisions, requirements to add or change, hidden-state decisions, assets and
+   holders, rulebook changes, scope, out-of-scope, retirement) and `test_plan.md` (UT and E2E
+   derived from the decisions). An [independent review](#independent-review) of both runs before
+   the user sees them. The user approves the plan by merging the plan PR; implement only from the
+   plan as merged on `origin/main`.
 2. **Tests first.** Add UT/E2E only from the reviewed `test_plan.md`. Update requirements,
    architecture, and `trace/tests.yaml` before making runtime code pass. If a test needs a new
    assumption, return to step 1.
+   - Each expected outcome comes from the approved plan, from a probe of the stack *before* the
+     change (`probe@<commit>`), or from an existing assertion (`existing@<commit>`); never from
+     watching the new implementation run. If a probe contradicts a value the plan approved, stop
+     and ask the user; do not adjust the row.
+   - Every negative E2E test names a positive twin: the allowed case on the same route, which must
+     pass in the same run (another test ID, or `internal` when a premise of the same test performs
+     it).
+   - A requirement may be proved statically, by a gate whose tooling tests show it fails on each
+     kind of violation (as `make qa-deploy` proves the `REQ-SEC` requirements), where a runtime
+     test would add nothing; the plan says which. `make qa-trace` cannot label a static proof yet,
+     so such a requirement still shows as a coverage gap.
 3. **Implement.** Only approved behavior. Remove the dead code, stale paths, and artifacts that
    `plan.md` lists for retirement.
 4. **Verify and close.** All of the following, in the same change:
@@ -112,7 +127,25 @@ Required for milestone and security-relevant changes. A slice bundle lives in
    - add a dated entry to `docs/history/implementation_log.md` (what changed, validation results,
      what was not run and why);
    - update `docs/STATUS.md` and the slice's row in `docs/slices/README.md`;
-   - add or close entries in `docs/open_problem_log.md` for problems found or fixed.
+   - add or close entries in `docs/open_problem_log.md` for problems found or fixed;
+   - put the independent review's answers to the implementation questions in the PR body.
+
+### Independent review
+- **Reviewer.** Never the author. Use `codex exec` in a read-only sandbox; if Codex is unavailable,
+  a Claude model with a clean context. The report says which reviewer ran and why. The reviewer
+  gets the intent (the approved plan, or the request), the change, and this file, and may read the
+  whole repository; it never gets the author's reasoning. The prompts used so far are recorded
+  verbatim in the slice review records (for example
+  [`review_1b.md`](docs/slices/agentic-delivery-process/review_1b.md#reviewer-prompts-verbatim)).
+- **Plan review** (step 1). The reviewer reviews `plan.md` and `test_plan.md` for security, test
+  adequacy and consistency, under [PoC scope and proportion](#poc-scope-and-proportion).
+  `docs/slices/<id>/plan_review.md` keeps each round's report verbatim, the SHA-256 of the files
+  reviewed, and the author's answers separately. Each round ends with "approvable within the
+  threat model: yes or no"; from round 2 a new finding counts only if it blocks.
+- **Implementation review** (step 4). The reviewer answers the questions in the test-plan template
+  (`docs/slices/_template/test_plan.md`: which wrong failure would still pass each new or changed
+  test, and whether a key, socket or secret now reaches a service outside its holders) in the PR
+  body. A "yes" blocks.
 
 Hidden-state rule: if a decision depends on hidden state, `plan.md` lists the state/key name, store,
 writer, reader, TTL or lifecycle, decision impact, and whether it is authoritative or advisory.
@@ -168,6 +201,9 @@ Standards that are **not** gated yet (follow them for new and changed code):
 
 ## Git rules
 - No `Co-Authored-By` trailers for AI assistants in commit messages.
+- Agents open pull requests; only the user merges into `main`. GitHub does not enforce this yet:
+  the `main` ruleset requires the CI checks but no approving review, and an agent's `gh` login may
+  be the owner's account.
 
 ## Environment
 - Docker Engine + Docker Compose v2. Linux, or macOS with Rancher Desktop.
