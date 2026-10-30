@@ -8,7 +8,7 @@ plan's threat model), with a negative control per check, and that the CI E2E job
 verdict as the local run.
 
 ## Inputs
-- [`plan.md`](plan.md): decisions D1–D11, the threat model and blocking criteria, REQ-T-R9, the
+- [`plan.md`](plan.md): decisions D1–D12, the threat model and blocking criteria, REQ-T-R9, the
   `REQ-SEC` static tests.
 - The CI trial of 2026-10-30 (runs `40999541906`, failed in `qa-evidence` on root-owned output;
   `41000278717`, passed after taking ownership).
@@ -16,8 +16,9 @@ verdict as the local run.
 ## Unit test plan
 One service function changes: capiss `load_or_create_root_private_key` (DD-111, D12). Its unit
 tests in `tests/unit/capiss/` change with it, under the unit-test rules (`tests/unit/AGENTS.md`):
-- no key file: a new key is written to `root_key.pem` as PKCS#8 PEM with mode `0600`, and loads
-  back to the same key (a token signed with it verifies under the exported public key);
+- no key file: a new key is written to `root_key.pem` as PKCS#8 PEM with mode `0600`; an
+  independent parser (`cryptography`'s `load_pem_private_key`, a dev dependency) reads it as the same
+  Ed25519 key, and a token signed with it verifies under the exported public key;
 - an existing valid `root_key.pem` is loaded, not replaced;
 - an existing `root_key.pem` that is not valid PKCS#8 PEM — raw base64 (the old format), a PEM
   block of another type, a wrong DER prefix, a wrong key length — makes the function raise, and no
@@ -25,11 +26,13 @@ tests in `tests/unit/capiss/` change with it, under the unit-test rules (`tests/
 - the concurrent-creator path (`FileExistsError`) loads the PEM the other creator wrote;
 - `root_key.b64` is never read or written.
 
+These tests carry the `invariant` marker, so the mutation run selects them.
+
 The capiss diff-coverage (≥ 90%) and mutation (≥ 70%) gates apply. QA tooling is tested in
 `tests/tools/`, below.
 
 ## Tooling tests (`tests/tools/`, each with a negative control)
-IDs V1–V12 are local to this test plan.
+IDs V1–V13 are local to this test plan.
 
 **Increment A — CI evidence**
 - **V1 `make e2e` output ownership** (D1, M10): after the target, `artifacts/` (including
@@ -42,12 +45,15 @@ IDs V1–V12 are local to this test plan.
   - a PEM `PRIVATE KEY` block;
   - a `JIRA_API_TOKEN=` or `Authorization: Bearer` line with a value;
   - a synthetic capiss root key in its new format (`root_key.pem`, PKCS#8 PEM);
+  - the same PEM file base64-encoded (about 160 characters), in a `.txt` file and inside a JSON
+    field;
   - a base64 PKCS#8 DER private key inside JSON, as SPIRE's key stores hold them, one fixture for
     an Ed25519 key and one for an EC P-256 key;
   - an Atlassian-style API token (synthetic, with the prefix).
 
-  The check reads no file outside the evidence directory (asserted: it runs with the register and
-  key directories absent).
+  The check reads no file outside the evidence directory: asserted by instrumenting file opens
+  during the check, which fails the test on any path outside it. An evidence file that cannot be
+  read fails the check (fail closed).
 
   The failure message names the file and the kind of secret, never the value (asserted).
 
@@ -59,6 +65,10 @@ IDs V1–V12 are local to this test plan.
 - **V3 Pinned tags** (D2, M8 as narrowed): `security/invariants.yaml` and compose name the same
   exact tags for `opa` and `redis`, and neither is `latest`; `qa-deploy` reports a compose tag that differs from the register (existing
   default-deny rule, one fixture).
+
+- **V13 Legacy key cleanup** (D12, retirement): with a Docker stub, `scripts/clean_stack.sh` removes
+  `capiss_keys/root_key.b64` and keeps `root_key.pem` and `root_public_key.b64`; a failed removal is
+  reported, not silent; `--check` changes nothing.
 
 **Increment B — trace model**
 - **V4 Static test entries** (D4, D5): a static entry that links `source_requirements` and names a

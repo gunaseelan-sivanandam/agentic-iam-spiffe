@@ -57,7 +57,8 @@ contain no secrets".
   verification and every API stay the same;
 - the harness (`scripts/rogue_node_tests.sh`) only where it writes evidence: token hand-offs move
   out of the evidence directory; every test's premise, exercise and outcome stay the same;
-- the register (`security/invariants.yaml`) only to pin two image tags;
+- the register (`security/invariants.yaml`) only to pin two image tags and to follow K1's new file
+  name;
 - `qa-deploy`'s output (a per-requirement report); its checks and verdict do not change.
 
 The `rogue-tests` container holds the Docker socket on the CI runner, as it does locally (it is a
@@ -80,8 +81,8 @@ after the next round goes to the user.
 | --- | --- | --- |
 | D1 | CI E2E | A `make e2e` target (build every image, run the full suite, take ownership of the root-owned output) and a CI job `e2e` that runs it, then `make qa-deploy` with image inspection, then `make qa-evidence`, and uploads `test_report.log`, `artifacts/rogue-tests/` and `artifacts/quality/` (14 days), only after the evidence secret check (D3) passed. It runs on every PR and every push to `main` and is a required check. Step 4 of the slice workflow **also** keeps the local full run on a clean stack. |
 | D2 | Floating images | Pin `openpolicyagent/opa:latest` and `redis:7-alpine` to exact version tags (compose and register). Tags, not digests. |
-| D3 | Tokens in evidence | Token hand-offs between guards move to a per-test scratch directory outside `artifacts/rogue-tests/`. Evidence keeps a SHA-256 fingerprint where a test needs one (for example "two mints differ"); saved mint JSON has its `token` replaced by the fingerprint. `qa-evidence` fails on a secret in evidence, so the mistake cannot come back. The check matches shapes only and reads no secret file: a PEM private-key block; a base64 run that is PKCS#8 DER (it starts with the fixed DER prefix of a private-key structure, as SPIRE's key stores do); a base64 or base64url run of at least 200 characters with at least 20 distinct characters outside PEM `CERTIFICATE` blocks (capiss tokens are 600 or more; other evidence stays under 100, and M5-T53's long single-character padding is not a token); a credential line (`JIRA_API_TOKEN=` or `Authorization:` with a value) or an Atlassian API token prefix. It never prints a matched value. Evidence is uploaded only after this check passes. `docs/test_spec.md` evidence lists follow. |
-| D12 | Secret formats *(user decision after plan review, 2026-10-30)* | Secrets this repository creates are stored in a standard, recognisable format, so a shape check can find them anywhere: private keys as PKCS#8 PEM. capiss stores its root signing key (K1) as `capiss_keys/root_key.pem` instead of raw base64 in `root_key.b64` (DD-111); the PKCS#8 encoding of an Ed25519 key is a fixed prefix plus the 32 key bytes, so no new dependency. An existing key file that is not valid PKCS#8 PEM makes capiss refuse to start (fail closed), never regenerate. The public key file is not a secret and does not change. The rule goes into `AGENTS.md` coding rules. Secrets created by others keep their format (SPIRE key stores, join tokens, Jira tokens). || D4 | Trace model | Every requirement is traced the same way: requirement → test ID in `trace/tests.yaml` → entry in the test specification → implementation → stored, checked result. |
+| D3 | Tokens in evidence | Token hand-offs between guards move to a per-test scratch directory outside `artifacts/rogue-tests/`. Evidence keeps a SHA-256 fingerprint where a test needs one (for example "two mints differ"); saved mint JSON has its `token` replaced by the fingerprint. `qa-evidence` fails on a secret in evidence, so the mistake cannot come back. The check matches shapes only and reads no secret file: a PEM private-key block; a base64 run that is PKCS#8 DER (it starts with the fixed DER prefix of a private-key structure, as SPIRE's key stores do); a base64 or base64url run of at least 200 characters with at least 20 distinct characters outside PEM `CERTIFICATE` blocks (capiss tokens are 600 or more; other evidence stays under 100, and M5-T53's long single-character padding is not a token); a base64 run that decodes to a PEM private-key block (base64 of `-----BEGIN ` always starts `LS0tLS1CRUdJTi`; such a run is decoded and checked for a private-key header, so a base64-encoded copy of `root_key.pem` is found); a credential line (`JIRA_API_TOKEN=` or `Authorization:` with a value) or an Atlassian API token prefix. It never prints a matched value. Evidence is uploaded only after this check passes. `docs/test_spec.md` evidence lists follow. |
+| D4 | Trace model | Every requirement is traced the same way: requirement → test ID in `trace/tests.yaml` → entry in the test specification → implementation → stored, checked result. |
 | D5 | Static tests | A new entry type for tests that prove a requirement statically. The ten `REQ-SEC` get one static test each, `DEPLOY-K1` … `DEPLOY-K8`, `DEPLOY-D1`, `DEPLOY-D2`, each with a spec entry. `make qa-deploy` writes a report with a status per requirement: `holds`, `known_violation` (with its OPL) or `grace` (D2's non-root grace period). The gate verdict does not change. A requirement whose only proof has status `known_violation` is reported as "not proved: known violation OPL-xxx", never as proved. The report records the SHA-256 of the compose file and register it checked, and whether image users were inspected; with `--skip-image-users`, D2's status is `not_checked`. `qa-evidence` accepts only a complete report (every `REQ-SEC` present with a known status, image users inspected, digests matching the files on disk). The `e2e` job and the local step-4 run produce it; the `qa-deploy` job's report (without image inspection) is not evidence. `qa-trace` never reads a run report: like an E2E link, a static link counts as proof structurally, and the status it reports comes from what the register declares — a requirement with a `known_violations` row is "not proved: known violation OPL-xxx", D2 within its grace date is "not proved: grace until 2027-01-31". Both count as gaps that are already on `main`. So `qa-trace` gives the same answer in a clean checkout, on the PR and on its merge-base. `qa-evidence` then checks that the run's report agrees with the register. |
 | D6 | Config-implemented ARCH | An ARCH section implemented by files that carry no DD-tagged functions — configuration (Envoys, SPIRE, the deployment register) or a test or demo script (the harness, `agent-a`) — names those files on an `Implemented by:` line. `qa-trace` checks those files exist and counts the section as implemented instead of expecting a DD. ARCH-034 is reworded as the deployment-register architecture. DD-925 to DD-930 are retired (QA gates carry no DD tags, like every other gate) and `IT-DEPLOY-*` are replaced by the static tests, which name `tests/tools/test_qa_deploy.py` as the gate's negative controls. The tooling tests do not change. |
 | D7 | Gap gate | On a PR, `qa-trace` computes the coverage gaps of the PR and of its merge-base with `main`, and fails on a gap the PR adds, in every gap category (requirements, ARCH, DD, unlinked tests). The mode is explicit (`--mode pr --base <ref>` or `--mode push`): in PR mode, a base that cannot be resolved or read fails, never falls back to push mode; the CI job fetches full history. Both sides are computed by the PR's own `qa-trace` (the head's code run on a checkout of the merge-base), and a gap is identified by its kind and ID (for example requirement `REQ-SEC-K1`), so a change in how gaps are categorised does not make old gaps look new. An intended gap is an `accepted_gaps` entry in `trace/tests.yaml`: gap ID, reason, expiry, one line. An expired entry fails, and so does an entry whose gap no longer exists. On a push to `main` the comparison is reported, not enforced. |
@@ -89,6 +90,7 @@ after the next round goes to the user.
 | D9 | One process | `AGENTS.md`: every change follows the slice workflow, scaled to its size; this replaces "required for milestone and security-relevant changes". |
 | D10 | Moved to slice 3 | All review design (template, lenses or roles, environment facts, agent count, synthesis) and lanes, with the user's input recorded in [`later_slices.md`](../agentic-delivery-process/later_slices.md). |
 | D11 | Increments | Two PRs. **A — CI evidence** (D1, D2, D3, D12). **B — trace model** (D4 to D9). A goes first, because CI must not upload evidence before the token fix. REQ-T-R9 and its static test `EVID-T1` land in B, which adds the static test type; the secret check they trace to lands in A. |
+| D12 | Secret formats *(user decision after plan review, 2026-10-30)* | Secrets this repository creates are stored in a standard, recognisable format, so a shape check can find them anywhere: private keys as PKCS#8 PEM. capiss stores its root signing key (K1) as `capiss_keys/root_key.pem` instead of raw base64 in `root_key.b64` (DD-111); the PKCS#8 encoding of an Ed25519 key is a fixed prefix plus the 32 key bytes, so no new dependency. An existing key file that is not valid PKCS#8 PEM makes capiss refuse to start (fail closed), never regenerate. The public key file is not a secret and does not change. The rule goes into `AGENTS.md` coding rules. Secrets created by others keep their format (SPIRE key stores, join tokens, Jira tokens). |
 
 ## Requirements
 - **New: REQ-T-R9 — Evidence non-disclosure.** Test evidence shall not contain bearer or capability
@@ -139,12 +141,13 @@ after the next round goes to the user.
 - The gap gate and `accepted_gaps` (D7).
 - The gate-consistency job; `unit-diff-cov` as its own job (D8).
 - `AGENTS.md`: one process (D9); the trace model and allowed links; the quality-gates table.
-- `docs/open_problem_log.md` OPL-009 mitigations: lanes and a nightly run are no longer planned;
+- `docs/open_problem_log.md` OPL-005 "Affected configuration" names `root_key.pem` (its observed
+  evidence stays verbatim); OPL-009 mitigations: lanes and a nightly run are no longer planned;
   every change goes through the slice workflow and the `e2e` job runs on every push to `main`.
 
 ## Out of scope
 - Review design and lanes (D10), automation of reviews (slice 3).
-- Fixing OPL-005 to OPL-008 (the pilot); changing any service.
+- Fixing OPL-005 to OPL-008 (the pilot); any service change other than capiss's key file format (D12).
 - Live Jira in CI (`M5-T55` stays env-gated and skipped in CI).
 - Pinning by digest; supply-chain, runner and artifact-access controls (out of model).
 - The open mutation decision (`mutate_only_covered_lines`, `docs/STATUS.md`).
@@ -161,7 +164,18 @@ after the next round goes to the user.
 - **Register change:** two image tags pinned (D2); no holder changes.
 
 ## Hidden-state and trust decisions
-- **Runtime:** none added or changed.
+- **Runtime:** one changed (D12):
+
+| State | Store | Writer | Reader | Lifecycle | Decision impact | Authority |
+| --- | --- | --- | --- | --- | --- | --- |
+| capiss root signing key (K1) | `capiss_keys/root_key.pem` on the host, mounted at `/var/lib/capiss/keys/`; PKCS#8 PEM, mode `0600` (was raw base64 in `root_key.b64`) | `capability-issuer`, once, when the file does not exist | `capability-issuer` (signs); its holders in the register; today also the OPL-005 known violators through the directory mount | persists until the directory is removed; a file that is not valid PKCS#8 PEM stops capiss (fail closed) | signs every capability; whoever reads it can mint any authority | authoritative |
+
+  **Upgrade and rollback.** The new loader ignores `root_key.b64`, so the first start after the
+  change creates a new key and a new public key. Verifiers read the public key at start, so
+  recreating only capiss would leave them rejecting every token (fail closed, not open). Upgrade
+  and rollback are therefore a clean redeploy: `scripts/clean_stack.sh`, then the stack up, as every
+  E2E run already does. A rollback likewise starts with a new raw-base64 key. The implementation PR
+  and `docs/STATUS.md` say this once.
 - **Process state:**
 
 | State | Store | Writer | Reader | Lifecycle | Authority |

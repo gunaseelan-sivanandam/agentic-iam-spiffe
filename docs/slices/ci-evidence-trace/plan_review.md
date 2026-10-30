@@ -5,7 +5,7 @@ them (`AGENTS.md`, Independent review). Reviewer: Codex (`codex exec -m gpt-6.1-
 read-only --ephemeral`), which never sees the author's reasoning. Review loop: no round limit;
 each finding is answered as fixed or rejected with a reason.
 
-**Outcome:** approvable within the threat model after 3 rounds (2026-10-30). 7 blocking findings,
+**Outcome of rounds 1–3:** approvable within the threat model (2026-10-30). 7 blocking findings,
 all fixed; 14 advisories: 10 taken, 3 rejections accepted by the reviewer, 1 already planned.
 
 ## Round 1 (2026-10-30)
@@ -934,3 +934,342 @@ Reviewed SHA-256 values:
 | --- | --- |
 | `plan.md` | `fb15fda048d2eb6e2be420d70e949ce54f410de2124aad5c292d0dfc2ae731fc` |
 | `test_plan.md` | `f018d78360c1b87ffde18459747abbfeefe3eeaf3b7c67384bdb27b59abd9781` |````
+
+## Round 4 (2026-10-30) — after D12
+After round 3 the user decided D12 (secrets this repository creates use recognisable formats; the
+evidence check becomes shape-only), because the reviewed exact-value check would have read
+root-owned SPIRE key stores it cannot read and failed every run. Round 4 reviews that change.
+
+Reviewed files (SHA-256, at commit `9b30419`):
+- `plan.md` `980d07bc586f2c8580a9f119f60476bdbe09f6bfad29b99a29e8284ee494c3e8`
+- `test_plan.md` `6ba7fcb9ed8ea9ef73e8261eee97a04b6e793a12892d3709d32cde8069d7ef58`
+
+Verdict: **no** — R4-B1, R4-B2 (R1-B2 reopened narrowly as R4-B1).
+
+### Author answers, round 4
+| Finding | Answer | Where |
+| --- | --- | --- |
+| R4-B1 base64 of the PEM key escapes the shape rules | Fixed: a base64 run starting `LS0tLS1CRUdJTi` (base64 of `-----BEGIN `) is decoded and fails on a private-key header; fixtures in text and JSON. | plan D3; test_plan V2 |
+| R4-B2 D12 contradicts scope; key state missing | Fixed: scope and register lines reconciled; runtime state row for K1; upgrade and rollback are a clean redeploy (verifiers read the public key at start), stated once in the PR and STATUS. | plan System under test, Out of scope, Hidden-state |
+| R4-A1 independent PKCS#8 parser; mutation selection | Taken: `cryptography`'s `load_pem_private_key` in the unit test; tests marked `invariant`, which `setup.cfg` selects for mutation. | test_plan Unit test plan |
+| R4-A2 cleanup controls | Taken: V13. | test_plan V13 |
+| R4-A3 instrument reads; unreadable evidence | Taken. | test_plan V2 |
+| R4-A4 D4 fused onto D12's row; inputs D1–D12 | Fixed (an editing error); D12 moved after D11. | plan decision table; test_plan Inputs |
+| R4-A5 OPL-005 current configuration | Taken; observed evidence stays verbatim. | plan In scope B |
+
+### Round 4 prompt (verbatim)
+````markdown
+You are the independent plan reviewer for a slice plan in the repository at the current working
+directory. You did not write it. Review read-only: do not modify files, run docker, start services
+or use the network. Never print key material, tokens or environment variable values.
+
+## What is under review
+The slice plan `docs/slices/ci-evidence-trace/plan.md` and its test plan
+`docs/slices/ci-evidence-trace/test_plan.md` (commit `HEAD`; `git log -6`; the change since your round-3 approval is `git diff HEAD~1` — review that diff and anything it affects). They are the plan for slice 2 of the agentic-delivery-process programme. The user
+has not seen them yet; your review comes first.
+
+The intent they must serve: the user's decisions from the slice's grill-me, recorded in the plan's
+decision table (D1–D11), and the repository's rules in `AGENTS.md`. Earlier input for this slice is
+`docs/slices/agentic-delivery-process/later_slices.md`; the plan says which parts of it were moved
+to slice 3, and that move is a user decision.
+
+You may read the whole repository. Decide yourself where to look; you are not given a list of files.
+
+## This is round 4
+Round 3 approved the plan (`docs/slices/ci-evidence-trace/plan_review.md`). Afterwards the user made
+a new decision, D12, and the author changed the plan: the reviewed secret check (D3) compared
+evidence with the exact values of the register's secrets, but the SPIRE key stores are root-owned
+and unreadable by the check, which also fails closed on an unreadable file, so it would have failed
+every run. D12 makes secrets this repository creates use recognisable formats (capiss stores its
+root key as PKCS#8 PEM) and D3's check becomes shape-only. Review this change in depth with the
+eight questions, including whatever it affects elsewhere in the plan, test plan and repository
+(capiss, its unit tests and gates, the register, `clean_stack.sh`, the verifiers, the architecture,
+the evidence check — examples, not a limit; decide yourself where to look). Previously closed findings stay closed unless this change reopens them.
+
+## How to judge
+Read `AGENTS.md` first, in particular "PoC scope and proportion" (threat model, blocking criteria,
+review loop) and "Slice workflow". Then read the plan's section "Threat model for this plan and its
+reviews": it is the threat model you judge against. A finding blocks only if it meets the blocking
+criteria there, with a concrete failure scenario. Everything else is advisory.
+
+## Environment facts (collected by the author on 2026-10-30; facts outside the repository)
+- The `main` ruleset `basic` requires these status checks: docs-check, qa-trace, unit-guard-check,
+  tooling-test, test-lint, qa-deploy, unit-mutation, unit-trust; strict; 0 approving reviews.
+- Latest CI runs: `CI` on push to `main` at `62d6b0c` (PR #7 merge): success. `E2E trial` (a
+  throwaway workflow on branch `ci-trial/e2e`, since deleted): run `40999541906` failure (both jobs:
+  the suite passed 120/120, then `make qa-evidence` failed with PermissionError on the root-owned
+  `artifacts/` directory); run `41000278717` success after adding `sudo chown` of `artifacts/` and
+  `test_report.log` before `qa-evidence` (both jobs: build 15–18 s, suite 177–188 s, 120/120 passed,
+  `qa-evidence` PASSED, validated 119, skipped 1 for M5-T55). The trial uploaded evidence as public
+  artifacts; it contains expired capability tokens.
+- The ruleset can be read without authentication from the public GitHub API
+  (`GET /repos/{owner}/{repo}/rulesets/{id}` returned HTTP 200 unauthenticated).
+- `make qa-trace` on `main` today: coverage gaps 138 (requirements_without_e2e 97,
+  architecture_without_dd 13, dd_without_ut 24, e2e_tests_without_requirements 4).
+- `make qa-deploy` with image inspection on the local stack: PASSED (18 known violations, 22 warnings,
+  all 22 "grandfathered until 2027-01-31").
+- PR #8 (open, docs only) removes the review round limit; this branch is based on it, so `AGENTS.md`
+  here already contains the review loop the user decided.
+
+## Questions (answer each in depth; "n/a" needs a reason)
+1. Intent: do the plan and test plan do what the decisions say, no more and no less? Is any decision
+   missing, contradicted or quietly widened?
+2. Claims and evidence: for each claim (success criteria, threat-model rows M1–M10, the "caught by"
+   column, requirement proofs), what in the test plan proves it? Could that proof pass while the
+   claim is false? Is each requirement verifiable and unambiguous?
+3. Design and quality: is each mechanism the simplest that fits? Consistent with how the repository
+   already does similar things? Are names, placement and structure what a newcomer would expect, and
+   will the user be able to see what ran and what failed?
+4. Failure and change: behaviour when an input is missing, malformed or unreadable (ruleset API,
+   reports, base commit, evidence); fails closed? Ordering between the two increments; can each be
+   rolled back?
+5. Rules and new risks: does it keep every rule in `AGENTS.md`, the requirements, the register and
+   the open problems? Does it add an asset, trust boundary, data flow or rule without registering it?
+6. Ripple: what depends on what changes (CI, Makefile, `docs-check`, `qa-trace`, `qa-evidence`,
+   `test_spec.md`, the harness, the register, other slices), and does the plan account for it?
+7. Durability: does anything decided live only somewhere temporary? Where must it live?
+8. Blind spots: what did you not check, and could it matter?
+
+## Output (markdown only)
+# Plan review — ci-evidence-trace, round 4
+## Earlier findings reopened by this change
+("none", or one line each)
+## Answers
+(one section per question above; brief where nothing changed since round 1)
+## Blocking findings
+New only, each with id (R4-B1, ...), where (file:line), the blocking criterion it meets, failure
+scenario, smallest fix. "None" if none.
+## Advisory
+New only, each with id (R4-A1, ...), one or two lines. No limit, but list each point once.
+## Verdict
+"Approvable within the threat model: yes" or "no — <ids>".
+## Not checked
+````
+
+### Round 4 report (verbatim)
+````markdown
+# Plan review — ci-evidence-trace, round 4
+
+Independent Codex review, as requested, of `HEAD` at `9b304190cee7b4df5605dee78942b4f563a143cd`. Read `AGENTS.md` first, inspected `git log -6`, and reviewed `git diff HEAD~1` and affected repository sources. External environment facts are accepted as supplied.
+
+## Earlier findings reopened by this change
+
+- **R1-B2, narrowly:** the replacement scanner loses detection of an ordinary Base64 encoding of the issuer’s private-key file. See R4-B1.
+- Other closed findings and accepted rejections remain closed.
+
+## Answers
+
+### 1. Intent
+
+D12 is an explicit user decision. Changing capiss’s persisted root key to PKCS#8 PEM, removing secret-file reads from the evidence scanner, and placing both changes in Increment A follow that decision.
+
+The revised unit plan covers creation, reuse, invalid existing contents, concurrent creation, permissions, signing compatibility, and retirement of capiss’s old file access. V2 adds the new issuer format and SPIRE-style PKCS#8 DER inside JSON. These are appropriate changes.
+
+Two problems remain:
+
+- D3’s listed shapes do not establish M6’s claim that the scanner finds every repository-created secret. An ordinary Base64 encoding of the new Ed25519 PEM file escapes every listed rule: R4-B1.
+- The plan still excludes service changes, limits register changes to image tags, and declares no runtime-state changes. Those statements contradict D12 and its new persistent signing-key format: R4-B2.
+
+D1–D11 otherwise retain their reviewed meaning. In particular, the slice-3 deferrals remain deferred; this review does not import the earlier orchestration, lane, or review-design drafts into implementation scope.
+
+### 2. Claims and evidence
+
+The unchanged proofs remain adequate at plan level, subject to implementation review and acceptance runs.
+
+| Success criterion | Planned proof | Assessment |
+| --- | --- | --- |
+| 1. Required CI E2E succeeds | V1, implementation-PR CI, required-check update, local clean-stack run | Unchanged. Actual triggers, required status and upload ordering need implementation acceptance. |
+| 2. Evidence contains no tokens or private keys | V2 and full-run scanning | Incomplete for the new key format when Base64-encoded: R4-B1. |
+| 3. Honest static statuses | V5, V6, V7 | Unchanged. Known violations and grace remain unproved. |
+| 4. New gaps fail | V9, V12 | Unchanged. Includes categories, gap swaps, expiry and unavailable bases. |
+| 5. ARCH declarations and retirement | V8, V11 plus semantic review | Unchanged. File existence alone does not prove implementation, so the planned review still matters. |
+| 6. Gate consistency | V10 and live implementation acceptance | Unchanged. Covers declared lists and executed targets. |
+| 7. PKCS#8 root-key storage and unchanged signing | New unit cases and clean-stack E2E | Suitable for the normal path. Use an independent standards oracle for the PEM assertion; lifecycle documentation remains incomplete under R4-B2. |
+
+The threat-model coverage is:
+
+| Row | Proof and limit |
+| --- | --- |
+| M1 | V9 exercises each gap category; V12 reproduces the historical requirement miss. |
+| M2 | V9 exercises acceptance fields, expiry and stale entries. |
+| M3 | V5/V7 preserve declared violations; V6 rejects contradictory execution reports. |
+| M4 | V6 rejects missing, unreadable, malformed, incomplete, inspection-skipped and digest-mismatched reports. |
+| M5 | V10 covers list disagreement, wrong commands and ruleset-read failures. Makefile-only gates remain expressly excluded. |
+| M6 | V2 covers the listed literal shapes, but a recoverable Base64 PEM key passes them: R4-B1. |
+| M7 | Required `e2e`, workflow inspection and implementation-PR execution provide the proof. |
+| M8 | V3 covers the two chosen compose images. Dockerfile-base floating remains excluded. |
+| M9 | V8 rejects nonexistent implementation files. |
+| M10 | V1 checks harness failure propagation; workflow review checks later failures and publication conditions. |
+
+For requirement proofs:
+
+- **REQ-T-R9 / EVID-T1:** the requirement is understandable and verifiable against concrete leak fixtures, but the current controls permit the R4-B1 violation while reporting success.
+- **REQ-SEC-K1:** changing its registered location is appropriate. Holders and known-violation status must remain unchanged; PEM encoding does not fix OPL-005.
+- **REQ-SEC-K2 and K4:** V2’s Ed25519 and P-256 DER fixtures address short private-key encodings that the generic 200-character rule misses. They establish detection of those formats, not exhaustive knowledge of all external secret representations.
+- **REQ-SEC-K3 and K5–K8:** their deployment proofs remain unchanged. The join-token detection limitation is explicitly recorded.
+- **REQ-SEC-D1 and D2:** existing deployment checks and V5–V7 remain applicable. Image inspection, grace and known violations retain distinct meanings.
+- **REQ-M4B-W8 and REQ-M5-CJ2:** their evidence clauses remain intact. Scratch storage and redacted responses must still preserve each test’s authorization assertions.
+
+The scanner’s documented limits should remain explicit. This review does not require universal secret detection or defenses against deliberate encoding attacks; R4-B1 concerns a conventional encoding previously covered by the reviewed design.
+
+### 3. Design and quality
+
+The main design is proportionate. A shape scanner avoids needing root access to SPIRE stores. Standard PKCS#8 encoding avoids inventing a secret-identification register or introducing a runtime dependency.
+
+The repository’s public-key consumers support the proposed separation:
+
+- capiss exports `root_public_key.b64`;
+- tool-b, jira-tool and jira-mcp-gateway load that public file;
+- none needs to understand the new private-key serialization.
+
+Thus the verifier code needs no format change. The private-key filename, issuer implementation, unit helpers and register location do.
+
+The new unit cases belong in `tests/unit/capiss/`; scanner fixtures belong in `tests/tools/`. Existing guard and traceability rules apply. Named scanner diagnostics and per-requirement deployment statuses should make failures visible without exposing matched contents.
+
+Two implementation details deserve particular attention:
+
+- A writer and reader using the same incorrect DER prefix can round-trip successfully. Assert standards compliance independently.
+- Mutation execution selects marked unit tests. Merely adding unmarked malformed-key cases does not ensure mutation runs exercise them.
+
+### 4. Failure and change
+
+The unchanged failure contracts remain sound: unavailable or malformed ruleset input fails; an unreadable or unresolved PR base fails; invalid deployment reports fail.
+
+For D12:
+
+- Missing `root_key.pem` creates a key.
+- Valid existing PEM loads without replacement.
+- Invalid existing contents raise without regeneration.
+- The concurrent-creator path loads the other creator’s key.
+
+Those contracts are appropriately fail-closed. Implementation should preserve failure on unreadable files and write errors, including the concurrent path. A reader seeing an incomplete concurrently written file may fail startup; the plan does not authorize silently replacing it.
+
+Removing the unreadable-*secret-source* fixture is justified because the new scanner must not read those sources. Unreadable *evidence* must still prevent validation and publication.
+
+A-before-B remains correct. B can be reverted while retaining A’s scanner and CI job, with corresponding required-check changes.
+
+D12 adds a runtime-data consideration to rollback: reverting source does not convert persisted PEM back to the old format. Likewise, upgrading a legacy stack generates a new signing key rather than loading the old `.b64` file. The verifiers cache their public keys in memory, so issuer-only recreation can leave them trusting the previous key. Document a coordinated clean redeployment and the resulting key rotation in the lifecycle record required by R4-B2. This needs no new rollback framework.
+
+### 5. Rules and new risks
+
+D12’s holder model is appropriate: the secret’s representation and path change, while its approved holders remain unchanged. The scanner relinquishes secret-source reads. Public CI evidence and harness scratch retain their existing planned boundaries.
+
+The principal rule violation is the missing, contradictory runtime-state account: R4-B2. `AGENTS.md` requires security-relevant file state to have its store, writers, readers, lifecycle, decision impact and authority recorded before implementation.
+
+Other obligations remain:
+
+- Implement only after the user merges the plan.
+- Add the reviewed tests and authoritative documentation before making runtime code pass.
+- Preserve independent review, local clean-stack verification and hand-written evidence descriptions.
+- Keep OPL-005/006/008 open with their existing limitations; changing key encoding does not isolate keys.
+- Put the approved recognisable-format rule in `AGENTS.md`, rather than leaving it solely in the slice record.
+
+No additional service, holder, exception class or production-hardening mechanism is needed to resolve the findings.
+
+### 6. Ripple
+
+The plan identifies most affected components correctly.
+
+| Change | Required dependents |
+| --- | --- |
+| Issuer private-key format/path | `app.py`, DD-111 tests and helpers, K1 register location, architecture and runtime-state account |
+| Public-key export | Preserve filename and encoding; prove signing against the exported key |
+| Legacy-file retirement | `clean_stack.sh`, operational lifecycle and cleanup verification |
+| Shape scanner | V2, diagnostics, upload condition, A’s rulebook contract and B’s `EVID-T1` specification |
+| Harness scratch/redaction | Every token reader and writer, saved mint responses, fingerprints and hand-written evidence lists |
+| New unit tests | Guard phases, UT/DD tags, coverage, mutation selection and trust gates |
+
+The existing deployment tooling’s synthetic `.b64` fixtures can continue proving generic mount and asset logic. They should not be mechanically rewritten simply because the live issuer filename changes. The historical compose replay still mounts the parent directory, so the live register’s filename change does not itself invalidate that replay.
+
+`docs/unit_test_spec.md` is explicitly scoped to the M4 trust matrix; D12 does not require inventing a new matrix entry there. The new unit tests still need their source-level traceability blocks.
+
+The static-test, `docs-check`, trace-schema and gap-gate changes remain as approved in round 3.
+
+### 7. Durability
+
+D12 already has planned durable homes in `AGENTS.md`, the register and architecture. Complete those with the runtime-key lifecycle record under R4-B2.
+
+The scanner contract belongs with Increment A, before publication starts; B later supplies its static trace/specification entry. Synthetic fixtures must remain independent of expiring trial artifacts.
+
+Keep historical OPL evidence and frozen slice records unchanged. Update OPL-005’s current configuration description to the new live filename while preserving dated observations of the old filename.
+
+The round-4 report, reviewed hashes and author dispositions belong in `plan_review.md`; the 14-day CI artifacts must not become the sole record of a design decision.
+
+### 8. Blind spots
+
+This review establishes plan adequacy, not implementation correctness.
+
+I checked the issuer bootstrap, relevant unit fixtures and gates, public-key loaders, register, cleanup script, evidence validator, CI/Makefile wiring, architecture, requirements, OPLs, prior review dispositions and deferred slice input.
+
+I did not establish the exact contents of deployed SPIRE stores. Their configurations identify disk stores, but validating actual external serialization would require evidence beyond the permitted repository-only review. The planned synthetic fixtures should therefore be standards-valid and have documented provenance.
+
+No additional blocking scenario was established in the unchanged M1–M5 or M7–M10 mechanisms.
+
+## Blocking findings
+
+### R4-B1 — Base64 encoding the new PEM key escapes the replacement scanner
+
+**Where:** `docs/slices/ci-evidence-trace/plan.md:83`; `docs/slices/ci-evidence-trace/test_plan.md:39`.
+
+**Blocking criterion:** Concrete false green under M6, violating planned REQ-T-R9.
+
+**Failure scenario:** An author saves the issuer key file Base64-encoded in diagnostic JSON or text. The previous reviewed design checked registered values in plain and Base64 form. The replacement covers literal PEM and Base64 **DER**, but not Base64 **PEM**.
+
+An in-memory experiment with a synthetic Ed25519 key established:
+
+- PKCS#8 PEM: **119 bytes**.
+- Base64 of that PEM: **160 characters**.
+- The encoded value contains no literal PEM marker, falls below the 200-character rule, and decodes to PEM rather than a DER private-key structure.
+- It remains fully recoverable as a private key.
+
+Therefore every listed V2 fixture can pass while this file passes the documented scanner and is published. No deliberate gate evasion is required.
+
+**Smallest fix:** Add a shape rule for Base64-encoded PEM private-key envelopes and a synthetic V2 fixture proving rejection, including inside JSON and without printing the value. This preserves shape-only checking and requires no secret-source reads.
+
+### R4-B2 — D12 contradicts the scope and omits mandatory runtime-key state
+
+**Where:** `docs/slices/ci-evidence-trace/plan.md:60`, `:147`, `:161`, `:164`.
+
+**Blocking criterion:** Contradiction with D12 and the `AGENTS.md` hidden-state rule.
+
+**Failure scenario:** D12 changes a service’s authoritative persisted signing-key path and encoding, but the plan still says:
+
+- the register is touched only for image tags;
+- changing any service is out of scope;
+- no runtime state is added or changed.
+
+Following those scope statements excludes required D12 work. Following D12 leaves the mandatory state inventory falsely declaring no change.
+
+The omission also hides a concrete lifecycle effect: an existing `.b64` stack gets a fresh key because the new loader ignores the legacy file. Recreating only capiss leaves running verifiers’ cached public keys stale. Source rollback likewise does not restore the previous persisted-key format.
+
+**Smallest fix:** Reconcile the scope and register descriptions with D12. Replace “Runtime: none” with a K1 state entry naming its store/format, issuer writer, authorised readers, persistent lifecycle, create/load/reject behavior, signing-authority impact and authoritative classification. State the coordinated clean-redeployment procedure and key-rotation consequence for upgrade and rollback.
+
+## Advisory
+
+- **R4-A1:** `test_plan.md:19` — Prove PKCS#8 validity with an independent parser or fixed standards-derived expectation. Mark the relevant new cases for mutation selection under `setup.cfg`.
+- **R4-A2:** `plan.md:189` — Add cleanup controls using a Docker stub: remove the legacy file, preserve the new private/public files, keep `--check` non-mutating, and expose cleanup failure.
+- **R4-A3:** `test_plan.md:49` — Absent key directories do not prove no read was attempted. Instrument forbidden secret-source accesses; separately test that unreadable evidence fails validation.
+- **R4-A4:** `plan.md:84` — Split D4 onto its own Markdown table row. Update the test-plan input list from D1–D11 to include D12.
+- **R4-A5:** Include OPL-005’s current configuration description in the filename update; retain its historical evidence verbatim.
+
+## Verdict
+
+Approvable within the threat model: no — R4-B1, R4-B2.
+
+## Not checked
+
+- No files modified, Docker invoked, services started or network accessed.
+- No runtime secret files or environment values inspected.
+- No unit, mutation, tooling, E2E or historical-replay suites executed.
+- No live ruleset verification or CI-artifact inspection.
+- The planned scanner does not exist yet; R4-B1 tests its specified detection rules, not an implementation.
+- No exhaustive service-security audit or reconstruction of grill-me beyond the recorded decisions.
+
+Read-only checks: `python3 -B scripts/check_docs.py` passed; `git diff HEAD~1 --check` passed; working tree remained clean.
+
+Reviewed SHA-256 values:
+
+| File | SHA-256 |
+| --- | --- |
+| `plan.md` | `980d07bc586f2c8580a9f119f60476bdbe09f6bfad29b99a29e8284ee494c3e8` |
+| `test_plan.md` | `6ba7fcb9ed8ea9ef73e8261eee97a04b6e793a12892d3709d32cde8069d7ef58` |````
