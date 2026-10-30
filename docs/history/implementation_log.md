@@ -20,6 +20,10 @@ is first); every heading carries its date.
   rules next to the expected-outcome table in `test_plan.md`.
 - `docs/STATUS.md`: slice 1 complete, slice 2 next; the open mutation decision
   (`mutate_only_covered_lines`) recorded.
+- Review loop (user decision, 2026-10-30): the 3-round limit is removed. Rounds continue until no
+  blocking finding is open; the author may reject a finding with a checkable reason; a finding still
+  disputed after the next round goes to the user. Each plan states the threat model its reviewer
+  judges against.
 - Validation: `make docs-check` and `make qa-trace`. No code or test changed, so no E2E run.
 
 ## 2026-10-29 Increment 1B: deployment register and qa-deploy

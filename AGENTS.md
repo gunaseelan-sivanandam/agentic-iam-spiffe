@@ -55,8 +55,16 @@ them.
 
   Everything else is advisory. It is listed once and is not fixed by default. Implementation details
   become notes for the implementation PR. Reviewers should expect production-hardening ideas (see
-  the simplifications above) and report them as advisory at most. Stop after 3 review rounds; the
-  user decides what is good enough.
+  the simplifications above) and report them as advisory at most.
+- **Review loop.** There is no round limit: review rounds continue until no blocking finding is
+  open. The author (the fixer) answers every finding in writing, either fixed (where) or rejected
+  (why). A rejection needs a reason the reviewer can check, for example: the failure scenario does
+  not happen (with the evidence), it is outside the threat model, it is already covered by a named
+  test or gate, or it does not meet the blocking criteria above. A finding labelled blocking that
+  does not meet them is not fixed by default. The next round sees each rejection and either accepts
+  it or re-raises it with new evidence; a finding still disputed after that goes to the user, who
+  decides. The review ends when every blocking finding is fixed, accepted as rejected, or decided by
+  the user.
 
 ## Operating model (black-box first)
 - Treat the system as a black box first:
@@ -140,12 +148,15 @@ Required for milestone and security-relevant changes. A slice bundle lives in
 - **Plan review** (step 1). The reviewer reviews `plan.md` and `test_plan.md` for security, test
   adequacy and consistency, under [PoC scope and proportion](#poc-scope-and-proportion).
   `docs/slices/<id>/plan_review.md` keeps each round's report verbatim, the SHA-256 of the files
-  reviewed, and the author's answers separately. Each round ends with "approvable within the
-  threat model: yes or no"; from round 2 a new finding counts only if it blocks.
+  reviewed, and the author's answers (fixed or rejected, with the reason) separately. Each round ends
+  with "approvable within the threat model: yes or no"; from round 2 a new finding counts only if it
+  blocks. The plan states the threat model the reviewer judges against: the
+  [delivery threat model](#poc-scope-and-proportion) applied to the slice's own change, and the
+  system-under-test threat the slice touches.
 - **Implementation review** (step 4). The reviewer answers the questions in the test-plan template
   (`docs/slices/_template/test_plan.md`: which wrong failure would still pass each new or changed
   test, and whether a key, socket or secret now reaches a service outside its holders) in the PR
-  body. A "yes" blocks.
+  body. A "yes" blocks, under the same review loop.
 
 Hidden-state rule: if a decision depends on hidden state, `plan.md` lists the state/key name, store,
 writer, reader, TTL or lifecycle, decision impact, and whether it is authoritative or advisory.
