@@ -14,8 +14,19 @@ verdict as the local run.
   `41000278717`, passed after taking ownership).
 
 ## Unit test plan
-None. This slice changes QA tooling and the harness, not services; QA tooling is tested in
-`tests/tools/` (`AGENTS.md`, documentation rules). Existing unit tests and their gates are unchanged.
+One service function changes: capiss `load_or_create_root_private_key` (DD-111, D12). Its unit
+tests in `tests/unit/capiss/` change with it, under the unit-test rules (`tests/unit/AGENTS.md`):
+- no key file: a new key is written to `root_key.pem` as PKCS#8 PEM with mode `0600`, and loads
+  back to the same key (a token signed with it verifies under the exported public key);
+- an existing valid `root_key.pem` is loaded, not replaced;
+- an existing `root_key.pem` that is not valid PKCS#8 PEM — raw base64 (the old format), a PEM
+  block of another type, a wrong DER prefix, a wrong key length — makes the function raise, and no
+  new key is written (fail closed);
+- the concurrent-creator path (`FileExistsError`) loads the PEM the other creator wrote;
+- `root_key.b64` is never read or written.
+
+The capiss diff-coverage (≥ 90%) and mutation (≥ 70%) gates apply. QA tooling is tested in
+`tests/tools/`, below.
 
 ## Tooling tests (`tests/tools/`, each with a negative control)
 IDs V1–V12 are local to this test plan.
@@ -30,9 +41,13 @@ IDs V1–V12 are local to this test plan.
   - the same token inside a JSON field;
   - a PEM `PRIVATE KEY` block;
   - a `JIRA_API_TOKEN=` or `Authorization: Bearer` line with a value;
-  - the exact value of a registered restricted asset (a synthetic `root_key.b64`: raw base64 of 32
-    random bytes, no recognisable shape) in plain form, and the same value base64-encoded;
-  - a registered asset file that exists but cannot be read (fails closed).
+  - a synthetic capiss root key in its new format (`root_key.pem`, PKCS#8 PEM);
+  - a base64 PKCS#8 DER private key inside JSON, as SPIRE's key stores hold them, one fixture for
+    an Ed25519 key and one for an EC P-256 key;
+  - an Atlassian-style API token (synthetic, with the prefix).
+
+  The check reads no file outside the evidence directory (asserted: it runs with the register and
+  key directories absent).
 
   The failure message names the file and the kind of secret, never the value (asserted).
 
