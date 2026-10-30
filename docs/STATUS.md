@@ -43,7 +43,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 | Branch | Purpose | State |
 | --- | --- | --- |
 | `docs/review-loop` | Remove the review round limit; the author may reject findings with a checkable reason | PR open |
-| `slice/ci-evidence-trace-plan` | Slice 2 plan: CI E2E, evidence without secrets, trace model | plan reviewed (approvable, 3 rounds); plan PR open |
+| `slice/ci-evidence-trace-plan` | Slice 2 plan: CI E2E, evidence without secrets, trace model | plan reviewed (approvable after 6 rounds); plan PR open |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
