@@ -49,11 +49,13 @@ IDs V1–V13 are local to this test plan.
     field;
   - a base64 PKCS#8 DER private key inside JSON, as SPIRE's key stores hold them, one fixture for
     an Ed25519 key and one for an EC P-256 key;
-  - an Atlassian-style API token (synthetic, with the prefix).
+  - an Atlassian-style API token (synthetic, with the prefix);
+  - a token only in `test_report.log`, and one only in a JSON file under `artifacts/quality/`
+    (the whole publication set is checked, D1).
 
-  The check reads no file outside the evidence directory: asserted by instrumenting file opens
-  during the check, which fails the test on any path outside it. An evidence file that cannot be
-  read fails the check (fail closed).
+  The check reads no file outside the publication set: asserted by instrumenting file opens during
+  the check, which fails the test on any other path. A file of the set that cannot be read fails the
+  check (fail closed). The upload step and the check use the same set definition (asserted).
 
   The failure message names the file and the kind of secret, never the value (asserted).
 
@@ -66,32 +68,30 @@ IDs V1–V13 are local to this test plan.
   exact tags for `opa` and `redis`, and neither is `latest`; `qa-deploy` reports a compose tag that differs from the register (existing
   default-deny rule, one fixture).
 
-- **V13 Legacy key cleanup** (D12, retirement): with a Docker stub, `scripts/clean_stack.sh` removes
-  `capiss_keys/root_key.b64` and keeps `root_key.pem` and `root_public_key.b64`; a failed removal is
-  reported, not silent; `--check` changes nothing.
+- **V13 Key directory reset** (D12): with a Docker stub, `scripts/clean_stack.sh` empties
+  `capiss_keys/` (private key, public key and a legacy `root_key.b64`); a failed removal is reported,
+  not silent; `--check` changes nothing.
 
 **Increment B — trace model**
 - **V4 Static test entries** (D4, D5): a static entry that links `source_requirements` and names a
   gate and its negative-control tests passes; a listed test file or selector that does not exist is
   a structural failure; a static entry with no `test_spec.md` heading fails `docs-check`, and so
   does a static heading with no entry.
-- **V5 `qa-deploy` report** (D5, M3, M4): on fixtures, the report gives `holds` for a requirement
-  with no violation, `known_violation` with its OPL for one covered by a known-violation row, and
-  `grace` for D2 with a grandfathered root service before 2027-01-31 (and an error after, as today).
-  With `--skip-image-users`, D2 is `not_checked` and the report says image users were not
-  inspected. The report contains no env values. On today's compose with image inspection: K1, K2,
-  K4 `known_violation` (OPL-005, -006, -008), D2 `grace`, the other six `holds`.
+- **V5 `qa-deploy` report** (D5, M4): the report holds the verdict, the violations found, whether
+  image users were inspected, and the compose and register digests; with `--skip-image-users` it
+  says image users were not inspected. It contains no env values and no per-requirement status
+  (that is `qa-trace`'s, V7).
 - **V6 Static evidence in `qa-evidence`** (D5, M4), each fails: a missing report; an unreadable
   report; malformed JSON;
-  a report missing a `REQ-SEC`; an unknown status; a report made with `--skip-image-users`
-  (matching digests, inspection skipped); a compose or register digest that differs from the files
-  on disk; a report whose status for a requirement disagrees with the register (for example K1
-  `holds` while the register has an OPL-005 row). A complete, matching report passes.
+  a report whose verdict is a failure; a report made with `--skip-image-users` (matching digests,
+  inspection skipped); a compose or register digest that differs from the files on disk. A passing,
+  inspected, matching report passes.
 - **V7 Trace status** (D5, M3): `qa-trace` takes the status from the register, never from a run
   report. A requirement whose only proof is a static test and whose asset has a `known_violations`
   row appears as "not proved: known violation OPL-xxx" and counts as a gap; without such a row it
   counts as proved statically; D2 before its grace date is "not proved: grace" and counts as a
-  gap. Clean-checkout case: with no
+  gap. On today's register: K1, K2, K4 "not proved: known violation" (OPL-005, -006, -008), D2
+  "not proved: grace", the other six proved statically. Clean-checkout case: with no
   `artifacts/` directory at all, `qa-trace` gives the same statuses, on the head and on the
   merge-base fixture.
 - **V8 Config-implemented ARCH** (D6, M9): an ARCH section with `Implemented by:` naming existing
@@ -113,8 +113,6 @@ IDs V1–V13 are local to this test plan.
   - `--mode pr` with a base that cannot be resolved (shallow history, unknown ref) or whose trace
     inputs cannot be read → fails, never falls back to push mode;
   - diverged history: the base is the merge-base, not the tip of `main`.
-  - the head renames a gap category (as Increment B does): an old gap under its new category name
-    still matches its base entry and passes.
 - **V10 Gate consistency** (D8, M5), one fixture each, all fail:
   - a gate the `AGENTS.md` table marks as CI with no job of that name in `ci.yml`;
   - a job in `ci.yml` that is not in the table;
