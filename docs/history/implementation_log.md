@@ -5,6 +5,23 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-10-30 Slice 1 standing rules moved into the rulebook
+
+- Docs-only change on `docs/durable-slice1-rules`, before slice 2 starts. A sweep of slice 1's
+  `plan.md` and `test_plan.md` found twelve rules or decisions that lived only in frozen slice
+  records (or in an agent's private notes), where future agents do not read them.
+- `AGENTS.md`: grill-me asks the key, socket and secret question (D16); plan approval by merging the
+  plan PR (D8); expected-outcome sources and the stop when a probe contradicts the plan (D4, plan
+  review note 4); positive twins (D5); static proofs (1B user decision); a new "Independent review"
+  section (D11, D17: reviewer, inputs, plan-review record, implementation questions); only the user
+  merges (D15), with the note that the `main` ruleset requires no approving review, so GitHub does
+  not enforce it.
+- Templates: an "Assets and holders" section and a "Rulebook" line in `plan.md`; the twin and probe
+  rules next to the expected-outcome table in `test_plan.md`.
+- `docs/STATUS.md`: slice 1 complete, slice 2 next; the open mutation decision
+  (`mutate_only_covered_lines`) recorded.
+- Validation: `make docs-check` and `make qa-trace`. No code or test changed, so no E2E run.
+
 ## 2026-10-29 Increment 1B: deployment register and qa-deploy
 
 - Slice `agentic-delivery-process` 1B on branch `slice/agentic-delivery-process-1b`, after 1A merged

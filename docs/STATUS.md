@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-10-29. Update this page at the end of every slice (see `AGENTS.md`, slice workflow step 4).
+Last updated: 2026-10-30. Update this page at the end of every slice (see `AGENTS.md`, slice workflow step 4).
 Detailed history: [`docs/history/implementation_log.md`](history/implementation_log.md).
 
 ## Where the project stands
@@ -17,11 +17,12 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
     Redis authorization state accepts unauthenticated writes.
   - [OPL-008](open_problem_log.md#opl-008-spire-token-init-mounts-the-whole-spire-server-data-directory):
     the SPIRE bootstrap container can read the server's signing keys and datastore.
-- **Next slice:** [agentic-delivery-process](slices/agentic-delivery-process/plan.md) slice 1 of 3
-  (plan approved, lean scope D20). Increment 1A (exact outcomes for the loose E2E checks,
-  `make test-lint`, mutation scoring) is merged (PR #5). Increment 1B (`security/invariants.yaml`
-  and `make qa-deploy`: who may hold each key, socket and secret, and every service's allowlist) is
-  implemented on `slice/agentic-delivery-process-1b`; with it, slice 1 is complete. Slices 2 (lanes, CI
+- **Next slice:** [agentic-delivery-process](slices/agentic-delivery-process/plan.md) slice 2 of 3,
+  `delivery-lanes-ci` (grill-me started 2026-10-30). Slice 1 is complete: Increment 1A (exact
+  outcomes for the loose E2E checks, `make test-lint`, mutation scoring) merged in PR #5, Increment 1B
+  (`security/invariants.yaml` and `make qa-deploy`: who may hold each key, socket and secret, and
+  every service's allowlist) in PR #6. Its standing rules (twins, probe sources, independent review)
+  are in `AGENTS.md`. Slices 2 (lanes, CI
   trust) and 3 (orchestration, then a pilot that fixes OPL-005 to OPL-008), and a proposed
   `asset-classification` slice (classify every resource that enters a container), are drafts in
   [`later_slices.md`](slices/agentic-delivery-process/later_slices.md). Later: the
@@ -36,12 +37,12 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 | `make qa-evidence` after that run | 2026-10-29 | PASSED (validated 119, skipped 1) |
 | `make qa-quality` (qa-trace, unit traceability, unit guard, docs-check, test-lint, qa-deploy) | 2026-10-29 | PASSED; qa-deploy: 18 known violations (OPL-005, -006, -008), 22 root warnings; qa-trace reports 138 non-blocking coverage gaps, incl. 97 requirements without E2E; the 10 REQ-SEC are proved statically (ARCH-034, DD-925 to DD-930, `IT-DEPLOY-*`), which the trace model cannot yet label |
 | `make unit-mutation` under the new scoring | 2026-10-29 | PASSED, 85.58% (1240 killed of 1449; 0 untested, 0 skipped) |
-| CI (`.github/workflows/ci.yml`, one job per gate) | 2026-10-29 | `unit-trust` workflow passing on PR #6 (`72ff2e7`); renamed to `CI` in the same PR, which is its first run under the new name |
+| CI (`.github/workflows/ci.yml`, workflow `CI`, one job per gate) | 2026-10-29 | passing on `main` after the PR #6 merge (`b2448ad`) |
 
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `slice/agentic-delivery-process-1b` | Increment 1B: deployment register and `qa-deploy` | implemented; PR to be opened |
+| `docs/durable-slice1-rules` | Move slice 1's standing rules from the frozen slice records into `AGENTS.md` and the templates | PR open |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
@@ -70,4 +71,7 @@ Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
   `jira-mcp-gateway do_POST` (23), and capiss `log_mint_decision` (23).
 - `make qa-trace` scans only `services/` and `scripts/` for DD tags, so `DD-918`, `DD-920`, and
   `DD-921` in the top-level `varambu` script are not indexed.
+- **Open decision (user):** mutation testing mutates covered lines only
+  (`mutate_only_covered_lines = true` in `setup.cfg`), so untested lines cannot lower the score.
+  With `false` the score measured 75.20% against 85.58% (2026-10-29); switching has not been decided.
 - Accepted test warnings: `M3.S2-T3` and `M3.S2-T5` (DNS-level isolation instead of TCP refusal).
