@@ -21,6 +21,7 @@ the repo in the same change — do not leave them disagreeing.
 | What does each E2E test do, in plain English? | [`docs/test_spec.md`](docs/test_spec.md) | hand-written spec |
 | Unit-test requirement matrix (M4 trust gates) | [`docs/unit_test_spec.md`](docs/unit_test_spec.md) | authoritative, read by `make traceability-check` |
 | Known unfixed runtime/trust problems | [`docs/open_problem_log.md`](docs/open_problem_log.md) | authoritative |
+| Which delivery mistakes were made, and what changed because of them? | [`docs/delivery_problem_log.md`](docs/delivery_problem_log.md) | authoritative |
 | Who may hold which key, socket or secret; what each service may be | [`security/invariants.yaml`](security/invariants.yaml) with the `REQ-SEC` requirements | authoritative, checked by `make qa-deploy` |
 | How was a past slice designed? | [`docs/slices/`](docs/slices/README.md) | frozen records |
 | What happened, when? | [`docs/history/`](docs/history/) | history |
@@ -105,10 +106,12 @@ Required for milestone and security-relevant changes. A slice bundle lives in
    Grill-me always asks which keys, sockets and secrets the slice touches and who may hold them,
    against the holders in `security/invariants.yaml`.
    Write `plan.md` (decisions, requirements to add or change, hidden-state decisions, assets and
-   holders, rulebook changes, scope, out-of-scope, retirement) and `test_plan.md` (UT and E2E
-   derived from the decisions). An [independent review](#independent-review) of both runs before
-   the user sees them. The user approves the plan by merging the plan PR; implement only from the
-   plan as merged on `origin/main`.
+   holders, environment facts, rulebook changes, scope, out-of-scope, retirement) and
+   `test_plan.md` (UT and E2E derived from the decisions). A decision that depends on a fact outside
+   the repository (file ownership, an API, CI history) records the probe and its result under
+   environment facts; never assume it. An [independent review](#independent-review) of both runs
+   before the user sees them. The user approves the plan by merging the plan PR; implement only from
+   the plan as merged on `origin/main`.
 2. **Tests first.** Add UT/E2E only from the reviewed `test_plan.md`. Update requirements,
    architecture, and `trace/tests.yaml` before making runtime code pass. If a test needs a new
    assumption, return to step 1.
@@ -135,7 +138,9 @@ Required for milestone and security-relevant changes. A slice bundle lives in
    - add a dated entry to `docs/history/implementation_log.md` (what changed, validation results,
      what was not run and why);
    - update `docs/STATUS.md` and the slice's row in `docs/slices/README.md`;
-   - add or close entries in `docs/open_problem_log.md` for problems found or fixed;
+   - add or close entries in `docs/open_problem_log.md` for problems found or fixed, and in
+     `docs/delivery_problem_log.md` for delivery misses (a step skipped, a false claim, a review
+     miss) found or fixed;
    - put the independent review's answers to the implementation questions in the PR body.
 
 ### Independent review
@@ -150,13 +155,23 @@ Required for milestone and security-relevant changes. A slice bundle lives in
   `docs/slices/<id>/plan_review.md` keeps each round's report verbatim, the SHA-256 of the files
   reviewed, and the author's answers (fixed or rejected, with the reason) separately. Each round ends
   with "approvable within the threat model: yes or no"; from round 2 a new finding counts only if it
-  blocks. The plan states the threat model the reviewer judges against: the
+  blocks, except simpler alternatives and decision concerns (below), which every round may report.
+  The plan states the threat model the reviewer judges against: the
   [delivery threat model](#poc-scope-and-proportion) applied to the slice's own change, and the
   system-under-test threat the slice touches.
 - **Implementation review** (step 4). The reviewer answers the questions in the test-plan template
   (`docs/slices/_template/test_plan.md`: which wrong failure would still pass each new or changed
   test, and whether a key, socket or secret now reaches a service outside its holders) in the PR
   body. A "yes" blocks, under the same review loop.
+- **Fixes stay within the agreed decisions** (the plan's decisions, or the request, and this file).
+  Before answering a finding with a new mechanism, the author names the upstream choice that causes
+  it and weighs changing that choice; removing or changing a mechanism is preferred over adding one.
+  A fix that would change an agreed decision goes to the user as a question before it is applied.
+- **Report sections.** Besides blocking and advisory findings, every round may report *simpler
+  alternatives* (a mechanism that could be removed or simplified within the agreed decisions;
+  non-blocking) and *decision concerns* (an agreed decision that itself seems to cause a problem;
+  for the user, never applied by the author). The reviewer may check metadata of secret files
+  (existence, owner, mode, readability), never their content.
 
 Hidden-state rule: if a decision depends on hidden state, `plan.md` lists the state/key name, store,
 writer, reader, TTL or lifecycle, decision impact, and whether it is authoritative or advisory.
@@ -169,6 +184,8 @@ say so.
 ## Quality gates
 
 Every CI gate is a job named after its make target in `.github/workflows/ci.yml` (workflow `CI`).
+A gate's result is its CI job's conclusion on GitHub; a local or offline rerun is a diagnosis and
+never replaces it.
 
 | Gate | Command | Enforced by | Threshold |
 | --- | --- | --- | --- |
