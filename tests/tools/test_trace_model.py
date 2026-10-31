@@ -56,7 +56,7 @@ def _write(repo: Path, files: dict[str, str]) -> None:
     for name, text in files.items():
         path = repo / name
         if text is None:
-            path.unlink()
+            path.unlink(missing_ok=True)
             continue
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
@@ -409,3 +409,49 @@ def test_gap_gate_replay_of_1b_fails_on_the_ten_new_req_sec_gaps(tmp_path: Path)
     expected = {f"requirements_without_proof:REQ-SEC-{r}" for r in
                 ("K1", "K2", "K3", "K4", "K5", "K6", "K7", "K8", "D1", "D2")}
     assert expected <= new, sorted(new)
+
+
+# --- review round 1 (B1-B1, B1-B2, B1-A2) ----------------------------------------
+
+def test_register_without_assets_mapping_fails_closed(tmp_path: Path) -> None:
+    register = BASE_FILES["security/invariants.yaml"].split("services:")[0].replace("assets:", "inventory:")
+    register += "services:\n  issuer:\n    root: forbidden\nknown_violations:\n  - {opl: OPL-005, asset: K1, services: [x], expires: 2026-12-31}\n"
+    result, _ = _run(_repo(tmp_path, {"security/invariants.yaml": register}), "--mode", "push")
+    assert result.returncode == 2
+    assert "'assets' must be a dict" in result.stderr
+
+
+def test_known_violation_row_naming_no_register_asset_fails(tmp_path: Path) -> None:
+    register = BASE_FILES["security/invariants.yaml"].replace(
+        "known_violations: []\n", "known_violations:\n  - {opl: OPL-005, asset: K9, services: [x], expires: 2026-12-31}\n")
+    result, _ = _run(_repo(tmp_path, {"security/invariants.yaml": register}), "--mode", "push")
+    assert result.returncode == 1
+    assert "names no register asset with a requirement" in result.stderr
+
+
+def test_missing_register_with_static_tests_fails(tmp_path: Path) -> None:
+    result, _ = _run(_repo(tmp_path, {"security/invariants.yaml": None}), "--mode", "push")
+    assert result.returncode == 1
+    assert "security/invariants.yaml is missing, but static tests take their status from it" in result.stderr
+
+
+@pytest.mark.parametrize(("entry", "message"), [
+    (_accepted("dd_without_ut:DD-001", expires="2026-10-30"), "expired on 2026-10-30"),
+    (_accepted("dd_without_ut:DD-099"), "does not exist"),
+])
+def test_push_mode_fails_on_an_expired_or_stale_acceptance(tmp_path: Path, entry: str, message: str) -> None:
+    files = {"tests/unit/test_alpha.py": "", **_trace_with(entry)}
+    result, _ = _run(_repo(tmp_path, files), "--mode", "push", "--now", "2026-11-01T00:00:00+00:00")
+    assert result.returncode == 1
+    assert message in result.stderr
+
+
+def test_a_run_report_cannot_change_a_status(tmp_path: Path) -> None:
+    """qa-trace never reads run reports: a report claiming success leaves a known violation unproved."""
+    register = BASE_FILES["security/invariants.yaml"].replace(
+        "known_violations: []\n", "known_violations:\n  - {opl: OPL-005, asset: K1, services: [x], expires: 2026-12-31}\n")
+    claim = json.dumps({"verdict": "passed", "status": {"REQ-SEC-K1": "proved"}, "known_violations": []})
+    files = {"security/invariants.yaml": register, "artifacts/quality/qa_deploy_report.json": claim}
+    result, report = _run(_repo(tmp_path, files), "--mode", "push")
+    assert result.returncode == 0, result.stderr
+    assert report["requirements"]["REQ-SEC-K1"]["status"] == "not proved: known violation OPL-005"

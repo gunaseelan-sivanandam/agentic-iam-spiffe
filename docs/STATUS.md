@@ -33,10 +33,10 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Last verification
 | Check | Date | Result |
 | --- | --- | --- |
-| Full E2E suite, clean stack, `make e2e` on `slice/ci-evidence-trace-a` | 2026-10-31 | 120/120 passed; 1 warning (M5-T55 env-gated skip). The first attempt never started the suite (OPL-010) |
-| `make qa-evidence` after that run, with the secret check over the publication set | 2026-10-31 | PASSED (validated 119, skipped 1); no secret findings |
-| `make qa-quality` (qa-trace, unit traceability, unit guard, docs-check, test-lint, qa-deploy) | 2026-10-31 | PASSED; qa-deploy with image users inspected: 18 known violations (OPL-005, -006, -008), 22 root warnings; qa-trace reports 138 non-blocking coverage gaps, incl. 97 requirements without E2E; the 10 REQ-SEC are proved statically (ARCH-034, DD-925 to DD-930, `IT-DEPLOY-*`), which the trace model cannot yet label |
-| `make unit-trust`; `make unit-diff-cov` against `origin/main` | 2026-10-31 | PASSED (total line 86.70%); diff coverage 100% on capiss, now measured (DPL-009) |
+| Full E2E suite, clean stack, `make e2e` on `slice/ci-evidence-trace-b` | 2026-10-31 | 120/120 passed; 1 warning (M5-T55 env-gated skip) |
+| `make qa-deploy` (image users inspected) and `make qa-evidence` after that run | 2026-10-31 | both PASSED; qa-evidence: validated 119, skipped 1, no secret findings, the qa-deploy report accepted (passed, inspected, digests match) |
+| `make qa-quality` (qa-trace in `--mode pr --base origin/main`, unit traceability, unit guard, docs-check, test-lint, qa-deploy) | 2026-10-31 | PASSED; gap gate: 0 new gaps, 25 closed; 113 coverage gaps remain (91 requirements without proof, 18 DD without UT, 4 tests without requirements); REQ-SEC-K1, K2, K4 not proved (known violations OPL-005, -006, -008), D2 not proved (grace until 2027-01-31), the other six and REQ-T-R9 proved statically |
+| `make tooling-test` | 2026-10-31 | PASSED (229 pytest, 9 shell) |
 | `make unit-mutation` on `slice/ci-evidence-trace-a` | 2026-10-31 | PASSED, 85.34% |
 | CI (`.github/workflows/ci.yml`, workflow `CI`, one job per gate) | 2026-10-29 | passing on `main` after the PR #6 merge (`b2448ad`) |
 

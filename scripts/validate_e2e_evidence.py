@@ -194,7 +194,8 @@ def deploy_report_failures(report_path: Path, compose: Path, register: Path) -> 
     if report.get("image_users_inspected") is not True:
         failures.append("qa-deploy report did not inspect image users (made with --skip-image-users)")
     for name, path in (("compose", compose), ("register", register)):
-        if report.get(f"{name}_sha256") != _sha256(path) or _sha256(path) is None:
+        digest = _sha256(path)
+        if digest is None or report.get(f"{name}_sha256") != digest:
             failures.append(f"qa-deploy report was made from another {name} file than {path}")
     return failures
 

@@ -71,3 +71,36 @@ def test_makefile_qa_evidence_checks_the_deploy_report() -> None:
     assert "--deploy-report artifacts/quality/qa_deploy_report.json" in makefile
     out = subprocess.run(["make", "-n", "qa-evidence"], cwd=ROOT, capture_output=True, text=True, check=True).stdout
     assert "--deploy-report artifacts/quality/qa_deploy_report.json" in out
+
+
+@pytest.mark.skipif(sys.platform == "win32" or __import__("os").geteuid() == 0, reason="root reads files regardless of mode")
+def test_unreadable_report_fails(tmp_path: Path) -> None:
+    path, compose, register = _files(tmp_path)
+    path.chmod(0)
+    try:
+        failures = ve.deploy_report_failures(path, compose, register)
+    finally:
+        path.chmod(0o600)
+    assert "missing or unreadable" in failures[0]
+
+
+def test_failed_report_fails_qa_evidence_through_its_exit_code(tmp_path: Path) -> None:
+    """End to end through the validator's exit: a minimal passing run, with a failed deploy report."""
+    (tmp_path / "trace").mkdir()
+    (tmp_path / "trace" / "tests.yaml").write_text(
+        "tests:\n  - id: E2E-SUITE-X\n    type: e2e_suite\n    evidence_prefixes: [M1-T1]\n")
+    evdir = tmp_path / "artifacts" / "rogue-tests" / "M1-T1_case"
+    evdir.mkdir(parents=True)
+    for name in ("premise_1.txt", "exercise_1.txt", "outcome_1.txt", "cmd_premise_1.txt"):
+        (evdir / name).write_text("ok\n")
+    (tmp_path / "test_report.log").write_text(
+        "EVIDENCE_DIR=/tmp/rogue-tests/M1-T1_case\n[T1] case .... PASS\nTotal: 1  Passed: 1  Failed: 0\n")
+    report, compose, register = _files(tmp_path, verdict="failed")
+    cmd = [sys.executable, str(ROOT / "scripts" / "validate_e2e_evidence.py"), "--tests", "trace/tests.yaml",
+           "--evidence-dir", "artifacts/rogue-tests", "--test-report", "test_report.log",
+           "--report-json", "artifacts/quality/evidence_report.json", "--deploy-report", str(report),
+           "--compose", str(compose), "--register", str(register)]
+    result = subprocess.run(cmd, cwd=tmp_path, capture_output=True, text=True, check=False)
+    assert result.returncode == 1 and "verdict is 'failed'" in result.stderr
+    report.write_text(report.read_text().replace('"failed"', '"passed"'))
+    assert subprocess.run(cmd, cwd=tmp_path, capture_output=True, text=True, check=False).returncode == 0

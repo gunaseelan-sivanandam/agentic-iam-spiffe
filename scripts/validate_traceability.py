@@ -87,8 +87,7 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     return raw
 
 
-def _load_items(path: Path, key: str) -> list[dict[str, Any]]:
-    data = _load_yaml(path)
+def _items(data: dict[str, Any], path: str, key: str = "tests") -> list[dict[str, Any]]:
     items = data.get(key)
     if not isinstance(items, list):
         raise ValueError(f"{path}: '{key}' must be a list")
@@ -561,21 +560,28 @@ def _retired_ids(data: dict[str, Any], failures: list[str]) -> dict[str, str]:
     return retired
 
 
-def _load_register(path: Path) -> dict[str, Any]:
-    """The deployment register, or an empty one where it does not exist (older trees)."""
+def _load_register(path: Path) -> dict[str, Any] | None:
+    """The deployment register; None where the file does not exist (trees older than the register)."""
     if not path.exists():
-        return {}
+        return None
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError(f"{path}: top-level document must be a map")
+    for key, kind in (("assets", dict), ("services", dict), ("known_violations", list)):
+        if not isinstance(raw.get(key), kind):
+            raise ValueError(f"{path}: '{key}' must be a {kind.__name__}")
     return raw
 
 
-def _register_holds_back(register: dict[str, Any], now: datetime) -> dict[str, str]:
+def _register_holds_back(register: dict[str, Any] | None, now: datetime, ctx: dict[str, Any]) -> dict[str, str]:
     """Requirement id -> why the register says it is not proved (known violation, non-root grace)."""
     from qa_deploy import NONROOT_GRACE_END, NONROOT_REQUIREMENT  # same scripts/ directory
 
-    reasons = _known_violation_reasons(register)
+    if register is None:
+        if any("static" in kinds for kinds in ctx["req_proof_kinds"].values()):
+            ctx["failures"].append("security/invariants.yaml is missing, but static tests take their status from it")
+        return {}
+    reasons = _known_violation_reasons(register, ctx["failures"])
     services = register.get("services") or {}
     if now < NONROOT_GRACE_END and any((s or {}).get("root") == "grandfathered" for s in services.values()):
         last_day = (NONROOT_GRACE_END - timedelta(days=1)).date().isoformat()
@@ -583,13 +589,16 @@ def _register_holds_back(register: dict[str, Any], now: datetime) -> dict[str, s
     return reasons
 
 
-def _known_violation_reasons(register: dict[str, Any]) -> dict[str, str]:
-    assets = register.get("assets") or {}
+def _known_violation_reasons(register: dict[str, Any], failures: list[str]) -> dict[str, str]:
+    """A row that names no register asset with a requirement is a failure, never a silent skip."""
     opls: dict[str, set[str]] = defaultdict(set)
-    for row in register.get("known_violations") or []:
-        requirement = (assets.get(row.get("asset")) or {}).get("requirement")
-        if requirement:
-            opls[requirement].add(str(row.get("opl")))
+    for row in register["known_violations"]:
+        asset = row.get("asset") if isinstance(row, dict) else None
+        requirement = (register["assets"].get(asset) or {}).get("requirement") if asset else None
+        if not requirement:
+            failures.append(f"known violation {row!r} names no register asset with a requirement")
+            continue
+        opls[requirement].add(str(row.get("opl")))
     return {req: f"known violation {', '.join(sorted(ids))}" for req, ids in opls.items()}
 
 
@@ -692,10 +701,11 @@ def _load_inputs(args: argparse.Namespace) -> dict[str, Any]:
     architecture = _parse_architecture(Path(args.architecture_doc), set(requirements))
     design_by_id, dd_failures = _parse_dd_sources(args.source_root, architecture)
     unit_tests, ut_failures = _parse_unit_tests(args.unit_root, design_by_id)
+    trace = _load_yaml(Path(args.tests))
     return {
         "requirements": requirements, "architecture": architecture, "design": design_by_id,
-        "unit_tests": unit_tests, "trace": _load_yaml(Path(args.tests)),
-        "test_items": _load_items(Path(args.tests), "tests"), "register": _load_register(Path(args.register)),
+        "unit_tests": unit_tests, "trace": trace, "test_items": _items(trace, args.tests),
+        "register": _load_register(Path(args.register)),
         "failures": [*dd_failures, *ut_failures],
     }
 
@@ -715,7 +725,7 @@ def compute(args: argparse.Namespace, now: datetime) -> dict[str, Any]:
     req_to_arch, arch_to_design = _link_architecture(inputs["architecture"], inputs["design"], failures)
     test_by_id, dd_to_ut = _collect_tests(inputs["test_items"], inputs["unit_tests"], retired, ctx)
 
-    held_back = _register_holds_back(inputs["register"], now)
+    held_back = _register_holds_back(inputs["register"], now, ctx)
     status = {req_id: _requirement_status(req_id, ctx, held_back) for req_id in inputs["requirements"]}
     links = {"tests": test_by_id, "dd_to_ut": dd_to_ut, "req_to_arch": req_to_arch, "arch_to_design": arch_to_design}
     _complete_gaps(gaps, status, inputs, links)
@@ -786,8 +796,9 @@ def gap_gate(report: dict[str, Any], args: argparse.Namespace, now: datetime) ->
     head = gap_ids(report["coverage_gaps"])
     accepted, failures = check_accepted_gaps(report["accepted_gaps"], head, now)
     if args.mode != "pr":
+        # On main the coverage comparison is reported, not enforced; invalid acceptances still fail.
         report["gap_gate"] = {"mode": "push", "accepted_gap_problems": failures}
-        return []
+        return failures
     if not args.base:
         return ["--mode pr needs --base <ref>"]
     base = base_gaps(args.base, args)
@@ -834,8 +845,6 @@ def _print_result(report: dict[str, Any], gate_failures: list[str], report_path:
     if gate.get("mode") == "pr":
         print(f"[qa-trace] gap gate vs merge-base of {gate['base']}: new {len(gate['new_gaps'])} "
               f"(accepted {len(gate['accepted'])}), closed {len(gate['closed_gaps'])}")
-    for problem in gate.get("accepted_gap_problems", []):
-        print(f"[qa-trace] warning: {problem}")
     if gap_total:
         print("[qa-trace] coverage gaps:")
         for key, vals in gaps.items():

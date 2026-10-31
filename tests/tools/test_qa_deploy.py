@@ -444,3 +444,18 @@ def test_repository_run_writes_a_report_without_env_values_or_requirement_status
     assert len(report["known_violations"]) == 18
     assert "REQ-SEC" not in text and "status" not in report
     assert "=" not in "".join(report["problems"] + report["known_violations"])
+
+
+@pytest.mark.parametrize(("register_text", "verdict", "code"), [
+    ("assets: {}\nservices: {}\nknown_violations: []\n", "failed", 1),
+    ("assets: [not, a, map\n", "error", 2),
+])
+def test_failed_or_broken_run_writes_a_report_that_says_so(tmp_path: Path, register_text: str, verdict: str, code: int) -> None:
+    import json
+
+    register = tmp_path / "register.yaml"
+    register.write_text(register_text)
+    report_path = tmp_path / "report.json"
+    assert qa.main(["--skip-image-users", "--register", str(register), "--report-json", str(report_path)]) == code
+    report = json.loads(report_path.read_text())
+    assert report["verdict"] == verdict and report["problems"]
