@@ -34,6 +34,8 @@ is first); every heading carries its date.
 - Independent review (Codex, [`review_b.md`](../slices/ci-evidence-trace/review_b.md)): round 1 found
   two blocking issues, both fixed: an incomplete register could turn known violations into static
   proofs (now fails closed), and push mode passed expired or stale accepted gaps (now fails).
+  Round 2 re-raised the first with a register asset naming a non-existent requirement (now fails);
+  round 3: approvable within the threat model.
 - Records: DPL-004 and DPL-005 closed.
 - Validation: see `docs/STATUS.md` "Last verification" (full E2E 120/120 on a clean stack,
   `qa-deploy`, `qa-evidence`, `qa-quality`, `tooling-test` PASSED). Not run locally: `unit-trust`,

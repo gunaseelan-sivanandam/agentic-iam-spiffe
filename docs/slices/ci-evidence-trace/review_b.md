@@ -8,6 +8,7 @@ the repository, the merged plan and the change, never the author's reasoning.
 | --- | --- | --- | --- |
 | 1 | `origin/main..f592d13` | not approvable | B1-B1, B1-B2 (blocking); B1-A1 to B1-A4 (advisory); two simpler alternatives |
 | 2 | fixes in `0195a8b` | not approvable | B1-B1 re-raised (an asset naming an unknown requirement); all else accepted |
+| 3 | fix in `bc5c201` | **approvable within the threat model** | B1-B1 fixed; none new |
 
 ## Author answers, round 1
 | Finding | Answer | Where |
@@ -273,6 +274,41 @@ Approvable within the threat model: no — B1-B1.
 - Secret contents or existing runtime evidence/report contents.
 
 Reviewed independently by Codex, read-only and offline, through `0195a8b`. Verification included documentation and diff checks, Python syntax checks, in-memory failure probes, and trace computations over current and historical Git inputs. Normal comparison reproduced **0 new, 25 closed, 113 remaining gaps**; historical replay found all ten expected REQ-SEC gaps. No files were modified.
+## Round 3 report (verbatim)
+
+### Implementation review — ci-evidence-trace Increment B, round 3
+
+#### Round-2 open finding
+
+**B1-B1: fixed.** [Requirement validation](/home/guna/projects/agentic_iam_spiffe/scripts/validate_traceability.py:593) now rejects register assets naming nonexistent requirements. Independently reproduced the `REQ-SEC-K9` typo: the validator exits **1** in both PR and push modes. The [regression test](/home/guna/projects/agentic_iam_spiffe/tests/tools/test_trace_model.py:460) checks the failure and exact diagnostic.
+
+Earlier dispositions remain accepted: B1-B2, B1-A1–B1-A3, and both simpler alternatives. B1-A4 remains non-blocking, with round 2’s qualification about lexical command matching.
+
+#### New blocking findings
+
+None.
+
+#### Simpler alternatives
+
+None.
+
+#### Decision concerns
+
+None.
+
+#### Verdict
+
+Approvable within the threat model: yes
+
+Independent review by Codex through `bc5c201`, read-only and offline. Verification reproduced **0 new, 25 closed, 113 remaining gaps**, the expected security statuses, and all ten historical REQ-SEC gaps. Documentation, diff and Python syntax checks passed. Offline gate controls and synthetic deployment-report probes passed.
+
+#### Not checked
+
+- Full pytest/shell suites, `qa-quality`, Docker-dependent checks or E2E execution; reported clean-stack results were supplied facts.
+- Live GitHub ruleset enforcement or branch CI conclusions. The two required-check additions and CI verification remain pending.
+- Secret contents, existing runtime evidence/report contents, or publication-set scanning.
+
+No files were modified, Docker invoked, services started or network accessed.
 ## Reviewer prompts (verbatim)
 
 ### Round 1
@@ -397,6 +433,57 @@ One line each (B1-B1, B1-B2, B1-A1 to B1-A4, the simpler alternatives): accepted
 evidence.
 ## New blocking findings
 Each with id (B2-B1, ...), where, criterion, failure scenario, simplest fix. "None" if none.
+## Simpler alternatives
+"None" if none.
+## Decision concerns
+"None" if none.
+## Verdict
+"Approvable within the threat model: yes" or "no — <ids>".
+## Not checked
+````
+
+### Round 3
+
+````markdown
+You are the independent implementation reviewer for a change in the repository at the current
+working directory, round 3. You did not write it. Review read-only: do not modify files, run docker,
+start services or use the network. Never print key material, tokens or environment variable values.
+You may check metadata of secret files (existence, owner, mode, readability), never their content.
+
+## What is under review
+Increment B ("trace model") of slice `ci-evidence-trace`: the commits `origin/main..HEAD`. Round 2
+reviewed up to `f592d13`; the commit after it answers round 1 (`git show HEAD`).
+
+The intent is the approved plan as merged on `main` (`docs/slices/ci-evidence-trace/plan.md`,
+`test_plan.md`; Increment B = D4 to D9) and the rules in `AGENTS.md` ("PoC scope and
+proportion", "Independent review"). The plan's "Threat model for this plan and its reviews" is the
+threat model you judge against.
+
+Your round-1 and round-2 reports and the author's answers (fixed or rejected, with reasons) are in
+`docs/slices/ci-evidence-trace/review_b.md`. Judge each answer: accept it, or re-raise it with new
+evidence. You may read the whole repository.
+
+## Facts outside the repository (collected by the author, 2026-10-31)
+- After the round-1 fixes: `scripts/clean_stack.sh`, `make e2e`, `make qa-evidence` were rerun on a
+  clean stack; the results are in `docs/STATUS.md` "Last verification" and the implementation log.
+- The CI workflow has not run on this branch yet; `gate-consistency` and `unit-diff-cov` are not yet
+  required checks (the user adds them at this PR), so `make gate-consistency` fails until then.
+
+## Rules for findings
+- Only these block: a concrete false green or an OPL-005-class miss inside the threat model, with a
+  failure scenario; a contradiction (with `AGENTS.md`, a requirement, the plan or its decisions); an
+  approved decision without a test. From round 2 a new finding counts only if it blocks.
+- Fixes must stay within the agreed decisions (D1–D12, and `AGENTS.md`); propose the simplest fix
+  within them; prefer removing or changing a mechanism over adding one.
+- "Simpler alternatives" and "Decision concerns" may be reported in every round; a decision concern
+  is never applied by the author.
+
+## Output (markdown only)
+# Implementation review — ci-evidence-trace Increment B, round 3
+## Round-2 open finding
+B1-B1: fixed, or re-raised with evidence.
+## New blocking findings
+Each with id (B3-B1, ...), where, criterion, failure scenario, simplest fix. "None" if none.
 ## Simpler alternatives
 "None" if none.
 ## Decision concerns
