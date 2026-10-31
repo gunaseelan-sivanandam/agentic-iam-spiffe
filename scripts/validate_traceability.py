@@ -581,12 +581,19 @@ def _register_holds_back(register: dict[str, Any] | None, now: datetime, ctx: di
         if any("static" in kinds for kinds in ctx["req_proof_kinds"].values()):
             ctx["failures"].append("security/invariants.yaml is missing, but static tests take their status from it")
         return {}
+    ctx["failures"] += _unknown_asset_requirements(register, ctx["requirements"])
     reasons = _known_violation_reasons(register, ctx["failures"])
     services = register.get("services") or {}
     if now < NONROOT_GRACE_END and any((s or {}).get("root") == "grandfathered" for s in services.values()):
         last_day = (NONROOT_GRACE_END - timedelta(days=1)).date().isoformat()
         reasons.setdefault(NONROOT_REQUIREMENT, f"grace until {last_day}")
     return reasons
+
+
+def _unknown_asset_requirements(register: dict[str, Any], requirements: dict[str, Any]) -> list[str]:
+    """Every register asset names a requirement that exists, so its known violations cannot vanish."""
+    named = {key: (asset or {}).get("requirement") for key, asset in register["assets"].items()}
+    return [f"register asset {key} names unknown requirement {req!r}" for key, req in named.items() if req not in requirements]
 
 
 def _known_violation_reasons(register: dict[str, Any], failures: list[str]) -> dict[str, str]:

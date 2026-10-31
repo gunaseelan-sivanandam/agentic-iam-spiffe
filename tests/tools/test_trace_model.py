@@ -455,3 +455,12 @@ def test_a_run_report_cannot_change_a_status(tmp_path: Path) -> None:
     result, report = _run(_repo(tmp_path, files), "--mode", "push")
     assert result.returncode == 0, result.stderr
     assert report["requirements"]["REQ-SEC-K1"]["status"] == "not proved: known violation OPL-005"
+
+
+def test_register_asset_naming_an_unknown_requirement_fails(tmp_path: Path) -> None:
+    """Round 2 (B1-B1): a typo in an asset's requirement must not let its known violation vanish."""
+    register = BASE_FILES["security/invariants.yaml"].replace("requirement: REQ-SEC-K1", "requirement: REQ-SEC-K9").replace(
+        "known_violations: []\n", "known_violations:\n  - {opl: OPL-005, asset: K1, services: [x], expires: 2026-12-31}\n")
+    result, _ = _run(_repo(tmp_path, {"security/invariants.yaml": register}), "--mode", "push")
+    assert result.returncode == 1
+    assert "register asset K1 names unknown requirement 'REQ-SEC-K9'" in result.stderr

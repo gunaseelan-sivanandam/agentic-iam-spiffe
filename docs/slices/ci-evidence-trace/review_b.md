@@ -7,6 +7,7 @@ the repository, the merged plan and the change, never the author's reasoning.
 | Round | Reviewed | Verdict | Findings |
 | --- | --- | --- | --- |
 | 1 | `origin/main..f592d13` | not approvable | B1-B1, B1-B2 (blocking); B1-A1 to B1-A4 (advisory); two simpler alternatives |
+| 2 | fixes in `0195a8b` | not approvable | B1-B1 re-raised (an asset naming an unknown requirement); all else accepted |
 
 ## Author answers, round 1
 | Finding | Answer | Where |
@@ -18,6 +19,11 @@ the repository, the merged plan and the change, never the author's reasoning.
 | B1-A3 complete the records after the E2E run | Taken: the clean-stack run passed (120/120, `qa-deploy` with image users and `qa-evidence` PASSED); `docs/STATUS.md` and the implementation log record it. CI and the ruleset update follow at the PR. | `docs/STATUS.md`, `docs/history/implementation_log.md` |
 | B1-A4 gate command matched as text, even in an unexecuted branch | Rejected: outside the honest-mistake model as a blocker; a job that names its target only in a branch it never takes is a deliberate construction, and the job's own conclusion is still the gate's result (`AGENTS.md` "Quality gates"). The `qa-trace` job runs `make qa-trace` in both branches. | — |
 | Simpler alternatives: parse `trace/tests.yaml` once; compute each digest once | Both taken. | `_load_inputs`, `_items`; `deploy_report_failures` |
+
+## Author answers, round 2
+| Finding | Answer | Where |
+| --- | --- | --- |
+| B1-B1 re-raised: a register asset whose `requirement` names no existing requirement drops its known violation | Fixed: every register asset must name a requirement that exists in `docs/requirements.md`, or `qa-trace` fails. | `_unknown_asset_requirements`; test `test_register_asset_naming_an_unknown_requirement_fails` |
 
 ## Round 1 report (verbatim)
 
@@ -229,6 +235,44 @@ Approvable within the threat model: **no — B1-B1, B1-B2**.
 - Final close-out records that the author intends to add after the running E2E suite.
 
 Independent verification comprised read-only documentation checking, diff checks, in-memory trace computations over current and historical Git trees, planned/current-fact gate comparisons, and synthetic failure-path probes. No files were modified.
+## Round 2 report (verbatim)
+
+### Implementation review — ci-evidence-trace Increment B, round 2
+
+#### Round-1 findings
+
+- **B1-B1 — re-raised with new evidence.** [validate_traceability.py:592](/home/guna/projects/agentic_iam_spiffe/scripts/validate_traceability.py:592) checks that a violation’s requirement reference is nonempty, but never checks that it resolves. In an in-memory reproduction, changing K1’s reference to nonexistent `REQ-SEC-K9`, while retaining OPL-005, produces **zero structural failures**, K1 **“proved: static”**, and **no PR gap-gate failures** against the actual main-tree gaps; K1 is counted as closed. This remains an M3 false proof and D5 contradiction. Simplest fix: reject references absent from the parsed requirements and add this typo negative control. The separate deployment gate’s rejection does not correct the authoritative trace status.
+- **B1-B2 — accepted.** Push mode now returns acceptance-validation failures; independently reproduced rejection of expired and stale entries.
+- **B1-A1 — accepted.** Added tests cover failed/error report production and evidence-validator exit propagation; in-memory probes confirmed report verdicts and failure exits.
+- **B1-A2 — accepted.** Added contradictory-report and unreadable-report controls address both omissions; permission failures reject.
+- **B1-A3 — accepted for this review stage.** STATUS and implementation records contain the supplied clean-stack results. Branch CI and ruleset updates remain pending and explicitly unverified.
+- **B1-A4 — accepted as non-blocking.** Matching remains lexical; inspection found no inactive gate invocation in the current workflow. Acceptance does not endorse the broader claim that every conditional-command mistake requires deliberate construction.
+- **Simpler alternative: parse trace YAML once — accepted.** `_load_inputs` now shares the parsed document.
+- **Simpler alternative: compute each digest once — accepted.** `deploy_report_failures` now reads each input digest once.
+
+#### New blocking findings
+
+None. B1-B1 remains open as re-raised above.
+
+#### Simpler alternatives
+
+None.
+
+#### Decision concerns
+
+None.
+
+#### Verdict
+
+Approvable within the threat model: no — B1-B1.
+
+#### Not checked
+
+- Full pytest/shell suites, Docker-dependent checks, services, E2E execution, or publication-set scanning.
+- Live GitHub ruleset configuration, required-check enforcement, or branch CI conclusions.
+- Secret contents or existing runtime evidence/report contents.
+
+Reviewed independently by Codex, read-only and offline, through `0195a8b`. Verification included documentation and diff checks, Python syntax checks, in-memory failure probes, and trace computations over current and historical Git inputs. Normal comparison reproduced **0 new, 25 closed, 113 remaining gaps**; historical replay found all ten expected REQ-SEC gaps. No files were modified.
 ## Reviewer prompts (verbatim)
 
 ### Round 1
@@ -302,6 +346,58 @@ simplest fix within the agreed decisions. "None" if none.
 Each with id (B1-A1, ...), one or two lines.
 ## Simpler alternatives
 Non-blocking: places where a mechanism could be removed or simplified within the agreed decisions.
+"None" if none.
+## Decision concerns
+"None" if none.
+## Verdict
+"Approvable within the threat model: yes" or "no — <ids>".
+## Not checked
+````
+
+### Round 2
+
+````markdown
+You are the independent implementation reviewer for a change in the repository at the current
+working directory, round 2. You did not write it. Review read-only: do not modify files, run docker,
+start services or use the network. Never print key material, tokens or environment variable values.
+You may check metadata of secret files (existence, owner, mode, readability), never their content.
+
+## What is under review
+Increment B ("trace model") of slice `ci-evidence-trace`: the commits `origin/main..HEAD`. Round 1
+reviewed up to `f592d13`; the commit after it answers round 1 (`git show HEAD`).
+
+The intent is the approved plan as merged on `main` (`docs/slices/ci-evidence-trace/plan.md`,
+`test_plan.md`; Increment B = D4 to D9) and the rules in `AGENTS.md` ("PoC scope and
+proportion", "Independent review"). The plan's "Threat model for this plan and its reviews" is the
+threat model you judge against.
+
+Your round-1 report and the author's answers (fixed or rejected, with reasons) are in
+`docs/slices/ci-evidence-trace/review_b.md`. Judge each answer: accept it, or re-raise it with new
+evidence. You may read the whole repository.
+
+## Facts outside the repository (collected by the author, 2026-10-31)
+- After the round-1 fixes: `scripts/clean_stack.sh`, `make e2e`, `make qa-evidence` were rerun on a
+  clean stack; the results are in `docs/STATUS.md` "Last verification" and the implementation log.
+- The CI workflow has not run on this branch yet; `gate-consistency` and `unit-diff-cov` are not yet
+  required checks (the user adds them at this PR), so `make gate-consistency` fails until then.
+
+## Rules for findings
+- Only these block: a concrete false green or an OPL-005-class miss inside the threat model, with a
+  failure scenario; a contradiction (with `AGENTS.md`, a requirement, the plan or its decisions); an
+  approved decision without a test. From round 2 a new finding counts only if it blocks.
+- Fixes must stay within the agreed decisions (D1–D12, and `AGENTS.md`); propose the simplest fix
+  within them; prefer removing or changing a mechanism over adding one.
+- "Simpler alternatives" and "Decision concerns" may be reported in every round; a decision concern
+  is never applied by the author.
+
+## Output (markdown only)
+# Implementation review — ci-evidence-trace Increment B, round 2
+## Round-1 findings
+One line each (B1-B1, B1-B2, B1-A1 to B1-A4, the simpler alternatives): accepted, or re-raised with
+evidence.
+## New blocking findings
+Each with id (B2-B1, ...), where, criterion, failure scenario, simplest fix. "None" if none.
+## Simpler alternatives
 "None" if none.
 ## Decision concerns
 "None" if none.
