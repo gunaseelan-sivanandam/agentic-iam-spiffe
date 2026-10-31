@@ -41,9 +41,15 @@ is first); every heading carries its date.
 - Records: DPL-002 closed; DPL-008 (stacked PR merged into a stale base) and DPL-009 added; `AGENTS.md`
   gate rows for `e2e` and the `qa-evidence` secret contract, step 4, test commands, git rule on
   stacking; ARCH-007, ARCH-012, ARCH-019; OPL-005's key file name.
+- CI on the PR: `unit-mutation` failed on UT-347. With `mutate_only_covered_lines`, mutmut runs the
+  tests in its own process, then unloads every module they loaded; `cryptography`'s compiled core
+  keeps the first import's classes, so `private_bytes(..., NoEncryption())` fails after the reload.
+  The mutation-selected tests no longer call `private_bytes`: UT-347 compares public keys, UT-348
+  writes the existing key with capiss's encoder, UT-349 drops its EC-key case (the wrong-prefix case
+  covers another key type). Reviewed in round 3 of `review_a.md`.
 - Validation: see `docs/STATUS.md` "Last verification" (full E2E 120/120 on a clean stack,
-  `qa-evidence` and `qa-quality` PASSED, `unit-trust` and `unit-diff-cov` PASSED). Not run locally:
-  `make unit-mutation` (CI runs it on the PR).
+  `qa-evidence` and `qa-quality` PASSED, `unit-trust`, `unit-diff-cov` and `unit-mutation` (85.34%)
+  PASSED).
 
 ## 2026-10-31 Delivery problem log and the rules from the slice 2 plan review
 

@@ -9,7 +9,7 @@ import pytest
 import redis
 from biscuit_auth import PublicKey
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import ec, ed25519
+from cryptography.hazmat.primitives.asymmetric import ed25519
 
 
 def _premise_module_loaded(guard, capiss_module):
@@ -509,7 +509,7 @@ def _pkcs8_pem(der: bytes) -> bytes:
 
 
 _ED25519_PKCS8_PREFIX = bytes.fromhex("302e020100300506032b657004220420")
-INVALID_KEY_FILE_KINDS = ["raw_base64_old_format", "certificate_block", "ec_p256_key",
+INVALID_KEY_FILE_KINDS = ["raw_base64_old_format", "certificate_block",
                           "wrong_der_prefix", "short_key", "long_key", "invalid_base64_body"]
 
 
@@ -518,10 +518,6 @@ def _invalid_key_file(kind: str) -> bytes:
         return base64.b64encode(bytes(range(32)))
     if kind == "certificate_block":
         return b"-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n"
-    if kind == "ec_p256_key":
-        key = ec.generate_private_key(ec.SECP256R1())
-        return key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
-                                 serialization.NoEncryption())
     if kind == "wrong_der_prefix":
         return _pkcs8_pem(bytes.fromhex("302e020100300506032b657104220420") + bytes(range(32)))
     if kind == "short_key":
@@ -536,7 +532,7 @@ def _invalid_key_file(kind: str) -> bytes:
 # UT: UT-347
 # Test Description: Verifies a new root key is written as a PKCS#8 PEM file with mode 0600 that an independent parser reads as the same Ed25519 key.
 # Precondition: The key directory is empty.
-# Expected Output: root_key.pem exists with mode 0600; cryptography's PEM loader returns an Ed25519 key with the same raw bytes; a token signed with it verifies under the exported public key; no root_key.b64 is written.
+# Expected Output: root_key.pem exists with mode 0600; cryptography's PEM loader returns an Ed25519 key with the same public key; a token signed with it verifies under the exported public key; no root_key.b64 is written.
 # Covers DD: DD-111
 @pytest.mark.invariant
 def test_root_key_created_as_pkcs8_pem(capiss_module, tmp_path, guard):
@@ -546,7 +542,8 @@ def test_root_key_created_as_pkcs8_pem(capiss_module, tmp_path, guard):
     private_key, created = guard.exercise("create root key", capiss_module.load_or_create_root_private_key)
     key_path = Path(capiss_module.CAPISS_KEY_FILE)
     parsed = guard.exercise("parse with cryptography", lambda: serialization.load_pem_private_key(key_path.read_bytes(), password=None))
-    raw = parsed.private_bytes(serialization.Encoding.Raw, serialization.PrivateFormat.Raw, serialization.NoEncryption())
+    # The public key is determined by the private key, so equal public keys mean the same key.
+    parsed_public = parsed.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
     builder = capiss_module.BiscuitBuilder()
     builder.add_fact(capiss_module.Fact('probe("ut-347")'))
     token = guard.exercise("sign token", lambda: builder.build(private_key).to_base64())
@@ -559,34 +556,35 @@ def test_root_key_created_as_pkcs8_pem(capiss_module, tmp_path, guard):
     guard.outcome("mode 0600", (key_path.stat().st_mode & 0o777) == 0o600)
     guard.outcome("PEM private key header", key_path.read_bytes().startswith(b"-----BEGIN PRIVATE KEY-----\n"))
     guard.outcome("independent parser reads an Ed25519 key", isinstance(parsed, ed25519.Ed25519PrivateKey))
-    guard.outcome("same key bytes", raw == private_key.to_bytes())
+    guard.outcome("same key", parsed_public == capiss_module.KeyPair.from_private_key(private_key).public_key.to_bytes())
     guard.outcome("token verifies", verified is not None)
     guard.outcome("no legacy file written", not (key_path.parent / "root_key.b64").exists())
 
 
 # UT: UT-348
-# Test Description: Verifies an existing valid root_key.pem written by another encoder is loaded, not replaced.
-# Precondition: root_key.pem holds an Ed25519 key serialised as PKCS#8 PEM by cryptography.
+# Test Description: Verifies an existing valid root_key.pem is loaded, not replaced.
+# Precondition: root_key.pem holds a valid Ed25519 PKCS#8 PEM key (written before the call).
 # Expected Output: The SUT returns that key with created False and leaves the file byte-for-byte unchanged.
 # Covers DD: DD-111
 @pytest.mark.invariant
 def test_existing_pem_root_key_is_loaded(capiss_module, tmp_path, guard):
     _premise_module_loaded(guard, capiss_module)
     guard.exercise("set key file paths", lambda: _set_key_paths(capiss_module, tmp_path))
-    key = ed25519.Ed25519PrivateKey.generate()
-    pem = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+    # cryptography's private_bytes cannot run under mutmut's module reload (its compiled core keeps the
+    # first import's classes), so the file is written by capiss's encoder; UT-347 proves cryptography reads it.
+    key = capiss_module.KeyPair().private_key
+    pem = capiss_module._root_key_to_pem(key)
     key_path = Path(capiss_module.CAPISS_KEY_FILE)
     guard.exercise("write existing key", lambda: (key_path.parent.mkdir(parents=True), key_path.write_bytes(pem)))
     guard.premise("existing key file present", key_path.exists())
     loaded, created = guard.exercise("load root key", capiss_module.load_or_create_root_private_key)
-    expected = key.private_bytes(serialization.Encoding.Raw, serialization.PrivateFormat.Raw, serialization.NoEncryption())
     guard.outcome("not created", created is False)
-    guard.outcome("same key loaded", loaded.to_bytes() == expected)
+    guard.outcome("same key loaded", loaded.to_bytes() == key.to_bytes())
     guard.outcome("file unchanged", key_path.read_bytes() == pem)
 
 
 # UT: UT-349
-# Test Description: Verifies an existing root_key.pem that is not a valid Ed25519 PKCS#8 PEM key makes the SUT raise instead of creating a key (old raw base64, another PEM type, an EC key, a wrong DER prefix, a short or long key, a body that is not base64).
+# Test Description: Verifies an existing root_key.pem that is not a valid Ed25519 PKCS#8 PEM key makes the SUT raise instead of creating a key (old raw base64, another PEM type, a wrong DER prefix, a short or long key, a body that is not base64).
 # Precondition: root_key.pem holds one invalid content per parameter.
 # Expected Output: ValueError is raised, the file is unchanged and no public key or legacy file is written.
 # Covers DD: DD-111

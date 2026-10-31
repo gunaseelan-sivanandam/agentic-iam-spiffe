@@ -37,7 +37,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 | `make qa-evidence` after that run, with the secret check over the publication set | 2026-10-31 | PASSED (validated 119, skipped 1); no secret findings |
 | `make qa-quality` (qa-trace, unit traceability, unit guard, docs-check, test-lint, qa-deploy) | 2026-10-31 | PASSED; qa-deploy with image users inspected: 18 known violations (OPL-005, -006, -008), 22 root warnings; qa-trace reports 138 non-blocking coverage gaps, incl. 97 requirements without E2E; the 10 REQ-SEC are proved statically (ARCH-034, DD-925 to DD-930, `IT-DEPLOY-*`), which the trace model cannot yet label |
 | `make unit-trust`; `make unit-diff-cov` against `origin/main` | 2026-10-31 | PASSED (total line 86.70%); diff coverage 100% on capiss, now measured (DPL-009) |
-| `make unit-mutation` under the new scoring | 2026-10-29 | PASSED, 85.58% (1240 killed of 1449; 0 untested, 0 skipped) |
+| `make unit-mutation` on `slice/ci-evidence-trace-a` | 2026-10-31 | PASSED, 85.34% |
 | CI (`.github/workflows/ci.yml`, workflow `CI`, one job per gate) | 2026-10-29 | passing on `main` after the PR #6 merge (`b2448ad`) |
 
 ## Work in flight
