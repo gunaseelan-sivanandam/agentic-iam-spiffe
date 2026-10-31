@@ -5,6 +5,26 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-10-31 Delivery problem log and the rules from the slice 2 plan review
+
+- Docs-only change on `slice/ci-evidence-trace-plan` (PR #9), after PR #8 (review loop) merged.
+- New `docs/delivery_problem_log.md`: misses in how we deliver, with root causes, corrective and
+  preventive actions and a lesson each; an entry closes only when its preventive action is merged.
+  Seven entries: DPL-001 key directory mounted whole (closed by `qa-deploy`, runtime part is
+  OPL-005), DPL-002 tokens in evidence (open, slice 2 D3), DPL-003 review rules only in a slice plan
+  (closed, PR #7), DPL-004 1B requirements without proof (open, slice 2 D5/D7), DPL-005 gates hidden
+  in another CI job (open, slice 2 D8), DPL-006 a failed CI run reported as passing, DPL-007 the 8D
+  of plan review rounds 1–4 of slice 2.
+- `AGENTS.md`: Start-here row for the log; step 1 records environment facts with their probe;
+  step 4 adds or closes delivery problem entries; independent review: fixes stay within the agreed
+  decisions, every round may report simpler alternatives and decision concerns, the reviewer may
+  check secret-file metadata; quality gates: a gate's result is its CI job's conclusion (DPL-006,
+  DPL-007).
+- Plan template: an "Environment facts" section. `plan_review.md` of slice 2 points to DPL-007
+  instead of "recorded in the session".
+- Validation: `make docs-check` PASSED; `make qa-trace` unchanged (138 non-blocking gaps). No
+  independent review was run on this docs change.
+
 ## 2026-10-30 Slice 1 standing rules moved into the rulebook
 
 - Docs-only change on `docs/durable-slice1-rules`, before slice 2 starts. A sweep of slice 1's
