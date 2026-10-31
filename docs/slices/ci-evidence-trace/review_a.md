@@ -8,6 +8,8 @@ the repository, the merged plan and the change, never the author's reasoning.
 | --- | --- | --- | --- |
 | 1 | `origin/main..18823d6` | not approvable | A1-B1, A1-B2 (blocking); A1-A1 to A1-A4 (advisory); one simpler alternative |
 | 2 | fixes in `4609e65` | **approvable within the threat model** | all round-1 answers accepted, including the three rejections; none new |
+| 3 | `4a32c0c` (test change after CI `unit-mutation` failed) | not approvable | A3-B1 (blocking) |
+| 4 | `4a32c0c`, `8459c12` | **approvable within the threat model** | A3-B1 fixed; none new |
 
 ## Author answers, round 1
 | Finding | Answer | Where |
@@ -19,6 +21,11 @@ the repository, the merged plan and the change, never the author's reasoning.
 | A1-A3 run every V2 shape through `qa-evidence` | Rejected: `qa-evidence` calls the same `scan` function; every shape is tested on `scan`, and the `qa-evidence` path is tested with a token in each of the three publication-set locations and with an unlistable directory. A per-shape copy adds no failure the existing tests miss. | — |
 | A1-A4 report rescan can disagree with `secret_findings` | Fixed by removal: the report is no longer rescanned. Every value in it is copied from evidence files already scanned, so the rescan could only disagree with the saved `secret_findings` that CI's upload decision reads. | `scripts/validate_e2e_evidence.py` |
 | Simpler alternative: upload only when `qa-evidence` succeeds | Not taken: it would drop the evidence of failed runs, which is what a failed CI run needs for diagnosis. With A1-A4 fixed, the report's `secret_findings` is complete, and the upload stays gated on it. | — |
+
+## Author answers, round 3
+| Finding | Answer | Where |
+| --- | --- | --- |
+| A3-B1 UT-349 lost the rejection of a valid key of another algorithm | Fixed: the wrong-prefix fixture (Ed448 OID with 32 bytes, malformed) is now a valid X25519 PKCS#8 key of the same length. With the decoder's algorithm check removed, the case fails (checked locally, then restored). | `tests/unit/capiss/test_utils.py` UT-349 `x25519_key` |
 
 ## Round 1 report (verbatim)
 
@@ -238,6 +245,101 @@ Approvable within the threat model: yes
 - Full tooling, unit, mutation and clean-stack E2E suites were not independently rerun. The supplied runtime results remain author-provided evidence.
 - The branch’s CI execution and required-check configuration remain pending, as stated in the supplied facts.
 - Independent verification comprised source/diff review, parsing nine changed Python files, syntax checks on four changed shell scripts, 22 passing in-memory shape/control cases, and mocked traversal, partial-publication and harness-exit probes.
+## Round 3 report (verbatim)
+
+### Implementation review — ci-evidence-trace Increment A, round 3
+
+#### Answer
+
+**Yes: removing UT-349’s EC case loses a concrete rejection check.** A wrong DD-111 decoder can now pass the listed unit tests while accepting a non-Ed25519 key. See A3-B1.
+
+Reviewed HEAD `4a32c0c` against its parent, the approved plan on `origin/main`, both applicable `AGENTS.md` files, and the round-2 record.
+
+| Unit-plan item | Assessment |
+| --- | --- |
+| New PEM, mode `0600`, independent Ed25519 parsing, matching identity and signature verification | Retained by UT-347. Comparing public keys adequately establishes signing identity within this threat model. |
+| Existing valid PEM loaded without replacement | Retained by UT-348. In-memory probes confirmed that its old independent encoding and current encoder produce identical PEM for the same seed. UT-347 retains the independent encoding check. |
+| Invalid inputs raise without writing a new key | All explicitly listed categories remain represented, but removing the valid EC input weakens algorithm rejection: A3-B1. |
+| Concurrent creator’s PEM loaded | UT-236 remains unchanged. |
+| Legacy file neither read nor written | UT-347/350 retain their previous coverage and the limitations already accepted in round 2. |
+
+#### New blocking findings
+
+**A3-B1 — UT-349 loses rejection of a valid key for another algorithm**
+
+**Where:** [test_utils.py:512](/home/guna/projects/agentic_iam_spiffe/tests/unit/capiss/test_utils.py:512), removing `ec_p256_key`; remaining wrong-prefix fixture at [line 521](/home/guna/projects/agentic_iam_spiffe/tests/unit/capiss/test_utils.py:521).
+
+**Criterion:** Concrete false green for an honest implementation mistake in DD-111’s Ed25519 validation.
+
+The remaining wrong-prefix fixture declares Ed448 but supplies only 32 key bytes. It is malformed, rather than a valid key for another algorithm.
+
+A mistaken decoder could validate the input using a generic PKCS#8 parser, normalize parsing failures to `ValueError`, then treat the final 32 DER bytes as an Ed25519 seed without checking the algorithm.
+
+An in-memory counterexample confirmed that this decoder:
+
+- rejects all six remaining UT-349 fixtures with `ValueError`;
+- correctly loads both the original and current UT-348 Ed25519 inputs;
+- accepts the removed valid EC fixture as an Ed25519 private key.
+
+Leaving creation and filesystem handling unchanged also preserves UT-347, lifecycle, race and legacy outcomes. The previous EC parameter would fail this implementation; the changed unit list would pass it. The current production decoder remains strict—this finding concerns lost regression coverage.
+
+**Simplest fix within D12:** Make the existing wrong-prefix fixture a structurally valid X25519 PKCS#8 key using the existing PEM helper and synthetic bytes. This restores valid-other-algorithm rejection coverage without calling `private_bytes`.
+
+#### Simpler alternatives
+
+None.
+
+#### Verdict
+
+Approvable within the threat model: no — A3-B1.
+
+#### Not checked
+
+- Full unit, mutation, CI and E2E runs were not independently executed; supplied results remain author-provided evidence.
+- Verification comprised source/diff review, Python parsing, and in-memory encoding and decoder counterexamples.
+- No files modified, Docker commands run, services started, network accessed, or key material, tokens or environment values printed.
+## Round 4 report (verbatim)
+
+### Implementation review — ci-evidence-trace Increment A, round 4
+
+#### A3-B1
+
+Fixed. [UT-349’s `x25519_key` fixture](/home/guna/projects/agentic_iam_spiffe/tests/unit/capiss/test_utils.py:521) independently parses as a valid X25519 PKCS#8 key and satisfies the decoder’s length check.
+
+An in-memory negative control confirmed that removing only the production decoder’s algorithm check makes it accept this fixture. UT-349 therefore catches the algorithm-confusion failure again.
+
+#### Answer
+
+No newly introduced false green was identified within the threat model. The changed set retains each item of the approved unit-test list:
+
+| Plan item | Assessment |
+| --- | --- |
+| Create PKCS#8 PEM, mode `0600`, independent parsing, same Ed25519 key, verifiable token | UT-347 retains these checks. Comparing independently derived public keys preserves the signing-key identity guarantee within this threat model. |
+| Load an existing valid PEM without replacement | UT-348 still checks the returned private bytes, `created=False` and unchanged file contents. An independent in-memory comparison confirmed its replacement fixture equals cryptography’s serialization for the same seed. UT-347 separately protects encoding validity. |
+| Reject invalid formats without creating another key | UT-349 retains raw base64, another PEM type, wrong DER prefix/algorithm, short and long keys, and invalid base64. All six fixtures were rejected by the production decoder in memory. |
+| Load the concurrent creator’s PEM | UT-236 is unchanged. Its previously accepted cached-key blind spot remains; these commits introduce no regression. |
+| Never read or write `root_key.b64` | UT-347, UT-349 and UT-350 retain the previously accepted coverage and limitations. |
+
+The relevant tests retain their `invariant` markers, guard phases and DD-111 traceability. No changed assertion contradicts the approved decisions.
+
+#### New blocking findings
+
+None.
+
+#### Simpler alternatives
+
+None.
+
+#### Verdict
+
+Approvable within the threat model: yes
+
+#### Not checked
+
+- Reviewer: Codex, independent read-only review of `4a32c0c` and `8459c12`, against the rulebooks, round-2 record and approved test plan matching local `origin/main`.
+- Full unit, mutation, quality and E2E suites were not rerun. CI history and the supplied mutation score remain author-provided evidence.
+- Verification comprised source/diff review and isolated in-memory codec, fixture and negative-control probes.
+- No files modified, Docker commands run, services started, network accessed, or secret-file contents inspected.
 ## Reviewer prompts (verbatim)
 
 ### Round 1
@@ -369,6 +471,103 @@ Each with id (A2-B1, ...), where, criterion, failure scenario, simplest fix. "No
 ## Simpler alternatives
 "None" if none.
 ## Decision concerns
+"None" if none.
+## Verdict
+"Approvable within the threat model: yes" or "no — <ids>".
+## Not checked
+````
+
+### Round 3
+
+````markdown
+You are the independent implementation reviewer for a change in the repository at the current
+working directory, round 3. You did not write it. Review read-only: do not modify files, run docker,
+start services or use the network. Never print key material, tokens or environment variable values.
+
+## What is under review
+Only the commit `HEAD` (`git show HEAD`), made after you judged Increment A of slice
+`ci-evidence-trace` "approvable within the threat model" in round 2 (record:
+`docs/slices/ci-evidence-trace/review_a.md`). It changes unit tests UT-347, UT-348 and UT-349 after
+the CI `unit-mutation` job failed on UT-347. The intent is the approved plan as merged on `main`
+(`docs/slices/ci-evidence-trace/test_plan.md`, "Unit test plan") and `AGENTS.md`.
+
+## Facts outside the repository (collected by the author, 2026-10-31)
+- CI run `41212244787` on the previous head: every job passed except `unit-mutation`, which failed in
+  mutmut's first (coverage) test run with `TypeError: Encryption algorithm must be a
+  KeySerializationEncryption instance` at UT-347's `private_bytes(..., NoEncryption())`; reproduced
+  locally, then UT-348 failed the same way.
+- mutmut 3.5.0 `code_coverage.py` (`gather_coverage`) runs the tests in its own process when
+  `mutate_only_covered_lines = true` and then pops every module loaded during that run from
+  `sys.modules`.
+- After this commit `make unit-mutation` passes locally (85.34%).
+
+## Rules for findings
+Only these block: a concrete false green inside the threat model with a failure scenario; a
+contradiction with `AGENTS.md`, the plan or its decisions; an approved decision without a test. From
+round 2 a new finding counts only if it blocks. Fixes stay within the agreed decisions.
+
+## Question
+Does any changed test now pass for a wrong implementation of DD-111 that it, or another test in the
+test plan's unit list, caught before? Does the changed set still meet each item of the test plan's
+unit-test list?
+
+## Output (markdown only)
+# Implementation review — ci-evidence-trace Increment A, round 3
+## Answer
+## New blocking findings
+"None" if none.
+## Simpler alternatives
+"None" if none.
+## Verdict
+"Approvable within the threat model: yes" or "no — <ids>".
+## Not checked
+````
+
+### Round 4
+
+````markdown
+You are the independent implementation reviewer for a change in the repository at the current
+working directory, round 4. You did not write it. Review read-only: do not modify files, run docker,
+start services or use the network. Never print key material, tokens or environment variable values.
+
+## What is under review
+The commits `HEAD~1` and `HEAD` (`git show HEAD~1 HEAD`), made after you judged Increment A of slice
+`ci-evidence-trace` "approvable within the threat model" in round 2 (record:
+`docs/slices/ci-evidence-trace/review_a.md`). It changes unit tests UT-347, UT-348 and UT-349 after
+the CI `unit-mutation` job failed on UT-347. Round 3 found A3-B1 (UT-349 lost the rejection of a
+valid key of another algorithm); `HEAD` answers it. Judge whether A3-B1 is fixed. The intent is the approved plan as merged on `main`
+(`docs/slices/ci-evidence-trace/test_plan.md`, "Unit test plan") and `AGENTS.md`.
+
+## Facts outside the repository (collected by the author, 2026-10-31)
+- CI run `41212244787` on the previous head: every job passed except `unit-mutation`, which failed in
+  mutmut's first (coverage) test run with `TypeError: Encryption algorithm must be a
+  KeySerializationEncryption instance` at UT-347's `private_bytes(..., NoEncryption())`; reproduced
+  locally, then UT-348 failed the same way.
+- mutmut 3.5.0 `code_coverage.py` (`gather_coverage`) runs the tests in its own process when
+  `mutate_only_covered_lines = true` and then pops every module loaded during that run from
+  `sys.modules`.
+- After these commits `make unit-mutation` passes locally (85.34%). With the production decoder's
+  algorithm check removed (length check kept), UT-349's `x25519_key` case fails (checked locally,
+  then restored).
+
+## Rules for findings
+Only these block: a concrete false green inside the threat model with a failure scenario; a
+contradiction with `AGENTS.md`, the plan or its decisions; an approved decision without a test. From
+round 2 a new finding counts only if it blocks. Fixes stay within the agreed decisions.
+
+## Question
+Does any changed test now pass for a wrong implementation of DD-111 that it, or another test in the
+test plan's unit list, caught before? Does the changed set still meet each item of the test plan's
+unit-test list?
+
+## Output (markdown only)
+# Implementation review — ci-evidence-trace Increment A, round 4
+## A3-B1
+Fixed, or re-raised with evidence.
+## Answer
+## New blocking findings
+"None" if none.
+## Simpler alternatives
 "None" if none.
 ## Verdict
 "Approvable within the threat model: yes" or "no — <ids>".
