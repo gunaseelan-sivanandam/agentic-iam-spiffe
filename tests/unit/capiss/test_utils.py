@@ -510,7 +510,7 @@ def _pkcs8_pem(der: bytes) -> bytes:
 
 _ED25519_PKCS8_PREFIX = bytes.fromhex("302e020100300506032b657004220420")
 INVALID_KEY_FILE_KINDS = ["raw_base64_old_format", "certificate_block",
-                          "wrong_der_prefix", "short_key", "long_key", "invalid_base64_body"]
+                          "x25519_key", "short_key", "long_key", "invalid_base64_body"]
 
 
 def _invalid_key_file(kind: str) -> bytes:
@@ -518,8 +518,9 @@ def _invalid_key_file(kind: str) -> bytes:
         return base64.b64encode(bytes(range(32)))
     if kind == "certificate_block":
         return b"-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n"
-    if kind == "wrong_der_prefix":
-        return _pkcs8_pem(bytes.fromhex("302e020100300506032b657104220420") + bytes(range(32)))
+    if kind == "x25519_key":
+        # A valid PKCS#8 key of another algorithm: same length, only the OID differs (1.3.101.110).
+        return _pkcs8_pem(bytes.fromhex("302e020100300506032b656e04220420") + bytes(range(32)))
     if kind == "short_key":
         return _pkcs8_pem(_ED25519_PKCS8_PREFIX + bytes(range(31)))
     if kind == "long_key":
@@ -584,7 +585,7 @@ def test_existing_pem_root_key_is_loaded(capiss_module, tmp_path, guard):
 
 
 # UT: UT-349
-# Test Description: Verifies an existing root_key.pem that is not a valid Ed25519 PKCS#8 PEM key makes the SUT raise instead of creating a key (old raw base64, another PEM type, a wrong DER prefix, a short or long key, a body that is not base64).
+# Test Description: Verifies an existing root_key.pem that is not a valid Ed25519 PKCS#8 PEM key makes the SUT raise instead of creating a key (old raw base64, another PEM type, a valid X25519 key (wrong DER prefix), a short or long key, a body that is not base64).
 # Precondition: root_key.pem holds one invalid content per parameter.
 # Expected Output: ValueError is raised, the file is unchanged and no public key or legacy file is written.
 # Covers DD: DD-111
