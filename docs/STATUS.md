@@ -17,17 +17,17 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
     Redis authorization state accepts unauthenticated writes.
   - [OPL-008](open_problem_log.md#opl-008-spire-token-init-mounts-the-whole-spire-server-data-directory):
     the SPIRE bootstrap container can read the server's signing keys and datastore.
-- **Next slice:** [agentic-delivery-process](slices/agentic-delivery-process/plan.md) slice 2 of 3,
-  [`ci-evidence-trace`](slices/ci-evidence-trace/plan.md) (plan merged 2026-10-31; Increment A, CI evidence, merged in PR #11; Increment B, trace model, in review). Slice 1 is complete: Increment 1A (exact
-  outcomes for the loose E2E checks, `make test-lint`, mutation scoring) merged in PR #5, Increment 1B
-  (`security/invariants.yaml` and `make qa-deploy`: who may hold each key, socket and secret, and
-  every service's allowlist) in PR #6. Its standing rules (twins, probe sources, independent review)
-  are in `AGENTS.md`. Slice 3 (orchestration and review design, then a pilot that
-  fixes OPL-005 to OPL-008) and a proposed
-  `asset-classification` slice (classify every resource that enters a container), are drafts in
-  [`later_slices.md`](slices/agentic-delivery-process/later_slices.md). Later: the
-  generic capability verifier ([brainstorm](slices/m5-generic-verifier-architecture/brainstorm.md),
-  not approved).
+- **Last slice:** [agentic-delivery-process](slices/agentic-delivery-process/plan.md) slice 2 of 3,
+  [`ci-evidence-trace`](slices/ci-evidence-trace/plan.md), is implemented: Increment A (CI E2E as a
+  required check, no secrets in evidence) in PR #11, Increment B (static tests, status from the
+  register, `Implemented by:`, the gap gate, gate consistency) in PR #12. Slice 1 (exact E2E outcomes,
+  `make test-lint`, mutation scoring, `security/invariants.yaml` and `make qa-deploy`) merged in PR #5
+  and PR #6.
+- **Next work** is tracked as [GitHub issues](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues) (label `slice`): the proposed `gate-register`
+  ([#13](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/13)), `asset-classification` ([#14](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/14)) and 100% coverage ([#15](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/15)) slices,
+  slice 3, review design and orchestration ([#16](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/16)), and the pilot that fixes OPL-005 to
+  OPL-008 ([#17](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/17)). Later: the generic capability verifier
+  ([brainstorm](slices/m5-generic-verifier-architecture/brainstorm.md), not approved).
 - **Future milestones:** M6–M9 as listed in the README.
 
 ## Last verification
@@ -43,7 +43,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `slice/ci-evidence-trace-b` | Slice 2 Increment B: static tests and status from the register, `Implemented by:`, the gap gate, gate consistency, one process | PR open |
+| `backlog-issues` | Move the open items of `later_slices.md` to GitHub issues; close slice 2 in the status pages | PR open |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
@@ -61,7 +61,7 @@ Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
 ## Open delivery problems
 Full entries, root causes and lessons in [`docs/delivery_problem_log.md`](delivery_problem_log.md).
 - **DPL-008** A stacked PR was merged into its stale base branch instead of `main` (closes when merged
-  head branches are deleted automatically, a repository setting).
+  head branches are deleted automatically, a repository setting; [#18](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/18)).
 
 ## Known gaps and debt
 - `M5-T55` (live Jira upstream) only runs with `JIRA_MCP_UPSTREAM_MODE=live`; default runs skip it.

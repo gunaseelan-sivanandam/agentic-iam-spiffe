@@ -23,6 +23,7 @@ the repo in the same change — do not leave them disagreeing.
 | Known unfixed runtime/trust problems | [`docs/open_problem_log.md`](docs/open_problem_log.md) | authoritative |
 | Which delivery mistakes were made, and what changed because of them? | [`docs/delivery_problem_log.md`](docs/delivery_problem_log.md) | authoritative |
 | Who may hold which key, socket or secret; what each service may be | [`security/invariants.yaml`](security/invariants.yaml) with the `REQ-SEC` requirements | authoritative, checked by `make qa-deploy` |
+| What is planned or waiting (proposed slices, actions only the user can take)? | [GitHub issues](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues), labels `slice` and `user-action` | tracking; a slice's decisions move into its `plan.md`, because reviewers read the repository, not issues |
 | How was a past slice designed? | [`docs/slices/`](docs/slices/README.md) | frozen records |
 | What happened, when? | [`docs/history/`](docs/history/) | history |
 | Retired documents | `docs/archive/`, `docs/slices/archive/` | archive, do not follow |
@@ -161,6 +162,8 @@ template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>
    - add or close entries in `docs/open_problem_log.md` for problems found or fixed, and in
      `docs/delivery_problem_log.md` for delivery misses (a step skipped, a false claim, a review
      miss) found or fixed;
+   - open a GitHub issue for work found but not done (label `slice` or `user-action`), and close the
+     issues the change finishes (`Closes #N` in the PR body);
    - put the independent review's answers to the implementation questions in the PR body.
 
 ### Independent review
