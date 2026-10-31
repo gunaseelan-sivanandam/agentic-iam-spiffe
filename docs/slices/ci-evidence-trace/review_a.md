@@ -7,6 +7,7 @@ the repository, the merged plan and the change, never the author's reasoning.
 | Round | Reviewed | Verdict | Findings |
 | --- | --- | --- | --- |
 | 1 | `origin/main..18823d6` | not approvable | A1-B1, A1-B2 (blocking); A1-A1 to A1-A4 (advisory); one simpler alternative |
+| 2 | fixes in `4609e65` | **approvable within the threat model** | all round-1 answers accepted, including the three rejections; none new |
 
 ## Author answers, round 1
 | Finding | Answer | Where |
@@ -199,6 +200,44 @@ Approvable within the threat model: no — A1-B1, A1-B2.
 - Full tooling/unit suites, clean-stack E2E, mutation testing and actual image users were not independently rerun. Their stated results are author-provided facts.
 - The branch’s CI execution and required-check update remain unverified and, per the supplied facts, pending.
 - Verification performed: source/diff review, parsing nine changed Python files, shell syntax checks, 22 passing in-memory shape cases, and read-only failure-path probes.
+## Round 2 report (verbatim)
+
+### Implementation review — ci-evidence-trace Increment A, round 2
+
+Reviewer: Codex, independent read-only review of `origin/main..4609e65`, against the approved plan and test plan on `origin/main`.
+
+#### Round-1 findings
+
+- **A1-B1 — accepted:** publication stages files before renaming; copy errors propagate, and the harness exits nonzero on publication failure. In-memory probes confirmed both failure paths.
+- **A1-B2 — accepted:** directory-listing errors reach the scanner and prevent publication; the added regression test also exercises `qa-evidence`.
+- **A1-A1 — accepted:** V13 now executes the cleanup command. V1’s ownership assertion remains indirect; accepting that limitation is proportionate given the supplied successful stack run.
+- **A1-A2 — accepted as advisory:** UT-350 now checks persistence. UT-236’s cached-key blind spot remains, but the implementation reads the competing creator’s file; no blocking defect was demonstrated.
+- **A1-A3 — accepted:** per-shape scanner tests plus validator integration tests cover the shared mechanism adequately.
+- **A1-A4 — accepted:** removing the generated-report rescan eliminates the identified disagreement between the saved `secret_findings` and the process result.
+- **Simpler alternative — accepted as declined:** retaining secret-free failed-run evidence serves diagnosis and remains within D1.
+
+#### New blocking findings
+
+None.
+
+#### Simpler alternatives
+
+None.
+
+#### Decision concerns
+
+None.
+
+#### Verdict
+
+Approvable within the threat model: yes
+
+#### Not checked
+
+- No files modified, Docker commands run, services started, or network accessed. No secret-file or live evidence contents inspected.
+- Full tooling, unit, mutation and clean-stack E2E suites were not independently rerun. The supplied runtime results remain author-provided evidence.
+- The branch’s CI execution and required-check configuration remain pending, as stated in the supplied facts.
+- Independent verification comprised source/diff review, parsing nine changed Python files, syntax checks on four changed shell scripts, 22 passing in-memory shape/control cases, and mocked traversal, partial-publication and harness-exit probes.
 ## Reviewer prompts (verbatim)
 
 ### Round 1
@@ -276,6 +315,58 @@ simplest fix within the agreed decisions. "None" if none.
 Each with id (A1-A1, ...), one or two lines.
 ## Simpler alternatives
 Non-blocking: places where a mechanism could be removed or simplified within the agreed decisions.
+"None" if none.
+## Decision concerns
+"None" if none.
+## Verdict
+"Approvable within the threat model: yes" or "no — <ids>".
+## Not checked
+````
+
+### Round 2
+
+````markdown
+You are the independent implementation reviewer for a change in the repository at the current
+working directory, round 2. You did not write it. Review read-only: do not modify files, run docker,
+start services or use the network. Never print key material, tokens or environment variable values.
+You may check metadata of secret files (existence, owner, mode, readability), never their content.
+
+## What is under review
+Increment A ("CI evidence") of slice `ci-evidence-trace`: the commits `origin/main..HEAD`. Round 1
+reviewed up to `18823d6`; the commit after it answers round 1 (`git show HEAD`).
+
+The intent is the approved plan as merged on `main` (`docs/slices/ci-evidence-trace/plan.md`,
+`test_plan.md`; Increment A = D1, D2, D3, D12) and the rules in `AGENTS.md` ("PoC scope and
+proportion", "Independent review"). The plan's "Threat model for this plan and its reviews" is the
+threat model you judge against.
+
+Your round-1 report and the author's answers (fixed or rejected, with reasons) are in
+`docs/slices/ci-evidence-trace/review_a.md`. Judge each answer: accept it, or re-raise it with new
+evidence. You may read the whole repository.
+
+## Facts outside the repository (collected by the author, 2026-10-31)
+- After the round-1 fixes: `scripts/clean_stack.sh`, `make e2e`, `make qa-evidence` were rerun on a
+  clean stack; the results are in `docs/STATUS.md` "Last verification" and the implementation log.
+- The CI workflow has not run on this branch yet; `e2e` is not yet a required check (the user adds
+  it at this PR).
+
+## Rules for findings
+- Only these block: a concrete false green or an OPL-005-class miss inside the threat model, with a
+  failure scenario; a contradiction (with `AGENTS.md`, a requirement, the plan or its decisions); an
+  approved decision without a test. From round 2 a new finding counts only if it blocks.
+- Fixes must stay within the agreed decisions (D1–D12, and `AGENTS.md`); propose the simplest fix
+  within them; prefer removing or changing a mechanism over adding one.
+- "Simpler alternatives" and "Decision concerns" may be reported in every round; a decision concern
+  is never applied by the author.
+
+## Output (markdown only)
+# Implementation review — ci-evidence-trace Increment A, round 2
+## Round-1 findings
+One line each (A1-B1, A1-B2, A1-A1 to A1-A4, the simpler alternative): accepted, or re-raised with
+evidence.
+## New blocking findings
+Each with id (A2-B1, ...), where, criterion, failure scenario, simplest fix. "None" if none.
+## Simpler alternatives
 "None" if none.
 ## Decision concerns
 "None" if none.
