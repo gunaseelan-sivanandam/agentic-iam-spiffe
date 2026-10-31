@@ -68,6 +68,7 @@ replaces the retired `docs/SECURITY_MODEL.md` (archived 2026-10-27).
 
 Type: Logical
 Satisfies: REQ-G-R2, REQ-G-R3, REQ-M1-R1, REQ-M1-R2, REQ-M1-R3, REQ-M1-R4, REQ-M1-R5, REQ-M1-R6, REQ-M1-R7, REQ-M1-R8, REQ-M1-R9, REQ-M1-R10, REQ-M1-R11, REQ-M1-R12, REQ-M1-R13, REQ-M1-R14, REQ-M1-R16, REQ-X-R1, REQ-X-R7
+Implemented by: `spire/server/server.conf`, `spire/agent/agent.conf`, `spire/token-init/init.sh`
 
 Overview:
 This subsystem establishes the SPIFFE trust domain, controls how nodes join it, and keeps bootstrap authorization explicit rather than implicit. Its job is to make node admission a governed act instead of a side effect of reachability or startup order.
@@ -82,6 +83,7 @@ It connects SPIRE server, SPIRE agent, and bootstrap token initialization. It al
 
 Type: Logical
 Satisfies: REQ-G-R1, REQ-G-R2, REQ-G-R3, REQ-M2-R1, REQ-M2-R2, REQ-M2-R3, REQ-M2-R4, REQ-M2-R5, REQ-M2-R6
+Implemented by: `spire/token-init/init.sh`, `spire/agent/agent.conf`, `spire/agent-wrapper/entrypoint.sh`, `compose/spiffe.compose.yml`
 
 Overview:
 This subsystem governs workload identity issuance after the trust domain is established. It separates authorization to receive an SVID from simple access to files, sockets, or container runtime surfaces.
@@ -96,6 +98,7 @@ It is implemented through SPIRE workload registration, the shared agent runtime,
 
 Type: Logical
 Satisfies: REQ-M2-R7, REQ-M2-R8, REQ-M2-R9, REQ-M2-R10, REQ-M2-R11, REQ-M2-R12, REQ-M2-R13, REQ-M2-R14, REQ-M2-R15, REQ-M2-R16, REQ-M2-R17, REQ-M2-R18, REQ-M2-R19, REQ-M2-R20, REQ-M2-R21, REQ-M25-R1, REQ-M25-R2, REQ-M25-R3, REQ-M25-R4, REQ-M25-R5, REQ-M3-R8, REQ-M3-R9, REQ-M4-E4, REQ-M4-E5, REQ-X-R2
+Implemented by: `services/tool-b-envoy/envoy.yaml`, `services/capability-issuer-envoy/envoy.yaml`, `services/jira-tool-envoy/envoy.yaml`, `services/jira-mcp-envoy/envoy.yaml`
 
 Overview:
 This subsystem establishes the trusted edge/app boundary pattern. It terminates mTLS at Envoy, derives verified caller identity from the authenticated connection, and forwards requests inward only under the isolated boundary model.
@@ -154,7 +157,8 @@ The current M4 slice depends on four Redis-backed authoritative state families. 
 ## ARCH-007 Evidence and Security Verification Harness
 
 Type: Logical
-Satisfies: REQ-G-R4, REQ-G-R5, REQ-M1-R15, REQ-X-R3, REQ-X-R4, REQ-X-R5, REQ-T-R1, REQ-T-R2, REQ-T-R3, REQ-T-R4, REQ-T-R5, REQ-T-R6, REQ-T-R7, REQ-T-R8
+Satisfies: REQ-G-R4, REQ-G-R5, REQ-M1-R15, REQ-X-R3, REQ-X-R4, REQ-X-R5, REQ-T-R1, REQ-T-R2, REQ-T-R3, REQ-T-R4, REQ-T-R5, REQ-T-R6, REQ-T-R7, REQ-T-R8, REQ-T-R9
+Implemented by: `scripts/rogue_node_tests.sh`, `scripts/run_e2e.sh`, `scripts/validate_e2e_evidence.py`, `scripts/evidence_secrets.py`
 
 Overview:
 This subsystem defines how the project proves security behavior. It is responsible for collecting authoritative evidence, distinguishing control failures from harness failures, and structuring tests around premise, exercise, and outcome.
@@ -169,6 +173,7 @@ It connects the rogue test harness, evidence artifact capture, profiling output,
 
 Type: Component
 Satisfies: REQ-M1-R1, REQ-M1-R2, REQ-M1-R3, REQ-M1-R4, REQ-M1-R5, REQ-M1-R6, REQ-M1-R7, REQ-M1-R8, REQ-M1-R9, REQ-M1-R14, REQ-M1-R16
+Implemented by: `spire/server/server.conf`
 
 Overview:
 SPIRE server is the authoritative control-plane service for node and workload registration state. It is the system of record for node admission and the trust anchor used by the rest of the SPIFFE domain.
@@ -183,6 +188,7 @@ It accepts node attestation from agents, stores registration state, and is queri
 
 Type: Component
 Satisfies: REQ-M1-R6, REQ-M1-R13
+Implemented by: `spire/token-init/init.sh`, `spire/token-init/Dockerfile`
 
 Overview:
 The token-init component prepares bootstrap material for the local lab topology. It is a bootstrap helper that makes admission material available to the intended node path.
@@ -197,6 +203,7 @@ It writes join-token material into the shared bootstrap location consumed by the
 
 Type: Component
 Satisfies: REQ-M1-R4, REQ-M2-R1, REQ-M2-R2, REQ-M2-R3, REQ-M2-R6
+Implemented by: `spire/agent/agent.conf`, `spire/agent-wrapper/entrypoint.sh`
 
 Overview:
 SPIRE agent mediates workload attestation and exposes the Workload API used by workloads to fetch X.509 SVIDs. It is the local identity issuer surface seen by the workloads in this lab.
@@ -253,6 +260,7 @@ It is called by the capability issuer over the internal app network and is delib
 
 Type: Component
 Satisfies: REQ-M2-R7, REQ-M2-R8, REQ-M2-R9, REQ-M2-R12, REQ-M2-R19, REQ-M2-R20, REQ-M2-R21, REQ-M25-R1, REQ-M25-R2, REQ-M25-R3, REQ-M25-R4, REQ-M25-R5, REQ-M4-E4, REQ-M4-E5
+Implemented by: `services/tool-b-envoy/envoy.yaml`, `services/tool-b-envoy/entrypoint.sh`
 
 Overview:
 This Envoy instance is the trusted ingress boundary for tool-b. It terminates mTLS, forwards verified caller identity inward, and keeps the application off the untrusted edge network.
@@ -331,6 +339,7 @@ This component does not own shared mutable state itself. It consumes token-chain
 
 Type: Component
 Satisfies: REQ-M3-R6, REQ-M3-R7
+Implemented by: `services/capability-issuer-envoy/envoy-no-opa.yaml`, `services/capability-issuer-envoy/entrypoint.sh`
 
 Overview:
 This test-only Envoy path forwards to a capability issuer configured with an unavailable OPA endpoint. It exists solely to prove that minting fails closed when policy evaluation cannot complete.
@@ -345,6 +354,7 @@ It is used only by the rogue test harness during fail-closed capability issuance
 
 Type: Component
 Satisfies: REQ-M2-R10, REQ-M2-R11
+Implemented by: `agents/agent-a/client.sh`, `agents/agent-a/jira_demo.sh`
 
 Overview:
 agent-a is the current intended client workload used to exercise legitimate calls through both the capability issuer and tool-b. It represents the expected in-domain caller for positive-path flows.
@@ -359,6 +369,7 @@ It connects to capability-issuer-envoy and tool-b-envoy over mTLS using workload
 
 Type: Component
 Satisfies: REQ-G-R4, REQ-G-R5, REQ-M1-R15, REQ-X-R3, REQ-X-R4, REQ-X-R5, REQ-T-R1, REQ-T-R2, REQ-T-R3, REQ-T-R4, REQ-T-R5, REQ-T-R6, REQ-T-R7, REQ-T-R8
+Implemented by: `scripts/rogue_node_tests.sh`, `scripts/run_e2e.sh`, `spire/rogue-tests/Dockerfile`
 
 Overview:
 The rogue-tests harness is the executable security verification layer for the integration and end-to-end suite. It drives adversarial scenarios, captures guard evidence, and writes the report and artifact set used for false-green analysis.
@@ -407,6 +418,7 @@ Interactions:
 
 Type: Component
 Satisfies: REQ-M4A-J11
+Implemented by: `services/jira-tool-envoy/envoy.yaml`, `services/jira-tool-envoy/entrypoint.sh`
 
 Status:
 Implemented in M4a.
@@ -521,6 +533,7 @@ The adapter presents its SPIFFE identity to `capability-issuer-envoy`; Envoy inj
 
 Type: Component
 Satisfies: REQ-M5-CJ5, REQ-M5-CJ10
+Implemented by: `services/jira-mcp-envoy/envoy.yaml`, `services/jira-mcp-envoy/entrypoint.sh`
 
 Status:
 Implemented in M5 Slice 1.
@@ -629,10 +642,11 @@ Authoritative State:
 | Persisted intent triple | `artifacts/varambu-demo/<timestamp>/trace.jsonl` | `varambu trace` (on read) | operators/tests | Per-session; rewritten idempotently | Durable, scrubbed, bounded verbatim-intent and result evidence joined by correlation ID | Evidence copy (derived from untrusted agent rollout) |
 | Assembled trace chain | `varambu trace` output (not persisted unless redirected) | `varambu trace` | operators/auditors | Recomputed each invocation | Presents the end-to-end M5 chain; agent-tamper detectable by cross-source comparison | Derived view |
 
-## ARCH-034 Deployment Register and qa-deploy
+## ARCH-034 Deployment Register
 
 Type: Logical
 Satisfies: REQ-SEC-K1, REQ-SEC-K2, REQ-SEC-K3, REQ-SEC-K4, REQ-SEC-K5, REQ-SEC-K6, REQ-SEC-K7, REQ-SEC-K8, REQ-SEC-D1, REQ-SEC-D2
+Implemented by: `security/invariants.yaml`, `compose/spiffe.compose.yml`
 
 Overview:
 The deployment is a checked contract. `security/invariants.yaml` names, for every protected asset,
@@ -655,10 +669,17 @@ everything in it. Open problems that violate the register pass only as known vio
 per OPL with its asset, services and an expiry, void once the OPL is closed or expired.
 
 Interactions:
-Runs locally in `make qa-quality`, where it also inspects built images for their `USER`, and in the
-CI documentation job with `--skip-image-users` (images are not built there, so only a compose `user`
-is checked). Its negative controls are in `tests/tools/test_qa_deploy.py`, including a replay of the
-`07520d7` compose, which reports the capiss signing key in `tool-b` (OPL-005).
+The register and compose are the implementation; `make qa-deploy` is the gate that proves them, one
+static test per requirement (`DEPLOY-K1` to `DEPLOY-K8`, `DEPLOY-D1`, `DEPLOY-D2` in
+`trace/tests.yaml` and `docs/test_spec.md`). It runs locally in `make qa-quality` and in the CI
+`e2e` job, both inspecting built images for their `USER`, and in the CI `qa-deploy` job with
+`--skip-image-users` (no images are built there, so only a compose `user` is checked). Each run
+writes `artifacts/quality/qa_deploy_report.json`; `make qa-evidence` accepts only a passing,
+inspected report that matches the compose file and register on disk. `make qa-trace` takes each
+requirement's status from the register: a requirement whose asset has a known violation, or the
+non-root rule within its grace date, is not proved. The negative controls are in
+`tests/tools/test_qa_deploy.py`, including a replay of the `07520d7` compose, which reports the
+capiss signing key in `tool-b` (OPL-005).
 
 Authoritative State:
 | State | Store/System | Writer | Reader | TTL/Lifecycle | Decision Impact | Classification |

@@ -31,6 +31,32 @@ def _git_add(root: Path) -> None:
     subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)  # nosec B603 B607
 
 
+# --- static tests (slice ci-evidence-trace, test plan V4) ------------------------
+
+TRACE = ("tests:\n- {id: E2E-X, type: e2e_suite}\n"
+         "- {id: DEPLOY-K1, type: static_test}\n- {id: EVID-T1, type: static_test}\n")
+
+
+def test_static_spec_complete_has_no_problems() -> None:
+    spec = "### M1-T1 — “a”\n### DEPLOY-K1 — “k”\n### EVID-T1 — “e”\n"
+    assert check_docs.check_static_spec(TRACE, spec) == []
+
+
+def test_static_entry_without_heading_is_reported() -> None:
+    problems = check_docs.check_static_spec(TRACE, "### DEPLOY-K1 — “k”\n")
+    assert problems == ["spec: static test EVID-T1 has no heading in the test spec"]
+
+
+def test_static_heading_without_entry_is_reported() -> None:
+    spec = "### DEPLOY-K1 — “k”\n### EVID-T1 — “e”\n### DEPLOY-K9 — “stale”\n"
+    assert check_docs.check_static_spec(TRACE, spec) == ["spec: heading DEPLOY-K9 names no static test in trace/tests.yaml"]
+
+
+def test_static_duplicate_heading_is_reported() -> None:
+    spec = "### DEPLOY-K1 — “k”\n### EVID-T1 — “e”\n### EVID-T1 — “again”\n"
+    assert check_docs.check_static_spec(TRACE, spec) == ["spec: duplicate heading for EVID-T1"]
+
+
 # --- spec -------------------------------------------------------------------
 
 

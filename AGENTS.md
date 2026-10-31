@@ -18,7 +18,7 @@ the repo in the same change — do not leave them disagreeing.
 | How is it built, which runtime state exists? | [`docs/architecture.md`](docs/architecture.md) | authoritative |
 | What is the trust model, on one page? | [`docs/architecture.md` — Security model summary](docs/architecture.md#security-model-summary) | summary of the ARCH sections |
 | Which test proves which requirement? | [`trace/tests.yaml`](trace/tests.yaml) | authoritative |
-| What does each E2E test do, in plain English? | [`docs/test_spec.md`](docs/test_spec.md) | hand-written spec |
+| What does each E2E or static test do, in plain English? | [`docs/test_spec.md`](docs/test_spec.md) | hand-written spec |
 | Unit-test requirement matrix (M4 trust gates) | [`docs/unit_test_spec.md`](docs/unit_test_spec.md) | authoritative, read by `make traceability-check` |
 | Known unfixed runtime/trust problems | [`docs/open_problem_log.md`](docs/open_problem_log.md) | authoritative |
 | Which delivery mistakes were made, and what changed because of them? | [`docs/delivery_problem_log.md`](docs/delivery_problem_log.md) | authoritative |
@@ -80,9 +80,15 @@ them.
 
 ## Traceability model and IDs
 
-Allowed links only: `REQ → ARCH` (architecture `Satisfies:`), `ARCH → DD` (DD `Implements:`),
-`DD → UT` (UT `Covers DD:`), `REQ → E2E` (`trace/tests.yaml` `source_requirements`), and
-`ARCH → IT` (`trace/tests.yaml` `source_architecture`; no integration cases exist yet).
+Every requirement is traced the same way: requirement → test ID in `trace/tests.yaml` → entry in
+[`docs/test_spec.md`](docs/test_spec.md) → implementation → stored, checked result. A test is an E2E
+test (the harness runs it; its evidence is checked by `make qa-evidence`) or a static test (a gate
+proves it on every run; see below).
+
+Allowed links only: `REQ → ARCH` (architecture `Satisfies:`), `ARCH → DD` (DD `Implements:`) or
+`ARCH → files` (architecture `Implemented by:`), `DD → UT` (UT `Covers DD:`), `REQ → E2E` and
+`REQ → static test` (`trace/tests.yaml` `source_requirements`), and `ARCH → IT` (`trace/tests.yaml`
+`source_architecture`; no integration cases exist yet).
 
 | ID | Where it lives | Format (as enforced by `scripts/validate_traceability.py`) |
 | --- | --- | --- |
@@ -91,16 +97,29 @@ Allowed links only: `REQ → ARCH` (architecture `Satisfies:`), `ARCH → DD` (D
 | `DD` | comment block above the implementing function in `services/**` or `scripts/**` | `# DD: DD-NNN` / `# Implements: ARCH-NNN` / `# Title: …` |
 | `UT` | comment block above the test in `tests/unit/**` | `# UT: UT-NNN` / `# Test Description:` / `# Precondition:` / `# Expected Output:` / `# Covers DD:` |
 | E2E test | `scripts/rogue_node_tests.sh` | harness IDs such as `M1-T1`, `M3.S4-T2`, `M5-T49`; mapped in `trace/tests.yaml` as `e2e_suite` / `e2e_case` entries |
+| Static test | `trace/tests.yaml` (`type: static_test`) and a `docs/test_spec.md` heading | `<NAME>-<CODE>`, e.g. `DEPLOY-K1`, `EVID-T1`; names `source_requirements`, `gate: make <target>`, `negative_controls` (`<file>::<test>` tooling tests that show the gate fails on each kind of violation) and `result` (the stored report) |
 
-- IDs are never reused. Do not delete a requirement or architecture ID; mark it retired with the reason.
+- An ARCH section implemented by files that carry no DD-tagged functions (configuration such as
+  Envoy or SPIRE files, the deployment register, a test or demo script) names them on an
+  `Implemented by:` line; `make qa-trace` checks they exist. QA gate code carries no DD tags.
+- IDs are never reused. Do not delete a requirement or architecture ID; mark it retired with the
+  reason. Retired DD and test IDs are listed under `retired_ids` in `trace/tests.yaml`; reusing one
+  fails `make qa-trace`.
+- A requirement's status comes from its proofs and the deployment register, never from a run: it is
+  not proved without a test, while an asset it protects has a `known_violations` row, or (the
+  non-root rule, `REQ-SEC-D2`) within its grace date. A requirement that is not proved is a
+  `requirements_without_proof` gap.
 - `make qa-trace` fails on structural errors (unknown IDs, wrong link direction, missing fields,
-  duplicates, missing files). Coverage gaps are reported but do not fail the build.
+  duplicates, missing files). On a PR it also fails on a coverage gap the PR adds compared with its
+  merge-base (the gap gate); a gap added on purpose needs a one-line `accepted_gaps` entry in
+  `trace/tests.yaml` with a reason and an expiry. Older gaps are reported, not failed.
 
 ## Slice workflow
 
-Required for milestone and security-relevant changes. A slice bundle lives in
-`docs/slices/<slice-id>/`, starts from `docs/slices/_template/`, and gets a row in the
-[slice index](docs/slices/README.md).
+Every change follows this workflow, scaled to its size: a small fix still gets a plan (it may be a
+few lines), tests first, an independent review and the close-out, but not every section of the
+template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>/`, starts from
+`docs/slices/_template/`, and gets a row in the [slice index](docs/slices/README.md).
 
 1. **Plan and review.** Run the `grill-me` skill and resolve design choices one branch at a time.
    Grill-me always asks which keys, sockets and secrets the slice touches and who may hold them,
@@ -124,18 +143,18 @@ Required for milestone and security-relevant changes. A slice bundle lives in
      it).
    - A requirement may be proved statically, by a gate whose tooling tests show it fails on each
      kind of violation (as `make qa-deploy` proves the `REQ-SEC` requirements), where a runtime
-     test would add nothing; the plan says which. `make qa-trace` cannot label a static proof yet,
-     so such a requirement still shows as a coverage gap.
+     test would add nothing; the plan says which. It gets a static test entry in `trace/tests.yaml`
+     and a heading in `docs/test_spec.md`.
 3. **Implement.** Only approved behavior. Remove the dead code, stale paths, and artifacts that
    `plan.md` lists for retirement.
 4. **Verify and close.** All of the following, in the same change:
    - run `make qa-quality` (includes `qa-trace`, `docs-check`, `test-lint` and `qa-deploy`), the full E2E suite on a clean
      stack (`scripts/clean_stack.sh`, then `make e2e`), and `make qa-evidence`; the `e2e` CI check runs the same
      suite on the PR;
-   - **update `docs/test_spec.md` by hand** for every E2E test added or changed — plain English,
-     not code: what it tests, how (premise, exercise, outcome), and the evidence it leaves. Each
-     test gets a heading `### <harness ID> — “<name>”`; `make docs-check` fails on a missing or
-     stale heading, but it cannot judge the prose, so review it;
+   - **update `docs/test_spec.md` by hand** for every E2E or static test added or changed — plain
+     English, not code: what it tests, how (premise, exercise, outcome, or the gate's check), and
+     the evidence or result it leaves. Each test gets a heading `### <ID> — “<name>”`; `make
+     docs-check` fails on a missing or stale heading, but it cannot judge the prose, so review it;
    - add a dated entry to `docs/history/implementation_log.md` (what changed, validation results,
      what was not run and why);
    - update `docs/STATUS.md` and the slice's row in `docs/slices/README.md`;
@@ -190,17 +209,18 @@ never replaces it.
 
 | Gate | Command | Enforced by | Threshold |
 | --- | --- | --- | --- |
-| Trace model | `make qa-trace` | CI, every push/PR | zero structural failures |
-| Documentation | `make docs-check` | CI | every harness test has a `docs/test_spec.md` heading and vice versa; relative links and `#anchors` in live docs resolve; every tracked image in `docs/` is referenced and every `.puml` has its `.svg`; every slice bundle is in the slice index; `TEST_ONLY=` examples name real tests |
+| Trace model | `make qa-trace` | CI, every push/PR | zero structural failures; on a PR (`--mode pr --base <base>`), no coverage gap the PR adds compared with its merge-base unless `accepted_gaps` in `trace/tests.yaml` lists it with a reason and an unexpired date (an expired or stale entry fails); a merge-base that cannot be resolved or read fails. On `main` (`--mode push`) gaps are reported |
+| Documentation | `make docs-check` | CI | every harness test and every static test in `trace/tests.yaml` has a `docs/test_spec.md` heading and vice versa; relative links and `#anchors` in live docs resolve; every tracked image in `docs/` is referenced and every `.puml` has its `.svg`; every slice bundle is in the slice index; `TEST_ONLY=` examples name real tests |
 | QA tooling tests | `make tooling-test` | CI | `tests/tools/` (pytest) and `tests/shell/` pass |
 | E2E outcome lint | `make test-lint` | CI | no outcome guard in `scripts/rogue_node_tests.sh` accepts several outcomes (`assert_file_any`, broad error regexes, `!= 200`), swallows failure (`\|\| true`), checks only a non-zero exit, or is a test of negative greps only; a multi-outcome guard needs `# test-lint: alternate: <reason>` |
-| Deployment register | `make qa-deploy` | CI (without image inspection) | every service's image, user, networks, ports, mounts, secret env names and privileges match `security/invariants.yaml`; every protected asset reaches only its holders, except unexpired known violations of open OPLs; register holders equal the `REQ-SEC` `Holders:` lines; non-root except the grandfathered baseline until 2027-01-31 |
+| Deployment register | `make qa-deploy` | CI (without image inspection; the `e2e` job runs it with image users inspected) | every service's image, user, networks, ports, mounts, secret env names and privileges match `security/invariants.yaml`; every protected asset reaches only its holders, except unexpired known violations of open OPLs; register holders equal the `REQ-SEC` `Holders:` lines; non-root except the grandfathered baseline until 2027-01-31 |
 | Unit guard integrity | `make unit-guard-check` | CI | every unit test has premise, exercise, outcome guards |
 | Unit trust bundle | `make unit-trust` | CI | total line coverage ≥ 85%; branch coverage ≥ 75% on `services/capability-issuer/app.py` and `services/tool-b/server.py`; unit traceability check; invariant, negative-control, hybrid-critical suites; invariant flake check ×5 |
-| Diff coverage | `make unit-diff-cov` | CI, PRs only | ≥ 90% of changed lines in `services/capability-issuer/` and `services/tool-b/` |
+| Diff coverage | `make unit-diff-cov` | CI, PRs only (own job) | ≥ 90% of changed lines in `services/capability-issuer/` and `services/tool-b/` |
 | Mutation | `make unit-mutation` | CI | score ≥ 70% (capiss and tool-b), counting untested and skipped mutants as not killed; an empty run fails |
+| Gate consistency | `make gate-consistency` | CI | every row this table marks as enforced by CI has a CI job of the same name that runs `make <name>`; every CI job has such a row; every CI job is a required check of the `main` ruleset and every required check is a job (the ruleset is read from the public GitHub API; a failed read fails) |
 | Full E2E suite | `make e2e` | CI, every push/PR; and local on a clean stack, required in step 4 | all pass; warnings reviewed. The CI job then runs `make qa-deploy` with image users inspected and `make qa-evidence`, and uploads the publication set for 14 days only if the secret check found nothing |
-| E2E evidence | `make qa-evidence` | CI (`e2e` job); local, after the E2E run | every test has premise/exercise/outcome evidence and a PASS line; no file of the publication set (`PUBLICATION_SET` in the `Makefile`: `test_report.log`, `artifacts/rogue-tests/`, `artifacts/quality/`) holds a secret by shape: a PEM private key, a base64 PKCS#8 private key, base64 of a PEM private key, a base64 or base64url run of ≥ 200 characters with ≥ 20 distinct ones outside certificates, a `JIRA_API_TOKEN=` or `Authorization:` line with a value, or an Atlassian API token; an unreadable file fails; a finding names the file and kind, never the value |
+| E2E evidence | `make qa-evidence` | in the CI `e2e` job; local, after the E2E run | every test has premise/exercise/outcome evidence and a PASS line; no file of the publication set (`PUBLICATION_SET` in the `Makefile`: `test_report.log`, `artifacts/rogue-tests/`, `artifacts/quality/`) holds a secret by shape: a PEM private key, a base64 PKCS#8 private key, base64 of a PEM private key, a base64 or base64url run of ≥ 200 characters with ≥ 20 distinct ones outside certificates, a `JIRA_API_TOKEN=` or `Authorization:` line with a value, or an Atlassian API token; an unreadable file fails; a finding names the file and kind, never the value |
 
 Standards that are **not** gated yet (follow them for new and changed code):
 - `ruff check services scripts` stays clean.

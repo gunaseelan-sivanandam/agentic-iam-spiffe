@@ -1,6 +1,6 @@
-# E2E Test Specification
+# Test Specification
 
-Hand-written, plain-English description of every E2E test in `scripts/rogue_node_tests.sh`: what it tests, how it does it, and what evidence it leaves under `artifacts/rogue-tests/<test-id>_<slug>/`. Requirement mappings live in `trace/tests.yaml`. If a detail is not explicit in the harness, it is marked as UNKNOWN.
+Hand-written, plain-English description of every E2E test in `scripts/rogue_node_tests.sh` (what it tests, how it does it, and what evidence it leaves under `artifacts/rogue-tests/<test-id>_<slug>/`) and of every static test in `trace/tests.yaml` ([Static tests](#static-tests), at the end). Requirement mappings live in `trace/tests.yaml`. If a detail is not explicit in the harness, it is marked as UNKNOWN.
 
 How to read it:
 - Each test heading starts with its harness ID (for example `M3.S4-T2`), which is also the value to pass in `TEST_ONLY=` and the prefix of its evidence directory.
@@ -11,7 +11,7 @@ How to read it:
   `sha256:<fingerprint>`. A token file or the `token` field of a saved mint response therefore
   holds the fingerprint; the same token has the same fingerprint in every file of a test.
 
-Maintenance rule (see `AGENTS.md`, slice workflow step 4): every change that adds or changes an E2E test updates this file in the same change. `make docs-check` fails if a harness test ID is missing here.
+Maintenance rule (see `AGENTS.md`, slice workflow step 4): every change that adds or changes an E2E or static test updates this file in the same change. `make docs-check` fails if a harness test ID or a static test in `trace/tests.yaml` is missing here, or a heading names neither.
 
 ## Milestone 1 - Server and agent connection and successful entry
 
@@ -3069,3 +3069,121 @@ Group overview:
   - Jira's error detail ("Unauthorized — the Jira credential was rejected") is shown verbatim, with no added interpretation.
 
 **Evidence:** `trace.json`, `trace.txt`
+
+## Static tests
+
+A static test proves a requirement with a gate that runs on every PR, where a runtime test would add nothing. Each entry in `trace/tests.yaml` (`type: static_test`) names the requirement, the gate, its negative controls (tooling tests that show the gate fails on each kind of violation) and the stored result. `make qa-trace` takes the requirement's status from the deployment register, never from a run: a requirement whose asset has a known violation, or the non-root rule within its grace date, is not proved and stays a coverage gap.
+
+### DEPLOY-K1 — “Issuer signing key confinement”
+
+**Requirement:** REQ-SEC-K1. The capiss root private key (`capiss_keys/root_key.pem`) reaches only `capability-issuer`, `capability-issuer-no-opa` and `rogue-tests`.
+
+**How:** `make qa-deploy` reads the merged compose over every profile (environment values discarded) and finds every service the asset reaches: a bind mount of its path or any parent, an environment variable of its name, or a mount covering its container path. A service outside the register's holders fails, unless an unexpired `known_violations` row of an open OPL lists it. The register's holders must equal the requirement's `Holders:` line.
+
+**Negative controls** (`tests/tools/test_qa_deploy.py`): an asset reached through an ancestor mount, an environment variable and a container path; the current compose reports exactly the registered known violations; removing a known-violation row, a mismatched or expired row, widened holders without a requirement change, and a requirement without an asset each fail.
+
+Also: a replay of the `07520d7` compose reports the signing key in `tool-b`.
+
+**Result:** the `make qa-deploy` report, `artifacts/quality/qa_deploy_report.json` (checked by `make qa-evidence`). **Status today:** not proved: known violation OPL-005 (the key directory is mounted into the verifiers, `agent-a` and `rogue`).
+
+### DEPLOY-K2 — “SPIRE agent private state confinement”
+
+**Requirement:** REQ-SEC-K2. Each SPIRE agent's data directory reaches only that agent and `rogue-tests`.
+
+**How:** `make qa-deploy` reads the merged compose over every profile (environment values discarded) and finds every service the asset reaches: a bind mount of its path or any parent, an environment variable of its name, or a mount covering its container path. A service outside the register's holders fails, unless an unexpired `known_violations` row of an open OPL lists it. The register's holders must equal the requirement's `Holders:` line.
+
+**Negative controls** (`tests/tools/test_qa_deploy.py`): an asset reached through an ancestor mount, an environment variable and a container path; the current compose reports exactly the registered known violations; removing a known-violation row, a mismatched or expired row, widened holders without a requirement change, and a requirement without an asset each fail.
+
+**Result:** the `make qa-deploy` report, `artifacts/quality/qa_deploy_report.json` (checked by `make qa-evidence`). **Status today:** not proved: known violation OPL-006.
+
+### DEPLOY-K3 — “Upstream credential confinement”
+
+**Requirement:** REQ-SEC-K3. `JIRA_API_TOKEN` is present only in `jira-tool` and `jira-mcp-gateway`.
+
+**How:** `make qa-deploy` reads the merged compose over every profile (environment values discarded) and finds every service the asset reaches: a bind mount of its path or any parent, an environment variable of its name, or a mount covering its container path. A service outside the register's holders fails, unless an unexpired `known_violations` row of an open OPL lists it. The register's holders must equal the requirement's `Holders:` line.
+
+**Negative controls** (`tests/tools/test_qa_deploy.py`): an asset reached through an ancestor mount, an environment variable and a container path; the current compose reports exactly the registered known violations; removing a known-violation row, a mismatched or expired row, widened holders without a requirement change, and a requirement without an asset each fail.
+
+**Result:** the `make qa-deploy` report, `artifacts/quality/qa_deploy_report.json` (checked by `make qa-evidence`). **Status today:** proved statically.
+
+### DEPLOY-K4 — “SPIRE server signing state confinement”
+
+**Requirement:** REQ-SEC-K4. The server's `keys.json` and datastore reach only `spire-server` and `rogue-tests`.
+
+**How:** `make qa-deploy` reads the merged compose over every profile (environment values discarded) and finds every service the asset reaches: a bind mount of its path or any parent, an environment variable of its name, or a mount covering its container path. A service outside the register's holders fails, unless an unexpired `known_violations` row of an open OPL lists it. The register's holders must equal the requirement's `Holders:` line.
+
+**Negative controls** (`tests/tools/test_qa_deploy.py`): an asset reached through an ancestor mount, an environment variable and a container path; the current compose reports exactly the registered known violations; removing a known-violation row, a mismatched or expired row, widened holders without a requirement change, and a requirement without an asset each fail.
+
+**Result:** the `make qa-deploy` report, `artifacts/quality/qa_deploy_report.json` (checked by `make qa-evidence`). **Status today:** not proved: known violation OPL-008.
+
+### DEPLOY-K5 — “SPIRE administration confinement”
+
+**Requirement:** REQ-SEC-K5. The server admin socket reaches only `spire-server`, `spire-token-init` and `rogue-tests`.
+
+**How:** `make qa-deploy` reads the merged compose over every profile (environment values discarded) and finds every service the asset reaches: a bind mount of its path or any parent, an environment variable of its name, or a mount covering its container path. A service outside the register's holders fails, unless an unexpired `known_violations` row of an open OPL lists it. The register's holders must equal the requirement's `Holders:` line.
+
+**Negative controls** (`tests/tools/test_qa_deploy.py`): an asset reached through an ancestor mount, an environment variable and a container path; the current compose reports exactly the registered known violations; removing a known-violation row, a mismatched or expired row, widened holders without a requirement change, and a requirement without an asset each fail.
+
+**Result:** the `make qa-deploy` report, `artifacts/quality/qa_deploy_report.json` (checked by `make qa-evidence`). **Status today:** proved statically.
+
+### DEPLOY-K6 — “Join token confinement”
+
+**Requirement:** REQ-SEC-K6. `spire/shared/join_token` reaches only `spire-token-init`, `spire-server`, `spire-agent` and `rogue-tests`.
+
+**How:** `make qa-deploy` reads the merged compose over every profile (environment values discarded) and finds every service the asset reaches: a bind mount of its path or any parent, an environment variable of its name, or a mount covering its container path. A service outside the register's holders fails, unless an unexpired `known_violations` row of an open OPL lists it. The register's holders must equal the requirement's `Holders:` line.
+
+**Negative controls** (`tests/tools/test_qa_deploy.py`): an asset reached through an ancestor mount, an environment variable and a container path; the current compose reports exactly the registered known violations; removing a known-violation row, a mismatched or expired row, widened holders without a requirement change, and a requirement without an asset each fail.
+
+**Result:** the `make qa-deploy` report, `artifacts/quality/qa_deploy_report.json` (checked by `make qa-evidence`). **Status today:** proved statically.
+
+### DEPLOY-K7 — “Workload key confinement”
+
+**Requirement:** REQ-SEC-K7. No service mounts a workload's `/run/spire/svid`; `tmp_svid/` reaches only `rogue-tests`.
+
+**How:** `make qa-deploy` reads the merged compose over every profile (environment values discarded) and finds every service the asset reaches: a bind mount of its path or any parent, an environment variable of its name, or a mount covering its container path. A service outside the register's holders fails, unless an unexpired `known_violations` row of an open OPL lists it. The register's holders must equal the requirement's `Holders:` line.
+
+**Negative controls** (`tests/tools/test_qa_deploy.py`): an asset reached through an ancestor mount, an environment variable and a container path; the current compose reports exactly the registered known violations; removing a known-violation row, a mismatched or expired row, widened holders without a requirement change, and a requirement without an asset each fail.
+
+**Result:** the `make qa-deploy` report, `artifacts/quality/qa_deploy_report.json` (checked by `make qa-evidence`). **Status today:** proved statically.
+
+### DEPLOY-K8 — “Docker socket confinement”
+
+**Requirement:** REQ-SEC-K8. `/var/run/docker.sock` reaches only `spire-agent` and `rogue-tests`.
+
+**How:** `make qa-deploy` reads the merged compose over every profile (environment values discarded) and finds every service the asset reaches: a bind mount of its path or any parent, an environment variable of its name, or a mount covering its container path. A service outside the register's holders fails, unless an unexpired `known_violations` row of an open OPL lists it. The register's holders must equal the requirement's `Holders:` line.
+
+**Negative controls** (`tests/tools/test_qa_deploy.py`): an asset reached through an ancestor mount, an environment variable and a container path; the current compose reports exactly the registered known violations; removing a known-violation row, a mismatched or expired row, widened holders without a requirement change, and a requirement without an asset each fail.
+
+Also: a Docker socket mount counts as a mount fact.
+
+**Result:** the `make qa-deploy` report, `artifacts/quality/qa_deploy_report.json` (checked by `make qa-evidence`). **Status today:** proved statically.
+
+### DEPLOY-D1 — “Deployment allowlist”
+
+**Requirement:** REQ-SEC-D1. Every service's image, user, networks, published ports, mounts and mode, secret environment variable names and privileges match the register; anything else fails.
+
+**How:** `make qa-deploy` compares each service of the merged compose (every profile) with its register entry, default deny.
+
+**Negative controls** (`tests/tools/test_qa_deploy.py`): each unregistered fact (image, network, port, mount, user, each privilege kind, secret env name, profile) fails; a mount mode change, an unregistered service and a stale register entry fail; a compose image tag that differs from the register fails; the live inventory covers every profile.
+
+**Result:** `artifacts/quality/qa_deploy_report.json` (checked by `make qa-evidence`). **Status today:** proved statically.
+
+### DEPLOY-D2 — “Non-root workloads”
+
+**Requirement:** REQ-SEC-D2. Services run as non-root; the services of 2026-10-29 may run as root until 2027-01-31.
+
+**How:** `make qa-deploy` reads each service's effective user (compose `user`, else the image's `USER`; unreadable counts as root). Root fails, except a grandfathered baseline service before the grace date, which warns. Image users are inspected in the local run and the CI `e2e` job; the CI `qa-deploy` job checks compose users only.
+
+**Negative controls** (`tests/tools/test_qa_deploy.py`): grandfathered root warns until expiry and fails after; a new service cannot be grandfathered; a locked service running as root or an unknown user fails; the compose user wins over the image user.
+
+**Result:** `artifacts/quality/qa_deploy_report.json` (checked by `make qa-evidence`). **Status today:** not proved: grace until 2027-01-31 (22 baseline services still run as root).
+
+### EVID-T1 — “Evidence non-disclosure”
+
+**Requirement:** REQ-T-R9. Test evidence holds no token value, private key or credential.
+
+**How:** guards work in a scratch directory; the harness publishes each test's evidence with every token-shaped value replaced by its SHA-256 fingerprint. `make qa-evidence` then checks every file of the publication set (`test_report.log`, `artifacts/rogue-tests/`, `artifacts/quality/`) for secret shapes (PEM private key, base64 PKCS#8 key, base64 of a PEM key, token-shaped runs, credential lines, Atlassian tokens), names file and kind only, and fails on an unreadable file or directory. CI uploads the evidence only when the check found nothing.
+
+**Negative controls** (`tests/tools/test_evidence_secrets.py`): each secret shape is found; the token-shape boundaries (199/200/201 characters, 19/20 distinct); a token anywhere in the publication set fails `qa-evidence`; an unlistable directory fails; CI uploads exactly the checked set, only after the check.
+
+**Result:** `artifacts/quality/evidence_report.json` (`secret_findings`). **Status today:** proved statically.

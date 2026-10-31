@@ -18,7 +18,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
   - [OPL-008](open_problem_log.md#opl-008-spire-token-init-mounts-the-whole-spire-server-data-directory):
     the SPIRE bootstrap container can read the server's signing keys and datastore.
 - **Next slice:** [agentic-delivery-process](slices/agentic-delivery-process/plan.md) slice 2 of 3,
-  [`ci-evidence-trace`](slices/ci-evidence-trace/plan.md) (plan merged 2026-10-31; Increment A, CI evidence, in review; Increment B, trace model, next). Slice 1 is complete: Increment 1A (exact
+  [`ci-evidence-trace`](slices/ci-evidence-trace/plan.md) (plan merged 2026-10-31; Increment A, CI evidence, merged in PR #11; Increment B, trace model, in review). Slice 1 is complete: Increment 1A (exact
   outcomes for the loose E2E checks, `make test-lint`, mutation scoring) merged in PR #5, Increment 1B
   (`security/invariants.yaml` and `make qa-deploy`: who may hold each key, socket and secret, and
   every service's allowlist) in PR #6. Its standing rules (twins, probe sources, independent review)
@@ -43,7 +43,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `slice/ci-evidence-trace-a` | Slice 2 Increment A: CI `e2e` job, no token values in evidence, the evidence secret check, capiss key as PKCS#8 PEM, pinned `opa` and `redis` | PR open |
+| `slice/ci-evidence-trace-b` | Slice 2 Increment B: static tests and status from the register, `Implemented by:`, the gap gate, gate consistency, one process | PR open |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
@@ -60,10 +60,6 @@ Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
 
 ## Open delivery problems
 Full entries, root causes and lessons in [`docs/delivery_problem_log.md`](delivery_problem_log.md).
-- **DPL-004** Slice 1B added ten requirements without proof while review and CI stayed green
-  (closes with slice 2 Increment B).
-- **DPL-005** Gates ran hidden inside another CI job; no check was required to merge (closes with
-  slice 2 Increment B).
 - **DPL-008** A stacked PR was merged into its stale base branch instead of `main` (closes when merged
   head branches are deleted automatically, a repository setting).
 
@@ -77,9 +73,10 @@ Full entries, root causes and lessons in [`docs/delivery_problem_log.md`](delive
   (OPL-006).
 - Some test titles claim more than their guards check (`M5-T19`, `M5-T21`, `M5-T34`, `M5-T35`,
   `M5-T36`); `docs/test_spec.md` notes each one.
-- Functions above the complexity target of 10 (`radon cc services scripts -n C`): 18, the worst being
-  `scripts/validate_traceability.py:main` (63), `scripts/validate_e2e_evidence.py:main` (32),
-  `jira-mcp-gateway do_POST` (23), and capiss `log_mint_decision` (23).
+- Functions above the complexity target of 10 (`radon cc services scripts -n C`): 16, the worst being
+  `scripts/validate_e2e_evidence.py:main` (32), `scripts/validate_traceability.py:_parse_unit_tests`
+  (25), `jira-mcp-gateway do_POST` (23), and capiss `log_mint_decision` (23). The trace validator's
+  `main` (63) was split in slice `ci-evidence-trace` B.
 - `make qa-trace` scans only `services/` and `scripts/` for DD tags, so `DD-918`, `DD-920`, and
   `DD-921` in the top-level `varambu` script are not indexed.
 - **Open decision (user):** mutation testing mutates covered lines only

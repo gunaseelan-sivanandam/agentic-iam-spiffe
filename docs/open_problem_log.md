@@ -327,8 +327,8 @@ Usage:
 - The pipeline is designed against a fallible, reward-seeking agent, not a deliberate attacker of its own infrastructure; there is no current reason to expect the latter.
 
 ### Mitigations
-- Changes to the harness, tests, test config, compose and gate code take the full-slice lane and the user's review (slice 2).
-- `main` reruns the full suite nightly (slice 2).
+- Every change goes through the slice workflow with an independent review, and the user merges (slice `ci-evidence-trace` D9; lanes and a nightly run are no longer planned).
+- The CI `e2e` job runs the full suite on every PR and every push to `main`, as a required check (slice `ci-evidence-trace` D1).
 - Credentials and merge rights are enforced by GitHub, not by agent instructions (slice 3).
 
 ### Closure criteria

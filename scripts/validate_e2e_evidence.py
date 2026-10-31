@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -35,6 +36,12 @@ def parse_args() -> argparse.Namespace:
         default=[],
         help="Files and directories a run publishes; each is checked for secrets.",
     )
+    parser.add_argument(
+        "--deploy-report",
+        help="qa-deploy report to accept as the static result of the DEPLOY-* tests (with --compose, --register)",
+    )
+    parser.add_argument("--compose", default="compose/spiffe.compose.yml")
+    parser.add_argument("--register", default="security/invariants.yaml")
     parser.add_argument(
         "--max-age-hours",
         type=float,
@@ -166,14 +173,47 @@ def _latest_dir_for_prefix(base: Path, prefix: str) -> Path | None:
     return max(matches, key=lambda p: p.stat().st_mtime)
 
 
-def _secret_failures(paths: list[Path], exclude: Path | None) -> list[str]:
-    """Secret findings and unreadable files in the publication set; never contains a matched value."""
-    roots = [p for p in paths if exclude is None or p.resolve() != exclude.resolve()]
-    findings, errors = evidence_secrets.scan(roots)
-    if exclude is not None and exclude.exists():
-        findings = [f for f in findings if Path(f.path).resolve() != exclude.resolve()]
-        errors = [e for e in errors if not e.startswith(f"{exclude}:")]
-    return [f"secret in published file: {f}" for f in findings] + [f"publication set: {e}" for e in errors]
+def _sha256(path: Path) -> str | None:
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def deploy_report_failures(report_path: Path, compose: Path, register: Path) -> list[str]:
+    """The qa-deploy report counts only if it passed, inspected image users and matches the files on disk."""
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"qa-deploy report {report_path} missing or unreadable ({type(exc).__name__})"]
+    if not isinstance(report, dict):
+        return [f"qa-deploy report {report_path} is not a JSON object"]
+    failures = []
+    if report.get("verdict") != "passed":
+        failures.append(f"qa-deploy report verdict is {report.get('verdict')!r}, not 'passed'")
+    if report.get("image_users_inspected") is not True:
+        failures.append("qa-deploy report did not inspect image users (made with --skip-image-users)")
+    for name, path in (("compose", compose), ("register", register)):
+        if report.get(f"{name}_sha256") != _sha256(path) or _sha256(path) is None:
+            failures.append(f"qa-deploy report was made from another {name} file than {path}")
+    return failures
+
+
+def _secret_failures(paths: list[Path], report_path: Path) -> list[str]:
+    """Secret findings and unreadable files in the publication set, except this run's own report
+    (rewritten below); never contains a matched value."""
+    own = report_path.resolve()
+    findings, errors = evidence_secrets.scan(paths)
+    found = [f"secret in published file: {f}" for f in findings if Path(f.path).resolve() != own]
+    return found + [f"publication set: {e}" for e in errors if not e.startswith(f"{report_path}:")]
+
+
+def _static_result_failures(args: argparse.Namespace, report_path: Path) -> tuple[list[str], list[str]]:
+    """Failures of the qa-deploy report check, and the secret findings over the publication set."""
+    deploy = []
+    if args.deploy_report:
+        deploy = deploy_report_failures(Path(args.deploy_report), Path(args.compose), Path(args.register))
+    return deploy, _secret_failures([Path(p) for p in args.publication_set], report_path)
 
 
 def main() -> int:
@@ -306,8 +346,8 @@ def main() -> int:
     }
 
     report_path = Path(args.report_json)
-    secret_failures = _secret_failures([Path(p) for p in args.publication_set], exclude=report_path)
-    failures.extend(secret_failures)
+    deploy_failures, secret_failures = _static_result_failures(args, report_path)
+    failures.extend(deploy_failures + secret_failures)
     report["summary"]["failures"] = len(failures)
     report["secret_findings"] = secret_failures
     report_path.parent.mkdir(parents=True, exist_ok=True)

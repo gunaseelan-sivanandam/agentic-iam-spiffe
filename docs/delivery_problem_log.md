@@ -108,7 +108,7 @@ A rule that applies to every later change goes into `AGENTS.md`, not into the pl
 
 ## DPL-004: Slice 1B added ten requirements without proof, and review and CI stayed green
 
-- Status: Open; closes when slice `ci-evidence-trace` Increment B merges (D5, D7)
+- Status: Closed (preventive actions merged with slice `ci-evidence-trace` Increment B)
 - Found: 2026-10-29, after the 1B review, not by it
 
 ### What happened
@@ -125,16 +125,17 @@ A rule that applies to every later change goes into `AGENTS.md`, not into the pl
   looked the same.
 
 ### Actions
-- Preventive (pending): static tests as a trace entry type (slice 2 D5) and the gap gate, which fails
-  a PR that adds a gap unless an `accepted_gaps` entry names it (slice 2 D7). Test V12 replays this
-  miss (`0dbd27b` against `8faeea9`).
+- Preventive: static tests as a trace entry type, with each requirement's status taken from the
+  register (slice 2 D5), and the gap gate, which fails a PR that adds a gap unless an
+  `accepted_gaps` entry names it (slice 2 D7). `tests/tools/test_trace_model.py` replays this miss
+  (`0dbd27b` against `8faeea9`) and fails on the ten new `REQ-SEC` gaps.
 
 ### Lesson
 Removing a check is a change like any other: review it, and make a new gap fail the build.
 
 ## DPL-005: Gates ran hidden inside another CI job, and no check was required to merge
 
-- Status: Open; closes when slice `ci-evidence-trace` Increment B merges (D8)
+- Status: Closed (preventive action merged with slice `ci-evidence-trace` Increment B)
 - Found: 2026-10-29, by the user, after the 1B review
 
 ### What happened
@@ -155,8 +156,8 @@ Removing a check is a change like any other: review it, and make a new gap fail 
 - Corrective: workflow `CI` with one job per make target (PR #6); the user made the eight jobs
   required checks on `main`.
 - Preventive: reviewer prompts give only the intent and the change, never a file list (`AGENTS.md`
-  "Independent review", PR #7). Pending: the `gate-consistency` CI job, which fails when a gate in
-  `AGENTS.md`, a job in `ci.yml` and a required check disagree (slice 2 D8).
+  "Independent review", PR #7). The `gate-consistency` CI job fails when a gate in `AGENTS.md`, a
+  job in `ci.yml` (or the command it runs) and a required check disagree (slice 2 D8).
 
 ### Lesson
 What runs in CI and what blocks a merge are facts to check by machine, not to assume from names.
