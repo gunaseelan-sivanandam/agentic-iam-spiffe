@@ -14,6 +14,7 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
+import os
 import re
 import shutil
 import sys
@@ -116,10 +117,19 @@ def scan_text(text: str, path: str) -> list[Finding]:
     return sorted(set(findings), key=lambda f: (f.line, f.kind))
 
 
-def _files(root: Path) -> list[Path]:
-    if root.is_dir():
-        return sorted(p for p in root.rglob("*") if p.is_file())
-    return [root]
+def _walk(root: Path) -> tuple[list[Path], list[str]]:
+    """Every file under root, and an error for each directory that could not be listed."""
+    if not root.is_dir():
+        return [root], []
+    files: list[Path] = []
+    errors: list[str] = []
+
+    def on_error(exc: OSError) -> None:
+        errors.append(f"{exc.filename}: cannot list ({exc.strerror or type(exc).__name__})")
+
+    for dirpath, _dirnames, filenames in os.walk(root, onerror=on_error):
+        files += [Path(dirpath) / name for name in filenames]
+    return sorted(files), errors
 
 
 def _read(path: Path) -> str:
@@ -134,7 +144,9 @@ def scan(paths: list[Path]) -> tuple[list[Finding], list[str]]:
     for root in paths:
         if not root.exists():
             continue
-        for path in _files(root):
+        files, walk_errors = _walk(root)
+        errors += walk_errors
+        for path in files:
             try:
                 text = _read(path)
             except OSError as exc:
@@ -163,16 +175,30 @@ def redact_text(text: str) -> str:
 
 
 def publish(src: Path, dst: Path) -> None:
-    """Copy src into dst file by file, with token-shaped values replaced by fingerprints."""
-    dst.mkdir(parents=True, exist_ok=True)
-    for path in _files(src):
-        target = dst / path.relative_to(src)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "rb") as handle:
-            data = handle.read()
-        text = data.decode("utf-8", "surrogateescape")
-        target.write_bytes(redact_text(text).encode("utf-8", "surrogateescape"))
-        shutil.copymode(path, target)
+    """Copy src to dst with token-shaped values replaced by fingerprints, all or nothing.
+
+    The copy is built in a sibling directory and renamed onto dst (which must be absent or empty)
+    only when every file was copied; on any error nothing new appears in dst and the error is raised.
+    """
+    partial = dst.with_name(dst.name + ".partial")
+    shutil.rmtree(partial, ignore_errors=True)
+    try:
+        partial.mkdir(parents=True)
+        files, errors = _walk(src)
+        if errors:
+            raise OSError("; ".join(errors))
+        for path in files:
+            target = partial / path.relative_to(src)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with open(path, "rb") as handle:
+                data = handle.read()
+            text = data.decode("utf-8", "surrogateescape")
+            target.write_bytes(redact_text(text).encode("utf-8", "surrogateescape"))
+            shutil.copymode(path, target)
+        os.replace(partial, dst)
+    except OSError:
+        shutil.rmtree(partial, ignore_errors=True)
+        raise
 
 
 def main(argv: list[str]) -> int:

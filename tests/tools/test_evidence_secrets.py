@@ -280,3 +280,64 @@ def test_ci_uploads_exactly_the_checked_set_and_only_after_the_check() -> None:
     upload = steps[uploads[0]]
     assert upload["with"]["path"] == "${{ steps.publishable.outputs.paths }}"
     assert "steps.publishable.outcome == 'success'" in upload["if"]
+
+
+# --- review round 1: all-or-nothing publishing, unlistable directories ---------
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads files regardless of mode")
+def test_publish_that_fails_part_way_leaves_the_evidence_directory_empty(tmp_path: Path) -> None:
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    for name in ("cmd_premise_1.txt", "premise_1.txt", "exercise_1.txt", "outcome_1.txt"):
+        (scratch / name).write_text("ok\n")
+    unreadable = scratch / "zz_late_file.txt"
+    unreadable.write_text("late\n")
+    unreadable.chmod(0)
+    published = tmp_path / "published"
+    published.mkdir()
+    try:
+        with pytest.raises(OSError):
+            es.publish(scratch, published)
+    finally:
+        unreadable.chmod(0o600)
+    assert list(published.iterdir()) == []
+    assert not (tmp_path / "published.partial").exists()
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root lists directories regardless of mode")
+def test_unlistable_directory_is_an_error_for_scan_publish_and_qa_evidence(tmp_path: Path) -> None:
+    root = _evidence_layout(tmp_path)
+    hidden = root / "artifacts" / "rogue-tests" / "M1-T1_case" / "hidden"
+    hidden.mkdir()
+    (hidden / "token.txt").write_text(_token())
+    hidden.chmod(0)
+    try:
+        findings, errors = es.scan([root / "artifacts" / "rogue-tests"])
+        with pytest.raises(OSError):
+            es.publish(root / "artifacts" / "rogue-tests", tmp_path / "copy")
+        result = _qa_evidence(root)
+    finally:
+        hidden.chmod(0o700)
+    assert errors and "cannot list" in errors[0] and str(hidden) in errors[0]
+    assert result.returncode == 1 and "cannot list" in result.stderr
+
+
+def _publish_function() -> str:
+    text = (ROOT / "scripts" / "rogue_node_tests.sh").read_text(encoding="utf-8")
+    start = text.index("publish_test_evidence() {")
+    return text[start:text.index("\n}\n", start) + 3]
+
+
+def test_harness_counts_a_failed_publish_and_fails_the_run(tmp_path: Path) -> None:
+    scratch, published = tmp_path / "scratch", tmp_path / "published"
+    scratch.mkdir()
+    published.mkdir()
+    script = (_publish_function()
+              + f'PUBLISH_FAILED=0\nEVDIR="{scratch}"\nEVPUB="{published}"\nEVIDENCE_PUBLISHER=/nonexistent.py\n'
+              + 'publish_test_evidence\necho "PUBLISH_FAILED=$PUBLISH_FAILED EVPUB=[$EVPUB]"\n')
+    result = subprocess.run(["sh", "-c", script], capture_output=True, text=True, check=False)
+    assert "PUBLISH_FAILED=1 EVPUB=[]" in result.stdout
+    assert "ERROR: could not publish evidence" in result.stdout
+    assert not scratch.exists()
+    harness = (ROOT / "scripts" / "rogue_node_tests.sh").read_text(encoding="utf-8")
+    assert 'if [ "$PUBLISH_FAILED" -ne 0 ]; then' in harness.split("printf '\\nTotal:")[-1]

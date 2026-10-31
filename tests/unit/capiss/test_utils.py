@@ -608,7 +608,7 @@ def test_invalid_root_key_file_fails_closed(capiss_module, tmp_path, guard, kind
 # UT: UT-350
 # Test Description: Verifies the SUT never reads the legacy root_key.b64: with only a valid legacy file present it creates a new PEM key and leaves the legacy file untouched.
 # Precondition: The key directory holds a valid raw-base64 root_key.b64 and no root_key.pem.
-# Expected Output: created is True, the new key differs from the legacy key, and root_key.b64 is byte-for-byte unchanged.
+# Expected Output: created is True, the new key differs from the legacy key, root_key.b64 is byte-for-byte unchanged, and root_key.pem holds a PEM private key.
 # Covers DD: DD-111
 @pytest.mark.invariant
 def test_legacy_b64_root_key_is_ignored(capiss_module, tmp_path, guard):
@@ -623,6 +623,7 @@ def test_legacy_b64_root_key_is_ignored(capiss_module, tmp_path, guard):
     guard.outcome("new key created", created is True)
     guard.outcome("legacy key not used", new_key.to_bytes() != legacy_key.to_bytes())
     guard.outcome("legacy file unchanged", legacy_path.read_bytes() == legacy)
+    guard.outcome("new PEM key file written", Path(capiss_module.CAPISS_KEY_FILE).read_bytes().startswith(b"-----BEGIN PRIVATE KEY-----"))
 
 
 # UT: UT-237

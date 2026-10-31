@@ -32,6 +32,12 @@ is first); every heading carries its date.
   diff-coverage gate never measured capiss (DPL-009); fixed with a tooling test.
 - Found and recorded: the SPIRE agent can crash on its first start after a reset (OPL-010); the first
   local run never started the suite.
+- Independent review (Codex, [`review_a.md`](../slices/ci-evidence-trace/review_a.md)): round 1
+  found two blocking issues, both fixed: a publish that failed part way could leave a partial
+  evidence directory that passed `qa-evidence` (publishing is now all or nothing and a failure fails
+  the run), and an unlistable directory was skipped by the secret scan (now an error). The report
+  rescan was removed so the saved `secret_findings` that gates the CI upload is complete. The full
+  suite was rerun on a clean stack after the fixes.
 - Records: DPL-002 closed; DPL-008 (stacked PR merged into a stale base) and DPL-009 added; `AGENTS.md`
   gate rows for `e2e` and the `qa-evidence` secret contract, step 4, test commands, git rule on
   stacking; ARCH-007, ARCH-012, ARCH-019; OPL-005's key file name.

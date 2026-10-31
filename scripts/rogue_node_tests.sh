@@ -25,6 +25,7 @@ trap 'rm -f "$LOG_PIPE"; kill "$TEE_PID" >/dev/null 2>&1 || true' EXIT
 TOTAL=0
 PASSED=0
 FAILED=0
+PUBLISH_FAILED=0
 FAIL_REASON=""
 EVDIR=""
 CURRENT_TEST_ID=""
@@ -234,8 +235,11 @@ publish_test_evidence() {
   if [ -z "${EVPUB:-}" ] || [ ! -d "${EVDIR:-}" ]; then
     return 0
   fi
+  # All or nothing: on failure the evidence directory stays empty, so qa-evidence fails, and the
+  # run fails at the end.
   if ! python3 "${EVIDENCE_PUBLISHER:-/repo/scripts/evidence_secrets.py}" publish "$EVDIR" "$EVPUB"; then
-    printf '  ERROR: could not publish evidence of %s\n' "$EVPUB" >&2
+    PUBLISH_FAILED=$((PUBLISH_FAILED + 1))
+    printf '  ERROR: could not publish evidence of %s\n' "$EVPUB"
   fi
   rm -rf "$EVDIR"
   EVPUB=""
@@ -4611,6 +4615,10 @@ if [ "$PROFILE_ENABLED" = "1" ] && [ -s "$PROFILE_FILE" ]; then
   awk -F '\t' 'NR>1 {printf "%8d ms | %-7s | %-10s | %s\n", $1, $2, $3, $6}' "$PROFILE_FILE" \
     | sort -nr | head -n 25 | tee "$PROFILE_SUMMARY_FILE"
   printf '\nTiming artifacts:\n  %s\n  %s\n' "$PROFILE_FILE" "$PROFILE_SUMMARY_FILE"
+fi
+if [ "$PUBLISH_FAILED" -ne 0 ]; then
+  printf '\nEvidence publish failures: %d\n' "$PUBLISH_FAILED"
+  exit 1
 fi
 if [ "$FAILED" -ne 0 ]; then
   exit 1

@@ -311,9 +311,8 @@ def main() -> int:
     report["summary"]["failures"] = len(failures)
     report["secret_findings"] = secret_failures
     report_path.parent.mkdir(parents=True, exist_ok=True)
+    # The report is not rescanned: every value in it is copied from evidence files scanned above.
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
-    if args.publication_set:
-        failures.extend(_secret_failures([report_path], exclude=None))
 
     if failures:
         print("[qa-evidence] FAILED", file=sys.stderr)

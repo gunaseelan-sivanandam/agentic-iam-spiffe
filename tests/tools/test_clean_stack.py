@@ -13,18 +13,25 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
-# The stub logs each call. `docker run -v <host>:/capiss_keys ...` empties <host> unless
-# STUB_FAIL_KEYS is set; every other call succeeds and `docker ps` lists no containers.
+# The stub logs each call. For `docker run -v <host>:/capiss_keys <image> <cmd...>` it runs the
+# script's own command on the host with /capiss_keys replaced by <host>, so an ineffective command
+# fails the test; STUB_FAIL_KEYS makes it fail. Every other call succeeds and `docker ps` lists no
+# containers.
 STUB = """#!/usr/bin/env bash
 echo "$*" >> "$STUB_LOG"
 if [ "$1" = "run" ]; then
+  host=""
   for arg in "$@"; do
-    case "$arg" in
-      *:/capiss_keys)
-        [ -n "${STUB_FAIL_KEYS:-}" ] && exit 1
-        find "${arg%:/capiss_keys}" -mindepth 1 -delete ;;
-    esac
+    case "$arg" in *:/capiss_keys) host="${arg%:/capiss_keys}" ;; esac
   done
+  if [ -n "$host" ]; then
+    [ -n "${STUB_FAIL_KEYS:-}" ] && exit 1
+    while [ "$#" -gt 0 ] && [ "$1" != "alpine:3.19" ]; do shift; done
+    shift
+    cmd=()
+    for arg in "$@"; do cmd+=("${arg//\/capiss_keys/$host}"); done
+    exec "${cmd[@]}"
+  fi
 fi
 exit 0
 """
