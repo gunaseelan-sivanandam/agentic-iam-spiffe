@@ -163,7 +163,7 @@ Trust/Responsibility:
 Its responsibility is not to enforce system security directly, but to ensure that security claims are backed by meaningful proof. It prevents false-green outcomes by requiring guard evidence and by preferring authoritative sources such as server state, logs, and direct enforcement results.
 
 Interactions:
-It connects the rogue test harness, evidence artifact capture, profiling output, and the generated test specifications that document what the harness actually executes.
+It connects the rogue test harness, evidence artifact capture, profiling output, and the generated test specifications that document what the harness actually executes. The full suite runs locally and in the CI `e2e` job (`make e2e`); `make qa-evidence` checks the evidence, including that no file a run publishes holds a secret, and CI uploads the evidence only after that check passes.
 
 ## ARCH-008 SPIRE Server
 
@@ -367,7 +367,7 @@ Trust/Responsibility:
 It is responsible for proving that the intended negative or positive path was actually exercised and for preserving the evidence needed to distinguish real enforcement outcomes from harness errors.
 
 Interactions:
-It orchestrates Docker-based scenarios, records evidence under `artifacts/rogue-tests`, and writes the summarized run output into `test_report.log`.
+It orchestrates Docker-based scenarios, records evidence under `artifacts/rogue-tests`, and writes the summarized run output into `test_report.log`. Guards work in a per-test scratch directory that is never published; at the end of each test the harness copies it into `artifacts/rogue-tests` with every token-shaped value replaced by its SHA-256 fingerprint. CI runs it in the `e2e` job.
 
 ## ARCH-021 M4a/M4b Jira Authority Issuance and Policy
 

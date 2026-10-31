@@ -109,11 +109,13 @@ scripts/clean_stack.sh --check
 docker compose -f compose/spiffe.compose.yml up -d --build
 ```
 
-**Run the full deterministic E2E suite**
+**Run the full deterministic E2E suite** (as CI does: build every image, run the suite, take back ownership of
+the root-owned output)
 
 ```bash
-docker compose --profile tests -f compose/spiffe.compose.yml up --build \
-  --abort-on-container-exit rogue-tests
+scripts/clean_stack.sh
+make e2e
+make qa-evidence
 ```
 
 **Run only the M5 Codex Jira MCP suite**

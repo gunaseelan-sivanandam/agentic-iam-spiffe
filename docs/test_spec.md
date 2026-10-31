@@ -6,6 +6,10 @@ How to read it:
 - Each test heading starts with its harness ID (for example `M3.S4-T2`), which is also the value to pass in `TEST_ONLY=` and the prefix of its evidence directory.
 - Every test runs **premise** guards (preconditions), **exercise** guards (the action), and **outcome** guards (the assertions). A failed guard fails the test and leaves `fail_reason.txt`.
 - Where a test's title claims more than its guards check, the entry says so in a note.
+- Evidence holds no token values (`AGENTS.md` coding rule 1): guards work in a scratch directory, and when a test ends
+  the harness publishes it to the evidence directory with every token-shaped value replaced by
+  `sha256:<fingerprint>`. A token file or the `token` field of a saved mint response therefore
+  holds the fingerprint; the same token has the same fingerprint in every file of a test.
 
 Maintenance rule (see `AGENTS.md`, slice workflow step 4): every change that adds or changes an E2E test updates this file in the same change. `make docs-check` fails if a harness test ID is missing here.
 
@@ -113,7 +117,7 @@ Outcome guards
 - (non‑EVDIR) /run/spire/rogue/fake_token  
 - (non‑EVDIR) /run/spire/server/data/private/api.sock  
 - (non‑EVDIR) /run/spire/shared/join_token
-- $EVDIR/mint_body.json
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)
 - $EVDIR/mint_headers.txt
 - $EVDIR/mint_request.json
 - $EVDIR/mint_status.txt
@@ -121,7 +125,7 @@ Outcome guards
 - $EVDIR/status.txt
 - $EVDIR/verified_capiss_result.txt
 - $EVDIR/verified_capiss_spiffe_id.txt
-- $EVDIR/token.txt
+- $EVDIR/token.txt (the token's SHA-256 fingerprint, not its value)
 - $EVDIR/toolb_envoy_ip.txt
 - $EVDIR/verified_toolb_result.txt
 - $EVDIR/verified_toolb_spiffe_id.txt
@@ -225,13 +229,13 @@ Outcome guards
 - (non‑EVDIR) /run/spire/agent/private/api.sock  
 - (non‑EVDIR) /run/spire/server/data/private/api.sock  
 - (non‑EVDIR) /run/spire/shared/join_token
-- $EVDIR/mint_body.json
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)
 - $EVDIR/mint_headers.txt
 - $EVDIR/mint_request.json
 - $EVDIR/mint_status.txt
 - $EVDIR/response.json
 - $EVDIR/status.txt
-- $EVDIR/token.txt
+- $EVDIR/token.txt (the token's SHA-256 fingerprint, not its value)
 - $EVDIR/toolb_envoy_ip.txt
 
 ### M1-T5 — “Rogue without Workload API socket cannot fetch SVID”
@@ -271,7 +275,7 @@ Outcome guards
 
 - $EVDIR/rogue_socket_fetch.txt  
 - (non‑EVDIR) /run/spire/agent/private/api.sock
-- $EVDIR/mint_body.json
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)
 - $EVDIR/mint_headers.txt
 - $EVDIR/mint_request.json
 - $EVDIR/mint_status.txt
@@ -362,13 +366,13 @@ Outcome guards
 - $EVDIR/toolb_bundle.pem  
 - $EVDIR/toolb_envoy_ip.txt  
 - (non‑EVDIR) /tmp/toolb_material
-- $EVDIR/mint_body.json
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)
 - $EVDIR/mint_headers.txt
 - $EVDIR/mint_request.json
 - $EVDIR/mint_status.txt
 - $EVDIR/response.json
 - $EVDIR/status.txt
-- $EVDIR/token.txt
+- $EVDIR/token.txt (the token's SHA-256 fingerprint, not its value)
 - $EVDIR/toolb_envoy_ip.txt
 
 ### M2-T3 — “Rogue with expired cert from an untrusted CA is rejected”
@@ -460,13 +464,13 @@ Outcome guards
 - $EVDIR/toolb_bundle.pem  
 - $EVDIR/toolb_cert.pem  
 - $EVDIR/toolb_envoy_ip.txt
-- $EVDIR/mint_body.json
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)
 - $EVDIR/mint_headers.txt
 - $EVDIR/mint_request.json
 - $EVDIR/mint_status.txt
 - $EVDIR/response.json
 - $EVDIR/status.txt
-- $EVDIR/token.txt
+- $EVDIR/token.txt (the token's SHA-256 fingerprint, not its value)
 - $EVDIR/toolb_envoy_ip.txt
 
 ### M2-T5 — “Rogue without Workload API socket cannot fetch SVID”
@@ -507,7 +511,7 @@ Outcome guards
 - (non‑EVDIR) /tmp/rogue_fetch  
 - (non‑EVDIR) /tmp/rogue_svid  
 - (non‑EVDIR) /tmp/rogue_svid/svid.pem
-- $EVDIR/mint_body.json
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)
 - $EVDIR/mint_headers.txt
 - $EVDIR/mint_request.json
 - $EVDIR/mint_status.txt
@@ -747,13 +751,13 @@ Outcome guards
 
 - $EVDIR/toolb_context.txt  
 - $EVDIR/toolb_missing_header.out
-- $EVDIR/mint_body.json
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)
 - $EVDIR/mint_headers.txt
 - $EVDIR/mint_request.json
 - $EVDIR/mint_status.txt
 - $EVDIR/response.json
 - $EVDIR/status.txt
-- $EVDIR/token.txt
+- $EVDIR/token.txt (the token's SHA-256 fingerprint, not its value)
 - $EVDIR/toolb_envoy_ip.txt
 
 ### M2.5-T3 — “tool-b rejects mismatched x-spiffe-id header”
@@ -797,12 +801,12 @@ Outcome guards
 - $EVDIR/capiss_envoy_ip.txt  
 - $EVDIR/hostname.txt  
 - $EVDIR/ip_route.txt  
-- $EVDIR/mint_body.json  
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/mint_status.txt  
 - $EVDIR/resolv.conf  
 - $EVDIR/response.json  
 - $EVDIR/status.txt  
-- $EVDIR/token.txt  
+- $EVDIR/token.txt (the token's SHA-256 fingerprint, not its value)  
 - $EVDIR/toolb_envoy_ip.txt
 
 ## M3.S2 — OPA-gated capability minting
@@ -853,7 +857,7 @@ Outcome guards
 ### Evidence produced
 
 - $EVDIR/capiss_envoy_ip.txt  
-- $EVDIR/mint_body.json  
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/mint_headers.txt  
 - $EVDIR/status.txt
 
@@ -895,16 +899,16 @@ Outcome guards
 ### Evidence produced
 
 - $EVDIR/capiss_envoy_ip.txt  
-- $EVDIR/mint_body.json  
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/mint_headers.txt  
 - $EVDIR/status.txt
-- $EVDIR/mint_body.json
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)
 - $EVDIR/mint_headers.txt
 - $EVDIR/mint_request.json
 - $EVDIR/mint_status.txt
 - $EVDIR/response.json
 - $EVDIR/status.txt
-- $EVDIR/token.txt
+- $EVDIR/token.txt (the token's SHA-256 fingerprint, not its value)
 - $EVDIR/toolb_envoy_ip.txt
 
 ### M3.S2-T3 — “OPA is not reachable from edge”
@@ -990,16 +994,16 @@ Outcome guards
 ### Evidence produced
 
 - $EVDIR/capiss_envoy_ip.txt  
-- $EVDIR/mint_body.json  
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/mint_headers.txt  
 - $EVDIR/status.txt
-- $EVDIR/mint_body.json
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)
 - $EVDIR/mint_headers.txt
 - $EVDIR/mint_request.json
 - $EVDIR/mint_status.txt
 - $EVDIR/response.json
 - $EVDIR/status.txt
-- $EVDIR/token.txt
+- $EVDIR/token.txt (the token's SHA-256 fingerprint, not its value)
 - $EVDIR/toolb_envoy_ip.txt
 
 ### M3.S2-T5 — “Issuer app not reachable from edge”
@@ -1083,7 +1087,7 @@ Outcome guards
 ### Evidence produced
 
 - $EVDIR/capiss_envoy_ip.txt  
-- $EVDIR/mint_body.json  
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/mint_headers.txt  
 - $EVDIR/status.txt
 
@@ -1124,17 +1128,17 @@ Outcome guards
 ### Evidence produced
 
 - $EVDIR/capiss_envoy_ip.txt  
-- $EVDIR/mint_body.json  
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/mint_headers.txt  
 - $EVDIR/status.txt  
 - $EVDIR/time.txt
-- $EVDIR/mint_body.json
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)
 - $EVDIR/mint_headers.txt
 - $EVDIR/mint_request.json
 - $EVDIR/mint_status.txt
 - $EVDIR/response.json
 - $EVDIR/status.txt
-- $EVDIR/token.txt
+- $EVDIR/token.txt (the token's SHA-256 fingerprint, not its value)
 - $EVDIR/toolb_envoy_ip.txt
 
 ### M3.S3-T3 — “two mints produce different tokens”
@@ -1172,8 +1176,8 @@ Outcome guards
 ### Evidence produced
 
 - $EVDIR/capiss_envoy_ip.txt  
-- $EVDIR/mint_body.json  
-- $EVDIR/mint_body2.json  
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)  
+- $EVDIR/mint_body2.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/status.txt
 
 ## M3.S4 — tool-b enforces capability tokens
@@ -1262,18 +1266,18 @@ Outcome guards
 ### Evidence produced
 
 - $EVDIR/capiss_envoy_ip.txt  
-- $EVDIR/mint_body.json  
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/mint_headers.txt  
 - $EVDIR/response.json  
 - $EVDIR/status.txt  
 - $EVDIR/toolb_envoy_ip.txt
-- $EVDIR/mint_body.json
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)
 - $EVDIR/mint_headers.txt
 - $EVDIR/mint_request.json
 - $EVDIR/mint_status.txt
 - $EVDIR/response.json
 - $EVDIR/status.txt
-- $EVDIR/token.txt
+- $EVDIR/token.txt (the token's SHA-256 fingerprint, not its value)
 - $EVDIR/toolb_envoy_ip.txt
 
 ### M3.S4-T3 — “rogue cannot access /secret without token”
@@ -1357,18 +1361,18 @@ Outcome guards
 ### Evidence produced
 
 - $EVDIR/capiss_envoy_ip.txt  
-- $EVDIR/mint_body.json  
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/mint_headers.txt  
 - $EVDIR/response.json  
 - $EVDIR/status.txt  
 - $EVDIR/toolb_envoy_ip.txt
-- $EVDIR/mint_body.json
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)
 - $EVDIR/mint_headers.txt
 - $EVDIR/mint_request.json
 - $EVDIR/mint_status.txt
 - $EVDIR/response.json
 - $EVDIR/status.txt
-- $EVDIR/token.txt
+- $EVDIR/token.txt (the token's SHA-256 fingerprint, not its value)
 - $EVDIR/toolb_envoy_ip.txt
 
 ### M3.S4-T5 — “expired token is rejected”
@@ -1417,12 +1421,12 @@ Outcome guards
 ### Evidence produced
 
 - $EVDIR/capiss_envoy_ip.txt  
-- $EVDIR/mint_body.json  
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/mint_headers.txt  
 - $EVDIR/response.json  
 - $EVDIR/status.txt  
 - $EVDIR/toolb_envoy_ip.txt
-- $EVDIR/mint_body.json
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)
 - $EVDIR/mint_headers.txt
 - $EVDIR/mint_request.json
 - $EVDIR/mint_status.txt
@@ -1468,7 +1472,7 @@ Outcome guards
 ### Evidence produced
 
 - $EVDIR/capiss_envoy_ip.txt  
-- $EVDIR/mint_body.json  
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/mint_headers.txt  
 - $EVDIR/status.txt
 
@@ -1510,7 +1514,7 @@ Outcome guards
 ### Evidence produced
 
 - $EVDIR/capiss_envoy_ip.txt  
-- $EVDIR/mint_body.json  
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/mint_headers.txt  
 - $EVDIR/status.txt
 
@@ -1552,7 +1556,7 @@ Outcome guards
 ### Evidence produced
 
 - $EVDIR/capiss_envoy_ip.txt  
-- $EVDIR/mint_body.json  
+- $EVDIR/mint_body.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/status.txt
 
 ### M4-T2 — “search writes discovery registry entries”
@@ -1601,7 +1605,7 @@ Outcome guards
 
 ### Evidence produced
 
-- $EVDIR/root_mint.json  
+- $EVDIR/root_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/root_status.txt  
 - $EVDIR/search_response.json  
 - $EVDIR/search_status.txt
@@ -1644,9 +1648,9 @@ Outcome guards
 
 ### Evidence produced
 
-- $EVDIR/root_mint.json  
+- $EVDIR/root_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/root_status.txt  
-- $EVDIR/resource_mint.json  
+- $EVDIR/resource_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/resource_status.txt
 
 ### M4-T4 — “resource mint after discovery allows read-file”
@@ -1703,11 +1707,11 @@ Outcome guards
 
 ### Evidence produced
 
-- $EVDIR/root_mint.json  
+- $EVDIR/root_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/root_status.txt  
 - $EVDIR/search_response.json  
 - $EVDIR/search_status.txt  
-- $EVDIR/resource_mint.json  
+- $EVDIR/resource_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/resource_status.txt  
 - $EVDIR/read_response.json  
 - $EVDIR/read_status.txt
@@ -1754,7 +1758,7 @@ Outcome guards
 
 ### Evidence produced
 
-- $EVDIR/root_mint.json  
+- $EVDIR/root_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/root_status.txt  
 - $EVDIR/statuses.txt  
 - $EVDIR/resp_11.json  
@@ -1803,9 +1807,9 @@ Outcome guards
 
 ### Evidence produced
 
-- $EVDIR/root_mint.json  
+- $EVDIR/root_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/root_status.txt  
-- $EVDIR/tampered_token.txt  
+- $EVDIR/tampered_token.txt (the token's SHA-256 fingerprint, not its value)  
 - $EVDIR/tampered_response.json  
 - $EVDIR/tampered_status.txt
 
@@ -1866,17 +1870,17 @@ Outcome guards
 
 ### Evidence produced
 
-- $EVDIR/root_mint.json  
+- $EVDIR/root_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/root_status.txt  
 - $EVDIR/search_response.json  
 - $EVDIR/search_status.txt  
-- $EVDIR/depth1_mint.json  
+- $EVDIR/depth1_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/depth1_status.txt  
-- $EVDIR/depth2_mint.json  
+- $EVDIR/depth2_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/depth2_status.txt  
-- $EVDIR/depth3_mint.json  
+- $EVDIR/depth3_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/depth3_status.txt  
-- $EVDIR/depth4_mint.json  
+- $EVDIR/depth4_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/depth4_status.txt  
 
 ### M4-T8 — “new-resource mint rate is enforced at capiss”
@@ -1931,17 +1935,17 @@ Outcome guards
 
 ### Evidence produced
 
-- $EVDIR/root_mint.json  
+- $EVDIR/root_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/root_status.txt  
 - $EVDIR/search_response.json  
 - $EVDIR/search_status.txt  
-- $EVDIR/fileA_mint.json  
+- $EVDIR/fileA_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/fileA_status.txt  
-- $EVDIR/fileB_mint.json  
+- $EVDIR/fileB_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/fileB_status.txt  
-- $EVDIR/fileC_mint.json  
+- $EVDIR/fileC_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/fileC_status.txt  
-- $EVDIR/fileA_again_mint.json  
+- $EVDIR/fileA_again_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/fileA_again_status.txt  
 
 ### M4-T9 — “allow flow emits correlatable audit events”
@@ -2004,11 +2008,11 @@ Outcome guards
 ### Evidence produced
 
 - $EVDIR/log_since.txt  
-- $EVDIR/root_mint.json  
+- $EVDIR/root_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/root_status.txt  
 - $EVDIR/search_response.json  
 - $EVDIR/search_status.txt  
-- $EVDIR/resource_mint.json  
+- $EVDIR/resource_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/resource_status.txt  
 - $EVDIR/read_response.json  
 - $EVDIR/read_status.txt  
@@ -2077,17 +2081,17 @@ Outcome guards
 ### Evidence produced
 
 - $EVDIR/log_since.txt  
-- $EVDIR/root_mint.json  
+- $EVDIR/root_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/root_status.txt  
 - $EVDIR/search_response.json  
 - $EVDIR/search_status.txt  
-- $EVDIR/fileA_mint.json  
+- $EVDIR/fileA_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/fileA_status.txt  
-- $EVDIR/fileB_mint.json  
+- $EVDIR/fileB_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/fileB_status.txt  
-- $EVDIR/fileC_mint.json  
+- $EVDIR/fileC_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/fileC_status.txt  
-- $EVDIR/fileA_again_mint.json  
+- $EVDIR/fileA_again_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)  
 - $EVDIR/fileA_again_status.txt  
 - $EVDIR/capiss_container.log  
 - $EVDIR/capiss_events.jsonl  
@@ -2129,9 +2133,9 @@ Outcome guards
 
 ### Evidence produced
 
-- $EVDIR/root_mint.json
+- $EVDIR/root_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)
 - $EVDIR/root_status.txt
-- $EVDIR/amplified_mint.json
+- $EVDIR/amplified_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)
 - $EVDIR/amplified_status.txt
 
 ### M4-T12 — “wildcard delegated resource is denied”
@@ -2171,9 +2175,9 @@ Outcome guards
 
 ### Evidence produced
 
-- $EVDIR/root_mint.json
+- $EVDIR/root_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)
 - $EVDIR/root_status.txt
-- $EVDIR/wildcard_mint.json
+- $EVDIR/wildcard_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)
 - $EVDIR/wildcard_status.txt
 
 ### M4-T13 — “budget and registry TTLs are bounded by root expiry”
@@ -2223,7 +2227,7 @@ Outcome guards
 
 ### Evidence produced
 
-- $EVDIR/root_mint.json
+- $EVDIR/root_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)
 - $EVDIR/root_status.txt
 - $EVDIR/search_response.json
 - $EVDIR/search_status.txt
@@ -2285,11 +2289,11 @@ Outcome guards
 
 ### Evidence produced
 
-- $EVDIR/root_mint.json
+- $EVDIR/root_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)
 - $EVDIR/root_status.txt
 - $EVDIR/search_response.json
 - $EVDIR/search_status.txt
-- $EVDIR/resource_mint.json
+- $EVDIR/resource_mint.json (a `token` field holds the SHA-256 fingerprint, not the value)
 - $EVDIR/resource_status.txt
 - $EVDIR/read_response.json
 - $EVDIR/read_status.txt

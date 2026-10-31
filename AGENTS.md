@@ -130,7 +130,8 @@ Required for milestone and security-relevant changes. A slice bundle lives in
    `plan.md` lists for retirement.
 4. **Verify and close.** All of the following, in the same change:
    - run `make qa-quality` (includes `qa-trace`, `docs-check`, `test-lint` and `qa-deploy`), the full E2E suite on a clean
-     stack, and `make qa-evidence`;
+     stack (`scripts/clean_stack.sh`, then `make e2e`), and `make qa-evidence`; the `e2e` CI check runs the same
+     suite on the PR;
    - **update `docs/test_spec.md` by hand** for every E2E test added or changed — plain English,
      not code: what it tests, how (premise, exercise, outcome), and the evidence it leaves. Each
      test gets a heading `### <harness ID> — “<name>”`; `make docs-check` fails on a missing or
@@ -198,8 +199,8 @@ never replaces it.
 | Unit trust bundle | `make unit-trust` | CI | total line coverage ≥ 85%; branch coverage ≥ 75% on `services/capability-issuer/app.py` and `services/tool-b/server.py`; unit traceability check; invariant, negative-control, hybrid-critical suites; invariant flake check ×5 |
 | Diff coverage | `make unit-diff-cov` | CI, PRs only | ≥ 90% of changed lines in `services/capability-issuer/` and `services/tool-b/` |
 | Mutation | `make unit-mutation` | CI | score ≥ 70% (capiss and tool-b), counting untested and skipped mutants as not killed; an empty run fails |
-| Full E2E suite | see [Test commands](#test-commands) | local, required in step 4 | all pass; warnings reviewed |
-| E2E evidence | `make qa-evidence` | local, after the E2E run | every test has premise/exercise/outcome evidence and a PASS line |
+| Full E2E suite | `make e2e` | CI, every push/PR; and local on a clean stack, required in step 4 | all pass; warnings reviewed. The CI job then runs `make qa-deploy` with image users inspected and `make qa-evidence`, and uploads the publication set for 14 days only if the secret check found nothing |
+| E2E evidence | `make qa-evidence` | CI (`e2e` job); local, after the E2E run | every test has premise/exercise/outcome evidence and a PASS line; no file of the publication set (`PUBLICATION_SET` in the `Makefile`: `test_report.log`, `artifacts/rogue-tests/`, `artifacts/quality/`) holds a secret by shape: a PEM private key, a base64 PKCS#8 private key, base64 of a PEM private key, a base64 or base64url run of ≥ 200 characters with ≥ 20 distinct ones outside certificates, a `JIRA_API_TOKEN=` or `Authorization:` line with a value, or an Atlassian API token; an unreadable file fails; a finding names the file and kind, never the value |
 
 Standards that are **not** gated yet (follow them for new and changed code):
 - `ruff check services scripts` stays clean.
@@ -235,6 +236,8 @@ Standards that are **not** gated yet (follow them for new and changed code):
 - Agents open pull requests; only the user merges into `main`. GitHub does not enforce this yet:
   the `main` ruleset requires the CI checks but no approving review, and an agent's `gh` login may
   be the owner's account.
+- Open pull requests against `main`; avoid stacking. A stacked PR is merged only after its base
+  shows `main` (GitHub retargets it when the base branch is deleted) ([DPL-008](docs/delivery_problem_log.md#dpl-008-a-stacked-pr-was-merged-into-its-stale-base-branch-instead-of-main)).
 
 ## Environment
 - Docker Engine + Docker Compose v2. Linux, or macOS with Rancher Desktop.
@@ -265,9 +268,11 @@ Standards that are **not** gated yet (follow them for new and changed code):
    ```
 
 ## Test commands
-- Full suite (writes `test_report.log` and evidence under `artifacts/rogue-tests/`):
+- Full suite (writes `test_report.log` and evidence under `artifacts/rogue-tests/`, builds every image, and gives
+  the root-owned output back to you so `make qa-evidence` can run):
   ```bash
-  docker compose --profile tests -f compose/spiffe.compose.yml up --build --abort-on-container-exit rogue-tests
+  scripts/clean_stack.sh
+  make e2e
   ```
 - Specific test IDs:
   ```bash
@@ -290,7 +295,9 @@ Profiling is on by default (`TEST_PROFILE=1`); timings go to `artifacts/rogue-te
 and `guard_timings_top25.txt`. Disable with `-e TEST_PROFILE=0`.
 
 ## Evidence checks (false-green guard)
-After a full run, `make qa-evidence` validates the evidence. To inspect by hand:
+After a full run, `make qa-evidence` validates the evidence. Evidence holds no token values: guards work in a
+scratch directory, and the harness publishes it with every token-shaped value replaced by its SHA-256 fingerprint.
+To inspect by hand:
 ```bash
 find artifacts/rogue-tests -maxdepth 1 -mindepth 1 -type d | sort
 grep -Eq 'Failed: [1-9]' test_report.log && find artifacts/rogue-tests -name fail_reason.txt -print -exec cat {} \;

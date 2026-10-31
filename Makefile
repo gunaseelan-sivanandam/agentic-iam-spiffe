@@ -11,8 +11,10 @@ MIN_DIFF_COVERAGE ?= 90
 MIN_MUTATION_SCORE ?= 70
 BASE_REF ?= origin/main
 MUTATION_MAX_CHILDREN ?= 2
+# Everything a test run publishes (CI uploads exactly this); qa-evidence checks it for secrets.
+PUBLICATION_SET := test_report.log artifacts/rogue-tests artifacts/quality
 
-.PHONY: unit unit-guard-check unit-invariants unit-boundary unit-negative-controls unit-hybrid-critical unit-flake unit-cov unit-diff-cov traceability-check unit-mutation unit-trust qa-trace qa-evidence qa-quality docs-check tooling-test test-lint qa-deploy jira-live-smoke
+.PHONY: unit unit-guard-check unit-invariants unit-boundary unit-negative-controls unit-hybrid-critical unit-flake unit-cov unit-diff-cov traceability-check unit-mutation unit-trust qa-trace qa-evidence qa-quality docs-check tooling-test test-lint qa-deploy jira-live-smoke print-publication-set e2e
 
 unit:
 	$(PYTEST) $(TEST_DIR)
@@ -78,7 +80,15 @@ qa-evidence:
 	  --tests trace/tests.yaml \
 	  --evidence-dir artifacts/rogue-tests \
 	  --test-report test_report.log \
-	  --report-json artifacts/quality/evidence_report.json
+	  --report-json artifacts/quality/evidence_report.json \
+	  --publication-set $(PUBLICATION_SET)
+
+print-publication-set:
+	@echo $(PUBLICATION_SET)
+
+# Full E2E suite on the current stack state; run scripts/clean_stack.sh first for a clean run.
+e2e:
+	bash scripts/run_e2e.sh
 
 qa-quality: qa-trace traceability-check unit-guard-check docs-check test-lint qa-deploy
 
