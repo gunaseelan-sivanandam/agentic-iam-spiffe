@@ -214,6 +214,9 @@ Standards that are **not** gated yet (follow them for new and changed code):
 4. Fail closed: any unexpected error in a security decision path denies.
 5. No broad `except Exception` in enforcement or validation paths; catch specific exceptions.
 6. Audit events never contain token values, passwords, or key material; E2E tests assert this.
+7. Secrets this repository creates are stored in a standard, recognisable format (private keys as
+   PKCS#8 PEM), so the evidence secret check finds them by shape. Secrets created by others (SPIRE
+   key stores, join tokens, Jira tokens) keep their format.
 
 ## Documentation rules
 - One home per fact. Before adding a document, check the [Start here](#start-here) table; extend the

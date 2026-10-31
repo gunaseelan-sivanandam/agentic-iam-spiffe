@@ -15,7 +15,7 @@ assets:
   K1:
     requirement: REQ-SEC-K1
     locations:
-      - path: capiss_keys/root_key.b64
+      - path: capiss_keys/root_key.pem
         holders: [capability-issuer, capability-issuer-no-opa, rogue-tests]
   K2:
     requirement: REQ-SEC-K2
@@ -208,7 +208,7 @@ services:
     privileges: []
     root: grandfathered
   opa:
-    image: openpolicyagent/opa:latest
+    image: openpolicyagent/opa:1.13.2
     profiles: []
     networks: [capiss_app_net]
     ports: []
@@ -218,7 +218,7 @@ services:
     privileges: []
     root: forbidden
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.8-alpine
     profiles: []
     networks: [capiss_app_net, jiramcp_app_net, jiratool_app_net, toolb_app_net]
     ports: []
