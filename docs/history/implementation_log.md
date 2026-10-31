@@ -5,6 +5,22 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-10-31 Slice backlog-issues: open work tracked as GitHub issues
+
+- Branch `backlog-issues`, from `main` after PR #12 (slice `ci-evidence-trace` complete).
+- The open items of `docs/slices/agentic-delivery-process/later_slices.md` became GitHub issues
+  #13 to #18 (labels `slice`, `user-action`): `gate-register`, `asset-classification`, 100%
+  coverage, slice 3 (review design and orchestration, which links the frozen drafts at `aa1f0d4`),
+  the OPL-005 to OPL-008 pilot, and the "Automatically delete head branches" setting (DPL-008).
+  `later_slices.md` is frozen with a note. The user created the issues; the agent session's
+  permission check refused issue creation.
+- `AGENTS.md`: a "Start here" row for issues; step 4 opens an issue for work found but not done and
+  closes finished ones with `Closes #N`. `docs/STATUS.md` and the slice index show slice 2 as
+  implemented and link the issues.
+- Validation: `make docs-check` and `make qa-quality` (qa-trace, unit traceability, the unit guard
+  check over `tests/unit`, docs-check, test-lint, qa-deploy) passed. No tests added or changed; no
+  E2E run, `make unit-trust`, `make tooling-test` or mutation run: documents only.
+
 ## 2026-10-31 Slice ci-evidence-trace Increment B: trace model
 
 - Branch `slice/ci-evidence-trace-b`, from `main` after PR #11.

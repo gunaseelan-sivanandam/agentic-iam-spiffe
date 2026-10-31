@@ -1,5 +1,10 @@
 # Later slices — drafts for slices 2 and 3 (not approved)
 
+> **Frozen 2026-10-31.** Open items moved to GitHub issues: slice 3 ([#16](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/16), which links
+> the sections below), the pilot ([#17](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/17)), `asset-classification` ([#14](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/14)), and the
+> new `gate-register` ([#13](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/13)) and 100% coverage ([#15](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/15)) proposals. Slice 2 became
+> [`ci-evidence-trace`](../ci-evidence-trace/plan.md). This file is no longer updated.
+
 Status: **draft input** (2026-10-29). Merging the slice-1 plan does **not** approve anything here.
 Each slice starts with its own grill-me, which uses this file as input, and gets its own
 `plan.md`, `test_plan.md` and independent review under the D17 acceptance bar and the D18 threat
