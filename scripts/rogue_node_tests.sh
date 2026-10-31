@@ -1,7 +1,8 @@
 #!/bin/sh
 # Evidence model: Premise proves inputs/env are as expected, Exercise proves the SUT
 # was actually invoked, Outcome proves expected result and fails on harness errors.
-# Evidence artifacts are stored under /tmp/rogue-tests/<TEST_ID>_<slug>/.
+# Evidence artifacts are stored under /tmp/rogue-tests/<TEST_ID>_<slug>/, published from a scratch
+# directory with token values replaced by fingerprints (begin_test_evidence).
 set -eu
 
 GREEN='\033[32m'
@@ -24,6 +25,7 @@ trap 'rm -f "$LOG_PIPE"; kill "$TEE_PID" >/dev/null 2>&1 || true' EXIT
 TOTAL=0
 PASSED=0
 FAILED=0
+PUBLISH_FAILED=0
 FAIL_REASON=""
 EVDIR=""
 CURRENT_TEST_ID=""
@@ -202,6 +204,7 @@ run_test() {
   if [ -n "${EVDIR:-}" ]; then
     printf 'duration_seconds=%s\n' "$duration" >"${EVDIR}/duration.txt" 2>/dev/null || true
   fi
+  publish_test_evidence
   rm -f "$test_warnings_file"
   CURRENT_TEST_ID=""
 }
@@ -213,14 +216,33 @@ set_reason() {
   fi
 }
 
+# Guards work in a scratch directory (EVDIR) that is never published, so token hand-offs between
+# guards stay out of the evidence. publish_test_evidence copies it to the evidence directory (EVPUB)
+# with every token-shaped value replaced by its SHA-256 fingerprint (AGENTS.md coding rule 1).
 begin_test_evidence() {
+  publish_test_evidence
   ev_test_id="$1"
   ev_slug="$2"
   base="${ROGUE_TEST_EVIDENCE_DIR:-/tmp/rogue-tests}"
-  EVDIR="${base}/${ev_test_id}_${ev_slug}"
+  EVPUB="${base}/${ev_test_id}_${ev_slug}"
+  EVDIR="${ROGUE_TEST_SCRATCH_DIR:-/tmp/rogue-scratch}/${ev_test_id}_${ev_slug}"
+  rm -rf "$EVPUB" "$EVDIR"
+  mkdir -p "$EVPUB" "$EVDIR"
+  export EVDIR EVPUB
+}
+
+publish_test_evidence() {
+  if [ -z "${EVPUB:-}" ] || [ ! -d "${EVDIR:-}" ]; then
+    return 0
+  fi
+  # All or nothing: on failure the evidence directory stays empty, so qa-evidence fails, and the
+  # run fails at the end.
+  if ! python3 "${EVIDENCE_PUBLISHER:-/repo/scripts/evidence_secrets.py}" publish "$EVDIR" "$EVPUB"; then
+    PUBLISH_FAILED=$((PUBLISH_FAILED + 1))
+    printf '  ERROR: could not publish evidence of %s\n' "$EVPUB"
+  fi
   rm -rf "$EVDIR"
-  mkdir -p "$EVDIR"
-  export EVDIR
+  EVPUB=""
 }
 
 ev_note() {
@@ -1860,7 +1882,7 @@ expect_edge_unreachable() {
 # M1-T1
 c1_test() {
   begin_test_evidence "M1-T1" "missing_join_token"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   mkdir -p /run/spire/rogue
   : > /run/spire/rogue/missing_token
   premise_guard "spire-server container running" \
@@ -1888,7 +1910,7 @@ c1_test() {
 # M1-T2
 c2_test() {
   begin_test_evidence "M1-T2" "forged_token"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "spire-server container running" \
     "docker ps --format '{{.Names}}' | grep -Fxq spiffe-spire-server"
   premise_guard "spire-server resolves" \
@@ -1917,7 +1939,7 @@ c2_test() {
 # M1-T3
 c3_test() {
   begin_test_evidence "M1-T3" "replayed_token"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "spire-server container running" \
     "docker ps --format '{{.Names}}' | grep -Fxq spiffe-spire-server"
   premise_guard "spire-server resolves" \
@@ -1945,7 +1967,7 @@ c3_test() {
 # M1-T4
 c4_test() {
   begin_test_evidence "M1-T4" "join_token_read"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "rogue agent container exists" \
     "docker inspect spiffe-spire-rogue-agent >/dev/null 2>&1"
   premise_guard "spire-server resolves" \
@@ -1963,7 +1985,7 @@ c4_test() {
 # M1-T5
 c5_test() {
   begin_test_evidence "M1-T5" "node_entries"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "spire-server container running" \
     "docker ps --format '{{.Names}}' | grep -Fxq spiffe-spire-server"
   premise_guard "spire-server resolves" \
@@ -1981,7 +2003,7 @@ c5_test() {
 # M2-T1
 T1_test() {
   begin_test_evidence "M2-T1" "missing_client_cert"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "tool-b material present" "ensure_toolb_material"
   premise_guard "tool-b bundle present" "test -s \"${TOOLB_BUNDLE:-}\""
   premise_guard "resolve tool-b-envoy" \
@@ -2002,7 +2024,7 @@ T1_test() {
 # M2-T2
 T2_test() {
   begin_test_evidence "M2-T2" "invalid_client_cert"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "tool-b material present" "ensure_toolb_material"
   premise_guard "tool-b bundle present" "test -s \"${TOOLB_BUNDLE:-}\""
   premise_guard "resolve tool-b-envoy" \
@@ -2027,7 +2049,7 @@ T2_test() {
 # M2-T3
 T3_test() {
   begin_test_evidence "M2-T3" "expired_client_cert"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "tool-b material present" "ensure_toolb_material"
   premise_guard "tool-b bundle present" "test -s \"${TOOLB_BUNDLE:-}\""
   premise_guard "resolve tool-b-envoy" \
@@ -2106,7 +2128,7 @@ EOF
 # M2-T9
 T9_test() {
   begin_test_evidence "M2-T9" "expired_short_lived_svid"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "tool-b material present" "ensure_toolb_material"
   premise_guard "resolve tool-b-envoy" \
     "toolb_ip=\"\$(wait_resolve_ip tool-b-envoy 30)\" && printf '%s\n' \"\$toolb_ip\" >\"$EVDIR/toolb_envoy_ip.txt\""
@@ -2248,7 +2270,7 @@ T9_test() {
 # M2-T4
 T4_test() {
   begin_test_evidence "M2-T4" "wrong_spiffe_id"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "tool-b material present" "ensure_toolb_material"
   premise_guard "tool-b cert present" "test -s \"${TOOLB_CERT:-}\""
   premise_guard "tool-b key present" "test -s \"${TOOLB_KEY:-}\""
@@ -2274,7 +2296,7 @@ T4_test() {
 # M2-T5
 T5_test() {
   begin_test_evidence "M2-T5" "no_workload_socket"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   temp_rogue=""
   premise_guard "start temp rogue container" \
     "temp_rogue=\"\$(start_temp_rogue_container)\"; test -n \"\$temp_rogue\"; echo \"\$temp_rogue\" >\"$EVDIR/temp_rogue_name.txt\""
@@ -2293,7 +2315,7 @@ T5_test() {
 # M2-T6
 T6_test() {
   begin_test_evidence "M2-T6" "socket_no_entry"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "rogue socket container running" \
     "container_running spiffe-rogue-socket"
   premise_guard "workload socket present" \
@@ -2308,7 +2330,7 @@ T6_test() {
 # M2-T7
 T7_test() {
   begin_test_evidence "M2-T7" "no_svid_or_keys"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   temp_rogue=""
   premise_guard "start temp rogue container" \
     "temp_rogue=\"\$(start_temp_rogue_container)\"; test -n \"\$temp_rogue\"; echo \"\$temp_rogue\" >\"$EVDIR/temp_rogue_name.txt\""
@@ -2327,7 +2349,7 @@ T7_test() {
 # M2-T8
 T8_test() {
   begin_test_evidence "M2-T8" "no_unintended_entries"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "baseline entry list exists" "test -s \"$ENTRY_BEFORE\""
   exercise_guard "capture entry list after tests" \
     "after=\"$EVDIR/entries_after.txt\"; capture_entries \"\$after\""
@@ -2338,7 +2360,7 @@ T8_test() {
 
 M25_T1_test() {
   begin_test_evidence "M2.5-T1" "toolb_app_not_reachable"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "capture edge container context" \
     "hostname >\"$EVDIR/hostname.txt\" 2>&1; ip route >\"$EVDIR/ip_route.txt\" 2>&1 || true; cat /etc/resolv.conf >\"$EVDIR/resolv.conf\" 2>&1"
   premise_guard "pin tool-b app IP (toolb_app_net)" \
@@ -2355,7 +2377,7 @@ M25_T1_test() {
 
 M25_T2_test() {
   begin_test_evidence "M2.5-T2" "missing_x_spiffe_id"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "capture tool-b container context" \
     "docker exec spiffe-tool-b sh -lc 'hostname; ip route || true; cat /etc/resolv.conf' >\"$EVDIR/toolb_context.txt\" 2>&1"
   out="$EVDIR/toolb_missing_header.out"
@@ -2381,7 +2403,7 @@ PY"
 
 M25_T3_test() {
   begin_test_evidence "M2.5-T3" "mismatched_x_spiffe_id"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "capture edge container context" \
     "hostname >\"$EVDIR/hostname.txt\" 2>&1; ip route >\"$EVDIR/ip_route.txt\" 2>&1 || true; cat /etc/resolv.conf >\"$EVDIR/resolv.conf\" 2>&1"
   premise_guard "tool-b-envoy reachable" \
@@ -2409,7 +2431,7 @@ M25_T3_test() {
 
 M3S2_T1_test() {
   begin_test_evidence "M3.S2-T1" "agent_a_mint_allowed"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "capiss material available" \
     "ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
@@ -2436,7 +2458,7 @@ M3S2_T1_test() {
 
 M3S2_T2_test() {
   begin_test_evidence "M3.S2-T2" "rogue_mint_denied"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "capiss material available" \
     "ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
@@ -2459,7 +2481,7 @@ M3S2_T2_test() {
 
 M3S2_T3_test() {
   begin_test_evidence "M3.S2-T3" "opa_unreachable"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "edge DNS resolves tool-b-envoy" \
     "printf '%s' tool-b-envoy >\"$EVDIR/premise_edge_dns_target.txt\"; out=\"$EVDIR/premise_edge_dns_out.txt\"; err=\"$EVDIR/premise_edge_dns_err.txt\"; resolve_host_ip tool-b-envoy >\"\$out\" 2>\"\$err\"; rc=\"\$?\"; printf '%s' \"\$rc\" >\"$EVDIR/premise_edge_dns_rc.txt\"; ip=\"\$(cat \"\$out\" 2>/dev/null || true)\"; [ \"\$rc\" -eq 0 ] && [ -n \"\$ip\" ]"
   premise_guard "edge context ready (tool-b-envoy reachable)" \
@@ -2481,7 +2503,7 @@ M3S2_T3_test() {
 
 M3S2_T4_test() {
   begin_test_evidence "M3.S2-T4" "opa_unavailable"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "capiss material available" \
     "ensure_capiss_material"
   premise_guard "capiss-no-opa-envoy resolves" \
@@ -2506,7 +2528,7 @@ M3S2_T4_test() {
 
 M3S2_T5_test() {
   begin_test_evidence "M3.S2-T5" "issuer_app_not_reachable"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "edge DNS resolves tool-b-envoy" \
     "printf '%s' tool-b-envoy >\"$EVDIR/premise_edge_dns_target.txt\"; out=\"$EVDIR/premise_edge_dns_out.txt\"; err=\"$EVDIR/premise_edge_dns_err.txt\"; resolve_host_ip tool-b-envoy >\"\$out\" 2>\"\$err\"; rc=\"\$?\"; printf '%s' \"\$rc\" >\"$EVDIR/premise_edge_dns_rc.txt\"; ip=\"\$(cat \"\$out\" 2>/dev/null || true)\"; [ \"\$rc\" -eq 0 ] && [ -n \"\$ip\" ]"
   premise_guard "edge context ready (tool-b-envoy reachable)" \
@@ -2528,7 +2550,7 @@ M3S2_T5_test() {
 
 M3S3_T1_test() {
   begin_test_evidence "M3.S3-T1" "mint_non_empty_token"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "capiss material available" \
     "ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
@@ -2551,7 +2573,7 @@ M3S3_T1_test() {
 
 M3S3_T2_test() {
   begin_test_evidence "M3.S3-T2" "expires_at_near_future"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "capiss material available" \
     "ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
@@ -2576,7 +2598,7 @@ M3S3_T2_test() {
 
 M3S3_T3_test() {
   begin_test_evidence "M3.S3-T3" "two_mints_different"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "capiss material available" \
     "ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
@@ -2600,7 +2622,7 @@ M3S3_T3_test() {
 
 M3S4_T1_test() {
   begin_test_evidence "M3.S4-T1" "identity_only_denied"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "tool-b and capiss material available" \
     "ensure_toolb_material && ensure_capiss_material"
   premise_guard "tool-b-envoy resolves" \
@@ -2617,7 +2639,7 @@ M3S4_T1_test() {
 
 M3S4_T2_test() {
   begin_test_evidence "M3.S4-T2" "agent_a_token_access"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "tool-b and capiss material available" \
     "ensure_toolb_material && ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
@@ -2654,7 +2676,7 @@ M3S4_T2_test() {
 
 M3S4_T3_test() {
   begin_test_evidence "M3.S4-T3" "rogue_no_token_denied"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "tool-b and capiss material available" \
     "ensure_toolb_material && ensure_capiss_material"
   premise_guard "tool-b-envoy resolves" \
@@ -2670,7 +2692,7 @@ M3S4_T3_test() {
 
 M3S4_T4_test() {
   begin_test_evidence "M3.S4-T4" "stolen_token_denied"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "tool-b and capiss material available" \
     "ensure_toolb_material && ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
@@ -2703,7 +2725,7 @@ M3S4_T4_test() {
 
 M3S4_T5_test() {
   begin_test_evidence "M3.S4-T5" "expired_token_denied"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "tool-b and capiss material available" \
     "ensure_toolb_material && ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
@@ -2742,7 +2764,7 @@ M3S4_T5_test() {
 
 M3S4_T6_test() {
   begin_test_evidence "M3.S4-T6" "mint_bad_request"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "capiss material available" \
     "ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
@@ -2765,7 +2787,7 @@ M3S4_T6_test() {
 
 M3S4_T7_test() {
   begin_test_evidence "M3.S4-T7" "mint_policy_denied"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "capiss material available" \
     "ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
@@ -2788,7 +2810,7 @@ M3S4_T7_test() {
 
 M4_T1_test() {
   begin_test_evidence "M4-T1" "root_mint_contains_chain_metadata"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "capiss material available" "ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
     "capiss_ip=\"$(wait_resolve_ip capability-issuer-envoy 30)\"; test -n \"\$capiss_ip\"; echo \"\$capiss_ip\" >\"$EVDIR/capiss_envoy_ip.txt\"; CAPISS_ENVOY_IP=\"\$capiss_ip\""
@@ -2808,7 +2830,7 @@ M4_T1_test() {
 
 M4_T2_test() {
   begin_test_evidence "M4-T2" "search_writes_discovery_registry"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "tool-b and capiss material available" \
     "ensure_toolb_material && ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
@@ -2838,7 +2860,7 @@ M4_T2_test() {
 
 M4_T3_test() {
   begin_test_evidence "M4-T3" "resource_mint_requires_registry_proof"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "capiss material available" "ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
     "capiss_ip=\"$(wait_resolve_ip capability-issuer-envoy 30)\"; test -n \"\$capiss_ip\"; CAPISS_ENVOY_IP=\"\$capiss_ip\""
@@ -2857,7 +2879,7 @@ M4_T3_test() {
 
 M4_T4_test() {
   begin_test_evidence "M4-T4" "resource_mint_after_discovery"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "tool-b and capiss material available" \
     "ensure_toolb_material && ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
@@ -2890,7 +2912,7 @@ M4_T4_test() {
 
 M4_T5_test() {
   begin_test_evidence "M4-T5" "budget_enforced_per_root_token"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "tool-b and capiss material available" \
     "ensure_toolb_material && ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
@@ -2915,7 +2937,7 @@ M4_T5_test() {
 
 M4_T6_test() {
   begin_test_evidence "M4-T6" "tampered_token_denied"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "tool-b and capiss material available" \
     "ensure_toolb_material && ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
@@ -2939,7 +2961,7 @@ M4_T6_test() {
 
 M4_T7_test() {
   begin_test_evidence "M4-T7" "depth_limit_enforced_on_repeated_delegation"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "tool-b and capiss material available" \
     "ensure_toolb_material && ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
@@ -2978,7 +3000,7 @@ M4_T7_test() {
 
 M4_T8_test() {
   begin_test_evidence "M4-T8" "new_resource_mint_rate_enforced"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "tool-b and capiss material available" \
     "ensure_toolb_material && ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
@@ -3014,7 +3036,7 @@ M4_T8_test() {
 
 M4_T9_test() {
   begin_test_evidence "M4-T9" "allow_flow_emits_correlatable_audit_events"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "tool-b and capiss material available" \
     "ensure_toolb_material && ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
@@ -3058,7 +3080,7 @@ M4_T9_test() {
 
 M4_T10_test() {
   begin_test_evidence "M4-T10" "deny_flow_emits_correlatable_mint_audit_event"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "tool-b and capiss material available" \
     "ensure_toolb_material && ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
@@ -3101,7 +3123,7 @@ M4_T10_test() {
 
 M4_T11_test() {
   begin_test_evidence "M4-T11" "amplified_delegated_mint_denied"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "capiss material available" "ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
     "capiss_ip=\"$(wait_resolve_ip capability-issuer-envoy 30)\"; test -n \"\$capiss_ip\"; CAPISS_ENVOY_IP=\"\$capiss_ip\""
@@ -3120,7 +3142,7 @@ M4_T11_test() {
 
 M4_T12_test() {
   begin_test_evidence "M4-T12" "wildcard_resource_denied"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "capiss material available" "ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
     "capiss_ip=\"$(wait_resolve_ip capability-issuer-envoy 30)\"; test -n \"\$capiss_ip\"; CAPISS_ENVOY_IP=\"\$capiss_ip\""
@@ -3139,7 +3161,7 @@ M4_T12_test() {
 
 M4_T13_test() {
   begin_test_evidence "M4-T13" "budget_and_registry_ttl_bounded"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "tool-b and capiss material available" \
     "ensure_toolb_material && ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
@@ -3169,7 +3191,7 @@ M4_T13_test() {
 
 M4_T14_test() {
   begin_test_evidence "M4-T14" "protected_request_does_not_require_capiss"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "tool-b and capiss material available" \
     "ensure_toolb_material && ensure_capiss_material"
   premise_guard "capiss-envoy resolves" \
@@ -3202,7 +3224,7 @@ M4_T14_test() {
 
 M4A_T1_test() {
   begin_test_evidence "M4a-T1" "mock_upstream_breadth"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "jira-mock health reachable from test harness" \
     "wait_http_ready \"${JIRA_MOCK_URL}/health\" \"\" 30"
   exercise_guard "direct mock read for IAM-1 and NAS-1" \
@@ -3216,7 +3238,7 @@ M4A_T1_test() {
 
 M4A_T2_test() {
   begin_test_evidence "M4a-T2" "allowed_mint_and_iam_read"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   raw="/tmp/m4a_t2_mint_$$.json"
   token_tmp="/tmp/m4a_t2_token_$$.txt"
   premise_guard "capiss material available" "ensure_capiss_material"
@@ -3240,7 +3262,7 @@ M4A_T2_test() {
 
 M4A_T3_test() {
   begin_test_evidence "M4a-T3" "non_allowed_project_mint_denied"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   raw="/tmp/m4a_t3_mint_$$.json"
   premise_guard "capiss material available" "ensure_capiss_material"
   premise_guard "capiss-envoy reachable" \
@@ -3254,7 +3276,7 @@ M4A_T3_test() {
 
 M4A_T4_test() {
   begin_test_evidence "M4a-T4" "nas_read_denied_before_upstream"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   raw="/tmp/m4a_t4_mint_$$.json"
   token_tmp="/tmp/m4a_t4_token_$$.txt"
   premise_guard "capiss material and jira-tool available" \
@@ -3275,7 +3297,7 @@ M4A_T4_test() {
 
 M4A_T5_test() {
   begin_test_evidence "M4a-T5" "rogue_jira_mint_denied"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   raw="/tmp/m4a_t5_mint_$$.json"
   premise_guard "capiss material available" "ensure_capiss_material"
   premise_guard "capiss-envoy reachable" \
@@ -3289,7 +3311,7 @@ M4A_T5_test() {
 
 M4A_T6_test() {
   begin_test_evidence "M4a-T6" "stolen_jira_token_denied"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   raw="/tmp/m4a_t6_mint_$$.json"
   token_tmp="/tmp/m4a_t6_token_$$.txt"
   premise_guard "capiss material and jira-tool available" \
@@ -3310,7 +3332,7 @@ M4A_T6_test() {
 
 M4A_T7_test() {
   begin_test_evidence "M4a-T7" "jira_budget_consumption"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   raw="/tmp/m4a_t7_mint_$$.json"
   token_tmp="/tmp/m4a_t7_token_$$.txt"
   premise_guard "capiss material and jira-tool available" \
@@ -3331,7 +3353,7 @@ M4A_T7_test() {
 
 M4A_T8_test() {
   begin_test_evidence "M4a-T8" "jira_budget_exhaustion"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   raw="/tmp/m4a_t8_mint_$$.json"
   token_tmp="/tmp/m4a_t8_token_$$.txt"
   premise_guard "capiss material and jira-tool available" \
@@ -3354,7 +3376,7 @@ M4A_T8_test() {
 
 M4A_T9_test() {
   begin_test_evidence "M4a-T9" "upstream_project_mismatch_denied"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   raw="/tmp/m4a_t9_mint_$$.json"
   token_tmp="/tmp/m4a_t9_token_$$.txt"
   premise_guard "capiss material and jira-tool available" \
@@ -3377,7 +3399,7 @@ M4A_T9_test() {
 
 M4A_T10_test() {
   begin_test_evidence "M4a-T10" "jira_audit_trace_reconstruction"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   raw="/tmp/m4a_t10_mint_$$.json"
   token_tmp="/tmp/m4a_t10_token_$$.txt"
   premise_guard "capiss material and jira-tool available" \
@@ -3404,7 +3426,7 @@ M4A_T10_test() {
 
 M4B_T1_test() {
   begin_test_evidence "M4b-T1" "allowed_write_update_and_readback"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   raw="/tmp/m4b_t1_mint_$$.json"
   token_tmp="/tmp/m4b_t1_token_$$.txt"
   body_file="/tmp/m4b_t1_body_$$.json"
@@ -3434,7 +3456,7 @@ M4B_T1_test() {
 
 M4B_T2_test() {
   begin_test_evidence "M4b-T2" "read_token_write_denied"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   raw="/tmp/m4b_t2_mint_$$.json"
   token_tmp="/tmp/m4b_t2_token_$$.txt"
   premise_guard "capiss material and jira-tool available" \
@@ -3455,7 +3477,7 @@ M4B_T2_test() {
 
 M4B_T3_test() {
   begin_test_evidence "M4b-T3" "nas_write_mint_denied"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   raw="/tmp/m4b_t3_mint_$$.json"
   premise_guard "capiss material available" "ensure_capiss_material"
   premise_guard "capiss-envoy reachable" \
@@ -3469,7 +3491,7 @@ M4B_T3_test() {
 
 M4B_T4_test() {
   begin_test_evidence "M4b-T4" "nas_write_denied_before_upstream"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   raw="/tmp/m4b_t4_mint_$$.json"
   token_tmp="/tmp/m4b_t4_token_$$.txt"
   premise_guard "capiss material and jira-tool available" \
@@ -3490,7 +3512,7 @@ M4B_T4_test() {
 
 M4B_T5_test() {
   begin_test_evidence "M4b-T5" "description_write_body_shape"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   raw="/tmp/m4b_t5_mint_$$.json"
   token_tmp="/tmp/m4b_t5_token_$$.txt"
   premise_guard "capiss material and jira-tool available" \
@@ -3515,7 +3537,7 @@ M4B_T5_test() {
 
 M4B_T6_test() {
   begin_test_evidence "M4b-T6" "write_audit_trace_reconstruction"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   raw="/tmp/m4b_t6_mint_$$.json"
   token_tmp="/tmp/m4b_t6_token_$$.txt"
   premise_guard "capiss material and jira-tool available" \
@@ -3563,7 +3585,7 @@ m5_mint_token_file() {
 
 M5_T1_test() {
   begin_test_evidence "M5-T1" "mcp_launcher_session"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "adapter container is running" "container_running spiffe-codex-jira-mcp-adapter"
   premise_guard "launcher uses docker compose exec -T" "grep -Fq 'exec -T' /repo/scripts/codex_jira_mcp.sh && ! grep -Eq 'compose .* up|--build' /repo/scripts/codex_jira_mcp.sh"
   exercise_guard "list tools through launcher" \
@@ -3575,7 +3597,7 @@ M5_T1_test() {
 
 M5_T2_test() {
   begin_test_evidence "M5-T2" "mcp_tool_surface"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "adapter container is running" "container_running spiffe-codex-jira-mcp-adapter"
   exercise_guard "list MCP tools" "mcp_launcher_message '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}' \"$EVDIR/tools.json\" \"$EVDIR/launcher.err\""
   outcome_guard "only approved tools are exposed" \
@@ -3585,7 +3607,7 @@ M5_T2_test() {
 
 M5_T3_test() {
   begin_test_evidence "M5-T3" "iam_summary_success"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "M5 path and mock ready" "m5_ready && jira_mcp_mock_reset"
   exercise_guard "call IAM project summary through MCP" \
     "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/summary.json\""
@@ -3597,7 +3619,7 @@ M5_T3_test() {
 
 M5_T4_test() {
   begin_test_evidence "M5-T4" "summary_allowed_fields"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "M5 path ready" "m5_ready"
   exercise_guard "call summary" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/summary.json\""
   outcome_guard "summary is the IAM project summary" \
@@ -3609,7 +3631,7 @@ M5_T4_test() {
 
 M5_T5_test() {
   begin_test_evidence "M5-T5" "summary_bounds"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "mock has excess IAM data" "jira_mcp_mock_breadth \"$EVDIR/breadth.json\" && jq -e '.iam_count > 75' \"$EVDIR/breadth.json\" >/dev/null"
   exercise_guard "call summary" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/summary.json\""
   outcome_guard "summary counts are bounded" "jq -e '(.issues|length)<=50 and (.epics|length)<=25' \"$EVDIR/summary.json\" >/dev/null"
@@ -3618,7 +3640,7 @@ M5_T5_test() {
 
 M5_T6_test() {
   begin_test_evidence "M5-T6" "nas_summary_mint_denied"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
   exercise_guard "call NAS summary through adapter" "mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/error.json\""
   exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
@@ -3629,7 +3651,7 @@ M5_T6_test() {
 
 M5_T7_test() {
   begin_test_evidence "M5-T7" "iam_story_create"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
   exercise_guard "create IAM story through MCP" \
     "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"M5 story\",\"description\":\"M5 description\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/create.json\""
@@ -3641,7 +3663,7 @@ M5_T7_test() {
 
 M5_T8_test() {
   begin_test_evidence "M5-T8" "iam_story_create_ac"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
   exercise_guard "create IAM story with acceptance criteria" \
     "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"M5 AC story\",\"description\":\"M5 description\",\"acceptance_criteria\":[\"AC one\",\"AC two\"]}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/create.json\""
@@ -3652,7 +3674,7 @@ M5_T8_test() {
 
 M5_T9_test() {
   begin_test_evidence "M5-T9" "iam_story_create_epic"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
   exercise_guard "create IAM story with valid epic" \
     "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"M5 epic story\",\"description\":\"M5 description\",\"epic_key\":\"IAM-101\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/create.json\""
@@ -3664,7 +3686,7 @@ M5_T9_test() {
 
 M5_T10_test() {
   begin_test_evidence "M5-T10" "invalid_epic_no_create"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
   exercise_guard "attempt create with non-Epic IAM issue" \
     "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"bad epic\",\"description\":\"d\",\"epic_key\":\"IAM-900\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/error.json\""
@@ -3676,7 +3698,7 @@ M5_T10_test() {
 
 M5_T11_test() {
   begin_test_evidence "M5-T11" "nas_create_mint_denied"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
   exercise_guard "attempt NAS create through MCP" "mcp_tool_call create_story '{\"project_key\":\"NAS\",\"summary\":\"NAS\",\"description\":\"d\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/error.json\""
   exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
@@ -3687,7 +3709,7 @@ M5_T11_test() {
 
 M5_T12_test() {
   begin_test_evidence "M5-T12" "iam_token_nas_payload_denied"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   token_file="$EVDIR/create_token.txt"
   premise_guard "M5 path ready and create token minted" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$token_file' create"
   exercise_guard "call create endpoint with NAS payload" "token=\"\$(cat '$token_file')\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"NAS\",\"summary\":\"x\",\"description\":\"d\"}' \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
@@ -3699,7 +3721,7 @@ M5_T12_test() {
 
 M5_T13_test() {
   begin_test_evidence "M5-T13" "cross_project_epic_denied"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
   exercise_guard "attempt create with NAS epic" "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":\"d\",\"epic_key\":\"NAS-101\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/error.json\""
   exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
@@ -3710,7 +3732,7 @@ M5_T13_test() {
 
 M5_T14_test() {
   begin_test_evidence "M5-T14" "arbitrary_fields_rejected"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   token_file="$EVDIR/create_token.txt"
   premise_guard "M5 path ready and create token minted" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$token_file' create"
   exercise_guard "send arbitrary assignee field to gateway" "token=\"\$(cat '$token_file')\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":\"d\",\"assignee\":\"bad\"}' \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
@@ -3722,7 +3744,7 @@ M5_T14_test() {
 
 M5_T15_test() {
   begin_test_evidence "M5-T15" "raw_adf_rejected"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   token_file="$EVDIR/create_token.txt"
   premise_guard "M5 path ready and create token minted" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$token_file' create"
   exercise_guard "send raw ADF description" "token=\"\$(cat '$token_file')\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":{\"type\":\"doc\"}}' \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
@@ -3734,7 +3756,7 @@ M5_T15_test() {
 
 M5_T16_test() {
   begin_test_evidence "M5-T16" "adapter_forwards_nas_to_capiss"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
   exercise_guard "call NAS summary through adapter" "mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/error.json\""
   exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
@@ -3746,7 +3768,7 @@ M5_T16_test() {
 
 M5_T17_test() {
   begin_test_evidence "M5-T17" "unsupported_action_denied"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "M5 capiss material ready" "m5_ready"
   exercise_guard "attempt unsupported M5 action mint" "jira_mcp_mint_with_body_to_file '$JIRA_MCP_UNSUPPORTED_MINT_BODY' \"$EVDIR/mint.json\" \"$EVDIR/status.txt\""
   outcome_guard "unsupported action denied" "assert_file_eq \"$EVDIR/status.txt\" \"403\" && jq -e '.reason==\"policy\"' \"$EVDIR/mint.json\" >/dev/null"
@@ -3755,7 +3777,7 @@ M5_T17_test() {
 
 M5_T18_test() {
   begin_test_evidence "M5-T18" "old_jira_authority_separated"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "capiss and M5 gateway ready" "m5_ready"
   exercise_guard "adapter cannot mint old jira-tool resource for M5 subject" "jira_mcp_mint_with_body_to_file '{\"aud\":\"jira-tool\",\"act\":\"read\",\"res\":\"jira-tool:/project:IAM\"}' \"$EVDIR/mint.json\" \"$EVDIR/status.txt\""
   outcome_guard "old authority denied for adapter" "assert_file_eq \"$EVDIR/status.txt\" \"403\" && jq -e '.reason==\"policy\"' \"$EVDIR/mint.json\" >/dev/null"
@@ -3764,7 +3786,7 @@ M5_T18_test() {
 
 M5_T19_test() {
   begin_test_evidence "M5-T19" "m4_jira_not_disturbed"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "M4 Jira policy entries still present" "grep -Fq 'aud == \"jira-tool\"' /repo/services/opa/policy.rego && grep -Fq 'jira-tool:/project:IAM' /repo/services/opa/policy.rego"
   exercise_guard "M4 jira-tool health remains reachable" "ensure_capiss_material && ensure_jira_envoy_ready"
   outcome_guard "M4 jira-tool envoy identity verified" "test -n \"${JIRA_ENVOY_IP:-}\""
@@ -3773,7 +3795,7 @@ M5_T19_test() {
 
 M5_T20_test() {
   begin_test_evidence "M5-T20" "endpoint_bound_action"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   read_token="$EVDIR/read_token.txt"
   create_token="$EVDIR/create_token.txt"
   premise_guard "M5 tokens minted" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_SUMMARY_MINT_BODY' '$read_token' read && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$create_token' create"
@@ -3785,7 +3807,7 @@ M5_T20_test() {
 
 M5_T21_test() {
   begin_test_evidence "M5-T21" "audience_mismatch_denied"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "M5 capiss material ready" "m5_ready"
   exercise_guard "attempt wrong-audience M5 resource mint" "jira_mcp_mint_with_body_to_file '{\"aud\":\"jira-tool\",\"act\":\"read_project_summary\",\"res\":\"jira-mcp:/project:IAM\"}' \"$EVDIR/mint.json\" \"$EVDIR/status.txt\""
   outcome_guard "wrong audience/resource family rejected before OPA (400 res)" "assert_denial \"$EVDIR/status.txt\" \"$EVDIR/mint.json\" 400 bad_request res"
@@ -3794,7 +3816,7 @@ M5_T21_test() {
 
 M5_T22_test() {
   begin_test_evidence "M5-T22" "stolen_token_subject_mismatch"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   token_file="$EVDIR/read_token.txt"
   premise_guard "M5 read token minted" "m5_ready && ensure_capiss_material && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_SUMMARY_MINT_BODY' '$token_file' read"
   exercise_guard "rogue presents adapter token to gateway" "token=\"\$(cat '$token_file')\"; jira_mcp_rogue_request_to_file \"\$token\" \"$JIRA_MCP_SUMMARY_URL\" '{\"project_key\":\"IAM\"}' \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
@@ -3804,7 +3826,7 @@ M5_T22_test() {
 
 M5_T23_test() {
   begin_test_evidence "M5-T23" "invalid_token_denied"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "M5 gateway ready" "m5_ready && jira_mcp_mock_reset"
   exercise_guard "call gateway with invalid token" "jira_mcp_request_to_file 'not-a-token' \"$JIRA_MCP_SUMMARY_URL\" '{\"project_key\":\"IAM\"}' \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
   exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
@@ -3815,7 +3837,7 @@ M5_T23_test() {
 
 M5_T24_test() {
   begin_test_evidence "M5-T24" "direct_app_bypass_unavailable"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "M5 edge path reachable" "m5_ready"
   exercise_guard "attempt direct gateway app from test harness" "set +e; curl -sS --max-time 2 http://jira-mcp-gateway:8080/health >\"$EVDIR/direct_gateway.out\" 2>&1; rc=\$?; set -e; echo \$rc >\"$EVDIR/direct_gateway_rc.txt\""
   outcome_guard "direct app path not available from edge/test context" "assert_file_eq \"$EVDIR/direct_gateway_rc.txt\" 6 && assert_text_contains \"$EVDIR/direct_gateway.out\" 'Could not resolve host: jira-mcp-gateway'"
@@ -3824,7 +3846,7 @@ M5_T24_test() {
 
 M5_T25_test() {
   begin_test_evidence "M5-T25" "only_gateway_calls_mock"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
   exercise_guard "run allowed and denied MCP calls" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/iam.json\" \"$EVDIR/iam.err\"; mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/nas.json\" \"$EVDIR/nas.err\""
   exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
@@ -3834,7 +3856,7 @@ M5_T25_test() {
 
 M5_T26_test() {
   begin_test_evidence "M5-T26" "mcp_responses_no_tokens"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "M5 path ready" "m5_ready"
   exercise_guard "call summary and create" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/summary_mcp.json\" \"$EVDIR/summary.err\"; mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":\"d\"}' \"$EVDIR/create_mcp.json\" \"$EVDIR/create.err\""
   outcome_guard "both MCP calls succeeded (ok=true, not isError)" "assert_mcp_ok \"$EVDIR/summary_mcp.json\" && assert_mcp_ok \"$EVDIR/create_mcp.json\""
@@ -3844,7 +3866,7 @@ M5_T26_test() {
 
 M5_T27_test() {
   begin_test_evidence "M5-T27" "adapter_logs_no_tokens"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "M5 path ready" "m5_ready"
   exercise_guard "call summary and capture adapter stderr" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/summary_mcp.json\" \"$EVDIR/adapter.err\""
   outcome_guard "adapter stderr contains metadata but no bearer token" "grep -Fq 'adapter_decision' \"$EVDIR/adapter.err\" && ! grep -Eiq 'Bearer |\"token\"|token_type|Biscuit' \"$EVDIR/adapter.err\""
@@ -3853,7 +3875,7 @@ M5_T27_test() {
 
 M5_T28_test() {
   begin_test_evidence "M5-T28" "adapter_env_no_jira_secret"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "adapter container running" "container_running spiffe-codex-jira-mcp-adapter"
   exercise_guard "capture adapter environment" "docker exec spiffe-codex-jira-mcp-adapter env | sort >\"$EVDIR/adapter_env.txt\""
   outcome_guard "captured environment is the adapter's" "assert_text_contains \"$EVDIR/adapter_env.txt\" 'JIRA_MCP_GATEWAY_URL='"
@@ -3863,7 +3885,7 @@ M5_T28_test() {
 
 M5_T30_test() {
   begin_test_evidence "M5-T30" "upstream_header_stripping"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "M5 path ready and mock reset" "m5_ready && jira_mcp_mock_reset"
   exercise_guard "create story through gateway" "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"header\",\"description\":\"d\"}' \"$EVDIR/create_mcp.json\" \"$EVDIR/adapter.err\""
   exercise_guard "capture mock requests" "jira_mcp_mock_request_log \"$EVDIR/mock_requests.json\""
@@ -3873,7 +3895,7 @@ M5_T30_test() {
 
 M5_T31_test() {
   begin_test_evidence "M5-T31" "summary_budget_governance"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   token_file="$EVDIR/read_token.txt"
   premise_guard "M5 read token minted" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_SUMMARY_MINT_BODY' '$token_file' read"
   exercise_guard "use same summary token until budget exhausted" "token=\"\$(cat '$token_file')\"; : >\"$EVDIR/statuses.txt\"; i=1; while [ \$i -le 11 ]; do jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_SUMMARY_URL\" '{\"project_key\":\"IAM\"}' \"$EVDIR/resp_\$i.json\" \"$EVDIR/status_\$i.txt\"; cat \"$EVDIR/status_\$i.txt\" >>\"$EVDIR/statuses.txt\"; echo >>\"$EVDIR/statuses.txt\"; i=\$((i+1)); done"
@@ -3883,7 +3905,7 @@ M5_T31_test() {
 
 M5_T32_test() {
   begin_test_evidence "M5-T32" "create_budget_before_upstream"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "M5 ready and log baseline captured" "m5_ready && jira_mcp_mock_reset && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
   exercise_guard "create story" "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"budget\",\"description\":\"d\"}' \"$EVDIR/create_mcp.json\" \"$EVDIR/adapter.err\""
   exercise_guard "capture gateway logs" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; docker logs --since \"\$since\" spiffe-jira-mcp-gateway >\"$EVDIR/gateway.log\" 2>&1"
@@ -3893,7 +3915,7 @@ M5_T32_test() {
 
 M5_T33_test() {
   begin_test_evidence "M5-T33" "budget_exhaustion_denies_create"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   token_file="$EVDIR/create_token.txt"
   premise_guard "M5 create token minted" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$token_file' create"
   exercise_guard "exhaust create token budget then attempt create" "token=\"\$(cat '$token_file')\"; i=1; while [ \$i -le 10 ]; do jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":\"d\"}' \"$EVDIR/create_\$i.json\" \"$EVDIR/status_\$i.txt\"; i=\$((i+1)); done; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":\"d\"}' \"$EVDIR/denied.json\" \"$EVDIR/denied_status.txt\""
@@ -3903,7 +3925,7 @@ M5_T33_test() {
 
 M5_T34_test() {
   begin_test_evidence "M5-T34" "prevalidation_no_budget_spend"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   token_file="$EVDIR/create_token.txt"
   premise_guard "M5 create token minted" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$token_file' create"
   exercise_guard "send invalid payload before valid create" "token=\"\$(cat '$token_file')\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":{\"type\":\"doc\"}}' \"$EVDIR/invalid.json\" \"$EVDIR/invalid_status.txt\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"valid\",\"description\":\"d\"}' \"$EVDIR/valid.json\" \"$EVDIR/valid_status.txt\""
@@ -3913,7 +3935,7 @@ M5_T34_test() {
 
 M5_T35_test() {
   begin_test_evidence "M5-T35" "upstream_failure_no_refund"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   token_file="$EVDIR/create_token.txt"
   premise_guard "M5 create token minted and mock failure armed" "m5_ready && jira_mcp_mock_reset && jira_mcp_mock_fail_next_create && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$token_file' create"
   exercise_guard "authorized create hits injected upstream failure" "token=\"\$(cat '$token_file')\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"fail\",\"description\":\"d\"}' \"$EVDIR/fail.json\" \"$EVDIR/fail_status.txt\""
@@ -3923,7 +3945,7 @@ M5_T35_test() {
 
 M5_T36_test() {
   begin_test_evidence "M5-T36" "read_audit_correlation"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "M5 path ready and log baseline captured" "m5_ready && jira_mcp_mock_reset && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
   exercise_guard "call summary" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/summary.json\""
   exercise_guard "capture logs" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; docker logs --since \"\$since\" spiffe-capability-issuer >\"$EVDIR/capiss.log\" 2>&1; docker logs --since \"\$since\" spiffe-jira-mcp-gateway >\"$EVDIR/gateway.log\" 2>&1"
@@ -3934,7 +3956,7 @@ M5_T36_test() {
 
 M5_T37_test() {
   begin_test_evidence "M5-T37" "create_audit_correlation"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "M5 path ready and log baseline captured" "m5_ready && jira_mcp_mock_reset && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
   exercise_guard "create story" "mcp_tool_call create_story '{\"project_key\":\"IAM\",\"summary\":\"audit\",\"description\":\"d\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/create.json\""
   exercise_guard "capture gateway logs" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; docker logs --since \"\$since\" spiffe-jira-mcp-gateway >\"$EVDIR/gateway.log\" 2>&1"
@@ -3944,7 +3966,7 @@ M5_T37_test() {
 
 M5_T38_test() {
   begin_test_evidence "M5-T38" "deny_decision_events"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   token_file="$EVDIR/create_token.txt"
   premise_guard "M5 token and log baseline ready" "m5_ready && jira_mcp_mock_reset && m5_mint_token_file '$JIRA_MCP_IAM_CREATE_MINT_BODY' '$token_file' create && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
   exercise_guard "trigger payload deny" "token=\"\$(cat '$token_file')\"; jira_mcp_request_to_file \"\$token\" \"$JIRA_MCP_STORIES_URL\" '{\"project_key\":\"IAM\",\"summary\":\"x\",\"description\":{\"type\":\"doc\"}}' \"$EVDIR/response.json\" \"$EVDIR/status.txt\""
@@ -3955,7 +3977,7 @@ M5_T38_test() {
 
 M5_T39_test() {
   begin_test_evidence "M5-T39" "standard_errors_no_existence_leak"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "mock proves NAS exists and M5 path ready" "jira_mcp_mock_breadth \"$EVDIR/breadth.json\" && jq -e '.projects | index(\"NAS\")' \"$EVDIR/breadth.json\" >/dev/null && m5_ready"
   exercise_guard "attempt NAS summary" "mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/mcp_response.json\" \"$EVDIR/adapter.err\" && mcp_text_json_to_file \"$EVDIR/mcp_response.json\" \"$EVDIR/error.json\""
   outcome_guard "standard local error has no upstream detail" "jq -e '.ok==false and .reason==\"mint_denied\" and (has(\"project\")|not) and (has(\"issues\")|not)' \"$EVDIR/error.json\" >/dev/null"
@@ -3964,7 +3986,7 @@ M5_T39_test() {
 
 M5_T40_test() {
   begin_test_evidence "M5-T40" "mock_breadth"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "jira-mcp-mock reachable" "wait_dns jira-mcp-mock 30"
   exercise_guard "capture mock breadth" "jira_mcp_mock_breadth \"$EVDIR/breadth.json\""
   outcome_guard "mock has IAM and NAS data" "jq -e '(.projects|sort)==[\"IAM\",\"NAS\"] and .iam_count>75 and .nas_count>=4' \"$EVDIR/breadth.json\" >/dev/null"
@@ -3973,7 +3995,7 @@ M5_T40_test() {
 
 M5_T41_test() {
   begin_test_evidence "M5-T41" "protected_path_narrows_mock"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   premise_guard "mock breadth and M5 path ready" "jira_mcp_mock_breadth \"$EVDIR/breadth.json\" && m5_ready && jira_mcp_mock_reset"
   exercise_guard "allowed IAM and denied NAS through MCP" "mcp_tool_call read_project_summary '{\"project_key\":\"IAM\"}' \"$EVDIR/iam_mcp.json\" \"$EVDIR/iam.err\" && mcp_text_json_to_file \"$EVDIR/iam_mcp.json\" \"$EVDIR/iam.json\"; mcp_tool_call read_project_summary '{\"project_key\":\"NAS\"}' \"$EVDIR/nas_mcp.json\" \"$EVDIR/nas.err\" && mcp_text_json_to_file \"$EVDIR/nas_mcp.json\" \"$EVDIR/nas.json\""
   outcome_guard "protected path allows IAM and denies NAS" "jq -e '.ok==true and .project.key==\"IAM\"' \"$EVDIR/iam.json\" >/dev/null && jq -e '.ok==false and .reason==\"mint_denied\"' \"$EVDIR/nas.json\" >/dev/null"
@@ -3982,7 +4004,7 @@ M5_T41_test() {
 
 M5_T42_test() {
   begin_test_evidence "M5-T42" "varambu_capiss_audit_files"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   session_dir="/repo/artifacts/varambu-demo/e2e-M5-T42"
   premise_guard "M5 path ready and audit session prepared" "m5_ready && jira_mcp_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
   exercise_guard "start Varambu capiss audit tailer" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; : >\"$session_dir/capiss_audit.jsonl\"; : >\"$session_dir/capiss_audit.log\"; python3 /repo/scripts/varambu_audit.py tail --since \"\$since\" --jsonl \"$session_dir/capiss_audit.jsonl\" --human \"$session_dir/capiss_audit.log\" --err \"$session_dir/audit_tailer.err\" >/dev/null 2>>\"$session_dir/audit_tailer.err\" & echo \$! >\"$session_dir/audit_tailer.pid\"; sleep 2; kill -0 \"\$(cat \"$session_dir/audit_tailer.pid\")\""
@@ -3999,7 +4021,7 @@ M5_T42_test() {
 
 M5_T43_test() {
   begin_test_evidence "M5-T43" "varambu_audit_active_append"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   session_dir="/repo/artifacts/varambu-demo/e2e-M5-T43"
   premise_guard "M5 path ready and empty audit session prepared" "m5_ready && jira_mcp_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && sleep 2 && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
   exercise_guard "start audit tailer" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; : >\"$session_dir/capiss_audit.jsonl\"; : >\"$session_dir/capiss_audit.log\"; python3 /repo/scripts/varambu_audit.py tail --since \"\$since\" --jsonl \"$session_dir/capiss_audit.jsonl\" --human \"$session_dir/capiss_audit.log\" --err \"$session_dir/audit_tailer.err\" >/dev/null 2>>\"$session_dir/audit_tailer.err\" & echo \$! >\"$session_dir/audit_tailer.pid\"; sleep 2; kill -0 \"\$(cat \"$session_dir/audit_tailer.pid\")\""
@@ -4016,7 +4038,7 @@ M5_T43_test() {
 
 M5_T44_test() {
   begin_test_evidence "M5-T44" "varambu_audit_session_and_history"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   session1="/repo/artifacts/varambu-demo/e2e-M5-T44-s1"
   session2="/repo/artifacts/varambu-demo/e2e-M5-T44-s2"
   premise_guard "two synthetic sessions exist with distinct records and current points to session 2" "mkdir -p /repo/artifacts/varambu-demo && find /repo/artifacts/varambu-demo -mindepth 1 -maxdepth 1 -exec rm -rf {} + && mkdir -p \"$session1\" \"$session2\" && printf '{\"sequence\":1,\"result\":\"allow\",\"reason_code\":\"ok\"}\n' >\"$session1/capiss_audit.jsonl\" && printf '#1 MINTED OK  -\n' >\"$session1/capiss_audit.log\" && printf '{\"sequence\":1,\"result\":\"deny\",\"reason_code\":\"policy\"}\n' >\"$session2/capiss_audit.jsonl\" && printf '#1 DENIED: Reason Policy  -\n' >\"$session2/capiss_audit.log\" && ln -sfn \"$session2\" /repo/artifacts/varambu-demo/current"
@@ -4034,7 +4056,7 @@ M5_T44_test() {
 
 M5_T45_test() {
   begin_test_evidence "M5-T45" "varambu_audit_secret_exclusion"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   session_dir="/repo/artifacts/varambu-demo/e2e-M5-T45"
   premise_guard "M5 path ready and audit session prepared" "m5_ready && jira_mcp_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
   exercise_guard "start audit tailer" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; : >\"$session_dir/capiss_audit.jsonl\"; : >\"$session_dir/capiss_audit.log\"; python3 /repo/scripts/varambu_audit.py tail --since \"\$since\" --jsonl \"$session_dir/capiss_audit.jsonl\" --human \"$session_dir/capiss_audit.log\" --err \"$session_dir/audit_tailer.err\" >/dev/null 2>>\"$session_dir/audit_tailer.err\" & echo \$! >\"$session_dir/audit_tailer.pid\"; sleep 2; kill -0 \"\$(cat \"$session_dir/audit_tailer.pid\")\""
@@ -4051,7 +4073,7 @@ M5_T45_test() {
 
 M5_T46_test() {
   begin_test_evidence "M5-T46" "varambu_audit_stale_tailer_warning"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   session_dir="/repo/artifacts/varambu-demo/e2e-M5-T46"
   premise_guard "session with dead tailer PID prepared" "rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && printf '#1 MINTED OK  -\nLogged At:    -\n\n' >\"$session_dir/capiss_audit.log\" && printf '{\"sequence\":1,\"result\":\"allow\",\"reason_code\":\"ok\"}\n' >\"$session_dir/capiss_audit.jsonl\" && echo 99999999 >\"$session_dir/audit_tailer.pid\""
   exercise_guard "run non-strict audit with dead tailer" "bash /repo/varambu audit >\"$EVDIR/audit_warn.out\" 2>\"$EVDIR/audit_warn.err\""
@@ -4064,7 +4086,7 @@ M5_T46_test() {
 
 M5_T47_test() {
   begin_test_evidence "M5-T47" "varambu_audit_timing_semantics"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   session_dir="/repo/artifacts/varambu-demo/e2e-M5-T47"
   premise_guard "M5 path ready and audit session prepared" "m5_ready && jira_mcp_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
   exercise_guard "start audit tailer" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; : >\"$session_dir/capiss_audit.jsonl\"; : >\"$session_dir/capiss_audit.log\"; python3 /repo/scripts/varambu_audit.py tail --since \"\$since\" --jsonl \"$session_dir/capiss_audit.jsonl\" --human \"$session_dir/capiss_audit.log\" --err \"$session_dir/audit_tailer.err\" >/dev/null 2>>\"$session_dir/audit_tailer.err\" & echo \$! >\"$session_dir/audit_tailer.pid\"; sleep 2; kill -0 \"\$(cat \"$session_dir/audit_tailer.pid\")\""
@@ -4079,7 +4101,7 @@ M5_T47_test() {
 
 M5_T48_test() {
   begin_test_evidence "M5-T48" "varambu_audit_uniform_enrichment"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   session_dir="/repo/artifacts/varambu-demo/e2e-M5-T48"
   premise_guard "M5 path ready and audit session prepared" "m5_ready && jira_mcp_mock_reset && rm -rf \"$session_dir\" && mkdir -p \"$session_dir\" && ln -sfn \"$session_dir\" /repo/artifacts/varambu-demo/current && date -u +%Y-%m-%dT%H:%M:%SZ >\"$EVDIR/log_since.txt\""
   exercise_guard "start audit tailer" "since=\"\$(cat \"$EVDIR/log_since.txt\")\"; : >\"$session_dir/capiss_audit.jsonl\"; : >\"$session_dir/capiss_audit.log\"; python3 /repo/scripts/varambu_audit.py tail --since \"\$since\" --jsonl \"$session_dir/capiss_audit.jsonl\" --human \"$session_dir/capiss_audit.log\" --err \"$session_dir/audit_tailer.err\" >/dev/null 2>>\"$session_dir/audit_tailer.err\" & echo \$! >\"$session_dir/audit_tailer.pid\"; sleep 2; kill -0 \"\$(cat \"$session_dir/audit_tailer.pid\")\""
@@ -4094,7 +4116,7 @@ M5_T48_test() {
 
 M5_T49_test() {
   begin_test_evidence "M5-T49" "trace_full_chain_allowed"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   sess_rel="e2e-M5-T49"
   session_dir="/repo/artifacts/varambu-demo/$sess_rel"
   prompt="Use the Jira MCP tools to create a story in IAM."
@@ -4131,7 +4153,7 @@ M5_T49_test() {
 
 M5_T50_test() {
   begin_test_evidence "M5-T50" "trace_denied_mint_partial"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   sess_rel="e2e-M5-T50"
   session_dir="/repo/artifacts/varambu-demo/$sess_rel"
   premise_guard "M5 path and mock ready; session prepared" \
@@ -4163,7 +4185,7 @@ M5_T50_test() {
 
 M5_T51_test() {
   begin_test_evidence "M5-T51" "trace_intent_pending_converge"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   sess_rel="e2e-M5-T51"
   session_dir="/repo/artifacts/varambu-demo/$sess_rel"
   prompt="Create a story in IAM after the in-boundary legs are captured."
@@ -4188,7 +4210,7 @@ M5_T51_test() {
 
 M5_T52_test() {
   begin_test_evidence "M5-T52" "trace_multi_tool_attribution"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   sess_rel="e2e-M5-T52"
   session_dir="/repo/artifacts/varambu-demo/$sess_rel"
   prompt="Use the Jira MCP tools to read IAM and then create a story in IAM."
@@ -4215,7 +4237,7 @@ M5_T52_test() {
 
 M5_T53_test() {
   begin_test_evidence "M5-T53" "trace_secret_hygiene_bounds"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   sess_rel="e2e-M5-T53"
   session_dir="/repo/artifacts/varambu-demo/$sess_rel"
   premise_guard "M5 path and mock ready; session prepared" \
@@ -4245,7 +4267,7 @@ M5_T53_test() {
 
 M5_T54_test() {
   begin_test_evidence "M5-T54" "trace_agent_tamper_detection"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   sess_rel="e2e-M5-T54"
   session_dir="/repo/artifacts/varambu-demo/$sess_rel"
   premise_guard "M5 path and mock ready; session prepared" \
@@ -4273,7 +4295,7 @@ M5_T54_test() {
 
 M5_T55_test() {
   begin_test_evidence "M5-T55" "trace_live_upstream_attested"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   sess_rel="e2e-M5-T55"
   session_dir="/repo/artifacts/varambu-demo/$sess_rel"
   premise_guard "live Jira env gate evaluated from the running gateway" \
@@ -4304,7 +4326,7 @@ M5_T55_test() {
 
 M5_T56_test() {
   begin_test_evidence "M5-T56" "trace_cli_surface_and_audit_nonregression"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   root="/repo/artifacts/varambu-demo"
   s1="$root/e2e-M5-T56-s1"
   s2="$root/e2e-M5-T56-s2"
@@ -4335,7 +4357,7 @@ M5_T56_test() {
 
 M5_T57_test() {
   begin_test_evidence "M5-T57" "trace_canonical_join_integrity"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   sess_rel="e2e-M5-T57"
   session_dir="/repo/artifacts/varambu-demo/$sess_rel"
   premise_guard "M5 path and mock ready; session prepared" \
@@ -4361,7 +4383,7 @@ M5_T57_test() {
 
 M5_T58_test() {
   begin_test_evidence "M5-T58" "trace_anchor_mint_reuse_timestamps"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   sess_rel="e2e-M5-T58"
   session_dir="/repo/artifacts/varambu-demo/$sess_rel"
   fakecid="00000000-0000-4000-8000-0000000000ff"
@@ -4390,7 +4412,7 @@ M5_T58_test() {
 
 M5_T59_test() {
   begin_test_evidence "M5-T59" "trace_gateway_allow_upstream_deny"
-  echo "EVIDENCE_DIR=$EVDIR"
+  echo "EVIDENCE_DIR=$EVPUB"
   sess_rel="e2e-M5-T59"
   session_dir="/repo/artifacts/varambu-demo/$sess_rel"
   cid="cccccccc-cccc-4ccc-8ccc-cccccccccccc"
@@ -4581,6 +4603,7 @@ if [ "$RUN_M5" -eq 1 ]; then
   run_test "T59" "Varambu trace separates gateway allow from upstream deny" M5_T59_test
 fi
 
+publish_test_evidence
 printf '\nTotal: %d  Passed: %d  Failed: %d\n' "$TOTAL" "$PASSED" "$FAILED"
 if [ -s "$WARNINGS_FILE" ]; then
   printf 'Warnings: %d\n' "$WARNING_TOTAL"
@@ -4592,6 +4615,10 @@ if [ "$PROFILE_ENABLED" = "1" ] && [ -s "$PROFILE_FILE" ]; then
   awk -F '\t' 'NR>1 {printf "%8d ms | %-7s | %-10s | %s\n", $1, $2, $3, $6}' "$PROFILE_FILE" \
     | sort -nr | head -n 25 | tee "$PROFILE_SUMMARY_FILE"
   printf '\nTiming artifacts:\n  %s\n  %s\n' "$PROFILE_FILE" "$PROFILE_SUMMARY_FILE"
+fi
+if [ "$PUBLISH_FAILED" -ne 0 ]; then
+  printf '\nEvidence publish failures: %d\n' "$PUBLISH_FAILED"
+  exit 1
 fi
 if [ "$FAILED" -ne 0 ]; then
   exit 1

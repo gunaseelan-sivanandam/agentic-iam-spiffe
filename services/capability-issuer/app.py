@@ -1,4 +1,5 @@
 import base64
+import binascii
 import json
 import os
 import re
@@ -47,7 +48,7 @@ M4_ROOT_TTL_SECONDS = int(os.getenv("M4_ROOT_TTL_SECONDS", "60"))
 M4_REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 M4_REDIS_SOCKET_TIMEOUT = float(os.getenv("REDIS_SOCKET_TIMEOUT", "0.5"))
 CAPISS_KEY_DIR = os.getenv("CAPISS_KEY_DIR", "/var/lib/capiss/keys")
-CAPISS_KEY_FILE = os.path.join(CAPISS_KEY_DIR, "root_key.b64")
+CAPISS_KEY_FILE = os.path.join(CAPISS_KEY_DIR, "root_key.pem")
 CAPISS_PUBLIC_KEY_FILE = os.path.join(CAPISS_KEY_DIR, "root_public_key.b64")
 VARAMBU_TZ = os.getenv("VARAMBU_TZ", "UTC").strip() or "UTC"
 
@@ -151,19 +152,44 @@ def check_opa_allow(input_payload: dict) -> tuple[bool | None, str | None]:
         return None, str(exc)
 
 
+# PKCS#8 DER of an Ed25519 private key is this fixed prefix followed by the 32 key bytes (RFC 8410).
+ED25519_PKCS8_PREFIX = bytes.fromhex("302e020100300506032b657004220420")
+PEM_PRIVATE_KEY_HEADER = b"-----BEGIN PRIVATE KEY-----"
+PEM_PRIVATE_KEY_FOOTER = b"-----END PRIVATE KEY-----"
+
+
+def _root_key_to_pem(private_key: PrivateKey) -> bytes:
+    der = ED25519_PKCS8_PREFIX + private_key.to_bytes()
+    return PEM_PRIVATE_KEY_HEADER + b"\n" + base64.b64encode(der) + b"\n" + PEM_PRIVATE_KEY_FOOTER + b"\n"
+
+
+def _root_key_from_pem(raw: bytes) -> PrivateKey:
+    """Parse an Ed25519 PKCS#8 PEM key; raise ValueError on anything else (never on the key's bytes)."""
+    lines = raw.strip().splitlines()
+    if len(lines) < 3 or lines[0] != PEM_PRIVATE_KEY_HEADER or lines[-1] != PEM_PRIVATE_KEY_FOOTER:
+        raise ValueError("root key file is not a PEM private key")
+    try:
+        der = base64.b64decode(b"".join(lines[1:-1]), validate=True)
+    except binascii.Error as exc:
+        raise ValueError("root key file has invalid base64") from exc
+    if len(der) != len(ED25519_PKCS8_PREFIX) + 32 or not der.startswith(ED25519_PKCS8_PREFIX):
+        raise ValueError("root key file is not an Ed25519 PKCS#8 key")
+    return PrivateKey.from_bytes(der[len(ED25519_PKCS8_PREFIX):], Algorithm.Ed25519)
+
+
 # DD: DD-111
 # Implements: ARCH-012
-# Title: load_or_create_root_private_key capability issuer signing key bootstrap
+# Title: load_or_create_root_private_key capability issuer signing key bootstrap (PKCS#8 PEM, fail closed)
 def load_or_create_root_private_key() -> tuple[PrivateKey, bool]:
     os.makedirs(CAPISS_KEY_DIR, exist_ok=True)
     if os.path.exists(CAPISS_KEY_FILE):
         with open(CAPISS_KEY_FILE, "rb") as handle:
             raw = handle.read()
-        return PrivateKey.from_bytes(base64.b64decode(raw), Algorithm.Ed25519), False
+        return _root_key_from_pem(raw), False
 
     keypair = KeyPair()
     private_key = keypair.private_key
-    encoded = base64.b64encode(private_key.to_bytes())
+    encoded = _root_key_to_pem(private_key)
     created = False
     try:
         fd = os.open(CAPISS_KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -173,7 +199,7 @@ def load_or_create_root_private_key() -> tuple[PrivateKey, bool]:
     except FileExistsError:
         with open(CAPISS_KEY_FILE, "rb") as handle:
             raw = handle.read()
-        private_key = PrivateKey.from_bytes(base64.b64decode(raw), Algorithm.Ed25519)
+        private_key = _root_key_from_pem(raw)
     return private_key, created
 
 

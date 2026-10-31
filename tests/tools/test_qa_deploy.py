@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import subprocess  # nosec B404 - fixed git and script argv
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "qa_deploy.py"
@@ -44,7 +46,7 @@ def _register(*services: "qa.Service", **extra: object) -> dict[str, object]:
     register: dict[str, object] = {
         "assets": {
             "K1": {"requirement": "REQ-SEC-K1", "locations": [
-                {"path": "capiss_keys/root_key.b64", "holders": ["issuer"]}]},
+                {"path": "capiss_keys/root_key.pem", "holders": ["issuer"]}]},
             "K3": {"requirement": "REQ-SEC-K3", "locations": [
                 {"env": "JIRA_API_TOKEN", "holders": ["jira-tool"]}]},
             "K7": {"requirement": "REQ-SEC-K7", "locations": [
@@ -90,12 +92,12 @@ def test_inventory_extracts_every_fact_and_no_env_values() -> None:
 def test_secrets_configs_and_volumes_from_are_inventoried() -> None:
     # Review finding C1: grants outside `volumes` must not be invisible.
     config = {"name": "compose",
-              "secrets": {"k": {"file": str(ROOT / "capiss_keys" / "root_key.b64")}},
+              "secrets": {"k": {"file": str(ROOT / "capiss_keys" / "root_key.pem")}},
               "configs": {"c": {"file": str(ROOT / "services" / "opa" / "policy.rego")}},
               "services": {"mock": {"image": "mock:1", "secrets": [{"source": "k", "target": "key"}],
                                     "configs": [{"source": "c"}], "volumes_from": ["capability-issuer:ro"]}}}
     service = qa.inventory_from_config(config, ROOT)["mock"]
-    assert "capiss_keys/root_key.b64:/run/secrets/key:ro" in service.mounts
+    assert "capiss_keys/root_key.pem:/run/secrets/key:ro" in service.mounts
     assert "services/opa/policy.rego:/c:ro" in service.mounts
     assert "volumes_from:capability-issuer:ro" in service.privileges
     found = {(v.asset, v.service) for v in qa.asset_violations({"mock": service}, _register())}
@@ -370,3 +372,31 @@ def test_repository_deployment_passes_with_known_violations_only() -> None:
     assert result.returncode == 0, result.stdout + result.stderr
     assert "[qa-deploy] PASSED" in result.stdout
     assert "OPL-005" in result.stdout
+
+
+# --- Pinned image tags (slice ci-evidence-trace, test plan V3) ----------------
+
+PINNED = ("opa", "redis")
+EXACT_TAG = re.compile(r"^[^:@\s]+:\d+\.\d+\.\d+(-[a-z0-9.]+)?$")
+
+
+def test_opa_and_redis_are_pinned_to_the_same_exact_tag_in_compose_and_register() -> None:
+    compose = yaml.safe_load((ROOT / "compose" / "spiffe.compose.yml").read_text(encoding="utf-8"))
+    register = qa.load_register(ROOT / "security" / "invariants.yaml")
+    for name in PINNED:
+        compose_image = compose["services"][name]["image"]
+        assert compose_image == register["services"][name]["image"], name
+        assert EXACT_TAG.match(compose_image), f"{name}: {compose_image} is not an exact version tag"
+        assert not compose_image.endswith(":latest")
+
+
+@pytest.mark.parametrize("tag", ["redis:latest", "redis:7-alpine", "redis:7.4-alpine", "redis"])
+def test_exact_tag_rule_rejects_floating_tags(tag: str) -> None:
+    assert not EXACT_TAG.match(tag)
+
+
+def test_compose_tag_differing_from_register_fails() -> None:
+    registered = _svc("redis", image="redis:7.4.8-alpine")
+    deployed = _svc("redis", image="redis:7.4.9-alpine")
+    errors = _errors({"redis": deployed}, _register(registered))
+    assert any("image" in error for error in errors), errors

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import base64
 import json
 import time
 from pathlib import Path
 
 import pytest
 import redis
+from biscuit_auth import PublicKey
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ed25519
 
 
 def _premise_module_loaded(guard, capiss_module):
@@ -38,7 +42,7 @@ def test_key_material_lifecycle(capiss_module, tmp_path, guard):
 
 def _set_key_paths(capiss_module, tmp_path):
     capiss_module.CAPISS_KEY_DIR = str(tmp_path / "keys")
-    capiss_module.CAPISS_KEY_FILE = str(Path(capiss_module.CAPISS_KEY_DIR) / "root_key.b64")
+    capiss_module.CAPISS_KEY_FILE = str(Path(capiss_module.CAPISS_KEY_DIR) / "root_key.pem")
     capiss_module.CAPISS_PUBLIC_KEY_FILE = str(Path(capiss_module.CAPISS_KEY_DIR) / "root_public_key.b64")
 
 
@@ -489,6 +493,136 @@ def test_load_or_create_root_private_key_handles_file_exists_race(capiss_module,
     loaded_key, created = guard.exercise("load key after race", capiss_module.load_or_create_root_private_key)
     guard.outcome("not created", created is False)
     guard.outcome("existing key loaded", loaded_key.to_bytes() == first_key.to_bytes())
+
+
+def _load_error(capiss_module):
+    try:
+        capiss_module.load_or_create_root_private_key()
+    except ValueError as exc:
+        return exc
+    return None
+
+
+def _pkcs8_pem(der: bytes) -> bytes:
+    body = base64.b64encode(der).decode("ascii")
+    return f"-----BEGIN PRIVATE KEY-----\n{body}\n-----END PRIVATE KEY-----\n".encode("ascii")
+
+
+_ED25519_PKCS8_PREFIX = bytes.fromhex("302e020100300506032b657004220420")
+INVALID_KEY_FILE_KINDS = ["raw_base64_old_format", "certificate_block",
+                          "x25519_key", "short_key", "long_key", "invalid_base64_body"]
+
+
+def _invalid_key_file(kind: str) -> bytes:
+    if kind == "raw_base64_old_format":
+        return base64.b64encode(bytes(range(32)))
+    if kind == "certificate_block":
+        return b"-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n"
+    if kind == "x25519_key":
+        # A valid PKCS#8 key of another algorithm: same length, only the OID differs (1.3.101.110).
+        return _pkcs8_pem(bytes.fromhex("302e020100300506032b656e04220420") + bytes(range(32)))
+    if kind == "short_key":
+        return _pkcs8_pem(_ED25519_PKCS8_PREFIX + bytes(range(31)))
+    if kind == "long_key":
+        return _pkcs8_pem(_ED25519_PKCS8_PREFIX + bytes(range(33)))
+    if kind == "invalid_base64_body":
+        return b"-----BEGIN PRIVATE KEY-----\n!!not-base64!!\n-----END PRIVATE KEY-----\n"
+    raise AssertionError(kind)
+
+
+# UT: UT-347
+# Test Description: Verifies a new root key is written as a PKCS#8 PEM file with mode 0600 that an independent parser reads as the same Ed25519 key.
+# Precondition: The key directory is empty.
+# Expected Output: root_key.pem exists with mode 0600; cryptography's PEM loader returns an Ed25519 key with the same public key; a token signed with it verifies under the exported public key; no root_key.b64 is written.
+# Covers DD: DD-111
+@pytest.mark.invariant
+def test_root_key_created_as_pkcs8_pem(capiss_module, tmp_path, guard):
+    _premise_module_loaded(guard, capiss_module)
+    guard.exercise("set key file paths", lambda: _set_key_paths(capiss_module, tmp_path))
+    guard.premise("no key file yet", not Path(capiss_module.CAPISS_KEY_FILE).exists())
+    private_key, created = guard.exercise("create root key", capiss_module.load_or_create_root_private_key)
+    key_path = Path(capiss_module.CAPISS_KEY_FILE)
+    parsed = guard.exercise("parse with cryptography", lambda: serialization.load_pem_private_key(key_path.read_bytes(), password=None))
+    # The public key is determined by the private key, so equal public keys mean the same key.
+    parsed_public = parsed.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+    builder = capiss_module.BiscuitBuilder()
+    builder.add_fact(capiss_module.Fact('probe("ut-347")'))
+    token = guard.exercise("sign token", lambda: builder.build(private_key).to_base64())
+    guard.exercise("write public key", lambda: capiss_module.write_public_key(private_key))
+    public_b64 = Path(capiss_module.CAPISS_PUBLIC_KEY_FILE).read_bytes()
+    public_key = PublicKey.from_bytes(base64.b64decode(public_b64), capiss_module.Algorithm.Ed25519)
+    verified = guard.exercise("verify token under exported public key", lambda: capiss_module.Biscuit.from_base64(token, public_key))
+    guard.outcome("created", created is True)
+    guard.outcome("file name is root_key.pem", key_path.name == "root_key.pem")
+    guard.outcome("mode 0600", (key_path.stat().st_mode & 0o777) == 0o600)
+    guard.outcome("PEM private key header", key_path.read_bytes().startswith(b"-----BEGIN PRIVATE KEY-----\n"))
+    guard.outcome("independent parser reads an Ed25519 key", isinstance(parsed, ed25519.Ed25519PrivateKey))
+    guard.outcome("same key", parsed_public == capiss_module.KeyPair.from_private_key(private_key).public_key.to_bytes())
+    guard.outcome("token verifies", verified is not None)
+    guard.outcome("no legacy file written", not (key_path.parent / "root_key.b64").exists())
+
+
+# UT: UT-348
+# Test Description: Verifies an existing valid root_key.pem is loaded, not replaced.
+# Precondition: root_key.pem holds a valid Ed25519 PKCS#8 PEM key (written before the call).
+# Expected Output: The SUT returns that key with created False and leaves the file byte-for-byte unchanged.
+# Covers DD: DD-111
+@pytest.mark.invariant
+def test_existing_pem_root_key_is_loaded(capiss_module, tmp_path, guard):
+    _premise_module_loaded(guard, capiss_module)
+    guard.exercise("set key file paths", lambda: _set_key_paths(capiss_module, tmp_path))
+    # cryptography's private_bytes cannot run under mutmut's module reload (its compiled core keeps the
+    # first import's classes), so the file is written by capiss's encoder; UT-347 proves cryptography reads it.
+    key = capiss_module.KeyPair().private_key
+    pem = capiss_module._root_key_to_pem(key)
+    key_path = Path(capiss_module.CAPISS_KEY_FILE)
+    guard.exercise("write existing key", lambda: (key_path.parent.mkdir(parents=True), key_path.write_bytes(pem)))
+    guard.premise("existing key file present", key_path.exists())
+    loaded, created = guard.exercise("load root key", capiss_module.load_or_create_root_private_key)
+    guard.outcome("not created", created is False)
+    guard.outcome("same key loaded", loaded.to_bytes() == key.to_bytes())
+    guard.outcome("file unchanged", key_path.read_bytes() == pem)
+
+
+# UT: UT-349
+# Test Description: Verifies an existing root_key.pem that is not a valid Ed25519 PKCS#8 PEM key makes the SUT raise instead of creating a key (old raw base64, another PEM type, a valid X25519 key (wrong DER prefix), a short or long key, a body that is not base64).
+# Precondition: root_key.pem holds one invalid content per parameter.
+# Expected Output: ValueError is raised, the file is unchanged and no public key or legacy file is written.
+# Covers DD: DD-111
+@pytest.mark.invariant
+@pytest.mark.parametrize("kind", INVALID_KEY_FILE_KINDS)
+def test_invalid_root_key_file_fails_closed(capiss_module, tmp_path, guard, kind):
+    _premise_module_loaded(guard, capiss_module)
+    guard.exercise("set key file paths", lambda: _set_key_paths(capiss_module, tmp_path))
+    content = _invalid_key_file(kind)
+    key_path = Path(capiss_module.CAPISS_KEY_FILE)
+    guard.exercise("write invalid key file", lambda: (key_path.parent.mkdir(parents=True), key_path.write_bytes(content)))
+    guard.premise("invalid key file present", key_path.read_bytes() == content)
+    error = guard.exercise("load root key", lambda: _load_error(capiss_module))
+    guard.outcome("ValueError raised", isinstance(error, ValueError))
+    guard.outcome("file unchanged", key_path.read_bytes() == content)
+    guard.outcome("no other file written", sorted(p.name for p in key_path.parent.iterdir()) == ["root_key.pem"])
+
+
+# UT: UT-350
+# Test Description: Verifies the SUT never reads the legacy root_key.b64: with only a valid legacy file present it creates a new PEM key and leaves the legacy file untouched.
+# Precondition: The key directory holds a valid raw-base64 root_key.b64 and no root_key.pem.
+# Expected Output: created is True, the new key differs from the legacy key, root_key.b64 is byte-for-byte unchanged, and root_key.pem holds a PEM private key.
+# Covers DD: DD-111
+@pytest.mark.invariant
+def test_legacy_b64_root_key_is_ignored(capiss_module, tmp_path, guard):
+    _premise_module_loaded(guard, capiss_module)
+    guard.exercise("set key file paths", lambda: _set_key_paths(capiss_module, tmp_path))
+    legacy_key = capiss_module.KeyPair().private_key
+    legacy = base64.b64encode(legacy_key.to_bytes())
+    legacy_path = Path(capiss_module.CAPISS_KEY_DIR) / "root_key.b64"
+    guard.exercise("write legacy key", lambda: (legacy_path.parent.mkdir(parents=True), legacy_path.write_bytes(legacy)))
+    guard.premise("no PEM key yet", not Path(capiss_module.CAPISS_KEY_FILE).exists())
+    new_key, created = guard.exercise("load or create root key", capiss_module.load_or_create_root_private_key)
+    guard.outcome("new key created", created is True)
+    guard.outcome("legacy key not used", new_key.to_bytes() != legacy_key.to_bytes())
+    guard.outcome("legacy file unchanged", legacy_path.read_bytes() == legacy)
+    guard.outcome("new PEM key file written", Path(capiss_module.CAPISS_KEY_FILE).read_bytes().startswith(b"-----BEGIN PRIVATE KEY-----"))
 
 
 # UT: UT-237

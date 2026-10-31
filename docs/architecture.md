@@ -45,8 +45,8 @@ replaces the retired `docs/SECURITY_MODEL.md` (archived 2026-10-27).
   ARCH-006, ARCH-020).
 - **Key and state isolation — known gaps.** These hold today only as design intent; the deployment
   violates them (all containers run as root):
-  - capiss's root signing key: verifiers need only the public key, but the whole `capiss_keys/`
-    directory is mounted into the verifiers, `agent-a` and `rogue`. A forged capability was
+  - capiss's root signing key (`root_key.pem`): verifiers need only the public key, but the whole
+    `capiss_keys/` directory is mounted into the verifiers, `agent-a` and `rogue`. A forged capability was
     accepted by tool-b's verifier on 2026-10-28 (OPL-005).
   - the SPIRE agent's private key store sits inside the directory mounted into every workload for
     the Workload API socket (OPL-006).
@@ -163,7 +163,7 @@ Trust/Responsibility:
 Its responsibility is not to enforce system security directly, but to ensure that security claims are backed by meaningful proof. It prevents false-green outcomes by requiring guard evidence and by preferring authoritative sources such as server state, logs, and direct enforcement results.
 
 Interactions:
-It connects the rogue test harness, evidence artifact capture, profiling output, and the generated test specifications that document what the harness actually executes.
+It connects the rogue test harness, evidence artifact capture, profiling output, and the generated test specifications that document what the harness actually executes. The full suite runs locally and in the CI `e2e` job (`make e2e`); `make qa-evidence` checks the evidence, including that no file a run publishes holds a secret, and CI uploads the evidence only after that check passes.
 
 ## ARCH-008 SPIRE Server
 
@@ -230,7 +230,7 @@ Overview:
 The capability issuer is the central authority that mints root and resource-scoped capability tokens. It translates allowed policy outcomes into explicit signed authority artifacts and enforces the current M4 new-resource mint-rate rule.
 
 Trust/Responsibility:
-It owns mint-time validation, required token fields, delegated token metadata, current M4 registry-gated resource minting, and current M4 new-resource mint-rate enforcement. It is also the authoritative source for mint-decision logging and must emit one final `capiss_mint_decision` event for every mint exit path. The final event includes allow/deny result, reason, subject, action/resource/audience, token identifiers when available, parent context when available, local and UTC decision timestamps, issued/expires timestamps and actual TTL for issued tokens, optional caller-supplied correlation ID, policy metadata, and `capiss`-derived resource attributes for known resource families. It must not log bearer token values or other secret material. In the canonical-resource cleanup slice it is responsible for rejecting non-canonical mint requests instead of silently preserving compatibility aliases.
+It owns mint-time validation, required token fields, delegated token metadata, current M4 registry-gated resource minting, and current M4 new-resource mint-rate enforcement. It is also the authoritative source for mint-decision logging and must emit one final `capiss_mint_decision` event for every mint exit path. The final event includes allow/deny result, reason, subject, action/resource/audience, token identifiers when available, parent context when available, local and UTC decision timestamps, issued/expires timestamps and actual TTL for issued tokens, optional caller-supplied correlation ID, policy metadata, and `capiss`-derived resource attributes for known resource families. It must not log bearer token values or other secret material. In the canonical-resource cleanup slice it is responsible for rejecting non-canonical mint requests instead of silently preserving compatibility aliases. It creates its Ed25519 root signing key pair when `capiss_keys/` holds no key, storing the private key as PKCS#8 PEM (`root_key.pem`, mode `0600`) and the public key as base64 (`root_public_key.b64`); an existing `root_key.pem` that is not a valid Ed25519 PKCS#8 PEM key stops it from starting (fail closed), and it never regenerates over it. `scripts/clean_stack.sh` empties `capiss_keys/`, so a clean stack starts with a fresh pair.
 
 Interactions:
 It receives verified identity from Envoy, queries OPA for mint policy, reads and writes shared state where needed, enforces the new-resource mint-rate against Redis-backed state, emits structured JSON mint-decision events to stdout for container-log capture and Varambu session copying, and returns signed tokens to callers.
@@ -367,7 +367,7 @@ Trust/Responsibility:
 It is responsible for proving that the intended negative or positive path was actually exercised and for preserving the evidence needed to distinguish real enforcement outcomes from harness errors.
 
 Interactions:
-It orchestrates Docker-based scenarios, records evidence under `artifacts/rogue-tests`, and writes the summarized run output into `test_report.log`.
+It orchestrates Docker-based scenarios, records evidence under `artifacts/rogue-tests`, and writes the summarized run output into `test_report.log`. Guards work in a per-test scratch directory that is never published; at the end of each test the harness copies it into `artifacts/rogue-tests` with every token-shaped value replaced by its SHA-256 fingerprint. CI runs it in the `e2e` job.
 
 ## ARCH-021 M4a/M4b Jira Authority Issuance and Policy
 

@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-10-30. Update this page at the end of every slice (see `AGENTS.md`, slice workflow step 4).
+Last updated: 2026-10-31. Update this page at the end of every slice (see `AGENTS.md`, slice workflow step 4).
 Detailed history: [`docs/history/implementation_log.md`](history/implementation_log.md).
 
 ## Where the project stands
@@ -18,7 +18,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
   - [OPL-008](open_problem_log.md#opl-008-spire-token-init-mounts-the-whole-spire-server-data-directory):
     the SPIRE bootstrap container can read the server's signing keys and datastore.
 - **Next slice:** [agentic-delivery-process](slices/agentic-delivery-process/plan.md) slice 2 of 3,
-  [`ci-evidence-trace`](slices/ci-evidence-trace/plan.md) (grill-me done and plan reviewed 2026-10-30; plan PR open). Slice 1 is complete: Increment 1A (exact
+  [`ci-evidence-trace`](slices/ci-evidence-trace/plan.md) (plan merged 2026-10-31; Increment A, CI evidence, in review; Increment B, trace model, next). Slice 1 is complete: Increment 1A (exact
   outcomes for the loose E2E checks, `make test-lint`, mutation scoring) merged in PR #5, Increment 1B
   (`security/invariants.yaml` and `make qa-deploy`: who may hold each key, socket and secret, and
   every service's allowlist) in PR #6. Its standing rules (twins, probe sources, independent review)
@@ -33,16 +33,17 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Last verification
 | Check | Date | Result |
 | --- | --- | --- |
-| Full E2E suite, clean stack, `slice/agentic-delivery-process-1b` at `ce465a8` (later 1B commits change only `qa-deploy`, the register and docs) | 2026-10-29 | 120/120 passed; 1 warning (M5-T55 env-gated skip) |
-| `make qa-evidence` after that run | 2026-10-29 | PASSED (validated 119, skipped 1) |
-| `make qa-quality` (qa-trace, unit traceability, unit guard, docs-check, test-lint, qa-deploy) | 2026-10-29 | PASSED; qa-deploy: 18 known violations (OPL-005, -006, -008), 22 root warnings; qa-trace reports 138 non-blocking coverage gaps, incl. 97 requirements without E2E; the 10 REQ-SEC are proved statically (ARCH-034, DD-925 to DD-930, `IT-DEPLOY-*`), which the trace model cannot yet label |
-| `make unit-mutation` under the new scoring | 2026-10-29 | PASSED, 85.58% (1240 killed of 1449; 0 untested, 0 skipped) |
+| Full E2E suite, clean stack, `make e2e` on `slice/ci-evidence-trace-a` | 2026-10-31 | 120/120 passed; 1 warning (M5-T55 env-gated skip). The first attempt never started the suite (OPL-010) |
+| `make qa-evidence` after that run, with the secret check over the publication set | 2026-10-31 | PASSED (validated 119, skipped 1); no secret findings |
+| `make qa-quality` (qa-trace, unit traceability, unit guard, docs-check, test-lint, qa-deploy) | 2026-10-31 | PASSED; qa-deploy with image users inspected: 18 known violations (OPL-005, -006, -008), 22 root warnings; qa-trace reports 138 non-blocking coverage gaps, incl. 97 requirements without E2E; the 10 REQ-SEC are proved statically (ARCH-034, DD-925 to DD-930, `IT-DEPLOY-*`), which the trace model cannot yet label |
+| `make unit-trust`; `make unit-diff-cov` against `origin/main` | 2026-10-31 | PASSED (total line 86.70%); diff coverage 100% on capiss, now measured (DPL-009) |
+| `make unit-mutation` on `slice/ci-evidence-trace-a` | 2026-10-31 | PASSED, 85.34% |
 | CI (`.github/workflows/ci.yml`, workflow `CI`, one job per gate) | 2026-10-29 | passing on `main` after the PR #6 merge (`b2448ad`) |
 
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `slice/ci-evidence-trace-plan` | Slice 2 plan: CI E2E, evidence without secrets, trace model; also the delivery problem log and the review rules from DPL-006 and DPL-007 | plan reviewed (approvable after 6 rounds); PR #9 open |
+| `slice/ci-evidence-trace-a` | Slice 2 Increment A: CI `e2e` job, no token values in evidence, the evidence secret check, capiss key as PKCS#8 PEM, pinned `opa` and `redis` | PR open |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
@@ -55,14 +56,16 @@ Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
 - **OPL-007** Redis authorization state accepts unauthenticated writes from every verifier network.
 - **OPL-008** spire-token-init mounts the whole SPIRE server data directory.
 - **OPL-009** The delivery pipeline does not resist a deliberately malicious PR (accepted, D18).
+- **OPL-010** The SPIRE agent can crash on its first start after a reset, so the suite never starts.
 
 ## Open delivery problems
 Full entries, root causes and lessons in [`docs/delivery_problem_log.md`](delivery_problem_log.md).
-- **DPL-002** Capability token values written into E2E evidence (closes with slice 2 Increment A).
 - **DPL-004** Slice 1B added ten requirements without proof while review and CI stayed green
   (closes with slice 2 Increment B).
 - **DPL-005** Gates ran hidden inside another CI job; no check was required to merge (closes with
   slice 2 Increment B).
+- **DPL-008** A stacked PR was merged into its stale base branch instead of `main` (closes when merged
+  head branches are deleted automatically, a repository setting).
 
 ## Known gaps and debt
 - `M5-T55` (live Jira upstream) only runs with `JIRA_MCP_UPSTREAM_MODE=live`; default runs skip it.

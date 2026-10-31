@@ -187,7 +187,7 @@ Usage:
 - First observed: 2026-10-27
 - Area: capability issuance trust root / key isolation
 - Affected configuration:
-  - `compose/spiffe.compose.yml`: the host directory `capiss_keys/` (holding both `root_key.b64` and `root_public_key.b64`) is bind-mounted read-only into `tool-b`, `jira-tool`, `jira-mcp-gateway`, `agent-a`, and `rogue`
+  - `compose/spiffe.compose.yml`: the host directory `capiss_keys/` (holding both the private key `root_key.pem`, `root_key.b64` before 2026-10-31, and `root_public_key.b64`) is bind-mounted read-only into `tool-b`, `jira-tool`, `jira-mcp-gateway`, `agent-a`, and `rogue`
   - no service image sets a non-root `USER`
 - Related requirements:
   - `REQ-M3-R22` (capability authenticity verification) and the M1/M2 rogue isolation requirements
@@ -333,3 +333,31 @@ Usage:
 
 ### Closure criteria
 - Re-confirmed at each programme review, or the threat model changes and the delivery infrastructure gains trusted builders, authenticated run records and per-job isolation.
+
+## OPL-010: The SPIRE agent can crash on its first start after a reset, so the suite never starts
+
+- Status: Open
+- First observed: 2026-10-31 (local `make e2e` on a clean stack, slice `ci-evidence-trace` Increment A)
+- Area: stack start-up / E2E reliability
+- Affected configuration:
+  - `compose/spiffe.compose.yml`: `spire-agent` and `spire-rogue-agent` wait only for `spire-server`
+    to be started (`service_started`), not ready, and have no restart policy
+
+### Problem
+- After `scripts/clean_stack.sh` empties the SPIRE server data, the server creates a new trust bundle
+  at start. An agent that attests before the bundle exists exits with `Agent crashed ... failed to get
+  updated bundle ... NotFound desc = bundle not found` and is not restarted.
+- Without an agent no workload gets an SVID, every Envoy stays unhealthy, and `docker compose up`
+  stops with `dependency failed to start: container spiffe-capability-issuer-envoy is unhealthy`.
+  No test runs.
+- Fails closed: `make e2e` exits non-zero and removes the previous run's report first, so nothing
+  stale can pass `make qa-evidence`. But the CI `e2e` check would fail without a code cause.
+
+### Evidence (2026-10-31)
+- First run after a clean: `spiffe-spire-agent` and `spiffe-spire-rogue-agent` exited (1) about one
+  second after start with the error above; `spire-server` was running. The next clean run passed
+  120/120.
+
+### Closure criteria
+- The agents start only once the server can serve its bundle (a server health check and
+  `service_healthy`, or a restart policy), and several consecutive clean runs start every time.

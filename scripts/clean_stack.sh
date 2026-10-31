@@ -9,6 +9,7 @@ STARTED_SPIRE=0
 WARNINGS=()
 CLEANED_TMP=0
 CLEANED_SPIDATA=0
+CLEANED_KEYS=0
 
 if [ "${1:-}" = "--check" ]; then
   CHECK_ONLY=1
@@ -118,6 +119,19 @@ else
 fi
 rm -rf /tmp/rogue-tests >/dev/null 2>&1 || true
 
+# capiss creates its root key pair when the directory is empty; starting empty, as CI does, keeps the
+# private and public key in step (verifiers cache the first public key they read). The files are
+# root-owned, so they are removed through a container.
+echo "Emptying capiss_keys (a clean stack starts with a fresh capiss key pair)..."
+if [ -d "$ROOT_DIR/capiss_keys" ]; then
+  if docker run --rm -v "$ROOT_DIR/capiss_keys:/capiss_keys" alpine:3.19 \
+    find /capiss_keys -mindepth 1 -delete >/dev/null 2>&1; then
+    CLEANED_KEYS=1
+  else
+    WARNINGS+=("failed to empty capiss_keys")
+  fi
+fi
+
 echo "Restoring ownership of demo artifacts (rogue-tests runs as root)..."
 if [ -d "$ROOT_DIR/artifacts/varambu-demo" ]; then
   docker run --rm -v "$ROOT_DIR/artifacts:/a" alpine:3.19 \
@@ -126,7 +140,7 @@ if [ -d "$ROOT_DIR/artifacts/varambu-demo" ]; then
 fi
 
 echo "Summary:"
-echo "  stopped_stack=$STOPPED_STACK started_spire_cleanup=$STARTED_SPIRE cleaned_spire_data=$CLEANED_SPIDATA cleaned_tmp_svid=$CLEANED_TMP"
+echo "  stopped_stack=$STOPPED_STACK started_spire_cleanup=$STARTED_SPIRE cleaned_spire_data=$CLEANED_SPIDATA cleaned_tmp_svid=$CLEANED_TMP cleaned_capiss_keys=$CLEANED_KEYS"
 if [ "${#WARNINGS[@]}" -gt 0 ]; then
   echo "Warnings:"
   for w in "${WARNINGS[@]}"; do

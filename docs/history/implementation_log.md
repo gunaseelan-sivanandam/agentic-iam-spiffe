@@ -5,6 +5,52 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-10-31 Slice ci-evidence-trace Increment A: CI evidence
+
+- Branch `slice/ci-evidence-trace-a`, from the plan as merged on `main` (PR #9 via PR #10).
+- **D12:** capiss stores its root key as `capiss_keys/root_key.pem` (Ed25519 PKCS#8 PEM, `0600`);
+  an existing file that is not a valid Ed25519 PKCS#8 PEM key stops capiss (fail closed); it never
+  reads `root_key.b64`. `scripts/clean_stack.sh` empties `capiss_keys/` through a container. The
+  register's K1 location follows. `AGENTS.md` coding rule 7: secrets this repository creates use
+  recognisable formats. UT-347 to UT-350; tooling test V13.
+- **D2:** `openpolicyagent/opa:1.13.2` and `redis:7.4.8-alpine` (the versions local runs used,
+  probed in the images) in compose and the register; tooling test V3.
+- **D3:** guards work in a per-test scratch directory (`/tmp/rogue-scratch`, not mounted); at the end
+  of each test the harness publishes it to `artifacts/rogue-tests/` with every token-shaped value
+  replaced by `sha256:<fingerprint>` (`scripts/evidence_secrets.py publish`). This one central step
+  replaces editing the 146 places that write token files, so no premise, exercise or outcome
+  changed. `make qa-evidence` runs a shape-only secret check over the publication set
+  (`PUBLICATION_SET` in the `Makefile`); on the 2026-10-29 evidence it found 68 token values, on this
+  run none. `docs/test_spec.md` notes the fingerprints. Tooling tests V2.
+- **D1:** `make e2e` (`scripts/run_e2e.sh`): removes the previous run's report and evidence, builds
+  every image, runs the suite, takes back ownership of the root-owned output through a container,
+  exits with the suite's code. The CI job `e2e` runs it, then `make qa-deploy` with image users
+  inspected and `make qa-evidence`, and uploads the publication set for 14 days only if the secret
+  check found nothing. Tooling tests V1 and an upload-step test.
+- Found and fixed: `make e2e` first left the previous run's report in place when the suite never
+  started, so `qa-evidence` would have passed on it; it now removes them first (V1). The
+  diff-coverage gate never measured capiss (DPL-009); fixed with a tooling test.
+- Found and recorded: the SPIRE agent can crash on its first start after a reset (OPL-010); the first
+  local run never started the suite.
+- Independent review (Codex, [`review_a.md`](../slices/ci-evidence-trace/review_a.md)): round 1
+  found two blocking issues, both fixed: a publish that failed part way could leave a partial
+  evidence directory that passed `qa-evidence` (publishing is now all or nothing and a failure fails
+  the run), and an unlistable directory was skipped by the secret scan (now an error). The report
+  rescan was removed so the saved `secret_findings` that gates the CI upload is complete. The full
+  suite was rerun on a clean stack after the fixes.
+- Records: DPL-002 closed; DPL-008 (stacked PR merged into a stale base) and DPL-009 added; `AGENTS.md`
+  gate rows for `e2e` and the `qa-evidence` secret contract, step 4, test commands, git rule on
+  stacking; ARCH-007, ARCH-012, ARCH-019; OPL-005's key file name.
+- CI on the PR: `unit-mutation` failed on UT-347. With `mutate_only_covered_lines`, mutmut runs the
+  tests in its own process, then unloads every module they loaded; `cryptography`'s compiled core
+  keeps the first import's classes, so `private_bytes(..., NoEncryption())` fails after the reload.
+  The mutation-selected tests no longer call `private_bytes`: UT-347 compares public keys, UT-348
+  writes the existing key with capiss's encoder, UT-349 drops its EC-key case (the wrong-prefix case
+  covers another key type). Reviewed in round 3 of `review_a.md`.
+- Validation: see `docs/STATUS.md` "Last verification" (full E2E 120/120 on a clean stack,
+  `qa-evidence` and `qa-quality` PASSED, `unit-trust`, `unit-diff-cov` and `unit-mutation` (85.34%)
+  PASSED).
+
 ## 2026-10-31 Delivery problem log and the rules from the slice 2 plan review
 
 - Docs-only change on `slice/ci-evidence-trace-plan` (PR #9), after PR #8 (review loop) merged.

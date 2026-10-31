@@ -20,6 +20,8 @@ except ImportError as exc:  # pragma: no cover
     )
     raise SystemExit(2) from exc
 
+import evidence_secrets  # noqa: E402 - scripts/ is on sys.path when run as a script
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
@@ -27,6 +29,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--evidence-dir", default="artifacts/rogue-tests")
     parser.add_argument("--test-report", default="test_report.log")
     parser.add_argument("--report-json", default="artifacts/quality/evidence_report.json")
+    parser.add_argument(
+        "--publication-set",
+        nargs="*",
+        default=[],
+        help="Files and directories a run publishes; each is checked for secrets.",
+    )
     parser.add_argument(
         "--max-age-hours",
         type=float,
@@ -156,6 +164,16 @@ def _latest_dir_for_prefix(base: Path, prefix: str) -> Path | None:
     if not matches:
         return None
     return max(matches, key=lambda p: p.stat().st_mtime)
+
+
+def _secret_failures(paths: list[Path], exclude: Path | None) -> list[str]:
+    """Secret findings and unreadable files in the publication set; never contains a matched value."""
+    roots = [p for p in paths if exclude is None or p.resolve() != exclude.resolve()]
+    findings, errors = evidence_secrets.scan(roots)
+    if exclude is not None and exclude.exists():
+        findings = [f for f in findings if Path(f.path).resolve() != exclude.resolve()]
+        errors = [e for e in errors if not e.startswith(f"{exclude}:")]
+    return [f"secret in published file: {f}" for f in findings] + [f"publication set: {e}" for e in errors]
 
 
 def main() -> int:
@@ -288,7 +306,12 @@ def main() -> int:
     }
 
     report_path = Path(args.report_json)
+    secret_failures = _secret_failures([Path(p) for p in args.publication_set], exclude=report_path)
+    failures.extend(secret_failures)
+    report["summary"]["failures"] = len(failures)
+    report["secret_findings"] = secret_failures
     report_path.parent.mkdir(parents=True, exist_ok=True)
+    # The report is not rescanned: every value in it is copied from evidence files scanned above.
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
 
     if failures:

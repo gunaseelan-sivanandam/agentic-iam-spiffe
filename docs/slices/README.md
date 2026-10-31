@@ -13,7 +13,7 @@ The workflow that produces and closes a bundle is defined in [`AGENTS.md`](../..
 
 | Slice | Milestone | Status | Dates | Notes |
 | --- | --- | --- | --- | --- |
-| [ci-evidence-trace](ci-evidence-trace/) | — | Plan reviewed; plan PR open | 2026-10-30 | Slice 2 of agentic-delivery-process: CI E2E as a required check, no secrets in evidence, static tests and gap gate in the trace model |
+| [ci-evidence-trace](ci-evidence-trace/) | — | Plan merged; Increment A in review, B next | 2026-10-31 | Slice 2 of agentic-delivery-process: CI E2E as a required check, no secrets in evidence, static tests and gap gate in the trace model |
 | [agentic-delivery-process](agentic-delivery-process/) | — | Implemented (slice 1 of 3; PR #5, #6) | 2026-10-29 | Slice 1 (lean, D20): exact E2E outcomes, key-holder list and `qa-deploy`; slices 2–3 drafted; decisions D1–D20 |
 | [docs-consolidation](docs-consolidation/) | — | Implemented, PR pending | 2026-10-27 | `AGENTS.md` rulebook, tracked status, complete E2E spec, `make docs-check` in CI |
 | [m5-generic-verifier-architecture](m5-generic-verifier-architecture/) | M5+ | Brainstorm, not approved | 2026-06-14 | Generic capability verifier; next candidate slice |

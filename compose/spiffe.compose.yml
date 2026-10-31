@@ -405,7 +405,7 @@ services:
       - tests
 
   opa:
-    image: openpolicyagent/opa:latest
+    image: openpolicyagent/opa:1.13.2
     container_name: spiffe-opa
     command: ["run", "--server", "--addr=0.0.0.0:8181", "/policies/policy.rego"]
     volumes:
@@ -414,7 +414,7 @@ services:
       - capiss_app_net
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.8-alpine
     container_name: spiffe-redis
     command: ["redis-server", "--save", "", "--appendonly", "no"]
     networks:

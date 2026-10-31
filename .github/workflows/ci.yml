@@ -116,3 +116,32 @@ jobs:
           name: mutation-report
           path: |
             mutants/mutmut-cicd-stats.json
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-python-deps
+      - name: Build every image and run the full E2E suite
+        run: make e2e
+      - name: Check the deployment against the asset register, with image users inspected
+        if: always()
+        run: make qa-deploy
+      - name: Check the evidence (guards, PASS lines, no secrets in the publication set)
+        if: always()
+        run: make qa-evidence
+      - name: List the publication set, only if the secret check found nothing
+        id: publishable
+        if: always()
+        # Fails closed: a missing report or any secret finding means no upload.
+        run: |
+          python3 -c 'import json,sys; r=json.load(open("artifacts/quality/evidence_report.json")); sys.exit(r.get("secret_findings") != [])'
+          { echo "paths<<EOF"; make -s print-publication-set | tr ' ' '\n'; echo "EOF"; } >> "$GITHUB_OUTPUT"
+      - name: Upload the evidence
+        if: always() && steps.publishable.outcome == 'success'
+        uses: actions/upload-artifact@v6
+        with:
+          name: e2e-evidence
+          path: ${{ steps.publishable.outputs.paths }}
+          retention-days: 14

@@ -49,7 +49,8 @@ Mount the narrowest thing a service needs, and keep a checked list of who may ho
 
 ## DPL-002: Capability token values were written into E2E evidence
 
-- Status: Open; closes when slice `ci-evidence-trace` Increment A merges (D3, REQ-T-R9)
+- Status: Closed (preventive action merged with slice `ci-evidence-trace` Increment A); the
+  requirement REQ-T-R9 and its static test follow in Increment B
 - Introduced: `7226c2e` (2026-01-20, premise, exercise and outcome guards for M1 and M2), then
   copied into M3, M4, M4b and M5 tests
 - Found: 2026-10-30, during the slice 2 CI trial
@@ -71,9 +72,11 @@ Mount the narrowest thing a service needs, and keep a checked list of who may ho
 - Evidence stayed local until CI was about to publish it, so nobody looked at it as published data.
 
 ### Actions
-- Corrective: slice 2 D3 keeps fingerprints instead of values.
-- Preventive (pending): the evidence secret check in `make qa-evidence` over everything published
-  (slice 2 D3, REQ-T-R9); CI uploads evidence only after it passes.
+- Corrective: guards work in a per-test scratch directory; when a test ends the harness publishes it
+  with every token-shaped value replaced by its SHA-256 fingerprint (slice 2 D3, Increment A).
+- Preventive: the shape-only secret check in `make qa-evidence` over the whole publication set
+  (`test_report.log`, `artifacts/rogue-tests/`, `artifacts/quality/`); the CI `e2e` job uploads
+  evidence only after it found nothing.
 
 ### Lesson
 Evidence is published data: record proof that a value existed, never the value.
@@ -238,3 +241,61 @@ Why review did not catch it:
 Before fixing a finding, ask which upstream choice causes it and whether changing that choice removes
 the problem. Prefer removing a mechanism to adding one, and keep review fixes inside the agreed
 decisions.
+
+## DPL-008: A stacked PR was merged into its stale base branch instead of `main`
+
+- Status: Open; closes when the git rule below merges (slice `ci-evidence-trace` Increment A) and
+  the repository deletes merged head branches
+- Found: 2026-10-31, by the author, when implementation was to start
+
+### What happened
+- PR #9 (the slice 2 plan) was stacked on PR #8 (`docs/review-loop`). PR #8 merged, but its branch
+  was not deleted, so GitHub did not retarget PR #9 to `main`.
+- The author's attempt to retarget it failed (a GitHub GraphQL deprecation error, then a blocked
+  REST call). The author told the user the base still had to be changed before merging; PR #9 was
+  merged into `docs/review-loop`, so the approved plan was not on `main`.
+- PR #10 brought the merge to `main` unchanged; implementation started only after it merged.
+
+### Root causes
+- A stacked PR keeps its base until the base branch is deleted; merged branches were not deleted
+  automatically.
+- The merge screen allows merging into any base; nothing flagged that the base was not `main`.
+- The warning lived in a chat message and a PR body, not where the merge happens.
+
+### Actions
+- Corrective: PR #10.
+- Preventive: `AGENTS.md` git rules: a stacked PR is merged only after its base shows `main`; agents
+  avoid stacking where they can. Pending (user): the repository setting "Automatically delete head
+  branches", so GitHub retargets stacked PRs itself.
+
+### Lesson
+Fix the mechanism that makes the mistake possible (stale base branches), not only the warning about it.
+
+## DPL-009: The diff-coverage gate never measured capiss
+
+- Status: Closed (fix and its tooling test merged with slice `ci-evidence-trace` Increment A)
+- Introduced: `4b808cb` (2026-03-03), when the gate was added
+- Found: 2026-10-31, by the author, when the gate reported "No lines with coverage information" for a
+  branch that changes 31 lines of `services/capability-issuer/app.py`
+
+### What happened
+- `scripts/diff_coverage_gate.sh` passed `--include "services/capability-issuer/*.py"` and then
+  `--include "services/tool-b/*.py"`. diff-cover keeps only the last repeated `--include`, so only
+  tool-b was measured; a capiss-only change had no measured lines and the gate passed.
+- `AGENTS.md` and `docs/STATUS.md` said the gate holds changed lines in capiss and tool-b to 90%.
+  For capiss it never did, in CI or locally (a false green for eight months).
+
+### Root causes
+- The gate had no tooling test with a negative control (a capiss change below the threshold must
+  fail), so nothing showed it measured capiss at all.
+- "No lines with coverage information" reads like "nothing to check", not like a broken filter.
+
+### Actions
+- Corrective: one `--include` with both patterns; this branch's capiss diff is measured (100% after
+  covering the invalid-base64 branch of the key parser).
+- Preventive: `tests/tools/test_diff_coverage_gate.py` asserts both patterns reach one `--include`;
+  it fails on the old script.
+
+### Lesson
+A gate without a negative control can be silently empty. Prove each gate fails on the case it exists for.
+
