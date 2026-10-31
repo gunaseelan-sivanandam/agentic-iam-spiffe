@@ -5,11 +5,16 @@ Default deny: every service's image, user, networks, published ports, mounts, se
 and privileges must match its register entry. Every protected asset (REQ-SEC-K*) may reach only its
 holders; a violation passes only as an unexpired known violation of an open OPL. Services run as
 non-root, except the grandfathered baseline until the grace date. Environment values are never kept.
+
+Each run writes a report (--report-json): the verdict, the problems and known violations found,
+whether image users were inspected, and the SHA-256 of the compose file and register it checked.
+`make qa-evidence` accepts only a passing, inspected report that matches the files on disk.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess  # nosec B404 - fixed docker argv
@@ -25,6 +30,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 COMPOSE_FILE = ROOT / "compose" / "spiffe.compose.yml"
 REGISTER_FILE = ROOT / "security" / "invariants.yaml"
+REPORT_FILE = ROOT / "artifacts" / "quality" / "qa_deploy_report.json"
 REQUIREMENTS_FILE = ROOT / "docs" / "requirements.md"
 OPL_FILE = ROOT / "docs" / "open_problem_log.md"
 
@@ -34,6 +40,8 @@ HOLDERS_RE = re.compile(r"Holders:([^\n]*)")
 OPL_HEADING_RE = re.compile(r"^## (OPL-\d+):", re.MULTILINE)
 OPL_STATUS_RE = re.compile(r"^- Status:\s*(.+)$", re.MULTILINE)
 NONROOT_GRACE_END = datetime(2027, 2, 1, tzinfo=timezone.utc)  # grandfathered through 2027-01-31
+# The requirement the non-root rule implements; `make qa-trace` reports it not proved within the grace.
+NONROOT_REQUIREMENT = "REQ-SEC-D2"
 # The services that existed when the non-root rule was introduced (D7, 2026-10-29); no others may
 # be grandfathered.
 GRANDFATHERED_BASELINE = frozenset({
@@ -189,9 +197,7 @@ def _privileges(spec: dict) -> tuple[str, ...]:
     return tuple(sorted(found))
 
 
-# DD: DD-925
-# Implements: ARCH-034
-# Title: inventory_from_config compose facts per service, environment values discarded
+# Compose facts per service, environment values discarded.
 def inventory_from_config(config: dict, root: Path) -> dict[str, Service]:
     inventory = {}
     for name, spec in sorted(config["services"].items()):
@@ -220,9 +226,7 @@ def load_register(path: Path) -> dict:
 # --- checks -------------------------------------------------------------------
 
 
-# DD: DD-926
-# Implements: ARCH-034
-# Title: check_allowlist default-deny comparison of every service with its register entry
+# Default-deny comparison of every service with its register entry.
 def check_allowlist(inventory: dict[str, Service], register: dict) -> list[str]:
     """Default deny: every deployed fact must be the registered one."""
     entries = register["services"]
@@ -277,9 +281,7 @@ def _reach(service: Service, location: dict) -> str | None:
     return None
 
 
-# DD: DD-927
-# Implements: ARCH-034
-# Title: asset_violations protected assets reaching services outside their holders
+# Protected assets reaching services outside their holders.
 def asset_violations(inventory: dict[str, Service], register: dict) -> list[Violation]:
     found: set[Violation] = set()
     for asset, spec in register["assets"].items():
@@ -317,9 +319,7 @@ def _row_problem(row: dict, opls: dict[str, str], now: datetime) -> str | None:
     return None
 
 
-# DD: DD-928
-# Implements: ARCH-034
-# Title: check_known_violations expiring exceptions tied to open OPLs
+# Expiring exceptions tied to open OPLs.
 def check_known_violations(violations: list[Violation], register: dict, opls: dict[str, str],
                            now: datetime) -> Report:
     report = Report()
@@ -357,9 +357,7 @@ def _is_root(user: str | None) -> bool:
     return uid in ("", "0", "root")
 
 
-# DD: DD-929
-# Implements: ARCH-034
-# Title: check_nonroot non-root rule with grandfathered baseline and grace date
+# Non-root rule with grandfathered baseline and grace date.
 def check_nonroot(inventory: dict[str, Service], register: dict,
                   user_of: Callable[[Service], str | None], now: datetime,
                   unknown_is_root: bool = True) -> Report:
@@ -404,9 +402,7 @@ def _required_holders(requirements_text: str) -> dict[str, set[str]]:
     return required
 
 
-# DD: DD-930
-# Implements: ARCH-034
-# Title: check_register_consistency register holders equal the REQ-SEC Holders lines
+# Register holders equal the REQ-SEC Holders lines.
 def check_register_consistency(register: dict, requirements_text: str) -> list[str]:
     """Each REQ-SEC-K* Holders line names exactly the holders the register lists for its asset."""
     required = _required_holders(requirements_text)
@@ -465,18 +461,43 @@ def run(args: argparse.Namespace) -> Report:
     return report
 
 
+def _sha256(path: Path) -> str | None:
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def write_report(args: argparse.Namespace, verdict: str, report: Report) -> None:
+    """The run's result for `make qa-evidence`: no per-requirement status, no environment values."""
+    payload = {
+        "verdict": verdict,
+        "problems": report.errors,
+        "known_violations": report.known,
+        "warnings": report.warnings,
+        "image_users_inspected": not args.skip_image_users,
+        "compose_sha256": _sha256(args.compose),
+        "register_sha256": _sha256(args.register),
+    }
+    args.report_json.parent.mkdir(parents=True, exist_ok=True)
+    args.report_json.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--compose", type=Path, default=COMPOSE_FILE)
     parser.add_argument("--register", type=Path, default=REGISTER_FILE)
     parser.add_argument("--skip-image-users", action="store_true",
                         help="do not inspect images for USER (CI, where images are not built)")
+    parser.add_argument("--report-json", type=Path, default=REPORT_FILE)
     args = parser.parse_args(argv)
     try:
         report = run(args)
     except (DeployCheckError, OSError, yaml.YAMLError, ValueError) as exc:
         print(f"[qa-deploy] ERROR {exc}", file=sys.stderr)
+        write_report(args, "error", Report(errors=[str(exc)]))
         return 2
+    write_report(args, "failed" if report.errors else "passed", report)
     for line in report.known:
         print(f"[qa-deploy] known violation: {line}")
     for line in report.warnings:

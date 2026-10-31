@@ -899,6 +899,9 @@ Security-relevant tests shall preserve sufficient evidence to justify their conc
 ## REQ-T-R8 — Accepted evidence forms
 Evidence may include, as applicable, TLS transcripts, server-side entry snapshots, logs, token inspection results, denial markers, and before/after state diffs.
 
+## REQ-T-R9 — Evidence non-disclosure
+Test evidence shall not contain bearer or capability token values, private key material, or credentials. A test that needs to relate tokens records a fingerprint. This generalises the evidence clauses of `REQ-M4B-W8` and `REQ-M5-CJ2` to every test.
+
 ---
 
 # 12. Milestone summaries

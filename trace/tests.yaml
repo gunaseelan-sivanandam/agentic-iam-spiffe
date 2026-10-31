@@ -782,57 +782,193 @@ tests:
   evidence_prefixes:
   - M5-T59
   status: active
-- id: IT-DEPLOY-INVENTORY
-  type: integration_case
-  # T-8 inventory over every profile; static proof of the REQ-SEC requirements that ARCH-034 satisfies (make tooling-test).
-  source_architecture:
-  - ARCH-034
-  location:
-    file: tests/tools/test_qa_deploy.py
-    selector: test_live_inventory_covers_every_profile
+# Static tests: a gate proves the requirement on every run; its negative controls are tooling tests
+# that show it fails on each kind of violation. Status follows the register (make qa-trace).
+- id: DEPLOY-K1
+  type: static_test
+  title: Issuer signing key confinement
+  source_requirements:
+  - REQ-SEC-K1
+  gate: make qa-deploy
+  negative_controls:
+  - tests/tools/test_qa_deploy.py::test_asset_reached_by_ancestor_mount_and_env_and_container_path
+  - tests/tools/test_qa_deploy.py::test_current_compose_reports_exactly_the_known_violations
+  - tests/tools/test_qa_deploy.py::test_removing_a_known_violation_row_fails
+  - tests/tools/test_qa_deploy.py::test_invalid_or_mismatched_known_violation_fails
+  - tests/tools/test_qa_deploy.py::test_known_violation_expiry_boundary
+  - tests/tools/test_qa_deploy.py::test_widened_holders_without_requirement_change_fails
+  - tests/tools/test_qa_deploy.py::test_requirement_without_asset_and_asset_without_requirement_fail
+  - tests/tools/test_qa_deploy.py::test_historical_compose_reports_signing_key_in_tool_b
+  result: artifacts/quality/qa_deploy_report.json
   status: active
-- id: IT-DEPLOY-DEFAULT-DENY
-  type: integration_case
-  # T-9 default deny; static proof of the REQ-SEC requirements that ARCH-034 satisfies (make tooling-test).
-  source_architecture:
-  - ARCH-034
-  location:
-    file: tests/tools/test_qa_deploy.py
-    selector: test_each_unregistered_fact_fails
+- id: DEPLOY-K2
+  type: static_test
+  title: SPIRE agent private state confinement
+  source_requirements:
+  - REQ-SEC-K2
+  gate: make qa-deploy
+  negative_controls:
+  - tests/tools/test_qa_deploy.py::test_asset_reached_by_ancestor_mount_and_env_and_container_path
+  - tests/tools/test_qa_deploy.py::test_current_compose_reports_exactly_the_known_violations
+  - tests/tools/test_qa_deploy.py::test_removing_a_known_violation_row_fails
+  - tests/tools/test_qa_deploy.py::test_invalid_or_mismatched_known_violation_fails
+  - tests/tools/test_qa_deploy.py::test_known_violation_expiry_boundary
+  - tests/tools/test_qa_deploy.py::test_widened_holders_without_requirement_change_fails
+  - tests/tools/test_qa_deploy.py::test_requirement_without_asset_and_asset_without_requirement_fail
+  result: artifacts/quality/qa_deploy_report.json
   status: active
-- id: IT-DEPLOY-ASSET-HOLDERS
-  type: integration_case
-  # T-10 assets reach only holders; 07520d7 replay; static proof of the REQ-SEC requirements that ARCH-034 satisfies (make tooling-test).
-  source_architecture:
-  - ARCH-034
-  location:
-    file: tests/tools/test_qa_deploy.py
-    selector: test_current_compose_reports_exactly_the_known_violations
+- id: DEPLOY-K3
+  type: static_test
+  title: Upstream credential confinement
+  source_requirements:
+  - REQ-SEC-K3
+  gate: make qa-deploy
+  negative_controls:
+  - tests/tools/test_qa_deploy.py::test_asset_reached_by_ancestor_mount_and_env_and_container_path
+  - tests/tools/test_qa_deploy.py::test_current_compose_reports_exactly_the_known_violations
+  - tests/tools/test_qa_deploy.py::test_removing_a_known_violation_row_fails
+  - tests/tools/test_qa_deploy.py::test_invalid_or_mismatched_known_violation_fails
+  - tests/tools/test_qa_deploy.py::test_known_violation_expiry_boundary
+  - tests/tools/test_qa_deploy.py::test_widened_holders_without_requirement_change_fails
+  - tests/tools/test_qa_deploy.py::test_requirement_without_asset_and_asset_without_requirement_fail
+  result: artifacts/quality/qa_deploy_report.json
   status: active
-- id: IT-DEPLOY-NONROOT
-  type: integration_case
-  # T-11 non-root rule; static proof of the REQ-SEC requirements that ARCH-034 satisfies (make tooling-test).
-  source_architecture:
-  - ARCH-034
-  location:
-    file: tests/tools/test_qa_deploy.py
-    selector: test_grandfathered_root_warns_until_expiry
+- id: DEPLOY-K4
+  type: static_test
+  title: SPIRE server signing state confinement
+  source_requirements:
+  - REQ-SEC-K4
+  gate: make qa-deploy
+  negative_controls:
+  - tests/tools/test_qa_deploy.py::test_asset_reached_by_ancestor_mount_and_env_and_container_path
+  - tests/tools/test_qa_deploy.py::test_current_compose_reports_exactly_the_known_violations
+  - tests/tools/test_qa_deploy.py::test_removing_a_known_violation_row_fails
+  - tests/tools/test_qa_deploy.py::test_invalid_or_mismatched_known_violation_fails
+  - tests/tools/test_qa_deploy.py::test_known_violation_expiry_boundary
+  - tests/tools/test_qa_deploy.py::test_widened_holders_without_requirement_change_fails
+  - tests/tools/test_qa_deploy.py::test_requirement_without_asset_and_asset_without_requirement_fail
+  result: artifacts/quality/qa_deploy_report.json
   status: active
-- id: IT-DEPLOY-REGISTER-CONSISTENCY
-  type: integration_case
-  # T-12 register matches REQ-SEC; static proof of the REQ-SEC requirements that ARCH-034 satisfies (make tooling-test).
-  source_architecture:
-  - ARCH-034
-  location:
-    file: tests/tools/test_qa_deploy.py
-    selector: test_widened_holders_without_requirement_change_fails
+- id: DEPLOY-K5
+  type: static_test
+  title: SPIRE administration confinement
+  source_requirements:
+  - REQ-SEC-K5
+  gate: make qa-deploy
+  negative_controls:
+  - tests/tools/test_qa_deploy.py::test_asset_reached_by_ancestor_mount_and_env_and_container_path
+  - tests/tools/test_qa_deploy.py::test_current_compose_reports_exactly_the_known_violations
+  - tests/tools/test_qa_deploy.py::test_removing_a_known_violation_row_fails
+  - tests/tools/test_qa_deploy.py::test_invalid_or_mismatched_known_violation_fails
+  - tests/tools/test_qa_deploy.py::test_known_violation_expiry_boundary
+  - tests/tools/test_qa_deploy.py::test_widened_holders_without_requirement_change_fails
+  - tests/tools/test_qa_deploy.py::test_requirement_without_asset_and_asset_without_requirement_fail
+  result: artifacts/quality/qa_deploy_report.json
   status: active
-- id: IT-DEPLOY-KNOWN-VIOLATIONS
-  type: integration_case
-  # T-13 known violations; static proof of the REQ-SEC requirements that ARCH-034 satisfies (make tooling-test).
-  source_architecture:
-  - ARCH-034
-  location:
-    file: tests/tools/test_qa_deploy.py
-    selector: test_known_violation_expiry_boundary
+- id: DEPLOY-K6
+  type: static_test
+  title: Join token confinement
+  source_requirements:
+  - REQ-SEC-K6
+  gate: make qa-deploy
+  negative_controls:
+  - tests/tools/test_qa_deploy.py::test_asset_reached_by_ancestor_mount_and_env_and_container_path
+  - tests/tools/test_qa_deploy.py::test_current_compose_reports_exactly_the_known_violations
+  - tests/tools/test_qa_deploy.py::test_removing_a_known_violation_row_fails
+  - tests/tools/test_qa_deploy.py::test_invalid_or_mismatched_known_violation_fails
+  - tests/tools/test_qa_deploy.py::test_known_violation_expiry_boundary
+  - tests/tools/test_qa_deploy.py::test_widened_holders_without_requirement_change_fails
+  - tests/tools/test_qa_deploy.py::test_requirement_without_asset_and_asset_without_requirement_fail
+  result: artifacts/quality/qa_deploy_report.json
   status: active
+- id: DEPLOY-K7
+  type: static_test
+  title: Workload key confinement
+  source_requirements:
+  - REQ-SEC-K7
+  gate: make qa-deploy
+  negative_controls:
+  - tests/tools/test_qa_deploy.py::test_asset_reached_by_ancestor_mount_and_env_and_container_path
+  - tests/tools/test_qa_deploy.py::test_current_compose_reports_exactly_the_known_violations
+  - tests/tools/test_qa_deploy.py::test_removing_a_known_violation_row_fails
+  - tests/tools/test_qa_deploy.py::test_invalid_or_mismatched_known_violation_fails
+  - tests/tools/test_qa_deploy.py::test_known_violation_expiry_boundary
+  - tests/tools/test_qa_deploy.py::test_widened_holders_without_requirement_change_fails
+  - tests/tools/test_qa_deploy.py::test_requirement_without_asset_and_asset_without_requirement_fail
+  result: artifacts/quality/qa_deploy_report.json
+  status: active
+- id: DEPLOY-K8
+  type: static_test
+  title: Docker socket confinement
+  source_requirements:
+  - REQ-SEC-K8
+  gate: make qa-deploy
+  negative_controls:
+  - tests/tools/test_qa_deploy.py::test_asset_reached_by_ancestor_mount_and_env_and_container_path
+  - tests/tools/test_qa_deploy.py::test_current_compose_reports_exactly_the_known_violations
+  - tests/tools/test_qa_deploy.py::test_removing_a_known_violation_row_fails
+  - tests/tools/test_qa_deploy.py::test_invalid_or_mismatched_known_violation_fails
+  - tests/tools/test_qa_deploy.py::test_known_violation_expiry_boundary
+  - tests/tools/test_qa_deploy.py::test_widened_holders_without_requirement_change_fails
+  - tests/tools/test_qa_deploy.py::test_requirement_without_asset_and_asset_without_requirement_fail
+  - tests/tools/test_qa_deploy.py::test_docker_socket_mount_is_a_mount_fact
+  result: artifacts/quality/qa_deploy_report.json
+  status: active
+- id: DEPLOY-D1
+  type: static_test
+  title: Deployment allowlist
+  source_requirements:
+  - REQ-SEC-D1
+  gate: make qa-deploy
+  negative_controls:
+  - tests/tools/test_qa_deploy.py::test_each_unregistered_fact_fails
+  - tests/tools/test_qa_deploy.py::test_mount_mode_change_fails
+  - tests/tools/test_qa_deploy.py::test_unregistered_service_and_stale_entry_fail
+  - tests/tools/test_qa_deploy.py::test_compose_tag_differing_from_register_fails
+  - tests/tools/test_qa_deploy.py::test_live_inventory_covers_every_profile
+  result: artifacts/quality/qa_deploy_report.json
+  status: active
+- id: DEPLOY-D2
+  type: static_test
+  title: Non-root workloads
+  source_requirements:
+  - REQ-SEC-D2
+  gate: make qa-deploy
+  negative_controls:
+  - tests/tools/test_qa_deploy.py::test_grandfathered_root_warns_until_expiry
+  - tests/tools/test_qa_deploy.py::test_new_service_cannot_be_grandfathered
+  - tests/tools/test_qa_deploy.py::test_locked_service_running_as_root_or_unknown_fails
+  - tests/tools/test_qa_deploy.py::test_effective_user_prefers_compose_user_over_image
+  result: artifacts/quality/qa_deploy_report.json
+  status: active
+- id: EVID-T1
+  type: static_test
+  title: Evidence non-disclosure
+  source_requirements:
+  - REQ-T-R9
+  gate: make qa-evidence
+  negative_controls:
+  - tests/tools/test_evidence_secrets.py::test_each_secret_shape_is_found
+  - tests/tools/test_evidence_secrets.py::test_token_shape_boundaries
+  - tests/tools/test_evidence_secrets.py::test_qa_evidence_fails_on_a_token_anywhere_in_the_publication_set
+  - tests/tools/test_evidence_secrets.py::test_unlistable_directory_is_an_error_for_scan_publish_and_qa_evidence
+  - tests/tools/test_evidence_secrets.py::test_ci_uploads_exactly_the_checked_set_and_only_after_the_check
+  result: artifacts/quality/evidence_report.json
+  status: active
+# IDs that may not be reused (AGENTS.md: never reuse an ID).
+retired_ids:
+- {id: DD-925, reason: "QA gate code carries no DD tags (slice ci-evidence-trace D6); qa_deploy.py inventory"}
+- {id: DD-926, reason: "QA gate code carries no DD tags (slice ci-evidence-trace D6); qa_deploy.py allowlist"}
+- {id: DD-927, reason: "QA gate code carries no DD tags (slice ci-evidence-trace D6); qa_deploy.py asset holders"}
+- {id: DD-928, reason: "QA gate code carries no DD tags (slice ci-evidence-trace D6); qa_deploy.py known violations"}
+- {id: DD-929, reason: "QA gate code carries no DD tags (slice ci-evidence-trace D6); qa_deploy.py non-root"}
+- {id: DD-930, reason: "QA gate code carries no DD tags (slice ci-evidence-trace D6); qa_deploy.py register consistency"}
+- {id: IT-DEPLOY-INVENTORY, reason: "replaced by the static tests DEPLOY-* (slice ci-evidence-trace D5)"}
+- {id: IT-DEPLOY-DEFAULT-DENY, reason: "replaced by the static tests DEPLOY-* (slice ci-evidence-trace D5)"}
+- {id: IT-DEPLOY-ASSET-HOLDERS, reason: "replaced by the static tests DEPLOY-* (slice ci-evidence-trace D5)"}
+- {id: IT-DEPLOY-NONROOT, reason: "replaced by the static tests DEPLOY-* (slice ci-evidence-trace D5)"}
+- {id: IT-DEPLOY-REGISTER-CONSISTENCY, reason: "replaced by the static tests DEPLOY-* (slice ci-evidence-trace D5)"}
+- {id: IT-DEPLOY-KNOWN-VIOLATIONS, reason: "replaced by the static tests DEPLOY-* (slice ci-evidence-trace D5)"}
+# Coverage gaps a change may add on purpose (make qa-trace --mode pr): one line each, with a reason
+# and an expiry (valid through 23:59:59 UTC). An expired entry, or one whose gap no longer exists, fails.
+accepted_gaps: []

@@ -18,7 +18,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
   - [OPL-008](open_problem_log.md#opl-008-spire-token-init-mounts-the-whole-spire-server-data-directory):
     the SPIRE bootstrap container can read the server's signing keys and datastore.
 - **Next slice:** [agentic-delivery-process](slices/agentic-delivery-process/plan.md) slice 2 of 3,
-  [`ci-evidence-trace`](slices/ci-evidence-trace/plan.md) (plan merged 2026-10-31; Increment A, CI evidence, in review; Increment B, trace model, next). Slice 1 is complete: Increment 1A (exact
+  [`ci-evidence-trace`](slices/ci-evidence-trace/plan.md) (plan merged 2026-10-31; Increment A, CI evidence, merged in PR #11; Increment B, trace model, in review). Slice 1 is complete: Increment 1A (exact
   outcomes for the loose E2E checks, `make test-lint`, mutation scoring) merged in PR #5, Increment 1B
   (`security/invariants.yaml` and `make qa-deploy`: who may hold each key, socket and secret, and
   every service's allowlist) in PR #6. Its standing rules (twins, probe sources, independent review)
@@ -33,17 +33,17 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Last verification
 | Check | Date | Result |
 | --- | --- | --- |
-| Full E2E suite, clean stack, `make e2e` on `slice/ci-evidence-trace-a` | 2026-10-31 | 120/120 passed; 1 warning (M5-T55 env-gated skip). The first attempt never started the suite (OPL-010) |
-| `make qa-evidence` after that run, with the secret check over the publication set | 2026-10-31 | PASSED (validated 119, skipped 1); no secret findings |
-| `make qa-quality` (qa-trace, unit traceability, unit guard, docs-check, test-lint, qa-deploy) | 2026-10-31 | PASSED; qa-deploy with image users inspected: 18 known violations (OPL-005, -006, -008), 22 root warnings; qa-trace reports 138 non-blocking coverage gaps, incl. 97 requirements without E2E; the 10 REQ-SEC are proved statically (ARCH-034, DD-925 to DD-930, `IT-DEPLOY-*`), which the trace model cannot yet label |
-| `make unit-trust`; `make unit-diff-cov` against `origin/main` | 2026-10-31 | PASSED (total line 86.70%); diff coverage 100% on capiss, now measured (DPL-009) |
+| Full E2E suite, clean stack, `make e2e` on `slice/ci-evidence-trace-b` | 2026-10-31 | 120/120 passed; 1 warning (M5-T55 env-gated skip) |
+| `make qa-deploy` (image users inspected) and `make qa-evidence` after that run | 2026-10-31 | both PASSED; qa-evidence: validated 119, skipped 1, no secret findings, the qa-deploy report accepted (passed, inspected, digests match) |
+| `make qa-quality` (qa-trace in `--mode pr --base origin/main`, unit traceability, unit guard, docs-check, test-lint, qa-deploy) | 2026-10-31 | PASSED; gap gate: 0 new gaps, 25 closed; 113 coverage gaps remain (91 requirements without proof, 18 DD without UT, 4 tests without requirements); REQ-SEC-K1, K2, K4 not proved (known violations OPL-005, -006, -008), D2 not proved (grace until 2027-01-31), the other six and REQ-T-R9 proved statically |
+| `make tooling-test` | 2026-10-31 | PASSED (229 pytest, 9 shell) |
 | `make unit-mutation` on `slice/ci-evidence-trace-a` | 2026-10-31 | PASSED, 85.34% |
 | CI (`.github/workflows/ci.yml`, workflow `CI`, one job per gate) | 2026-10-29 | passing on `main` after the PR #6 merge (`b2448ad`) |
 
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `slice/ci-evidence-trace-a` | Slice 2 Increment A: CI `e2e` job, no token values in evidence, the evidence secret check, capiss key as PKCS#8 PEM, pinned `opa` and `redis` | PR open |
+| `slice/ci-evidence-trace-b` | Slice 2 Increment B: static tests and status from the register, `Implemented by:`, the gap gate, gate consistency, one process | PR open |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
@@ -60,10 +60,6 @@ Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
 
 ## Open delivery problems
 Full entries, root causes and lessons in [`docs/delivery_problem_log.md`](delivery_problem_log.md).
-- **DPL-004** Slice 1B added ten requirements without proof while review and CI stayed green
-  (closes with slice 2 Increment B).
-- **DPL-005** Gates ran hidden inside another CI job; no check was required to merge (closes with
-  slice 2 Increment B).
 - **DPL-008** A stacked PR was merged into its stale base branch instead of `main` (closes when merged
   head branches are deleted automatically, a repository setting).
 
@@ -77,9 +73,10 @@ Full entries, root causes and lessons in [`docs/delivery_problem_log.md`](delive
   (OPL-006).
 - Some test titles claim more than their guards check (`M5-T19`, `M5-T21`, `M5-T34`, `M5-T35`,
   `M5-T36`); `docs/test_spec.md` notes each one.
-- Functions above the complexity target of 10 (`radon cc services scripts -n C`): 18, the worst being
-  `scripts/validate_traceability.py:main` (63), `scripts/validate_e2e_evidence.py:main` (32),
-  `jira-mcp-gateway do_POST` (23), and capiss `log_mint_decision` (23).
+- Functions above the complexity target of 10 (`radon cc services scripts -n C`): 16, the worst being
+  `scripts/validate_e2e_evidence.py:main` (32), `scripts/validate_traceability.py:_parse_unit_tests`
+  (25), `jira-mcp-gateway do_POST` (23), and capiss `log_mint_decision` (23). The trace validator's
+  `main` (63) was split in slice `ci-evidence-trace` B.
 - `make qa-trace` scans only `services/` and `scripts/` for DD tags, so `DD-918`, `DD-920`, and
   `DD-921` in the top-level `varambu` script are not indexed.
 - **Open decision (user):** mutation testing mutates covered lines only

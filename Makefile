@@ -10,11 +10,16 @@ MIN_CRITICAL_BRANCH ?= 75
 MIN_DIFF_COVERAGE ?= 90
 MIN_MUTATION_SCORE ?= 70
 BASE_REF ?= origin/main
+# Gap gate: fail on a coverage gap the branch adds compared with its merge-base with BASE_REF.
+# CI passes --mode pr --base origin/<PR base> on pull requests and --mode push on main.
+QA_TRACE_ARGS ?= --mode pr --base $(BASE_REF)
+# The main ruleset, readable without a token; gate-consistency compares its required checks with CI.
+RULESET_URL ?= https://api.github.com/repos/gunaseelan-sivanandam/agentic-iam-spiffe/rulesets/26054924
 MUTATION_MAX_CHILDREN ?= 2
 # Everything a test run publishes (CI uploads exactly this); qa-evidence checks it for secrets.
 PUBLICATION_SET := test_report.log artifacts/rogue-tests artifacts/quality
 
-.PHONY: unit unit-guard-check unit-invariants unit-boundary unit-negative-controls unit-hybrid-critical unit-flake unit-cov unit-diff-cov traceability-check unit-mutation unit-trust qa-trace qa-evidence qa-quality docs-check tooling-test test-lint qa-deploy jira-live-smoke print-publication-set e2e
+.PHONY: unit unit-guard-check unit-invariants unit-boundary unit-negative-controls unit-hybrid-critical unit-flake unit-cov unit-diff-cov traceability-check unit-mutation unit-trust qa-trace qa-evidence qa-quality docs-check tooling-test test-lint qa-deploy jira-live-smoke print-publication-set e2e gate-consistency
 
 unit:
 	$(PYTEST) $(TEST_DIR)
@@ -73,7 +78,8 @@ qa-trace:
 	  --requirements-doc docs/requirements.md \
 	  --architecture-doc docs/architecture.md \
 	  --tests trace/tests.yaml \
-	  --report-json artifacts/quality/traceability_report.json
+	  --report-json artifacts/quality/traceability_report.json \
+	  $(QA_TRACE_ARGS)
 
 qa-evidence:
 	$(PYTHON) scripts/validate_e2e_evidence.py \
@@ -81,6 +87,7 @@ qa-evidence:
 	  --evidence-dir artifacts/rogue-tests \
 	  --test-report test_report.log \
 	  --report-json artifacts/quality/evidence_report.json \
+	  --deploy-report artifacts/quality/qa_deploy_report.json \
 	  --publication-set $(PUBLICATION_SET)
 
 print-publication-set:
@@ -101,6 +108,9 @@ test-lint:
 # Locally the built images are inspected for their USER; CI passes QA_DEPLOY_ARGS=--skip-image-users.
 qa-deploy:
 	$(PYTHON) scripts/qa_deploy.py $(QA_DEPLOY_ARGS)
+
+gate-consistency:
+	$(PYTHON) scripts/check_gate_consistency.py --ruleset-url $(RULESET_URL)
 
 tooling-test:
 	$(PYTEST) -q tests/tools

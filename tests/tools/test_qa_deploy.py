@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import re
 import subprocess  # nosec B404 - fixed git and script argv
@@ -364,9 +365,10 @@ def test_opl_status_parsing() -> None:
 # --- end to end on the repository --------------------------------------------
 
 
-def test_repository_deployment_passes_with_known_violations_only() -> None:
+def test_repository_deployment_passes_with_known_violations_only(tmp_path: Path) -> None:
+    # The report goes to tmp_path: a test must not overwrite the run's report in artifacts/quality.
     result = subprocess.run(  # nosec B603 - fixed argv
-        [sys.executable, str(SCRIPT), "--skip-image-users"],
+        [sys.executable, str(SCRIPT), "--skip-image-users", "--report-json", str(tmp_path / "report.json")],
         cwd=ROOT, capture_output=True, text=True, check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -400,3 +402,60 @@ def test_compose_tag_differing_from_register_fails() -> None:
     deployed = _svc("redis", image="redis:7.4.9-alpine")
     errors = _errors({"redis": deployed}, _register(registered))
     assert any("image" in error for error in errors), errors
+
+
+# --- qa-deploy report (slice ci-evidence-trace, test plan V5) -----------------
+
+def _report_args(tmp_path: Path, skip: bool) -> argparse.Namespace:
+    compose = tmp_path / "compose.yml"
+    register = tmp_path / "register.yaml"
+    compose.write_text("services: {}\n")
+    register.write_text("assets: {}\n")
+    return argparse.Namespace(compose=compose, register=register, skip_image_users=skip,
+                              report_json=tmp_path / "quality" / "qa_deploy_report.json")
+
+
+@pytest.mark.parametrize("skip", [False, True])
+def test_report_records_verdict_findings_inspection_and_digests(tmp_path: Path, skip: bool) -> None:
+    import hashlib
+    import json
+
+    args = _report_args(tmp_path, skip)
+    findings = qa.Report(errors=[], warnings=["w"], known=["OPL-005 K1 tool-b (mount capiss_keys), expires 2026-12-31"])
+    qa.write_report(args, "passed", findings)
+    report = json.loads(args.report_json.read_text())
+    assert report == {
+        "verdict": "passed", "problems": [], "warnings": ["w"],
+        "known_violations": ["OPL-005 K1 tool-b (mount capiss_keys), expires 2026-12-31"],
+        "image_users_inspected": not skip,
+        "compose_sha256": hashlib.sha256(args.compose.read_bytes()).hexdigest(),
+        "register_sha256": hashlib.sha256(args.register.read_bytes()).hexdigest(),
+    }
+
+
+def test_repository_run_writes_a_report_without_env_values_or_requirement_status(tmp_path: Path) -> None:
+    import json
+
+    report_path = tmp_path / "qa_deploy_report.json"
+    assert qa.main(["--skip-image-users", "--report-json", str(report_path)]) == 0
+    text = report_path.read_text()
+    report = json.loads(text)
+    assert report["verdict"] == "passed" and report["image_users_inspected"] is False
+    assert len(report["known_violations"]) == 18
+    assert "REQ-SEC" not in text and "status" not in report
+    assert "=" not in "".join(report["problems"] + report["known_violations"])
+
+
+@pytest.mark.parametrize(("register_text", "verdict", "code"), [
+    ("assets: {}\nservices: {}\nknown_violations: []\n", "failed", 1),
+    ("assets: [not, a, map\n", "error", 2),
+])
+def test_failed_or_broken_run_writes_a_report_that_says_so(tmp_path: Path, register_text: str, verdict: str, code: int) -> None:
+    import json
+
+    register = tmp_path / "register.yaml"
+    register.write_text(register_text)
+    report_path = tmp_path / "report.json"
+    assert qa.main(["--skip-image-users", "--register", str(register), "--report-json", str(report_path)]) == code
+    report = json.loads(report_path.read_text())
+    assert report["verdict"] == verdict and report["problems"]

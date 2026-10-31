@@ -3,7 +3,7 @@
 
 Checks (see docs/slices/docs-consolidation/test_plan.md):
 - spec:   every E2E test ID in the harness has a heading in docs/test_spec.md, and no heading
-          names a test the harness does not run
+          names a test the harness does not run; the same for static tests in trace/tests.yaml
 - links:  every relative Markdown link in a live document resolves, including #anchors
 - images: every image in docs/ is referenced by a live document; every .puml has its .svg
 - slices: every slice bundle directory has a row in docs/slices/README.md
@@ -19,8 +19,11 @@ import sys
 import unicodedata
 from pathlib import Path
 
+import yaml
+
 HARNESS_ID_RE = re.compile(r'^\s*begin_test_evidence\s+"([^"]+)"', re.MULTILINE)
 SPEC_HEADING_RE = re.compile(r"^### (M[0-9A-Za-z.]+-T\d+) — ", re.MULTILINE)
+STATIC_HEADING_RE = re.compile(r"^### ([A-Z]+-[A-Z0-9]+) — ", re.MULTILINE)
 LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)\s]+)\)")
 HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$")
 TEST_ONLY_RE = re.compile(r"TEST_ONLY=([A-Za-z0-9.,-]+)")
@@ -41,6 +44,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--root", default=".", help="repository root")
     parser.add_argument("--harness", default="scripts/rogue_node_tests.sh")
     parser.add_argument("--spec", default="docs/test_spec.md")
+    parser.add_argument("--trace", default="trace/tests.yaml")
     return parser.parse_args()
 
 
@@ -167,10 +171,29 @@ def check_test_only_ids(root: Path, docs: list[Path], known: set[str]) -> list[s
     return problems
 
 
-def run_checks(root: Path, harness: Path, spec: Path) -> list[str]:
+def static_test_ids(trace_text: str) -> list[str]:
+    data = yaml.safe_load(trace_text) or {}
+    return [str(t.get("id")) for t in data.get("tests") or [] if isinstance(t, dict) and t.get("type") == "static_test"]
+
+
+def check_static_spec(trace_text: str, spec_text: str) -> list[str]:
+    """Every static test in trace/tests.yaml has a test-spec heading, and every static heading an entry."""
+    entries = static_test_ids(trace_text)
+    documented = STATIC_HEADING_RE.findall(spec_text)
+    problems = [f"spec: static test {t} has no heading in the test spec" for t in entries if t not in documented]
+    problems += [f"spec: heading {t} names no static test in trace/tests.yaml" for t in documented if t not in entries]
+    problems += [f"spec: duplicate heading for {t}" for t in sorted(set(documented)) if documented.count(t) > 1]
+    return problems
+
+
+def run_checks(root: Path, harness: Path, spec: Path, trace: Path | None = None) -> list[str]:
     harness_text = harness.read_text(encoding="utf-8")
     docs = live_docs(root)
-    problems = check_spec(harness_text, spec.read_text(encoding="utf-8"))
+    spec_text = spec.read_text(encoding="utf-8")
+    problems = check_spec(harness_text, spec_text)
+    trace = trace or root / "trace" / "tests.yaml"
+    if trace.exists():
+        problems += check_static_spec(trace.read_text(encoding="utf-8"), spec_text)
     for doc in docs:
         problems += check_links(root, doc)
     problems += check_images(root, docs)
@@ -182,7 +205,7 @@ def run_checks(root: Path, harness: Path, spec: Path) -> list[str]:
 def main() -> int:
     args = parse_args()
     root = Path(args.root).resolve()
-    problems = run_checks(root, root / args.harness, root / args.spec)
+    problems = run_checks(root, root / args.harness, root / args.spec, root / args.trace)
     if problems:
         print("[docs-check] FAILED", file=sys.stderr)
         for item in problems:

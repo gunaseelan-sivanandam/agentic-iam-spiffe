@@ -5,6 +5,43 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-10-31 Slice ci-evidence-trace Increment B: trace model
+
+- Branch `slice/ci-evidence-trace-b`, from `main` after PR #11.
+- **D4, D5:** `trace/tests.yaml` gains the `static_test` type (requirement, `gate: make <target>`,
+  `negative_controls` as `<file>::<test>`, `result`); `DEPLOY-K1` to `DEPLOY-K8`, `DEPLOY-D1`,
+  `DEPLOY-D2` and `EVID-T1` for the new REQ-T-R9. `make qa-trace` takes each requirement's status
+  from its proofs and the register: K1, K2, K4 not proved (known violations), D2 not proved (grace
+  until 2027-01-31), the other six and REQ-T-R9 proved statically. A requirement that is not proved
+  is a `requirements_without_proof` gap, so a status change is never a "new" gap. `make qa-deploy`
+  writes `artifacts/quality/qa_deploy_report.json` (verdict, findings, inspection flag, compose and
+  register SHA-256); `make qa-evidence` accepts only a passing, inspected, matching report. The
+  non-root requirement ID sits beside its grace date in `scripts/qa_deploy.py`.
+- **D6:** `Implemented by:` on the 13 config-implemented ARCH sections and ARCH-034 (now "Deployment
+  Register": the register and compose); DD-925 to DD-930 and `IT-DEPLOY-*` retired (`retired_ids`).
+- **D7:** `make qa-trace --mode pr --base <ref>` exports the merge-base tree with `git archive` and
+  runs the same script on it, then fails on a gap the branch adds unless `accepted_gaps` lists it;
+  `--mode push` reports. CI runs PR mode on PRs (full history) and push mode on `main`.
+- **D8:** `make gate-consistency` (new job) checks the `AGENTS.md` CI gates, the `ci.yml` jobs (each
+  runs `make <name>`) and the `main` ruleset's required checks; `unit-diff-cov` has its own job.
+- **D9:** `AGENTS.md`: every change follows the slice workflow, scaled to its size; trace model,
+  static tests, `Implemented by:`, retired IDs, the gap gate. OPL-009 mitigations updated.
+- `docs/test_spec.md` is now "Test Specification" with a "Static tests" part; `make docs-check`
+  checks static-test heading parity. The trace validator's `main` (complexity 63) is split into
+  functions under 10.
+- Found on the way: a tooling test ran `qa-deploy` without `--report-json` and overwrote the run's
+  report; `qa-evidence` then rejected it (not inspected). Tests now write reports to a temporary path.
+- Independent review (Codex, [`review_b.md`](../slices/ci-evidence-trace/review_b.md)): round 1 found
+  two blocking issues, both fixed: an incomplete register could turn known violations into static
+  proofs (now fails closed), and push mode passed expired or stale accepted gaps (now fails).
+  Round 2 re-raised the first with a register asset naming a non-existent requirement (now fails);
+  round 3: approvable within the threat model.
+- Records: DPL-004 and DPL-005 closed.
+- Validation: see `docs/STATUS.md` "Last verification" (full E2E 120/120 on a clean stack,
+  `qa-deploy`, `qa-evidence`, `qa-quality`, `tooling-test` PASSED). Not run locally: `unit-trust`,
+  `unit-mutation` (no service or unit-test change; CI runs them). `make gate-consistency` fails until
+  `gate-consistency` and `unit-diff-cov` are required checks.
+
 ## 2026-10-31 Slice ci-evidence-trace Increment A: CI evidence
 
 - Branch `slice/ci-evidence-trace-a`, from the plan as merged on `main` (PR #9 via PR #10).

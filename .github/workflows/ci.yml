@@ -22,9 +22,17 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
+        with:
+          # The gap gate compares with the merge-base of the PR and its base branch.
+          fetch-depth: 0
       - uses: ./.github/actions/setup-python-deps
-      - name: Validate the cross-layer traceability model
-        run: make qa-trace
+      - name: Validate the trace model; on a PR, fail on a coverage gap the PR adds
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            make qa-trace QA_TRACE_ARGS="--mode pr --base origin/${{ github.base_ref }}"
+          else
+            make qa-trace QA_TRACE_ARGS="--mode push"
+          fi
 
   docs-check:
     runs-on: ubuntu-latest
@@ -85,12 +93,6 @@ jobs:
       - uses: ./.github/actions/setup-python-deps
       - name: Run the unit trust bundle (coverage, traceability, invariants, flake check)
         run: make unit-trust
-      - name: Fetch PR base for diff coverage
-        if: github.event_name == 'pull_request'
-        run: git fetch --no-tags origin "${{ github.base_ref }}"
-      - name: Run diff coverage gate (PR only)
-        if: github.event_name == 'pull_request'
-        run: make unit-diff-cov BASE_REF="origin/${{ github.base_ref }}"
       - name: Upload coverage artifacts
         if: always()
         uses: actions/upload-artifact@v6
@@ -99,7 +101,25 @@ jobs:
           path: |
             coverage.json
             coverage.xml
-            diff-coverage.txt
+
+  unit-diff-cov:
+    # PRs only: a push to main has no PR diff to measure.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-python-deps
+      - name: Diff coverage of the changed capiss and tool-b lines
+        run: make unit-diff-cov BASE_REF="origin/${{ github.base_ref }}"
+      - name: Upload the diff coverage report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: diff-coverage
+          path: diff-coverage.txt
 
   unit-mutation:
     runs-on: ubuntu-latest
@@ -145,3 +165,12 @@ jobs:
           name: e2e-evidence
           path: ${{ steps.publishable.outputs.paths }}
           retention-days: 14
+
+  gate-consistency:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-python-deps
+      - name: Check that AGENTS.md CI gates, CI jobs and main's required checks agree
+        run: make gate-consistency
