@@ -24,6 +24,11 @@
 - Which keys, sockets and secrets this slice touches, adds or moves, and who may hold each one
   (`security/invariants.yaml` and the `REQ-SEC` requirements). If none, say so explicitly.
 
+## Environment facts
+- Facts outside the repository that a decision depends on (file ownership and modes, APIs, CI
+  history, runtime behaviour), each with the probe that established it and its result. If none, say
+  so explicitly.
+
 ## Hidden-state and trust decisions
 - If the slice depends on hidden state, list:
   - state/key name

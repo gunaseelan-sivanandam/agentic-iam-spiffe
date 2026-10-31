@@ -1293,9 +1293,8 @@ Verdict: **no** — R5-B1. R4-B1, R4-B2 and the round-4 advisories fixed.
 | (author) environment facts | Probed and recorded (file ownership, ruleset access, verifier key caching, mutation selection). | plan Environment facts |
 
 The 8D itself (why rounds 1–4 answered every finding by adding, and why a simpler design came from
-the user) is recorded in the session; its standing lesson for authors is: fix inside the agreed
-decisions, consider the upstream cause and several approaches before choosing, and prefer removing a
-mechanism over adding one.
+the user) is [DPL-007](../../delivery_problem_log.md#dpl-007-plan-review-answered-every-finding-by-adding-mechanisms)
+in the delivery problem log, with its root causes and the rules it added to `AGENTS.md`.
 
 ### Round 5 prompt (verbatim)
 ````markdown

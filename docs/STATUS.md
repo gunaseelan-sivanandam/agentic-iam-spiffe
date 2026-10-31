@@ -42,8 +42,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `docs/review-loop` | Remove the review round limit; the author may reject findings with a checkable reason | PR open |
-| `slice/ci-evidence-trace-plan` | Slice 2 plan: CI E2E, evidence without secrets, trace model | plan reviewed (approvable after 6 rounds); plan PR open |
+| `slice/ci-evidence-trace-plan` | Slice 2 plan: CI E2E, evidence without secrets, trace model; also the delivery problem log and the review rules from DPL-006 and DPL-007 | plan reviewed (approvable after 6 rounds); PR #9 open |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
@@ -56,6 +55,14 @@ Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
 - **OPL-007** Redis authorization state accepts unauthenticated writes from every verifier network.
 - **OPL-008** spire-token-init mounts the whole SPIRE server data directory.
 - **OPL-009** The delivery pipeline does not resist a deliberately malicious PR (accepted, D18).
+
+## Open delivery problems
+Full entries, root causes and lessons in [`docs/delivery_problem_log.md`](delivery_problem_log.md).
+- **DPL-002** Capability token values written into E2E evidence (closes with slice 2 Increment A).
+- **DPL-004** Slice 1B added ten requirements without proof while review and CI stayed green
+  (closes with slice 2 Increment B).
+- **DPL-005** Gates ran hidden inside another CI job; no check was required to merge (closes with
+  slice 2 Increment B).
 
 ## Known gaps and debt
 - `M5-T55` (live Jira upstream) only runs with `JIRA_MCP_UPSTREAM_MODE=live`; default runs skip it.
