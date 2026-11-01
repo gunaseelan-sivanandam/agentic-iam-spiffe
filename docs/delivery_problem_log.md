@@ -245,8 +245,8 @@ decisions.
 
 ## DPL-008: A stacked PR was merged into its stale base branch instead of `main`
 
-- Status: Open; closes when the git rule below merges (slice `ci-evidence-trace` Increment A) and
-  the repository deletes merged head branches
+- Status: Closed (git rule merged with slice `ci-evidence-trace` Increment A; the owner turned on
+  "Automatically delete head branches", recorded in slice `agent-identity`)
 - Found: 2026-10-31, by the author, when implementation was to start
 
 ### What happened
@@ -266,8 +266,8 @@ decisions.
 ### Actions
 - Corrective: PR #10.
 - Preventive: `AGENTS.md` git rules: a stacked PR is merged only after its base shows `main`; agents
-  avoid stacking where they can. Pending (user): the repository setting "Automatically delete head
-  branches", so GitHub retargets stacked PRs itself.
+  avoid stacking where they can. The repository setting "Automatically delete head branches" is on
+  (`delete_branch_on_merge: true`, probed 2026-11-01), so GitHub retargets stacked PRs itself.
 
 ### Lesson
 Fix the mechanism that makes the mistake possible (stale base branches), not only the warning about it.

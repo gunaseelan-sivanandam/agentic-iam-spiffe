@@ -1,5 +1,6 @@
 """Negative controls for scripts/check_gate_consistency.py (slice ci-evidence-trace, test plan V10):
-the AGENTS.md CI gates, the CI jobs (and the command each runs) and the required checks must agree."""
+the AGENTS.md CI gates, the CI jobs (and the command each runs) and the required checks must agree.
+Slice agent-identity (test plan V1): the main ruleset must also require an approving review."""
 
 from __future__ import annotations
 
@@ -40,10 +41,13 @@ WORKFLOW = """jobs:
 """
 
 
-def _ruleset(*checks: str) -> dict:
-    return {"rules": [{"type": "deletion"},
-                      {"type": "required_status_checks",
-                       "parameters": {"required_status_checks": [{"context": c} for c in checks]}}]}
+def _ruleset(*checks: str, approvals: object = 1, enforcement: str = "active") -> dict:
+    rules: list[dict] = [{"type": "deletion"},
+                         {"type": "required_status_checks",
+                          "parameters": {"required_status_checks": [{"context": c} for c in checks]}}]
+    if approvals is not None:
+        rules.append({"type": "pull_request", "parameters": {"required_approving_review_count": approvals}})
+    return {"enforcement": enforcement, "rules": rules}
 
 
 RULESET = _ruleset("qa-trace", "qa-deploy")
@@ -82,6 +86,30 @@ def test_job_running_another_target_fails() -> None:
 def test_target_prefix_is_not_its_own_target() -> None:
     workflow = WORKFLOW.replace("make qa-deploy QA_DEPLOY_ARGS=--skip-image-users", "make qa-deploy-extra")
     assert gc.check(AGENTS, workflow, RULESET) == ["CI job qa-deploy does not run `make qa-deploy`"]
+
+
+@pytest.mark.parametrize("approvals", [None, 0, True, "1"])
+def test_ruleset_without_a_required_approval_fails(approvals: object) -> None:
+    ruleset = _ruleset("qa-trace", "qa-deploy", approvals=approvals)
+    assert gc.check(AGENTS, WORKFLOW, ruleset) == ["the main ruleset does not require an approving review"]
+
+
+def test_pull_request_rule_without_parameters_fails() -> None:
+    ruleset = _ruleset("qa-trace", "qa-deploy", approvals=None)
+    ruleset["rules"].append({"type": "pull_request"})
+    assert gc.check(AGENTS, WORKFLOW, ruleset) == ["the main ruleset does not require an approving review"]
+
+
+def test_approval_count_in_another_rule_type_fails() -> None:
+    ruleset = _ruleset("qa-trace", "qa-deploy", approvals=None)
+    ruleset["rules"].append({"type": "deletion", "parameters": {"required_approving_review_count": 1}})
+    assert gc.check(AGENTS, WORKFLOW, ruleset) == ["the main ruleset does not require an approving review"]
+
+
+@pytest.mark.parametrize("enforcement", ["disabled", "evaluate"])
+def test_ruleset_that_is_not_active_fails(enforcement: str) -> None:
+    ruleset = _ruleset("qa-trace", "qa-deploy", enforcement=enforcement)
+    assert gc.check(AGENTS, WORKFLOW, ruleset) == [f"the main ruleset is not active (enforcement: {enforcement})"]
 
 
 @pytest.mark.parametrize("content", ["{not json", "[]", json.dumps({"rules": "x"})])

@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-10-31. Update this page at the end of every slice (see `AGENTS.md`, slice workflow step 4).
+Last updated: 2026-11-01. Update this page at the end of every slice (see `AGENTS.md`, slice workflow step 4).
 Detailed history: [`docs/history/implementation_log.md`](history/implementation_log.md).
 
 ## Where the project stands
@@ -23,6 +23,10 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
   register, `Implemented by:`, the gap gate, gate consistency) in PR #12. Slice 1 (exact E2E outcomes,
   `make test-lint`, mutation scoring, `security/invariants.yaml` and `make qa-deploy`) merged in PR #5
   and PR #6.
+- **Delivery identity:** agents work on GitHub as the machine user `gunaseelan-agent`; `main`
+  requires one approving review, which the bot cannot give itself, so the owner approves every
+  merge (slice
+  [`agent-identity`](slices/agent-identity/plan.md)).
 - **Next work** is tracked as [GitHub issues](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues) (label `slice`): the proposed `gate-register`
   ([#13](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/13)), `asset-classification` ([#14](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/14)) and 100% coverage ([#15](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/15)) slices,
   slice 3, review design and orchestration ([#16](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/16)), and the pilot that fixes OPL-005 to
@@ -43,7 +47,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `backlog-issues` | Move the open items of `later_slices.md` to GitHub issues; close slice 2 in the status pages | PR open |
+| `slice/agent-identity` | Agents act as the machine user `gunaseelan-agent`; `main` requires the owner's approval (#20) | PR open |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
@@ -60,8 +64,7 @@ Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
 
 ## Open delivery problems
 Full entries, root causes and lessons in [`docs/delivery_problem_log.md`](delivery_problem_log.md).
-- **DPL-008** A stacked PR was merged into its stale base branch instead of `main` (closes when merged
-  head branches are deleted automatically, a repository setting; [#18](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/18)).
+- None. DPL-008 closed on 2026-11-01 (automatic head-branch deletion is on).
 
 ## Known gaps and debt
 - `M5-T55` (live Jira upstream) only runs with `JIRA_MCP_UPSTREAM_MODE=live`; default runs skip it.
