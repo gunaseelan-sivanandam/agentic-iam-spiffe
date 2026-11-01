@@ -5,6 +5,21 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-11-01 Slice agent-identity: agents act as a machine user
+
+- Branch `slice/agent-identity`, from `main` after PR #19; issue #20. Plan and implementation in one
+  PR (user's decision).
+- The owner created the machine user `gunaseelan-agent` (2FA on, write collaborator), logged its
+  classic token (`repo`, `read:org`, `workflow`; expires 2027-01-30) into
+  `/home/guna/.config/gh-agent`, set the bot identity in the gitignored `.claude/settings.local.json`
+  (`GH_CONFIG_DIR`, `GIT_AUTHOR_*`, `GIT_COMMITTER_*`) and set the `main` ruleset to require one
+  approving review. The agent switched `origin` to HTTPS.
+- `make gate-consistency` now also fails when the ruleset requires no approving review (two new
+  tooling tests). `AGENTS.md` Git rules rewritten. DPL-008 closed (automatic head-branch deletion is
+  on; issue #18).
+- Validation: listed in the PR; no E2E run, `make unit-trust` or mutation run: no `services/**` or
+  harness change.
+
 ## 2026-10-31 Slice backlog-issues: open work tracked as GitHub issues
 
 - Branch `backlog-issues`, from `main` after PR #12 (slice `ci-evidence-trace` complete).

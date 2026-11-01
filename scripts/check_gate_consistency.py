@@ -6,6 +6,9 @@ Three lists must name the same gates:
 - the jobs of .github/workflows/ci.yml, each of which must run `make <its own name>`;
 - the required status checks of the `main` ruleset, read from the public GitHub API without a token
   (or from a JSON file in tests). A ruleset that cannot be read or parsed fails the check.
+
+The ruleset must also require at least one approving review (slice agent-identity): agents work as
+the bot account, which cannot approve its own pull requests, so only the owner can let one merge.
 """
 
 from __future__ import annotations
@@ -67,6 +70,16 @@ def required_checks(ruleset: object) -> list[str]:
     return contexts
 
 
+def required_approvals(ruleset: dict) -> int:
+    """Highest required_approving_review_count of the ruleset's pull_request rules; 0 if none."""
+    counts = [0]
+    for rule in ruleset["rules"]:
+        if isinstance(rule, dict) and rule.get("type") == "pull_request":
+            count = (rule.get("parameters") or {}).get("required_approving_review_count")
+            counts.append(count if isinstance(count, int) else 0)
+    return max(counts)
+
+
 def load_ruleset(url: str | None, path: str | None) -> object:
     try:
         if path:
@@ -89,6 +102,8 @@ def check(agents_text: str, workflow_text: str, ruleset: object) -> list[str]:
     problems += [f"CI job {j} does not run `make {j}`" for j in sorted(jobs) if not runs_own_target(j, jobs[j])]
     problems += [f"CI job {j} is not a required check of the main ruleset" for j in sorted(set(jobs) - required)]
     problems += [f"required check {c} is not a CI job" for c in sorted(required - set(jobs))]
+    if required_approvals(ruleset) < 1:
+        problems.append("the main ruleset does not require an approving review")
     return problems
 
 
@@ -111,7 +126,7 @@ def main() -> int:
         for problem in problems:
             print(f"  - {problem}", file=sys.stderr)
         return 1
-    print("[gate-consistency] PASSED (AGENTS.md CI gates, CI jobs and required checks agree)")
+    print("[gate-consistency] PASSED (AGENTS.md CI gates, CI jobs and required checks agree; an approving review is required)")
     return 0
 
 

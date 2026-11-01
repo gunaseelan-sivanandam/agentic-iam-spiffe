@@ -221,7 +221,7 @@ never replaces it.
 | Unit trust bundle | `make unit-trust` | CI | total line coverage ≥ 85%; branch coverage ≥ 75% on `services/capability-issuer/app.py` and `services/tool-b/server.py`; unit traceability check; invariant, negative-control, hybrid-critical suites; invariant flake check ×5 |
 | Diff coverage | `make unit-diff-cov` | CI, PRs only (own job) | ≥ 90% of changed lines in `services/capability-issuer/` and `services/tool-b/` |
 | Mutation | `make unit-mutation` | CI | score ≥ 70% (capiss and tool-b), counting untested and skipped mutants as not killed; an empty run fails |
-| Gate consistency | `make gate-consistency` | CI | every row this table marks as enforced by CI has a CI job of the same name that runs `make <name>`; every CI job has such a row; every CI job is a required check of the `main` ruleset and every required check is a job (the ruleset is read from the public GitHub API; a failed read fails) |
+| Gate consistency | `make gate-consistency` | CI | every row this table marks as enforced by CI has a CI job of the same name that runs `make <name>`; every CI job has such a row; every CI job is a required check of the `main` ruleset and every required check is a job; the ruleset requires at least one approving review (the ruleset is read from the public GitHub API; a failed read fails) |
 | Full E2E suite | `make e2e` | CI, every push/PR; and local on a clean stack, required in step 4 | all pass; warnings reviewed. The CI job then runs `make qa-deploy` with image users inspected and `make qa-evidence`, and uploads the publication set for 14 days only if the secret check found nothing |
 | E2E evidence | `make qa-evidence` | in the CI `e2e` job; local, after the E2E run | every test has premise/exercise/outcome evidence and a PASS line; no file of the publication set (`PUBLICATION_SET` in the `Makefile`: `test_report.log`, `artifacts/rogue-tests/`, `artifacts/quality/`) holds a secret by shape: a PEM private key, a base64 PKCS#8 private key, base64 of a PEM private key, a base64 or base64url run of ≥ 200 characters with ≥ 20 distinct ones outside certificates, a `JIRA_API_TOKEN=` or `Authorization:` line with a value, or an Atlassian API token; an unreadable file fails; a finding names the file and kind, never the value |
 
@@ -256,9 +256,15 @@ Standards that are **not** gated yet (follow them for new and changed code):
 
 ## Git rules
 - No `Co-Authored-By` trailers for AI assistants in commit messages.
-- Agents open pull requests; only the user merges into `main`. GitHub does not enforce this yet:
-  the `main` ruleset requires the CI checks but no approving review, and an agent's `gh` login may
-  be the owner's account.
+- Agents act on GitHub as the machine user `gunaseelan-agent`; only the owner
+  (`gunaseelan-sivanandam`) approves and merges into `main`. The `main` ruleset requires one
+  approving review, which GitHub never lets a pull request's author give, so an agent cannot merge
+  its own; `make gate-consistency` fails if that requirement is removed.
+- An agent session gets the bot identity from the `env` block of the gitignored
+  `.claude/settings.local.json` (`GH_CONFIG_DIR` for the bot's `gh` login, `GIT_AUTHOR_*` and
+  `GIT_COMMITTER_*` for commits); `origin` is the HTTPS URL, so `git push` uses the bot's token
+  through `gh` as git's credential helper. Before a GitHub write, check that `gh api user --jq
+  .login` prints `gunaseelan-agent`; if not, stop and tell the user.
 - Open pull requests against `main`; avoid stacking. A stacked PR is merged only after its base
   shows `main` (GitHub retargets it when the base branch is deleted) ([DPL-008](docs/delivery_problem_log.md#dpl-008-a-stacked-pr-was-merged-into-its-stale-base-branch-instead-of-main)).
 
