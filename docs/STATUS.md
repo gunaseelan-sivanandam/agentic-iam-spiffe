@@ -24,7 +24,8 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
   `make test-lint`, mutation scoring, `security/invariants.yaml` and `make qa-deploy`) merged in PR #5
   and PR #6.
 - **Delivery identity:** agents work on GitHub as the machine user `gunaseelan-agent`; `main`
-  requires one approving review, so only the owner can let a PR merge (slice
+  requires one approving review, which the bot cannot give itself, so the owner approves every
+  merge (slice
   [`agent-identity`](slices/agent-identity/plan.md)).
 - **Next work** is tracked as [GitHub issues](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues) (label `slice`): the proposed `gate-register`
   ([#13](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/13)), `asset-classification` ([#14](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/14)) and 100% coverage ([#15](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/15)) slices,

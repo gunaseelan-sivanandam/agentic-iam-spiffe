@@ -14,11 +14,12 @@ is first); every heading carries its date.
   `/home/guna/.config/gh-agent`, set the bot identity in the gitignored `.claude/settings.local.json`
   (`GH_CONFIG_DIR`, `GIT_AUTHOR_*`, `GIT_COMMITTER_*`) and set the `main` ruleset to require one
   approving review. The agent switched `origin` to HTTPS.
-- `make gate-consistency` now also fails when the ruleset requires no approving review (two new
-  tooling tests). `AGENTS.md` Git rules rewritten. DPL-008 closed (automatic head-branch deletion is
-  on; issue #18).
-- Validation: listed in the PR; no E2E run, `make unit-trust` or mutation run: no `services/**` or
-  harness change.
+- `make gate-consistency` now also fails when the ruleset is not active or requires no approving
+  review (tooling tests V1–V4; V4 from review finding AI-B1). `AGENTS.md` Git rules rewritten.
+  DPL-008 closed (automatic head-branch deletion is on; issue #18).
+- Validation: `make tooling-test` (238 pytest, 9 shell), `make gate-consistency` on the live ruleset
+  and `make qa-quality` passed; manual checks M0–M2 are in the PR body. No E2E run, `make
+  unit-trust` or mutation run: no `services/**` or harness change.
 
 ## 2026-10-31 Slice backlog-issues: open work tracked as GitHub issues
 

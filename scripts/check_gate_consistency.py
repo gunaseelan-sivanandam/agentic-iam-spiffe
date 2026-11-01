@@ -7,8 +7,8 @@ Three lists must name the same gates:
 - the required status checks of the `main` ruleset, read from the public GitHub API without a token
   (or from a JSON file in tests). A ruleset that cannot be read or parsed fails the check.
 
-The ruleset must also require at least one approving review (slice agent-identity): agents work as
-the bot account, which cannot approve its own pull requests, so only the owner can let one merge.
+The ruleset must also be active and require at least one approving review (slice agent-identity):
+agents work as the bot account, which cannot approve its own pull requests.
 """
 
 from __future__ import annotations
@@ -76,7 +76,7 @@ def required_approvals(ruleset: dict) -> int:
     for rule in ruleset["rules"]:
         if isinstance(rule, dict) and rule.get("type") == "pull_request":
             count = (rule.get("parameters") or {}).get("required_approving_review_count")
-            counts.append(count if isinstance(count, int) else 0)
+            counts.append(count if isinstance(count, int) and not isinstance(count, bool) else 0)
     return max(counts)
 
 
@@ -102,6 +102,8 @@ def check(agents_text: str, workflow_text: str, ruleset: object) -> list[str]:
     problems += [f"CI job {j} does not run `make {j}`" for j in sorted(jobs) if not runs_own_target(j, jobs[j])]
     problems += [f"CI job {j} is not a required check of the main ruleset" for j in sorted(set(jobs) - required)]
     problems += [f"required check {c} is not a CI job" for c in sorted(required - set(jobs))]
+    if ruleset.get("enforcement") != "active":
+        problems.append(f"the main ruleset is not active (enforcement: {ruleset.get('enforcement')})")
     if required_approvals(ruleset) < 1:
         problems.append("the main ruleset does not require an approving review")
     return problems
@@ -126,7 +128,7 @@ def main() -> int:
         for problem in problems:
             print(f"  - {problem}", file=sys.stderr)
         return 1
-    print("[gate-consistency] PASSED (AGENTS.md CI gates, CI jobs and required checks agree; an approving review is required)")
+    print("[gate-consistency] PASSED (AGENTS.md CI gates, CI jobs and required checks agree; the ruleset is active and requires an approving review)")
     return 0
 
 

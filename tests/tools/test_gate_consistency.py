@@ -41,13 +41,13 @@ WORKFLOW = """jobs:
 """
 
 
-def _ruleset(*checks: str, approvals: int | None = 1) -> dict:
+def _ruleset(*checks: str, approvals: object = 1, enforcement: str = "active") -> dict:
     rules: list[dict] = [{"type": "deletion"},
                          {"type": "required_status_checks",
                           "parameters": {"required_status_checks": [{"context": c} for c in checks]}}]
     if approvals is not None:
         rules.append({"type": "pull_request", "parameters": {"required_approving_review_count": approvals}})
-    return {"rules": rules}
+    return {"enforcement": enforcement, "rules": rules}
 
 
 RULESET = _ruleset("qa-trace", "qa-deploy")
@@ -88,8 +88,8 @@ def test_target_prefix_is_not_its_own_target() -> None:
     assert gc.check(AGENTS, workflow, RULESET) == ["CI job qa-deploy does not run `make qa-deploy`"]
 
 
-@pytest.mark.parametrize("approvals", [None, 0])
-def test_ruleset_without_a_required_approval_fails(approvals: int | None) -> None:
+@pytest.mark.parametrize("approvals", [None, 0, True, "1"])
+def test_ruleset_without_a_required_approval_fails(approvals: object) -> None:
     ruleset = _ruleset("qa-trace", "qa-deploy", approvals=approvals)
     assert gc.check(AGENTS, WORKFLOW, ruleset) == ["the main ruleset does not require an approving review"]
 
@@ -98,6 +98,18 @@ def test_pull_request_rule_without_parameters_fails() -> None:
     ruleset = _ruleset("qa-trace", "qa-deploy", approvals=None)
     ruleset["rules"].append({"type": "pull_request"})
     assert gc.check(AGENTS, WORKFLOW, ruleset) == ["the main ruleset does not require an approving review"]
+
+
+def test_approval_count_in_another_rule_type_fails() -> None:
+    ruleset = _ruleset("qa-trace", "qa-deploy", approvals=None)
+    ruleset["rules"].append({"type": "deletion", "parameters": {"required_approving_review_count": 1}})
+    assert gc.check(AGENTS, WORKFLOW, ruleset) == ["the main ruleset does not require an approving review"]
+
+
+@pytest.mark.parametrize("enforcement", ["disabled", "evaluate"])
+def test_ruleset_that_is_not_active_fails(enforcement: str) -> None:
+    ruleset = _ruleset("qa-trace", "qa-deploy", enforcement=enforcement)
+    assert gc.check(AGENTS, WORKFLOW, ruleset) == [f"the main ruleset is not active (enforcement: {enforcement})"]
 
 
 @pytest.mark.parametrize("content", ["{not json", "[]", json.dumps({"rules": "x"})])

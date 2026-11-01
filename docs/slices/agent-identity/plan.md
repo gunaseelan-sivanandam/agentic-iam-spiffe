@@ -22,8 +22,9 @@
   owner's own terminal stays the owner. `.git/config` keeps the owner's `user.name`; only `origin`
   changes to HTTPS.
 - **D5 The `main` ruleset requires one approving review**, no bypass actors. The bot cannot approve
-  its own PR; the owner approves and merges. `make gate-consistency` fails if the ruleset requires no
-  approving review (it already reads the ruleset).
+  its own PR; the owner approves and merges. `make gate-consistency` fails if the ruleset is not
+  active or requires no approving review (it already reads the ruleset). The public API does not show
+  bypass actors, so the empty bypass list is checked by hand (test plan M2).
 - **D6 `AGENTS.md` Git rules** say agents act as the bot, the owner approves and merges, how a
   session gets the identity, and that an agent checks `gh api user --jq .login` before a GitHub write.
 - The two inactive write collaborators (environment facts) stay; their approval would count, but
@@ -42,7 +43,9 @@
 - `gh api user` in an agent session prints `gunaseelan-agent`; commits from the session carry the
   bot's no-reply address; this PR is opened and pushed by the bot.
 - The `main` ruleset has `required_approving_review_count: 1` and no bypass actors.
-- `make gate-consistency` fails on a ruleset without a required approval and passes on the live one.
+- `make gate-consistency` fails on a ruleset that is not active or has no required approval, and
+  passes on the live one.
+- The owner's own shell (without the session `env` block) still acts as the owner (test plan M1).
 
 ## In scope
 - `scripts/check_gate_consistency.py` and its tooling tests; `AGENTS.md` (Git rules, gate-consistency
@@ -85,6 +88,11 @@ Probed 2026-10-31 and 2026-11-01, without printing token values:
 - Ruleset `basic` (26054924) after the owner's change: `pull_request` with
   `required_approving_review_count: 1`; the public API without a token shows it, which is what
   `make gate-consistency` reads.
+- Manual checks (2026-11-01, test plan M0–M2): the agent session's `gh` login is `gunaseelan-agent`
+  and its commits carry the bot's no-reply address; without the session `env` block, `gh api user`
+  prints `gunaseelan-sivanandam` (run by the owner in their terminal) and `git var GIT_AUTHOR_IDENT`
+  names the owner; read with the owner's login, the ruleset has `bypass_actors: []` and
+  `enforcement: "active"`.
 
 ## Hidden-state and trust decisions
 - No runtime state. The session's identity lives in `.claude/settings.local.json` (gitignored; writer:
