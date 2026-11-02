@@ -44,29 +44,42 @@ them.
   on one Docker host. A design where each secret is visible only to the services that hold it is
   enough. KMS, HSM, Vault, per-key ownership proofs, CI-runner isolation and supply-chain controls
   are out of scope unless the user asks.
+- **Threat-model changes.** No agent may change, expand or narrow the approved threat model during
+  planning, implementation, any review round or review fixes without the user's explicit approval.
+  Proposed changes remain decision concerns; reviewers use the approved model until approval.
+- **Preserve discovered issues.** Preserve every issue discovered during the work and report it to
+  the user in the final handoff, regardless of whether it is pre-existing, introduced by the change,
+  related to the current slice, or outside the approved threat model. Include its disposition and
+  any existing tracking reference. Reporting an issue does not by itself make it blocking or
+  authorize fixing it; out-of-model issues need no separate OPL or exception entry.
 - **Ask before growing.** If a change makes the process bigger or more complex (a new gate, job,
   document, register, exception class or review step), say so and ask the user first. Prefer the
   smallest check that catches an honest mistake.
 - **Few exceptions.** Fix rather than except. Do not open an OPL, exception entry or plan note for a
   finding outside the threat model; one line in the review report is enough. Every exception must
   fit on one line and have an expiry.
-- **Review findings.** Give reviewers this section as context. Only these block:
-  - a concrete false green or an OPL-005-class miss inside the threat model, with a failure scenario;
-  - a contradiction;
-  - an approved decision without a test.
-
-  Everything else is advisory. It is listed once and is not fixed by default. Implementation details
-  become notes for the implementation PR. Reviewers should expect production-hardening ideas (see
-  the simplifications above) and report them as advisory at most.
-- **Review loop.** There is no round limit: review rounds continue until no blocking finding is
-  open. The author (the fixer) answers every finding in writing, either fixed (where) or rejected
-  (why). A rejection needs a reason the reviewer can check, for example: the failure scenario does
-  not happen (with the evidence), it is outside the threat model, it is already covered by a named
-  test or gate, or it does not meet the blocking criteria above. A finding labelled blocking that
-  does not meet them is not fixed by default. The next round sees each rejection and either accepts
-  it or re-raises it with new evidence; a finding still disputed after that goes to the user, who
-  decides. The review ends when every blocking finding is fixed, accepted as rejected, or decided by
-  the user.
+- **Review findings.** Judge within the approved PoC threat model. Blocking findings require
+  a concrete unmet approved obligation or security/correctness failure, a false green, a
+  contradiction, or missing required proof. Preferences and speculative hardening are advisory.
+  Preserve pre-existing and out-of-model issues without automatically making them slice blockers;
+  a claimed validation obstruction needs evidence. Threat-model changes go to the user.
+  Required checklist evidence and accountable-reviewer confirmation of N/A are completion
+  conditions, not permission to promote advisory preferences into blockers. Explicit provisional
+  tests-stage acceptance may carry named runtime proof forward; final acceptance may not.
+- **Review loop.** One initial review is followed by at most three fix-and-recheck cycles per
+  declared artifact review unit: one artifact or a fixed bundle with identified members. Each cycle comprises one author fix/response submission and assessment by all
+  required reviewers; parallel reviewers do not count separately. An incomplete review consumes
+  execution time, not a completed cycle. Cycle three is allowed; remaining blockers then
+  escalate. Revisions, new findings, restarts and upstream corrections do not reset counters.
+  Only explicit user authorization extends the limit. A plan/test-plan bundle has one shared
+  counter, not three cycles per member; renaming or repartitioning it cannot reset that counter.
+  Authors answer each finding with a fix or an evidence-backed proposed rejection. They cannot
+  close a blocker as won't-fix. The originating reviewer accepts/rejects each response with a
+  reason; it may downgrade its own finding with a reason, and may upgrade an advisory in a
+  later round only with new evidence. Only the user may waive a blocker, with scope, rationale
+  and expiry; waived is not fixed. Earlier escalation requires a baseline conflict or an
+  explicit, evidenced reviewer judgment of lack of progress. No consolidated report can silently
+  suppress or downgrade findings.
 
 ## Operating model (black-box first)
 - Treat the system as a black box first:
@@ -122,32 +135,47 @@ few lines), tests first, an independent review and the close-out, but not every 
 template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>/`, starts from
 `docs/slices/_template/`, and gets a row in the [slice index](docs/slices/README.md).
 
-1. **Plan and review.** Run the `grill-me` skill and resolve design choices one branch at a time.
-   Grill-me always asks which keys, sockets and secrets the slice touches and who may hold them,
-   against the holders in `security/invariants.yaml`.
-   Write `plan.md` (decisions, requirements to add or change, hidden-state decisions, assets and
-   holders, environment facts, rulebook changes, scope, out-of-scope, retirement) and
-   `test_plan.md` (UT and E2E derived from the decisions). A decision that depends on a fact outside
-   the repository (file ownership, an API, CI history) records the probe and its result under
-   environment facts; never assume it. An [independent review](#independent-review) of both runs
-   before the user sees them. The user approves the plan by merging the plan PR; implement only from
-   the plan as merged on `origin/main`.
-2. **Tests first.** Add UT/E2E only from the reviewed `test_plan.md`. Update requirements,
-   architecture, and `trace/tests.yaml` before making runtime code pass. If a test needs a new
-   assumption, return to step 1.
-   - Each expected outcome comes from the approved plan, from a probe of the stack *before* the
-     change (`probe@<commit>`), or from an existing assertion (`existing@<commit>`); never from
-     watching the new implementation run. If a probe contradicts a value the plan approved, stop
-     and ask the user; do not adjust the row.
-   - Every negative E2E test names a positive twin: the allowed case on the same route, which must
-     pass in the same run (another test ID, or `internal` when a premise of the same test performs
-     it).
-   - A requirement may be proved statically, by a gate whose tooling tests show it fails on each
-     kind of violation (as `make qa-deploy` proves the `REQ-SEC` requirements), where a runtime
-     test would add nothing; the plan says which. It gets a static test entry in `trace/tests.yaml`
-     and a heading in `docs/test_spec.md`.
-3. **Implement.** Only approved behavior. Remove the dead code, stale paths, and artifacts that
-   `plan.md` lists for retirement.
+1. **Plan and review.** Run the `grill-me` skill, covering the actual problem, causes,
+   alternatives, relevant product qualities and slice dependencies. Always identify keys,
+   sockets, secrets, holders and security relevance against `security/invariants.yaml`.
+   Write `plan.md` with behavior obligations, decisions, requirements to add/change, state,
+   assets, environment probes, retirement and rulebook changes; write `test_plan.md` from
+   those obligations with distinct UT/E2E maturity and acceptance criteria. Independent review
+   and fixes precede the user's plan PR. Approval is the user's merge into the designated
+   branch: normally `main`, or an explicitly approved fixture integration branch. Verify the
+   branch and artifact revisions, not merge state alone. One plan PR may authorize multiple
+   fully specified slices; unresolved slices remain unapproved.
+2. **Specify, design and test.** After plan approval, author the requirement specification in
+   `docs/requirements.md`, then obtain requirements-focused review. Author architecture and
+   detailed interface contracts in `docs/architecture.md`, then obtain architecture-focused
+   review. These elaborate the approved obligations; they cannot introduce new behavior or
+   weaken guarantees. Any ambiguity or baseline change returns to the user; independent work
+   may continue and isolated variants may collect evidence without becoming the baseline.
+   - Write executable tests from the approved test plan and reviewed contracts, using minimal
+     interface skeletons where needed, then obtain tester-focused review. Distinguish UT and
+     E2E evidence. Record red output and intended failure cause, positive controls and targeted
+     protection-removal mutants for security-relevant paths. Import errors are not meaningful red.
+   - Expected outcomes come from the approved plan, `probe@<commit>` observations made before
+     implementation, or `existing@<commit>` assertions; never from the new implementation.
+     A contradicting probe is a user decision, not permission to change the expectation.
+   - Every negative E2E has a passing positive twin on the same route in the same run. Where
+     runtime proof cannot yet execute, test review may explicitly accept assertions provisionally
+     with named outstanding evidence. Final acceptance still requires that evidence.
+   - Lock accepted tests together with their fixtures, helpers, configuration and trace/env gates.
+     Use default inclusion outside reviewed implementation-owned and record paths; unknown inputs
+     are not silently excluded. Genuine corrections return to tests-stage review; implementers
+     cannot silently edit assertions or neutralize them through configuration. Hash checks detect changes rather
+     than establish write prevention.
+   - Update `trace/tests.yaml` before claiming implementation proof. A requirement may use a
+     static test backed by a gate and real negative controls, where runtime proof adds nothing;
+     the plan states the proof type. Tooling tests do not become harness E2E by naming.
+3. **Implement and review.** Implement only approved behavior and retire agreed dead paths.
+   Independent implementation review examines correctness, security, simplicity, maintainability
+   and test strength. Corrections reopen affected upstream/downstream artifacts and evidence,
+   with independently checked impact analysis. Finish with a fresh integrated review: first
+   assess the original problem, approved plans, authoritative artifacts and delivered behavior;
+   then reconcile the complete review history. Perform these stages manually until an approved
+   controller implements their coordination; instructions are not claimed as enforcement.
 4. **Verify and close.** All of the following, in the same change:
    - run `make qa-quality` (includes `qa-trace`, `docs-check`, `test-lint` and `qa-deploy`), the full E2E suite on a clean
      stack (`scripts/clean_stack.sh`, then `make e2e`), and `make qa-evidence`; the `e2e` CI check runs the same
@@ -167,34 +195,147 @@ template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>
    - put the independent review's answers to the implementation questions in the PR body.
 
 ### Independent review
-- **Reviewer.** Never the author. Use `codex exec` in a read-only sandbox; if Codex is unavailable,
-  a Claude model with a clean context. The report says which reviewer ran and why. The reviewer
-  gets the intent (the approved plan, or the request), the change, and this file, and may read the
-  whole repository; it never gets the author's reasoning. The prompts used so far are recorded
-  verbatim in the slice review records (for example
-  [`review_1b.md`](docs/slices/agentic-delivery-process/review_1b.md#reviewer-prompts-verbatim)).
-- **Plan review** (step 1). The reviewer reviews `plan.md` and `test_plan.md` for security, test
-  adequacy and consistency, under [PoC scope and proportion](#poc-scope-and-proportion).
-  `docs/slices/<id>/plan_review.md` keeps each round's report verbatim, the SHA-256 of the files
-  reviewed, and the author's answers (fixed or rejected, with the reason) separately. Each round ends
-  with "approvable within the threat model: yes or no"; from round 2 a new finding counts only if it
-  blocks, except simpler alternatives and decision concerns (below), which every round may report.
-  The plan states the threat model the reviewer judges against: the
-  [delivery threat model](#poc-scope-and-proportion) applied to the slice's own change, and the
-  system-under-test threat the slice touches.
-- **Implementation review** (step 4). The reviewer answers the questions in the test-plan template
-  (`docs/slices/_template/test_plan.md`: which wrong failure would still pass each new or changed
-  test, and whether a key, socket or secret now reaches a service outside its holders) in the PR
-  body. A "yes" blocks, under the same review loop.
-- **Fixes stay within the agreed decisions** (the plan's decisions, or the request, and this file).
-  Before answering a finding with a new mechanism, the author names the upstream choice that causes
-  it and weighs changing that choice; removing or changing a mechanism is preferred over adding one.
-  A fix that would change an agreed decision goes to the user as a question before it is applied.
-- **Report sections.** Besides blocking and advisory findings, every round may report *simpler
-  alternatives* (a mechanism that could be removed or simplified within the agreed decisions;
-  non-blocking) and *decision concerns* (an agreed decision that itself seems to cause a problem;
-  for the user, never applied by the author). The reviewer may check metadata of secret files
-  (existence, owner, mode, readability), never their content.
+- **Roles and identity.** Never self-review. Codex authors/fixes; Claude independently reviews
+  with clean context and a different model from the author/fixer. Record role, invocation/provider
+  model identity, instruction/checklist versions and reviewed commit/file hashes. A stable
+  originating-reviewer identity may continue in a fresh session with its own finding history;
+  another model cannot silently inherit disposition authority.
+- **Coverage.** Each artifact has an accountable primary reviewer. Security-relevant work also
+  gets an independent security perspective; interface, authoritative-state or cross-component
+  failure changes get an independent design/maintainability perspective. All reviewers use the
+  shared holistic layer and every matching artifact checklist; mixed artifacts do not permit
+  selecting a subset. The accountable reviewer confirms each N/A with supporting evidence.
+  On security-relevant slices, protection removed/weakened, trust boundaries, security-property
+  evidence and baseline relationship are never N/A.
+- **Context.** Supply the agreed problem, plan, test plan, applicable authoritative documents,
+  relevant source and environment evidence at identified revisions. Do not substitute summaries
+  or hide agreed design. Initial independent reviews withhold this slice's review-comment
+  material and persuasive author responses, not authoritative context. Re-review supplies the
+  originating reviewer's own findings and corresponding responses/fixes. Integrated review
+  receives complete history in its second pass. Decisions cannot remain authoritative only in
+  review comments; baseline amendments still require the user's merged plan approval.
+- **Revision binding — every delivery stage.** Before authoring, fixing, testing or reviewing,
+  identify and supply the designated revisions of authoritative documents, applicable process
+  rules/checklists and task source. Record approval status, actual resolved paths/revisions and
+  content identities, including automatically loaded instruction files. Check actual inputs
+  against that designation before starting; a pull of the latest branch is not sufficient.
+  Record the output revision separately: expected implementation edits are outputs, not permission
+  to change authoritative inputs. Before accepting a result, verify it applies to the delivered
+  output and that its input/dependency binding remains valid. Relevant changed inputs reopen
+  affected validation/reviews; missing or uncertain binding stays pending. Preserve existing
+  counters, review independence and user-only baseline approval. The fixture tests this same rule.
+- **Rules being changed are artifacts.** For every delivery, governing instruction/checklist
+  content comes from the designated approved authority revision plus explicit user instructions,
+  not edited task-tree copies. A change to AGENTS.md, CLAUDE.md, nested instructions or a
+  checklist is reviewed as an output artifact; it cannot govern its own review. Separate the
+  authority context from task artifacts or disable their automatic instruction loading and
+  supply the approved authority explicitly. Verify and record the resolved authority before
+  invocation; inability to establish that separation leaves the operation pending. Architecture
+  specifies each CLI's loading method. Clean working-directory selection alone is not proof.
+- **Evidence reuse.** The approved feature/slice plan owns the record-path allowlist used by
+  review, accepted-test and validation bindings; a trial uses that delivery's approved policy,
+  not a separate source of authority. Missing approval is not permission for an agent to invent
+  exclusions. Reuse requires matching relevant input identities and independent confirmation
+  of record-only status at the required review/handoff. Apply existing reviewed implementation
+  exceptions only to accepted-test locks, never to trial equivalence. Record-only equivalence
+  cannot substitute an old CI result for the actual head, tested base/merge and required PR mode.
+  Exact exclusions are approved in the plan PR or a user-merged plan amendment under D49,
+  before use. Design review can propose paths but cannot approve them on the user's behalf.
+  Review bindings are default-inclusive under that policy, with their full input manifest
+  recorded; no declared-file subset silently excludes other task inputs.
+- **CI applicability.** For any delivery, accept required checks only when their GitHub job
+  conclusions match the delivered head, intended target and tested base/merge identity, with the
+  required event/mode. A merge, a green unrelated run or a local diagnostic is insufficient.
+- **Acceptance-checker changes.** Whenever acceptance logic, decision policy, input schema or
+  verification configuration changes,
+  independent review checks the relevant decision with known-good and known-bad evidence,
+  including missing/stale proof. For identity comparisons and CI binding, independently recompute
+  the relevant facts; do not treat the candidate checker's own pass as its sole certification.
+  This applies during bootstrap and later changes, using existing tests/reviews, not a new gate.
+  The originating reviewer specifies/accepts probes and expected cases; Codex executes standard
+  Git/hash/API recomputation independently of candidate checker helpers. Record commands/tool
+  versions, immutable inputs/results and executor/reviewer attribution. This is executor-reported
+  evidence assessed afterward, not elimination of shared honest mistakes.
+  Routine new run evidence is checked by the existing verifier; it does not itself require
+  recertifying unchanged acceptance logic.
+  Classify checker code and transitive helpers/configuration/schema/policy in the reviewed design.
+  Unknown or ambiguous changes to consumed checker inputs default to changed acceptance logic.
+  Compare their actual identities against the last independently verified identity rather than
+  trusting the author's classification. A changed trial acceptance matrix is policy; per-run
+  observations are evidence. Record the distinction and repeat only affected verification.
+- **Blind fixture trials.** Supply the complete fixed/seeded fixture feature authority in a
+  separate task workspace, with applicable process rules and checklists. The orchestration
+  meta-plan is not the evaluated agent's feature plan. Keep the independently prepared,
+  user-approved, pre-run hash-committed evaluation key with the trial coordinator outside
+  evaluated contexts. Expected findings must follow visible fixture authority; hidden requirements
+  cannot determine failure. Report/escalate fixed-baseline defects instead of silently rewriting
+  authority. Record actual supplied inputs and available tool reads; known or uncertain disclosure
+  cannot earn independent-detection credit. Separate folders do not establish OS isolation.
+  Fixture-specific content stays off main. This exception does not reduce normal review context.
+- **Access and assurance.** Configure reviewers for read/search-only source access and disposable
+  probes; route privileged validation through the orchestrator. Probe and label boundaries as
+  enforced, detected afterward, instruction-only or unverified. Same-user processes and worktrees
+  are not presumed OS sandboxes or credential isolation. Do not inspect secret contents.
+  A missing reviewer or partial report cannot count as approval.
+- **Records.** Keep one review document per declared artifact bundle, with complete round sections
+  for original reviewer reports, author responses/fixes and originating-reviewer dispositions.
+  The plan/test-plan bundle uses `plan_review.md`, naming both artifacts and their checksums.
+  Preserve completed reports and prompts verbatim, attribution and stable finding IDs. The
+  top summary gives current status and links; raw model reasoning/session transcripts and
+  credentials are not review records.
+- **Review effort and usage.** Every review invocation explicitly requests medium or high effort;
+  never rely on the CLI default or silently request xhigh/max. Routine focused reviews and
+  rechecks default to medium; initial plan, security, architecture/state/trust-boundary and
+  integrated reviews use high. Record the selected level and reason; a broader recheck may use
+  high with its reason recorded. Other levels require an explicit user decision.
+  Record per-attempt role/stage/cycle, requested and reported model/effort, duration, turns/tool
+  calls, uncached input, cache reads/writes, output and provider-reported cost where available.
+  Include failures, retries and probes separately; missing is unknown, not zero. Deduplicate
+  repeated copies of the same invocation. Output already includes thinking: do not add it twice.
+  USD estimates are not subscription invoices or quota percentages. Keep metadata only, with
+  one readable usage table in the review record; never publish raw prompts/replies/thinking as
+  cost data. Historical effort stays unknown unless invocation evidence establishes it.
+- **Finding schema.** Each comment identifies reviewer/role/model/round, reviewed revision,
+  severity, checklist/threat-model criterion, exact location, concrete problem, supporting
+  evidence, consequence, baseline relationship and resolution criteria. Suggested fixes are
+  optional. Every checklist answer cites a supporting location, assertion/result, probe or
+  quotation; otherwise it is not verified. Consolidation only groups actual duplicates and
+  preserves all originals, severity and disagreements. The consolidator does not confirm N/A
+  or accept resolutions on the reviewer's behalf.
+- **Scope of findings and fixes.** For every finding, identify the underlying failure class
+  and check whether it affects other stages, artifacts or ordinary delivery. Cite a concrete
+  counterpart, or explain why the issue is local. Put a generally applicable correction in the
+  general rule/design, with fixture scenarios proving it. This is mandatory in the holistic
+  checklist layer and the fix review; it does not authorize scope/threat-model expansion or
+  implementation of unrelated changes. Proposed broader baseline changes still need approval.
+- **Outcome attribution.** In issue/run records, distinguish reviewer detection, controller
+  containment and evidenced root-cause resolution. Record what was observed or remains unknown;
+  containment does not prove reviewer effectiveness or close a finding. Record expected user
+  approvals separately from human troubleshooting, source edits or other execution assistance.
+  Assisted ordinary delivery can pass normal review/validation, but cannot be claimed as a
+  successful autonomous run. A rescued fixture attempt still fails its autonomy evaluation.
+  Trace source changes to recorded invocations and expected user decisions. Unexplained edits
+  or interactive interventions default to assisted/unknown, with the autonomous-success claim
+  withheld. This is post-run attribution evidence, not prevention or human authentication on
+  shared credentials.
+- **Plan review.** Review plan and test plan for intent, security, proof adequacy, consistency,
+  feasibility and simplicity under the stated delivery and system-under-test threat models.
+  Keep each round's reports, input hashes and responses in the bundle's review document. End
+  with "approvable within the threat model: yes or no". Proposed checklist additions prompted
+  by uncovered blockers remain proposals until the user approves them.
+- **Implementation review.** Answer the test-plan questions: what wrong behavior could pass
+  each changed test, and whether a key/socket/secret reaches an unauthorized holder through
+  mounts, environment, copied files or shared state. The reviewer must examine concrete
+  evidence and surrounding dependencies, not merely check that a requested edit appeared.
+- **Fix discipline.** Name the actual problem and upstream cause before selecting a fix. Prefer
+  simpler upstream corrections where they preserve every approved obligation; removing a
+  protection or proof is not justified by simplicity. Changes or uncertainty about requirements,
+  design, behavior, scope or security guarantees pause affected work for the user. Comparisons
+  remain isolated experiments, never implicit approval.
+- **Reports beyond blockers.** Preserve advisories, simpler alternatives, decision concerns and
+  unverified areas in every round. Upgrading an advisory needs new evidence; changing the threat
+  model requires user approval. The integrated reviewer flags superficial checklist boilerplate.
+  Reviewer metadata probes may record existence, owner, mode and readability, never secret values.
 
 Hidden-state rule: if a decision depends on hidden state, `plan.md` lists the state/key name, store,
 writer, reader, TTL or lifecycle, decision impact, and whether it is authoritative or advisory.
@@ -256,11 +397,22 @@ Standards that are **not** gated yet (follow them for new and changed code):
 
 ## Git rules
 - No `Co-Authored-By` trailers for AI assistants in commit messages.
-- Agents open pull requests; only the user merges into `main`. GitHub does not enforce this yet:
-  the `main` ruleset requires the CI checks but no approving review, and an agent's `gh` login may
-  be the owner's account.
-- Open pull requests against `main`; avoid stacking. A stacked PR is merged only after its base
-  shows `main` (GitHub retargets it when the base branch is deleted) ([DPL-008](docs/delivery_problem_log.md#dpl-008-a-stacked-pr-was-merged-into-its-stale-base-branch-instead-of-main)).
+- Only the user merges into designated approval branches: normally `main`, or the fixture
+  integration branch explicitly authorized in the approved plan. Agents push work branches and
+  open/update PRs; they do not push directly to approval branches or merge into them.
+  Shared owner credentials do not enforce this outside controller-routed operations; record that
+  instruction-only residual rather than claiming GitHub separates user and agent authority.
+- One-time creation of a previously absent fixture integration ref is allowed only when the
+  approved plan authorizes its name and creation-point rule: the clean pinned framework candidate
+  commit recorded by the controller in the execution manifest at creation. Never overwrite an
+  existing ref this way; subsequent approval-branch updates remain user merges only.
+- Check the PR base against its approved target at creation and when accepting merge evidence.
+  Avoid stacking. A stacked PR waits until its base is the intended approval branch; that may be
+  `main` or an explicitly approved fixture branch, never a stale working branch
+  ([DPL-008](docs/delivery_problem_log.md#dpl-008-a-stacked-pr-was-merged-into-its-stale-base-branch-instead-of-main)).
+- Do not force-push, reset away or rewrite completed review records during normal fixes. A Git
+  rewrite cannot reset review budgets; missing/conflicting history needs reconciliation, not a
+  fresh counter. Controller-routed writes must preserve independent cycle receipts.
 
 ## Environment
 - Docker Engine + Docker Compose v2. Linux, or macOS with Rancher Desktop.
@@ -335,6 +487,11 @@ find artifacts/rogue-tests -name skip_reason.txt -print -exec cat {} \;
   and no exercise or outcome artifacts exist. The test still prints `PASS` in `test_report.log`.
 
 ## Docker guardrails
+- Agents manage only stacks they created or the user explicitly authorized them to take over.
+  Names or Compose project alone are not ownership. Before lifecycle/cleanup, reconcile exact
+  object IDs, Compose working-directory/config-file labels and affected mount paths against the
+  run receipt. Unknown, replaced or cross-checkout objects require user takeover approval.
+  Check fixed-name and `--volumes-from` cleanup targets as well; preserve evidence before reset.
 - Never run Docker lifecycle commands in parallel. Serialize `scripts/clean_stack.sh` and
   `docker compose … up/down/run`; run `ps`/`logs` only after the mutating command finishes.
 - `capability-issuer-no-opa-envoy` is test-only (`tests` profile); never use it outside tests.

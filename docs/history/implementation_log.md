@@ -5,6 +5,26 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-11-02 Delivery-orchestration plan and user-authorized manual telemetry
+
+- Prepared the staged-delivery plan/test plan and rulebook/template corrections for issue #16.
+  Independent originating reviews are recorded in the slice's plan_review.md; user approval
+  still requires the plan PR. The workflow controller, authoritative spec/design changes and
+  actual fixture feature remain future work. Fixture content must stay off main.
+- The user separately authorized scripts/review_usage.py and scripts/run_manual_review.py:
+  metadata-only per-attempt usage reporting, explicit medium/high effort, failure/timeout
+  provenance, unknown historical settings, deduplication and safe review invocation. These
+  helpers do not grant approval, select stages, retry automatically, merge or publish.
+- The missing additional publication scan coverage is user-waived under D58's exact new-folder/
+  document scope through 2026-12-01 end of day UTC, not fixed; existing no-secrets rules remain.
+- Local validation: 18 targeted telemetry tests passed; make tooling-test passed (248 Python
+  tests and 9 shell contract checks); Ruff passed for both helpers/their tests; Radon measured
+  all helper functions at complexity 10 or below; docs/diff checks passed. Two existing Python
+  invalid-escape deprecation warnings were reported in unrelated tooling tests.
+- No local protected-service E2E/runtime validation or existing-stack lifecycle operation ran:
+  this change is planning/manual tooling, and no takeover of the other checkout's stack was
+  authorized. Applicable PR CI conclusions remain to be checked; local results are not CI proof.
+
 ## 2026-10-31 Slice backlog-issues: open work tracked as GitHub issues
 
 - Branch `backlog-issues`, from `main` after PR #12 (slice `ci-evidence-trace` complete).
