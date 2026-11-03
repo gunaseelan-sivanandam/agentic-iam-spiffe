@@ -256,9 +256,9 @@ Standards that are **not** gated yet (follow them for new and changed code):
 
 ## Git rules
 - No `Co-Authored-By` trailers for AI assistants in commit messages.
-- Agents open pull requests; only the user merges into `main`. GitHub does not enforce this yet:
-  the `main` ruleset requires the CI checks but no approving review, and an agent's `gh` login may
-  be the owner's account.
+- Agents act on GitHub as `gunaseelan-agent` and open pull requests; only the user approves and
+  merges into `main`. Before a GitHub write, check that `gh api user --jq .login` prints
+  `gunaseelan-agent`; if not, stop and tell the user.
 - Open pull requests against `main`; avoid stacking. A stacked PR is merged only after its base
   shows `main` (GitHub retargets it when the base branch is deleted) ([DPL-008](docs/delivery_problem_log.md#dpl-008-a-stacked-pr-was-merged-into-its-stale-base-branch-instead-of-main)).
 
