@@ -162,8 +162,8 @@ template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>
    - add or close entries in `docs/open_problem_log.md` for problems found or fixed, and in
      `docs/delivery_problem_log.md` for delivery misses (a step skipped, a false claim, a review
      miss) found or fixed;
-   - open a GitHub issue for work found but not done (label `slice` or `user-action`), and close the
-     issues the change finishes (`Closes #N` in the PR body);
+   - open a GitHub issue for work found but not done (label `slice` or `user-action`) and lock its
+     conversation right away, and close the issues the change finishes (`Closes #N` in the PR body);
    - put the independent review's answers to the implementation questions in the PR body.
 
 ### Independent review
