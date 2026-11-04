@@ -58,7 +58,7 @@ Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
 - **OPL-007** Redis authorization state accepts unauthenticated writes from every verifier network.
 - **OPL-008** spire-token-init mounts the whole SPIRE server data directory.
 - **OPL-009** The delivery pipeline does not resist a deliberately malicious PR (accepted, D18).
-- **OPL-010** The SPIRE agent can crash on its first start after a reset, so the suite never starts.
+- **OPL-010** The SPIRE agent can crash on its first start after a reset, so the suite never starts ([#30](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/30))
 
 ## Open delivery problems
 Full entries, root causes and lessons in [`docs/delivery_problem_log.md`](delivery_problem_log.md).
