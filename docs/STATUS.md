@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-10-31. Update this page at the end of every slice (see `AGENTS.md`, slice workflow step 4).
+Last updated: 2026-11-04. Update this page at the end of every slice (see `AGENTS.md`, slice workflow step 4).
 Detailed history: [`docs/history/implementation_log.md`](history/implementation_log.md).
 
 ## Where the project stands
@@ -26,7 +26,9 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 - **Next work** is tracked as [GitHub issues](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues) (label `slice`): the proposed `gate-register`
   ([#13](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/13)), `asset-classification` ([#14](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/14)) and 100% coverage ([#15](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/15)) slices,
   slice 3, review design and orchestration ([#16](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/16)), and the pilot that fixes OPL-005 to
-  OPL-008 ([#17](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/17)). Later: the generic capability verifier
+  OPL-008 ([#17](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/17)); publication secret scanning ([#21](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/21)), deterministic
+  orchestration review limits ([#25](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/25)) and names that say what a file, gate or decision is
+  ([#27](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/27)). Later: the generic capability verifier
   ([brainstorm](slices/m5-generic-verifier-architecture/brainstorm.md), not approved).
 - **Future milestones:** M6–M9 as listed in the README.
 
@@ -38,12 +40,12 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 | `make qa-quality` (qa-trace in `--mode pr --base origin/main`, unit traceability, unit guard, docs-check, test-lint, qa-deploy) | 2026-10-31 | PASSED; gap gate: 0 new gaps, 25 closed; 113 coverage gaps remain (91 requirements without proof, 18 DD without UT, 4 tests without requirements); REQ-SEC-K1, K2, K4 not proved (known violations OPL-005, -006, -008), D2 not proved (grace until 2027-01-31), the other six and REQ-T-R9 proved statically |
 | `make tooling-test` | 2026-10-31 | PASSED (229 pytest, 9 shell) |
 | `make unit-mutation` on `slice/ci-evidence-trace-a` | 2026-10-31 | PASSED, 85.34% |
-| CI (`.github/workflows/ci.yml`, workflow `CI`, one job per gate) | 2026-10-29 | passing on `main` after the PR #6 merge (`b2448ad`) |
+| CI (`.github/workflows/ci.yml`, workflow `CI`, one job per gate) | 2026-11-04 | passing on `main` after the PR #28 merge (`dc4376e`) |
 
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `backlog-issues` | Move the open items of `later_slices.md` to GitHub issues; close slice 2 in the status pages | PR open |
+| `plan/delivery-orchestration` | Plan staged agent delivery and meter manual reviews | PR #26 open |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
@@ -60,8 +62,7 @@ Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
 
 ## Open delivery problems
 Full entries, root causes and lessons in [`docs/delivery_problem_log.md`](delivery_problem_log.md).
-- **DPL-008** A stacked PR was merged into its stale base branch instead of `main` (closes when merged
-  head branches are deleted automatically, a repository setting; [#18](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/18)).
+- None. DPL-008 closed on 2026-11-04 (automatic deletion of merged head branches is on).
 
 ## Known gaps and debt
 - `M5-T55` (live Jira upstream) only runs with `JIRA_MCP_UPSTREAM_MODE=live`; default runs skip it.
