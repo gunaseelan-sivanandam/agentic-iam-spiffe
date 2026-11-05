@@ -5,6 +5,44 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-11-05 Existing PR update authorized
+
+The user subsequently requested updating PR #26 with the prepared local revisions. This
+supersedes the local-only publication restriction for that existing PR; it does not authorize
+a new PR, merge, review-cycle extension or controller/fixture implementation. The update includes
+the previously local round-cap correction and DPL-010 RCA. Validation and pending independent
+acceptance remain as recorded below. GitHub writes use the verified `gunaseelan-agent` account.
+
+## 2026-11-05 Local revisions from PR #26 file comments
+
+- The user authorized local revisions and requested no new PR. Added a concrete delivery
+  contract, deliverables and separate definitions of done for controller setup and later
+  fixture evaluation/improvements. Updated D40/test ownership so setup completion cannot claim
+  live effectiveness; successful candidate-bound evaluation remains required before the pilot.
+- Planned separate controller requirements/architecture homes, with future integration into the
+  existing trace tooling; service specifications stay in their current home. No controller,
+  fixture, new gate or trace-validator implementation is included.
+- Renamed `scripts/run_manual_review.py` to `scripts/run_claude_review.py` and updated active
+  examples/tests. Preserved the existing local cycle-admission fixes. Clarified that usage
+  covers all attempts and does not grant extra review rounds. Historical references retain
+  the script name used at that time.
+- Verified #23 merged, #20 closed, PR #26 agent authorship and the active main ruleset through
+  read-only GitHub API calls. Corrected stale identity statements without claiming host
+  isolation. Updated live programme navigation while preserving implemented frozen plans.
+- Preserved earlier review records and consumed counters. This revised bundle is not covered
+  by previous approvals; no model review, commit, push, new PR or GitHub reply was performed.
+- Validation: 22 targeted helper tests passed; `make tooling-test` passed (252 Python tests,
+  9 shell checks); Ruff and diff whitespace checks passed. `make qa-quality` passed trace
+  structure/gap comparison (113 existing gaps, zero new), unit traceability, 357 unit tests,
+  docs and outcome lint, then failed deployment image inspection: OPA's image user was unknown
+  and must be non-root. No deployment inputs changed in this revision. A separate diagnostic
+  `make qa-deploy QA_DEPLOY_ARGS=--skip-image-users` passed with 18 existing accepted violations;
+  it is not a full-quality or image-user pass. Full inspection also reported 22 grandfathered
+  root/unknown-user warnings. Leave image-user verification pending; do not weaken its gate.
+- No E2E or Docker lifecycle operation ran; the existing cross-checkout stack was not taken
+  over. Existing trace gaps, accepted OPL violations, live fixture proof and independent
+  acceptance remain outstanding. No new issue or PR was opened for this local-only revision.
+
 ## 2026-11-02 Delivery-orchestration plan and user-authorized manual telemetry
 
 - Prepared the staged-delivery plan/test plan and rulebook/template corrections for issue #16.

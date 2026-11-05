@@ -1,6 +1,6 @@
 # Slice Test Plan — delivery-orchestration
 
-Status: Draft planning checkpoint, 2026-11-01. Not approved for implementation.
+Status: Revised locally for two-slice delivery, 2026-11-05. Not approved for implementation.
 Inputs: [`plan.md`](plan.md), decisions D1–D59. This records required proof scenarios; executable
 cases, trace IDs, fixtures and exact expected signatures follow the remaining design decisions
 and independent review. Do not derive expectations from watching a new implementation run.
@@ -11,6 +11,28 @@ Prove that mechanical enforcement and agent instructions together preserve the a
 require complete independent reviews, retain issues and provenance, and recover honestly from
 failures. Controller tests prove mechanics, not the quality of model judgment. A live isolated
 fixture trial must separately demonstrate actual Codex–Claude behavior before the OPL pilot.
+
+## Proof ownership by delivery slice
+
+Slice 1 delivers controller mechanics and their deterministic positive/negative tests. Every
+controller admission/recovery/review/identity/binding/usage row below belongs to slice 1,
+including simulated missing/failed/stale trial evidence and the requirement to reject it when
+an approved baseline requires a live trial. Tests must cover both configured acceptance paths:
+controller-setup completion with live confidence explicitly pending, and rejection of evaluation
+completion without the required successful candidate-bound trial. Candidate text cannot choose
+the weaker path. A setup result is not an evaluation result.
+
+Slice 1 also proves existing trace tooling reads both controller and service specifications:
+a valid mixed-source trace passes; unknown/cross-source duplicate IDs, broken links and added
+coverage gaps fail. Controller requirements/design are authored after approval in the separate
+homes named by the plan; no service requirement moves or changes meaning.
+
+Slice 2 owns actual model invocations and the live fixture section below. Its off-main approved
+fixture plan freezes scenarios, seeds, expected outcomes, pass thresholds and run limits before
+execution. A clean case must complete; seeded safety failures cannot be averaged away. Preserve
+failed/assisted runs, pin every corrected candidate and rerun affected scenarios. Slice 2 cannot
+complete while required live evidence is missing. The OPL pilot follows only after that success
+and separate pilot-plan approval. No new independent review budget is granted by this split.
 
 ## Unit test plan
 
@@ -75,7 +97,7 @@ prove that missing/rejected judgment prevents acceptance, not that string matchi
 | Trial verdict | Clean delivery completes and mandatory safety behavior holds against the frozen acceptance matrix | Blanket refusal passes; safety failure averaged into a partial score; manual rescue or reporting alone presented as a successful attempt | D44, D46 | M+J |
 | Seed evaluation | Independently frozen expectations distinguish detection, containment and root-cause resolution | Disclosed seed counts as novel-detection evidence; containment credited as reviewer detection; expected result changed after observing the run | D44–D46 | M+J |
 | Fixture CI evidence | Successful applicable checks match the intended PR base and reviewed/tested revision | Merged PR with failed/missing/stale checks accepted as successful; direct merge prevention claimed without repository enforcement | D37, D48 | M |
-| User approval evidence | Merge or explicit decision comment matches configured user, intended base, affected revisions and decision scope | Agent-written approval, wrong-account/base/revision evidence, ambiguous comment or expired waiver grants authority; shared account attribution claimed as proof of human action | D3, D12, D37, D49 | M+J |
+| User approval evidence | Merge or explicit decision comment matches configured user, intended base, affected revisions and decision scope | Agent-written approval, wrong-account/base/revision evidence, ambiguous comment or expired waiver grants authority; distinct account attribution claimed as proof of host credential isolation | D3, D12, D37, D49 | M+J |
 | Review context | Fresh first pass has applicable authoritative plans/design/source at identified revisions, without the slice's review-comment material; re-review and integrated second pass receive their permitted history | Approved plan/design omitted or replaced by summary; substantive decision exists only in hidden review comments; wrong review phase receives another reviewer's comments without the required independence boundary/assurance label | D10, D23, D37, D50 | M+J |
 | Stack ownership | Created or explicitly taken-over stack is managed after checkpoint/Docker ownership reconciliation; run/variant evidence is preserved before reset | Pre-existing/unknown-ownership stack cleaned without scoped user approval, stale checkpoint grants takeover, or reset destroys the only evidence copy | D27, D31, D37, D52 | M+J |
 | Default-input trial binding | Allowlisted record-only updates preserve trial with matching non-record inputs and independent confirmation | New file/folder/type, content change, deletion, rename, executable-mode change or symlink-target change outside record paths silently retains the trial | D40, D53 | M+J |
@@ -131,7 +153,7 @@ is insufficient. Keep positive controls so a controller that refuses everything 
 The tooling verification path produces a typed controls-test report at
 `artifacts/quality/delivery_orchestration_controls_report.json`. It tests the real acceptance
 verifier using known-good/bad proof, not just its invocation arguments. It does not require a
-completed outer trial on every WIP or nested fixture CI run. Separately, the controller's final
+completed outer trial on every WIP, controller-setup or nested fixture CI run. Separately, the controller's slice-2/overall-readiness
 user-handoff transition emits a typed acceptance result and verifies the actual required trial
 binding, reading the requirement from the merged execution plan. Missing/failed/stale proof
 refuses that transition; a controls-test report cannot masquerade as live acceptance. The actual static-test IDs, negative-control function IDs and authoritative REQ
@@ -202,7 +224,7 @@ the second attempt cannot claim fresh detection merely by inheriting that fix.
 
 Expected user approvals are normal steps. Hands-on rescue makes that attempt unsuccessful;
 retain it, fix the process and rerun against the revised candidate. Never relabel the original
-attempt as successful. Final approval requires a successful trial bound to the tested candidate
+attempt as successful. Slice-2 and overall-readiness approval require a successful trial bound to the tested candidate
 under D40; later record-only commits require D53's approved-allowlist comparison and independent
 confirmation. No input type/folder inventory substitutes for default inclusion of non-record paths.
 
@@ -216,7 +238,7 @@ changed loaded framework instructions invalidate trial proof. Publication admiss
 controller-routed waiver check: valid scoped/unexpired waiver permits dependent publication;
 missing/expired waiver pauses dependent review-record/checkpoint/PR-body publication while local
 work continues. D54's dated tracking decision is process-only; this D49 pause is mechanically tested,
-with the direct shared-account instruction-only residual preserved.
+with distinct agent/owner account attribution verified and no claim of host credential isolation.
 
 Under D55, evaluated agents receive a separate fixture workspace with complete fixed/seeded
 feature authority and applicable rules/checklists, not the orchestration meta-plan or evaluation

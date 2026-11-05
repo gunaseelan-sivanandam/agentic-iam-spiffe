@@ -78,13 +78,16 @@ def test_manual_launcher_pins_effort_without_spending_tokens(tmp_path):
     authority = tmp_path / "authority"
     authority.mkdir()
     (authority / "governing_review_authority.txt").write_text("Synthetic approved authority")
-    script = Path(__file__).resolve().parents[2] / "scripts/run_manual_review.py"
-    command = [sys.executable, str(script), str(tmp_path), "--role", "primary", "--cycle", "5",
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    (shared / "input_manifest.json").write_text(json.dumps({"cycle": 2, "completed_cycles_before": 1}))
+    script = Path(__file__).resolve().parents[2] / "scripts/run_claude_review.py"
+    command = [sys.executable, str(script), str(tmp_path), "--role", "primary", "--cycle", "2",
                "--attempt", "2", "--effort", "medium", "--effort-reason", "Focused recheck", "--dry-run"]
     result = subprocess.run(command, capture_output=True, text=True, check=True)
     request = json.loads(result.stdout)
     assert request["requested_effort"] == "medium" and request["dry_run"]
-    assert request["cycle"] == 5 and request["attempt"] == 2
+    assert request["cycle"] == 2 and request["attempt"] == 2
     argv = request["command"]
     assert "--safe-mode" in argv and "--restricted" in argv
     assert argv[argv.index("--tools") + 1] == "Read,Grep,Glob"
@@ -125,8 +128,8 @@ def test_unreadable_log_preserves_request_and_failure_metadata(tmp_path):
 
 def _launcher(monkeypatch):
     monkeypatch.setitem(sys.modules, "review_usage", usage)
-    path = Path(__file__).resolve().parents[2] / "scripts/run_manual_review.py"
-    spec = importlib.util.spec_from_file_location("manual_review_test", path)
+    path = Path(__file__).resolve().parents[2] / "scripts/run_claude_review.py"
+    spec = importlib.util.spec_from_file_location("claude_review_test", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -137,7 +140,10 @@ def _launch_args(tmp_path):
     authority.mkdir()
     (authority / "governing_review_authority.txt").write_text("Synthetic approved authority")
     (tmp_path / "primary_prompt.txt").write_text("Synthetic prompt")
-    return ["run_manual_review", str(tmp_path), "--role", "primary", "--cycle", "6", "--attempt", "1",
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    (shared / "input_manifest.json").write_text(json.dumps({"cycle": 2, "completed_cycles_before": 1}))
+    return ["run_claude_review", str(tmp_path), "--role", "primary", "--cycle", "2", "--attempt", "1",
             "--effort", "medium", "--effort-reason", "Focused recheck", "--timeout", "1"]
 
 
@@ -182,3 +188,22 @@ def test_launcher_preserves_existing_attempt(tmp_path, monkeypatch):
     with pytest.raises(SystemExit) as rejected:
         launcher.main()
     assert rejected.value.code == 2 and request.read_text() == "original record"
+
+
+@pytest.mark.parametrize("requested,completed,declared", [
+    (4, 3, 4), (1, 6, 1), (3, 3, 3), (2, 0, 2),
+])
+def test_launcher_blocks_exhausted_or_reset_budget_before_invocation(tmp_path, monkeypatch, requested, completed, declared):
+    launcher = _launcher(monkeypatch)
+    argv = _launch_args(tmp_path)
+    argv[argv.index("--cycle") + 1] = str(requested)
+    (tmp_path / "shared/input_manifest.json").write_text(json.dumps({
+        "cycle": declared, "completed_cycles_before": completed}))
+    monkeypatch.setattr(sys, "argv", argv)
+    def must_not_launch(*args, **kwargs):
+        pytest.fail("Exhausted or inconsistent budget must not invoke a reviewer")
+    monkeypatch.setattr(launcher.subprocess, "run", must_not_launch)
+    with pytest.raises(SystemExit) as rejected:
+        launcher.main()
+    assert rejected.value.code == 2
+    assert not (tmp_path / "primary_attempt1_request.json").exists()

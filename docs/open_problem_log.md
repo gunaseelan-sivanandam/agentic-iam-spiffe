@@ -329,13 +329,13 @@ Usage:
 ### Mitigations
 - Every change goes through the slice workflow with an independent review, and the user merges (slice `ci-evidence-trace` D9; lanes and a nightly run are no longer planned).
 - The CI `e2e` job runs the full suite on every PR and every push to `main`, as a required check (slice `ci-evidence-trace` D1).
-- GitHub enforces the configured checks on `main`, but the current user and agent tools share
-  the owner's admin-capable account. GitHub does not establish human-versus-agent merge authority
-  in that setup. Agent merges are prohibited by instructions; controller-routed merge refusal is
-  planned, not a claim of current OS or credential isolation. Separate agent identity and owner
-  approval enforcement remain proposed in [issue #20](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/20).
-  This corrects an overstated mitigation; the accepted deliberate-delivery-attacker residual and
-  PoC threat-model scope above are unchanged.
+- GitHub enforces configured checks and one required approving review on `main`. Agents use
+  `gunaseelan-agent`; the owner approves and merges. Identity separation was delivered by
+  [PR #23](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/pull/23), closing
+  [issue #20](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/20), verified
+  2026-11-05. Verify the agent actor before writes and reject agent-originated approval evidence.
+  Distinct accounts do not establish OS isolation or prove owner credentials inaccessible to
+  all local processes. The deliberate-delivery-attacker residual and PoC threat model remain.
 
 ### Closure criteria
 - Re-confirmed at each programme review, or the threat model changes and the delivery infrastructure gains trusted builders, authenticated run records and per-job isolation.

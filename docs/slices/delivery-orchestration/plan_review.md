@@ -1,16 +1,46 @@
 # Independent plan review — delivery-orchestration
 
-## Current status
+## Publication status — 2026-11-05
+
+The user subsequently authorized updating existing PR #26 with these revisions, including the
+previously local round-cap/RCA changes. The local-only statements below describe the preceding
+editing step. Publication does not grant independent acceptance or additional review cycles.
+The older current-status summary below applies to af1017a, not the revised candidate.
+
+## 2026-11-05 user file-comment revisions — pending acceptance
+
+The user authorized local changes after assessment of six pending file comments on PR #26
+and requested no new PR. This revision separates controller setup from live evaluation with
+per-slice deliverables/DoD, amends D40's acceptance boundary, proposes separate controller
+requirement/design homes and existing-trace integration, renames the Claude launcher, clarifies
+all-attempt telemetry, corrects identity facts delivered by #23/#20 and updates live status
+navigation while preserving frozen plans. No fixture content or controller implementation is added.
+
+These are changed review inputs. Earlier originating-reviewer approvals apply only to af1017a;
+no acceptance of this revision is claimed. Six historical cycles remain consumed; splitting
+implementation work does not repartition this plan-review bundle or reset its counter. No new
+model review is launched. User decisions and original reports below remain preserved.
+
+Comment dispositions (author proposals; no GitHub threads resolved): naming and usage scope
+addressed by launcher rename/docs; identity statement corrected using live GitHub facts; stale
+historical statuses explained through the live index; requirements separation and sequential
+slice boundaries incorporated in the revised plan/test plan. Local validation is recorded in the
+2026-11-05 implementation-log entry. No commit, push, new PR or GitHub reply is part of this work.
+
+## Previous candidate status — af1017a
 
 Status updated 2026-11-02: six cycles are complete. All three originating reviewers find the
 current plan/test-plan/manual-helper bundle approvable within the PoC threat model. No blocking
 finding remains. D58 is user-waived until 2026-12-01, not fixed. Optional review rounds are stopped
 per the user; remaining nonblocking advisories are preserved below. Await user plan-PR approval.
-Quota-limited attempt 1 remains preserved. The user authorizes as many additional
-cycles as needed to close blockers, with escalation for decisions the agent cannot make.
-The cumulative count is preserved; the general three-cycle default is not globally rewritten.
-The fixture stale-instruction blocker is accepted as resolved. Overall plan is not yet approvable:
-PLN-040/SEC-022 (ordinary rule edits governing their own review) await acceptance of submission 5.
+Those model approvals apply to commit af1017a. The subsequent user-requested three-cycle
+admission checks are local changes, validated by tests but not yet independently reviewed/pushed.
+2026-11-03 user direction restores the three-cycle cap and revokes the earlier open-ended
+extension. Six historical completed cycles remain consumed; there is no new three-cycle budget
+for this bundle and no further reviewer invocation is authorized under the restored cap.
+Quota-limited attempt 1 remains preserved. Historical extension records below describe past
+authorization only and must not be treated as current permission.
+The fixture and ordinary rule-authority blockers were accepted by all originating reviewers.
 PLN-008's missing additional scan coverage is now user-waived within D58's scope/expiry, not fixed;
 the user decision and original reviewer reports are preserved. Design's advisory DES-028 remains
 attributed separately. No new independent acceptance is claimed while the provider is unavailable.
@@ -26,6 +56,35 @@ The user also authorized D57's broader fixture-scope corrections; these remain d
 pending review, with no added review cycle, waiver or implementation approval inferred.
 The user approved D55: evaluated workers receive fixed/seeded fixture authority in a separate
 workspace, not the orchestration meta-plan or evaluation key. No runtime implementation has started.
+
+## 2026-11-03 restored round limit and author-disposition audit
+
+The user instructed: "enforce the 3 round limit again". The existing AGENTS/D13 rule remains
+one initial review plus at most three fix-and-recheck cycles per declared bundle; prior unlimited
+session authorization is revoked. Preserve the six cycles already completed, not a reset to zero.
+
+The current manual launcher now rejects cycle >3, exhausted completed-cycle metadata and
+inconsistent declared/requested cycles before starting a reviewer. Tests cover a fourth cycle,
+attempted restart at cycle 1 with six already consumed, exhausted cycle 3, and inconsistent counts.
+This is a narrow user-requested admission check, not a claim that the planned persistent controller
+or OS/tool isolation is implemented. Future controller reconciliation must still prevent stale or
+rewritten metadata; direct shell invocations remain outside this helper's technical control.
+
+Audit answer: the latest author responses contain **no formal evidence-backed rejection of a
+reviewer's finding submitted for originating-reviewer adjudication**. They contain fixes,
+clarifications, architecture deferrals, preserved limitations and user-waiver escalation. For
+example PLN-023 argued that a missing literal heading does not prove a runtime defect, but the
+finding stayed reported/advisory; that was qualification, not a rejected finding. DES-013/019 were
+deferred to architecture, and PLN-008 was waived by the user; neither is an author rejection.
+Reviewer tables saying "reject" describe reviewers rejecting author resolutions, not the reverse.
+
+This is an instance of DPL-010's missing triage: comments were too readily converted to work.
+Future triage must distinguish a valid blocker, accepted/deferred advisory and an evidence-backed
+disagreement. There is no rejection quota, and authors still cannot close blockers as won't-fix;
+the originating reviewer must accept/reject a proposed disagreement with reasons.
+
+These user-directed local cap changes have not received a new independent review. No model
+calls, counter resets, public push or CI rerun were performed to make this audit or correction.
 
 ## Current review usage and handoff
 

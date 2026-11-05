@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch one already-authorized manual review with explicit effort and usage metadata.
+"""Launch one already-authorized Claude review with explicit effort and usage metadata.
 
 This is an invocation wrapper, not the delivery controller: it grants no approval,
 selects no stages, does not retry, and never merges or publishes anything.
@@ -17,6 +17,35 @@ import time
 from review_usage import collect
 
 
+MAX_FIX_CYCLES = 3
+
+
+def cycle_budget_error(root: Path, cycle: int) -> str | None:
+    """Check the declared frozen budget; persistent reconciliation belongs to the controller."""
+    if cycle > MAX_FIX_CYCLES:
+        return "Three fix-and-recheck cycles exhausted; escalate instead of launching another review"
+    try:
+        manifest = json.loads((root / "shared/input_manifest.json").read_text())
+    except (OSError, ValueError):
+        return "A frozen manifest with cumulative cycle accounting is required"
+    if not isinstance(manifest, dict):
+        return "Invalid cycle accounting"
+    completed = manifest.get("completed_cycles_before")
+    if type(completed) is not int or completed < 0:
+        return "Missing or invalid cumulative completed-cycle count"
+    if completed >= MAX_FIX_CYCLES:
+        return "Cumulative cycle budget exhausted; the count cannot be reset"
+    if manifest.get("cycle") != cycle or completed != max(0, cycle - 1):
+        return "Requested cycle does not match the frozen cumulative cycle accounting"
+    return None
+
+
+def enforce_cycle_budget(root: Path, cycle: int, parser: argparse.ArgumentParser) -> None:
+    error = cycle_budget_error(root, cycle)
+    if error:
+        parser.error(error)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("root", type=Path, help="Frozen review view with authority/source/shared and role prompt")
@@ -32,6 +61,7 @@ def main() -> int:
     if args.cycle < 0 or args.attempt < 1 or args.timeout < 1:
         parser.error("cycle must be nonnegative; attempt and timeout must be positive")
     root = args.root.resolve()
+    enforce_cycle_budget(root, args.cycle, parser)
     authority = root / "authority/governing_review_authority.txt"
     command = ["claude", "--safe-mode", "--restricted", "--tools", "Read,Grep,Glob",
                "--allowedTools", "Read,Grep,Glob", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',

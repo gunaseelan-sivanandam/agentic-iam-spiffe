@@ -1,6 +1,8 @@
 # Slice Plan — delivery-orchestration
 
-Status: Draft from the grill-me session, 2026-11-01. Not approved for implementation.
+Status: Revised locally from user PR feedback, 2026-11-05. Not approved for implementation.
+The user authorized these revisions and requested no new PR. Prior model approvals cover the
+previous candidate only; see `plan_review.md`.
 Tracks GitHub issue #16. Historical input is the frozen
 [`agentic-delivery-process/later_slices.md`](../agentic-delivery-process/later_slices.md),
 not an approved design to implement wholesale. Fixture validation precedes the OPL-005–008 pilot
@@ -12,8 +14,62 @@ Use Codex to orchestrate approved feature delivery, with Claude independently re
 artifact and the integrated result. Reduce dependence on the user during execution without
 letting agents approve changes to requirements, design, behavior, scope or security guarantees.
 Every decision, review and fix starts from the actual problem, its causes and system context.
-Exercise the orchestration on an isolated fixture branch, then improve it through the real
-key/state-isolation pilot.
+Deliver the controller in slice 1, evaluate and improve it on an isolated fixture branch in
+slice 2, then use a separately approved key/state-isolation pilot. Completion of slice 1 alone
+does not establish live orchestration effectiveness or authorize the pilot.
+
+## Delivery contract and slice boundaries
+
+The concrete product is a local controller that takes a user-approved feature plan through
+requirements, design, tests, implementation, independent Claude reviews and validation to an
+inspectable implementation PR. The user retains plan approval, merges and decisions that change
+the approved baseline. A run may stop honestly at an unresolved decision or missing proof.
+
+This bundle specifies two sequential delivery slices. Its later detailed decisions are shared
+obligations; the boundaries below determine when each obligation must be demonstrated. This
+2026-11-05 user-directed split amends D40's former single implementation-PR acceptance boundary;
+it does not remove the live trial or lower its success thresholds.
+
+| Slice | Concrete deliverables | Definition of done |
+| --- | --- | --- |
+| 1 — Controller setup | Local `start`, `continue`, `status`, `resume` interface; stage/review routing; versioned guidelines and checklists; durable findings, approval, revision, usage and recovery records; automated controller tests and trace integration | Reviewed requirements/design and accepted tests; implementation and integrated reviews complete; deterministic positive/negative controls prove the mechanics, including refusal of missing/failed trial evidence when the approved delivery requires it; applicable repository checks pass; an inspectable implementation PR reports unresolved issues and explicitly states that live agent effectiveness is unproven |
+| 2 — Fixture evaluation and improvements | Separately reviewed off-main fixture feature/seed design and frozen evaluation matrix; independently prepared seeds/key; live clean and seeded runs; attributable findings, controller corrections and candidate-bound reruns | Clean delivery reaches a working implementation PR with only expected user approvals; safety and delivery pass the frozen matrix; seeded blockers are detected or safely contained; no unresolved blocker, unauthorized baseline adoption or false approval; successful evidence binds to the final controller candidate; other confidence dimensions and every failed/assisted attempt are reported |
+
+Slice 2 depends on the reviewed slice-1 controller. Fixture contents, exact scenarios, seeds,
+thresholds and run bounds require their own reviewed plan/test plan and user approval before
+execution. Multiple attempts retain their original outcomes; every relevant controller change
+invalidates affected proof and requires a new pinned candidate/rerun. Within-baseline fixes may
+proceed; changed behavior, guarantees or scope require a user-approved amendment. No unlimited
+run or review budget is granted. General controller improvements go to main through separate
+implementation PRs; fixture content and evaluation records remain off main under D33/D55.
+
+### What approval of this plan means
+
+A future user merge approves the stated controller obligations and staged delivery, including
+the later evaluation requirement. It does not approve unwritten fixture contents or any OPL
+pilot design. Slice 1 may be completed before the live trial; slice 2 and overall orchestration
+readiness may not. The isolation pilot remains blocked until slice 2 succeeds and its own plan
+is approved. No implementation is authorized by this local edit alone.
+
+This planning change is complete when goal, deliverables, per-slice acceptance, dependencies and
+remaining approvals are explicit; the test plan assigns mechanical versus live proof; naming,
+identity facts and live status links are consistent; and local checks are recorded. Independent
+acceptance of this revised bundle remains pending under the existing consumed review budget.
+
+### Requirement and design ownership
+
+Product/service requirements remain in `docs/requirements.md`. After slice-1 plan approval,
+controller requirements will have one authoritative home at `docs/orchestration_requirements.md`,
+and controller state/interfaces at `docs/orchestration_architecture.md`. These paths are planned,
+not existing specifications. AGENTS.md owns contributor rules; checklists operationalize those
+rules without becoming a duplicate requirements register. This bundle owns scope/decisions.
+
+Slice 1 must extend the existing trace validators/docs checks to consume both product and
+controller sources, reject unknown/duplicate IDs across them, and preserve existing coverage
+and gap checks. Use the existing REQ/ARCH formats with unique controller IDs; do not create a
+second trace system or new CI job. Update the rulebook's source map when those specifications
+are authored. Slice 2 uses these controller specifications plus separately approved fixture
+feature authority; the orchestration meta-plan is never its feature specification.
 
 ### Observed delivery failures this addresses
 
@@ -58,7 +114,7 @@ accounting live in `plan_review.md`; this document does not grant itself approva
 | D1 | Codex orchestrates and authors/fixes; Claude independently reviews with fresh context. Reviewers use a different model from the author/fixer. Guidelines and checklist formats remain runtime-independent. |
 | D2 | Every feature begins with grill-me covering the problem, alternatives, constraints, behavior, security, failure modes and relevant product qualities. Split into slices; individual slices receive further grill-me when necessary. |
 | D3 | Produce plan and test plan, independently review and fix them before the user's plan PR. The user approves by merging; no implementation before approval. One plan PR may authorize multiple fully specified slices in dependency order. Unresolved slices remain unapproved. |
-| D4 | Each approved slice proceeds through requirements and requirements review, architecture and architecture review, tests and tester-focused review, implementation and implementation review, validation and fresh integrated review, then the user's implementation PR. Requirements and architecture stay in today's authoritative documents. |
+| D4 | Each approved slice proceeds through requirements and requirements review, architecture and architecture review, tests and tester-focused review, implementation and implementation review, validation and fresh integrated review, then the user's implementation PR. Service requirements/architecture stay in their existing authoritative documents; controller specifications use the separate homes in Requirement and design ownership. |
 | D5 | Each stage focuses on its artifact but considers the whole feature and may challenge upstream assumptions. Corrections reopen dependent artifacts, reviews and validation; an independent reviewer checks the impact analysis. Previous approvals do not approve changed content. |
 | D6 | Automatic corrections must preserve approved requirements, design, behavior, feature scope and security guarantees. Simplicity never justifies weakened protection or proof. Tests/docs cannot be adjusted to legitimize an unauthorized implementation. |
 | D7 | A baseline conflict or uncertainty about compliance pauses affected delivery work. Investigate autonomously; present an amendment, defer explicitly, or build isolated comparison variants. Only the user can approve adoption. Continue unaffected authorized work. |
@@ -94,7 +150,7 @@ accounting live in `plan_review.md`; this document does not grant itself approva
 | D37 | Reviewers are instructed/configured for read-only reviewed inputs and disposable probe workspaces; privileged runtime validation is routed through the orchestrator. These are not assumed security guarantees. Probe restrictions and label each boundary enforced, detected afterward, instruction-only or unverified. Worktrees are not sandboxes; same-user execution may retain host/credential access. No malicious-agent containment or extensive sandbox infrastructure is authorized by this honest-mistake PoC. |
 | D38 | The tests stage writes executable tests from the approved plan/requirements/design before behavior implementation. Use minimal interface skeletons derived from approved detailed design, so red results are meaningful rather than import errors. Record red output, failure type and intended cause; passing positive controls; and, for security-relevant paths, evidence that a targeted protection-removal/weakening mutant makes the test fail for the intended reason. Verify the mutant reaches the exercised path; mutation is evidence of sensitivity to that fault, not complete security proof. Lock reviewed assertions to accepted revisions/hashes. Implementers cannot silently change them; a genuine defect returns to the tests stage for within-baseline correction and independent re-review. Hash checks detect changes rather than preventing writes. If runtime proof is genuinely unavailable before implementation, allow explicitly provisional acceptance with outstanding evidence recorded; mocks are not deployed proof. Final acceptance requires outstanding positive-control and targeted mutation evidence. |
 | D39 | The architecture stage includes detailed interface contracts: inputs/outputs, errors, state transitions and security responsibilities, at enough detail to derive skeletons/tests without inventing behavior. Review these before the tests stage. Use the existing authoritative architecture document and source-level DD conventions; do not add a separate detailed-design stage or parallel authoritative document. |
-| D40 | A successful fixture trial is required for the user's final orchestration PR approval, not just before the OPL pilot. Bind the trial to the exact tested candidate orchestration revision, with later record-only changes qualified by D53, and include results, observed deviations and remaining limitations in the PR. Fixture design, implementation and review records remain on their dedicated branch. |
+| D40 | Under the user-directed two-slice split, a successful fixture trial is required for slice-2 acceptance and overall orchestration readiness before the OPL pilot. Slice-1 controller setup may be accepted with deterministic proof and an explicit live-effectiveness limitation. Bind the trial to the exact tested candidate orchestration revision, with later record-only changes qualified by D53, and include results, observed deviations and remaining limitations in the PR. Fixture design, implementation and review records remain on their dedicated branch. |
 | D41 | Initial artifact-specific checklists cover feature/slice plans, test plans, requirements, architecture/detailed design, unit tests, E2E tests, implementation code, configuration/deployment, documentation/operational instructions, and process rules/checklists/orchestration definitions. Plan review checks problem/scope, decisions/alternatives, slice dependencies, approval boundaries, assumptions, success criteria, assets/risks and retirement. Test-plan review checks proof coverage and test levels, independent expected outcomes, fixtures and evidence. UT and E2E have separate maturity/acceptance criteria; neither substitutes for an obligation at the other level without an approved proof-strategy change. One test_plan.md may contain both, receiving all applicable planning checks. UT often supports meaningful red through approved skeletons; E2E runtime proof may remain explicitly provisional until deployment. Every artifact also receives the mandatory shared holistic layer. |
 | D42 | Keep a compact machine-readable checkpoint alongside each slice's review documents, versioned in Git, recording stages, counters, pending evidence, reviewed revisions and user decisions awaited. No credentials or raw session transcripts. Human review documents remain the readable history. A checkpoint cannot grant approval: resume reconciles it against review records, Git and CI. Recovery must not depend on one machine's temporary files. |
 | D43 | Originating reviewer means a stable per-artifact identity comprising role, model and versioned review instructions, not one immortal process/session. A fresh session may continue using its own original findings, subsequent responses and reviewed revisions. A replacement model cannot silently inherit disposition authority; unavailability follows the retry/escalation policy. |
@@ -103,7 +159,7 @@ accounting live in `plan_review.md`; this document does not grant itself approva
 | D46 | Trial verdict: safety and delivery must pass. Review effectiveness, recovery and decision quality may be partial only where no mandatory obligation is violated, no blocker remains unresolved, and the shortfall is explicitly reported. Safety failures cannot be averaged away as partial reviewer/recovery scores. Report detection, containment, root-cause resolution, false blockers and unnecessary changes separately for each novel seed. Report a missed defect regardless of whether the trial passes; reporting alone is not success. |
 | D47 | Recovery must preserve completed review-fix counts and in-progress cycles. Reject silent counter rollback; replayed reviewer results count once. Test interruption between reviewer completion and checkpoint persistence. Cycle three is permitted; unresolved blockers afterward escalate rather than start cycle four. Revisions, new findings and upstream corrections do not reset counters. Only explicit user authorization extends the limit, and that authorization must itself survive restart. Counter failure is a mandatory safety failure, not an acceptable partial recovery result. |
 | D48 | Fixture acceptance uses applicable existing validation checks, fixed in the approved trial matrix. The controller verifies successful GitHub conclusions against the reviewed/tested revision and intended PR base; failed, missing or stale checks cannot count as a successful trial, even if the PR was merged. This verifies acceptance rather than preventing direct merges by the user or an agent sharing credentials. No new fixture-branch ruleset is required initially. |
-| D49 | Plans/amendments require a verified GitHub merge attributed to the configured user account, into the intended branch and bound to approved artifact revisions. Waivers, decision answers and review-cycle extensions require an explicit GitHub comment from that account identifying the decision, affected baseline, scope and expiry where applicable. Agent-written checkpoints/summaries cannot grant approval. Shared credentials establish account attribution, not proof of human action: outside controller-routed operations, the prohibition on agent approval/merge remains instruction-only until separate identity controls exist. Do not silently assume issue #20 is implemented. D58 is the specific user-authorized exception: a verified user merge of this plan/amendment carrying that waiver's exact scope, rationale and expiry is also valid evidence for D58 only. A generic plan mention, agent-written text or agent merge does not activate any waiver; other waivers retain the explicit-comment requirement. |
+| D49 | Plans/amendments require a verified GitHub merge attributed to the configured user account, into the intended branch and bound to approved artifact revisions. Waivers, decision answers and review-cycle extensions require an explicit GitHub comment from that account identifying the decision, affected baseline, scope and expiry where applicable. Agent-written checkpoints/summaries cannot grant approval. Issue #20 was delivered by merged PR #23: agents act as `gunaseelan-agent`, and the configured owner approves/merges. Verify actor identity before GitHub writes and reject agent-authored approvals. Account attribution is not host isolation or proof that owner credentials are inaccessible to every same-user process; do not claim that stronger boundary. D58 is the specific user-authorized exception: a verified user merge of this plan/amendment carrying that waiver's exact scope, rationale and expiry is also valid evidence for D58 only. A generic plan mention, agent-written text or agent merge does not activate any waiver; other waivers retain the explicit-comment requirement. |
 | D50 | Supply the plan, test plan, applicable authoritative documents and relevant source whenever needed for review, with exact wording, revision provenance and approval status. Do not hide agreed plans/designs or replace them with author-generated summaries to avoid review-history exposure. The withheld material is the slice's review-comment documents, including plan-review comments and author responses, during a fresh independent first pass. Re-review receives the originating reviewer's own findings and corresponding responses/fixes; integrated review receives complete history in its second pass. Substantive decisions reached during review must enter the approved plan/authoritative documents, not remain authoritative only inside review comments. This supersedes the proposed broader exclusion of checkpoints/Git history as a blanket rule; the concrete input assembly must preserve authoritative context while respecting D10/D23 and label its actual assurance under D37. |
 | D51 | The user requested publication secret scanning as its own proposed slice, tracked in issue #21, not scanner implementation within delivery-orchestration. Propose automatic coverage of publishable repository content, existing evidence outputs and generated PR text without per-file registration. The separate slice requires its own grill-me, reviewed plan/test plan and user approval. PLN-008 remains open: issue creation is neither implementation nor waiver, and publication integration/sequencing must be resolved before claiming the gap addressed. |
 | D52 | The orchestrator manages only test stacks it created or the user explicitly authorized it to take over. Existing unowned/unknown-ownership stacks require explicit takeover approval before lifecycle operations; pause affected runtime work and continue independent authorized work. Resume verifies ownership against checkpoints and Docker metadata. Preserve each run/variant's evidence before resetting an owned stack. Serialization alone does not establish ownership; outside controller-routed commands the restriction is instruction-only unless separately enforced. |
@@ -118,7 +174,7 @@ accounting live in `plan_review.md`; this document does not grant itself approva
 ## Requirements
 
 The plan PR approves the behavior obligations below and decisions D1–D59. The requirements stage
-formalizes those obligations in `docs/requirements.md`; it does not authorize inventing new
+formalizes controller obligations in the planned `docs/orchestration_requirements.md`; it does not authorize inventing new
 behavior. Architecture and executable tests similarly elaborate the approved baseline. Every
 normative addition must trace to an approved obligation; ambiguity or a changed guarantee follows
 D7/D49 rather than being legitimized by a stage review. Allocate final REQ/ARCH/DD/test IDs during
@@ -141,6 +197,9 @@ that the runtime or its proofs already exist. Existing service requirements and 
 guarantees remain unchanged.
 
 ## Success criteria
+
+These are overall programme criteria. Slice 1 uses its narrower definition of done above; live
+fixture results and readiness for the pilot belong to slice 2. No slice-1 result substitutes for them.
 
 - Approved slices proceed unattended to an inspectable implementation PR, with mandatory reviews
   and validation bound to exact input versions and recorded revision/proof provenance.
@@ -281,8 +340,8 @@ endless new source commit solely to say that the previous head's CI finished. Gi
 reconciled caches; actual GitHub conclusions remain authoritative.
 
 **Trigger, not a self-declared final flag.** The approved orchestration execution plan requires
-a live trial at its final user-handoff transition. The controller reads that requirement from the
-merged baseline, not from candidate text or the presence of a receipt. For this slice it is required.
+a live trial at the slice-2/overall-readiness user-handoff transition. The controller reads that requirement from the
+merged baseline, not from candidate text or the presence of a receipt. For slice 2 and overall readiness it is required; slice-1 setup proves the admission logic with controls and reports the outstanding live trial.
 A missing/failed/stale binding refuses that transition. Work-in-progress CI and nested fixture PRs
 run the mechanical tests without requiring the outer trial to have completed, avoiding recursion.
 The existing tooling job proves the acceptance verifier with positive/negative controls; it does
@@ -329,7 +388,7 @@ and recorded server comment ID. Reconcile a post by operation ID after a crash b
 returned ID. Exclude those IDs and machine envelopes from user approvals, including posts quoting
 an approval template. Accept only an explicit decision envelope linked to the known request,
 baseline and scope; ambiguous or quoted text is not approval. Direct posts outside the controller
-remain the instruction-only shared-account residual, not a mechanically proven human distinction.
+must still be checked against the configured owner identity; account attribution does not prove host-level credential isolation.
 
 **Stack fingerprints.** Before lifecycle calls, require exact container IDs plus matching Compose
 working_dir/config_files/service and mount sources for this approved task checkout. Match creation
@@ -383,6 +442,9 @@ general process/design authority, with fixture cases testing them. Proposals tha
 requirements/design/threat scope still go to the user; no automatic scope expansion follows.
 
 ## In scope
+
+The delivery contract allocates these programme obligations between controller setup (slice 1)
+and live evaluation/improvements (slice 2); inclusion here does not make both one acceptance unit.
 
 - Process guidelines, full shared/artifact checklists and structured review instructions.
 - Minimal local orchestration, stage transitions, review routing, records and decision handoffs.
@@ -441,6 +503,11 @@ implement a scanner, add a gate or weaken the existing publication requirements.
 - Live Jira credentials/actions are not authorized by this slice's unattended permission.
 
 ## Environment facts
+
+Historical observations below describe the original review environment. On 2026-11-05, GitHub
+reads confirmed #23 merged, #20 closed and PR #26 authored by `gunaseelan-agent`. The active main
+ruleset requires one approving review and status checks. This supersedes the earlier shared-owner
+GitHub workflow description, without establishing host-level credential isolation.
 
 Read-only probes performed during 2026-11-01/02; overnight observations are identified below:
 
@@ -516,14 +583,14 @@ Additional decision-significant states:
 
 ## Authored source changes
 
-- User-authorized manual telemetry now: `scripts/review_usage.py`,
-  `scripts/run_manual_review.py`, `tests/tools/test_review_usage.py` and metadata-only
+- User-authorized Claude review launch and usage helpers now: `scripts/review_usage.py`,
+  `scripts/run_claude_review.py`, `tests/tools/test_review_usage.py` and metadata-only
   `review_usage.json`. These small reporting/invocation helpers do not implement the stage
   controller. Record targeted/full tooling validation and remaining limits in the implementation
   log, STATUS and slice index before the plan PR; CI conclusions remain separate provider facts.
-- Requirements: formalize the obligation matrix in `docs/requirements.md` after plan approval.
+- Requirements: formalize the controller obligation matrix in `docs/orchestration_requirements.md` after plan approval; retain service requirements in their existing home and extend existing trace tooling to both sources.
 - Architecture: specify the host controller, reviewed interfaces, states and boundaries in
-  `docs/architecture.md`; keep existing service architectures authoritative.
+  `docs/orchestration_architecture.md`; keep existing service architectures authoritative in `docs/architecture.md`.
 - Proof: use the existing static-test/gate model for mechanically verified orchestration
   requirements and their tooling negative controls. Deterministic controller tests are not Jira/
   SPIRE harness E2E. Pin actual live fixture evidence separately as described in the test plan.
@@ -534,13 +601,20 @@ Additional decision-significant states:
   test/trace entries and existing-gate integration. No new standalone CI job is assumed.
 - Templates: align plan/test-plan/review fields in implementation while preserving frozen slices.
 
-## Manual telemetry usage
+## Claude review launch and usage
+
+The launcher runs one already-authorized Claude review and records effort/usage. It does not
+select stages or grant additional rounds. Telemetry covers every attempt: initial reviews,
+ordinary fix/rechecks, explicitly authorized extensions, retries, failures and probes. The word
+"manual" in earlier records describes invocation before a controller existed, not a human
+review or a restriction to exceptional rounds. The current launcher still refuses exhausted
+budgets; recording an extension does not implement an extension-admission bypass.
 
 The frozen view contains source/shared/authority directories, each role's own history and prompt,
 and a governing_review_authority.txt file. Preview the exact command with authority text redacted:
 
 ```sh
-python3 scripts/run_manual_review.py /path/to/frozen-view --role primary --cycle 6 --attempt 1 --effort medium --effort-reason "Focused recheck" --dry-run
+python3 scripts/run_claude_review.py /path/to/frozen-view --role primary --cycle 2 --attempt 1 --effort medium --effort-reason "Focused recheck" --dry-run
 python3 scripts/review_usage.py /path/to/invocations.json --json-out /path/to/review_usage.json --markdown-out /path/to/review_usage.md
 ```
 
@@ -549,6 +623,13 @@ effort; include requested model, process exit/termination, timestamps and measur
 when known. The wrapper creates an immutable request before launch and a complete per-attempt
 usage receipt afterward. Actual invocation omits --dry-run only under the existing authorization;
 existing attempt files must never be overwritten. Keep private raw streams outside publication.
+The launcher admits only the initial review (cycle 0) and fix cycles 1–3, using the frozen
+manifest's declared cycle and cumulative completed_cycles_before count. An exhausted or
+inconsistent count fails before any reviewer process starts; no CLI flag bypasses that check.
+This checks declared admission metadata, not a completed persistent-controller reconciliation
+mechanism. Direct shell calls or editing that metadata are not technically prevented by this
+manual helper. The user's earlier open-ended extension is revoked; six historical cycles remain
+consumed for this bundle, and no further model review is admitted under the restored limit.
 
 ## Retirement and compatibility
 
@@ -564,9 +645,9 @@ existing attempt files must never be overwritten. Keep private raw streams outsi
   containment. No write/credential-inaccessibility guarantee is silently retained.
 - Remove only superseded process text through review. Do not import the frozen draft's ledger
   branches, main-only assumptions or old removal-of-checks review exemptions.
-- Correct OPL-009's promised GitHub merge-rights mitigation to current shared-account facts.
-  No implemented protection is removed: GitHub identity separation is still a proposed issue #20
-  slice, not delivered by this one. The accepted deliberate-attacker residual remains unchanged.
+- Reconcile OPL-009 and D49 with identity separation delivered by PR #23 (issue #20 closed).
+  Preserve the deliberate-attacker residual; distinct GitHub accounts do not establish OS or
+  credential isolation. Historical environment probes below remain dated observations.
 - Existing main service-security and quality gates remain effective. Fixture branch support and
   trial-reuse exceptions do not weaken them.
 - No runtime capability, compatibility endpoint, service secret holder or security control is

@@ -9,14 +9,19 @@ The workflow that produces and closes a bundle is defined in [`AGENTS.md`](../..
   reality; record later changes in a new slice or in `docs/history/implementation_log.md`.
 - Add a row to the index below when a bundle is created, and update its status when it closes.
 
+Current programme mapping: the frozen `agentic-delivery-process` plan's slice 1 is implemented
+(PR #5/#6); its draft `delivery-lanes-ci` became implemented `ci-evidence-trace` (PR #11/#12);
+its orchestration draft is superseded by the current delivery-orchestration bundle below.
+Historical draft/status wording in completed plans describes their original approval point.
+
 ## Index
 
 | Slice | Milestone | Status | Dates | Notes |
 | --- | --- | --- | --- | --- |
-| [delivery-orchestration](delivery-orchestration/) | — | Plan review and narrow manual telemetry helpers; awaiting user plan approval | 2026-11-02 | Issue #16; staged Codex/Claude delivery, complete checklists and off-main fixture. Controller/fixture not implemented. Separate scanner issue #21; scoped user waiver expires 2026-12-01 |
+| [delivery-orchestration](delivery-orchestration/) | — | Locally revised into controller setup then fixture evaluation; approval pending | 2026-11-02 | Issue #16; staged Codex/Claude delivery, complete checklists and off-main fixture. Controller/fixture not implemented; helper renamed run_claude_review.py; previous review applies to old candidate. Separate scanner issue #21; scoped user waiver expires 2026-12-01 |
 | [backlog-issues](backlog-issues/) | — | Implemented, PR pending | 2026-10-31 | Open items of `later_slices.md` moved to GitHub issues (labels `slice`, `user-action`); `AGENTS.md` start-here row and close-out rule |
 | [ci-evidence-trace](ci-evidence-trace/) | — | Implemented (PR #11, #12) | 2026-10-31 | Slice 2 of agentic-delivery-process: CI E2E as a required check, no secrets in evidence, static tests and gap gate in the trace model |
-| [agentic-delivery-process](agentic-delivery-process/) | — | Implemented (slice 1 of 3; PR #5, #6) | 2026-10-29 | Slice 1 (lean, D20): exact E2E outcomes, key-holder list and `qa-deploy`; decisions D1–D20. Slice 2 became `ci-evidence-trace`; slice 3 is a draft (GitHub issue #16) |
+| [agentic-delivery-process](agentic-delivery-process/) | — | Implemented (slice 1 of 3; PR #5, #6) | 2026-10-29 | Slice 1 (lean, D20): exact E2E outcomes, key-holder list and `qa-deploy`; decisions D1–D20. Slice 2 became `ci-evidence-trace`; slice 3 is the revised delivery-orchestration plan (GitHub issue #16); historical plans remain frozen |
 | [docs-consolidation](docs-consolidation/) | — | Implemented, PR pending | 2026-10-27 | `AGENTS.md` rulebook, tracked status, complete E2E spec, `make docs-check` in CI |
 | [m5-generic-verifier-architecture](m5-generic-verifier-architecture/) | M5+ | Brainstorm, not approved | 2026-06-14 | Generic capability verifier; next candidate slice |
 | [m5-full-chain-audit-trace](m5-full-chain-audit-trace/) | M5 | Implemented | 2026-06-19 – 06-30 | `varambu trace`, `M5-T49..T59`; Increment 3 harness hardening merged 2026-10-27 (PR #2) |

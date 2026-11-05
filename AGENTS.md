@@ -400,8 +400,9 @@ Standards that are **not** gated yet (follow them for new and changed code):
 - Only the user merges into designated approval branches: normally `main`, or the fixture
   integration branch explicitly authorized in the approved plan. Agents push work branches and
   open/update PRs; they do not push directly to approval branches or merge into them.
-  Shared owner credentials do not enforce this outside controller-routed operations; record that
-  instruction-only residual rather than claiming GitHub separates user and agent authority.
+  Agents act on GitHub as `gunaseelan-agent` and verify the account before every write; the
+  owner approves and merges (PR #23, issue #20). Distinct accounts do not imply host-level
+  credential isolation. Reject agent-originated approval evidence.
 - One-time creation of a previously absent fixture integration ref is allowed only when the
   approved plan authorizes its name and creation-point rule: the clean pinned framework candidate
   commit recorded by the controller in the execution manifest at creation. Never overwrite an
