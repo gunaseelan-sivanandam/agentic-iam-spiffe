@@ -46,22 +46,9 @@ Every negative test has a twin. A `probe@` value is observed before any change; 
 
 ## Review notes
 - Record any test-design assumptions that must be approved before implementation begins.
-- Record per-invocation model, explicit medium/high effort and reason, duration, turns/tools,
-  uncached/cached input, output and reported USD estimate. Include unsuccessful attempts and
-  unknowns; do not label estimates as subscription billing or retain private review content.
-- For each finding/fix, identify the underlying failure class and concrete affected stages or
-  artifact types, or justify why it is local. General rules belong in general process/design
-  authority, with fixture scenarios testing them; broader baseline changes still need approval.
-- For evidence reuse, identify the approved delivery policy, relevant input/output revisions and
-  record-only exceptions. CI conclusions must match actual head, target, tested base/merge and mode.
-- If acceptance logic, policy, schema or verification configuration changes, plan independent known-good/bad/missing/stale
-  proof checks. Do not rely solely on the changed checker's own pass result.
-- Keep reviewer detection, controller containment and evidenced root-cause resolution distinct.
-  Record human execution assistance separately from expected approvals and autonomous-run claims.
 
 ## Independent review at the implementation PR
-An independent Claude reviewer with a different model from the Codex author/fixer answers in
-an attributed report, summarized and linked from the PR body:
+A reviewer that is not the author (Codex, or a clean-context Claude) answers in the PR body:
 1. *Tests:* for each new or changed test, which wrong failure would still pass it (service down,
    another status, the right status with another reason, another component answering, a missing
    value or empty file read as success)? Does its assertion match the expected-outcome row?

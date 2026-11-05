@@ -297,5 +297,5 @@ main gates or invent a passing CI result from a local diagnosis.
 - Trial confidence is scoped to demonstrated scenarios. A successful trial permits the supervised
   OPL pilot; it does not certify mature orchestration or substitute for real pilot evidence.
 - Current independent-review dispositions and cycle accounting are recorded in `plan_review.md`.
-  Stage-controller/fixture implementation requires plan approval; D59's narrow manual-helper
-  implementation and tests are separately user-authorized.
+  Stage-controller/fixture and helper implementation require plan approval. No executable
+  tests or helper changes are delivered by this planning PR.

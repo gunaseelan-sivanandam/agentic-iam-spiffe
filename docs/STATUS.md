@@ -1,16 +1,9 @@
 # Project Status
 
-Last updated: 2026-11-05. Update this page at the end of every slice (see `AGENTS.md`, slice workflow step 4).
+Last updated: 2026-10-31. Update this page at the end of every slice (see `AGENTS.md`, slice workflow step 4).
 Detailed history: [`docs/history/implementation_log.md`](history/implementation_log.md).
 
 ## Where the project stands
-- **Delivery orchestration planning:** [draft plan](slices/delivery-orchestration/plan.md) and
-  [review history](slices/delivery-orchestration/plan_review.md) await user plan-PR approval.
-  Local user-feedback revisions separate controller setup from later live fixture evaluation,
-  with distinct acceptance criteria and planned controller requirement/design homes. The
-  Claude launcher is renamed `run_claude_review.py`; prior approvals cover the previous candidate.
-  No new PR or model review is authorized by this revision. Controller and fixture remain unimplemented. New-publication scan coverage is
-  user-waived within the recorded scope through 2026-12-01, not fixed.
 - **Implemented milestones:** M1, M2, M2.5, M3, M4 (reduced scope), M4a, M4b, M5.
   M5 covers the Codex → Jira MCP path, the `varambu` demo CLI with capiss audit, and the
   full-chain audit trace (`varambu trace`). See the milestone table in [`README.md`](../README.md#milestones).

@@ -29,23 +29,6 @@
   history, runtime behaviour), each with the probe that established it and its result. If none, say
   so explicitly.
 
-## Governing rules and task artifacts
-- Identify the approved authority revision and instruction/checklist sources for each stage,
-  including automatically loaded files. Record their user-approval provenance separately from
-  in-progress artifact status; proposed rules cannot govern their own review.
-- List rulebook/checklist files this slice changes as output artifacts and specify how invocations
-  receive approved rules while reading those changes as data. If loading cannot be verified,
-  the operation remains pending; do not designate the unapproved task tree as authority.
-
-## Evidence reuse and acceptance verification
-- List exact record-path exclusions for the user's plan-PR approval, or explicitly state none.
-  Later exceptions require a user-merged plan amendment before use; design review is not approval.
-  Review bindings include all task inputs by default; existing test-lock implementation exceptions
-  are a separate reviewed classification, not trial/review record exclusions.
-- Identify checker logic and transitive verification configuration/policy/schema/helper inputs
-  affected by the slice. Unknown checker-input changes require verification; routine new evidence
-  alone does not. Name the independent review and recomputation tools/evidence provenance.
-
 ## Hidden-state and trust decisions
 - If the slice depends on hidden state, list:
   - state/key name

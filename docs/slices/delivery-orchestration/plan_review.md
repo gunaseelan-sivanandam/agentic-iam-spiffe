@@ -1,5 +1,19 @@
 # Independent plan review — delivery-orchestration
 
+## Current scope correction — planning only, 2026-11-05
+
+The user clarified that this grill-me stage delivers plan/test-plan artifacts only; related
+changes follow plan merge. Removed AGENTS.md/template edits, helper/test implementations and
+operational documentation updates from the PR diff. Preserved the plan, test plan, historical
+review/usage evidence and minimal slice-index registration. Prior prepared files were copied to
+`/tmp/delivery-orchestration-deferred-20261105` for later work; previous commits also retain them.
+The current clarification supersedes earlier helper-delivery exceptions and publication scope.
+
+Historical approval, validation and implementation statements below describe earlier candidates;
+they are not acceptance or implementation claims for this planning-only candidate. Review counters
+remain consumed and no further model review is launched. Proposed policy remains in the plan
+until post-merge implementation; no threat-model change is made. PR #26 is updated in place.
+
 ## Publication status — 2026-11-05
 
 The user subsequently authorized updating existing PR #26 with these revisions, including the

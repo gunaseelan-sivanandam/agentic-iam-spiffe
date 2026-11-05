@@ -1,7 +1,7 @@
 # Slice Plan — delivery-orchestration
 
 Status: Revised locally from user PR feedback, 2026-11-05. Not approved for implementation.
-The user authorized these revisions and requested no new PR. Prior model approvals cover the
+The user authorized updating existing PR #26 and clarified that this stage delivers planning artifacts only. Prior model approvals cover the
 previous candidate only; see `plan_review.md`.
 Tracks GitHub issue #16. Historical input is the frozen
 [`agentic-delivery-process/later_slices.md`](../agentic-delivery-process/later_slices.md),
@@ -17,6 +17,15 @@ Every decision, review and fix starts from the actual problem, its causes and sy
 Deliver the controller in slice 1, evaluate and improve it on an isolated fixture branch in
 slice 2, then use a separately approved key/state-isolation pilot. Completion of slice 1 alone
 does not establish live orchestration effectiveness or authorize the pilot.
+
+## Planning-only approval boundary
+
+This PR delivers the plan and test plan, their preserved review/usage records and the minimal
+slice-index registration. It does not change AGENTS.md, templates, standing policy, helpers,
+implementation tests or operational status/problem/history documents. Those changes follow
+user merge of this plan through the approved delivery stages. All process/controller behavior
+specified below is proposed future work, not an already adopted repository rule. The user's
+current clarification supersedes earlier exceptions for including telemetry helpers now.
 
 ## Delivery contract and slice boundaries
 
@@ -169,7 +178,7 @@ accounting live in `plan_review.md`; this document does not grant itself approva
 | D56 | Revision binding is a general delivery guarantee, not a fixture-only safeguard. Every authoring, fixing, test and review operation uses designated authoritative documents, process rules/checklists and task-source revisions, recording actual input identities/approval status and output revisions. Latest branch state or a pull is not evidence of the correct approved baseline. Check input identity at start and result/dependency applicability before acceptance; missing or uncertain binding stays pending, and relevant changes reopen affected work/reviews without resetting counters. Expected output edits do not authorize baseline changes. The fixture tests this same guarantee, including stale loaded instructions before a run or on rerun against a newer candidate. The user agreed this generalization; it does not itself authorize another exhausted review cycle or waive findings. |
 | D57 | Following the fixture-scope audit, generalize evidence reuse/approved record-policy ownership, applicable CI conclusions, independent verification of initial and later changed acceptance logic, separate detection/containment/root-cause outcomes, and honest human-assistance/autonomy reporting to ordinary delivery. The approved feature/slice baseline owns the shared record policy; missing approval grants no exclusions. Every holistic/fix review checks the underlying failure class for other stages/artifacts, with a concrete counterpart or justified local scope; generally applicable corrections belong in general authority and fixture tests exercise them. This does not expand approved design/threat scope or authorize unrelated fixes. Assisted normal delivery may pass normal review/validation without qualifying as autonomous success. Hidden seeds/answer keys, dedicated fixture branches and rescue-fails-trial scoring stay evaluation-specific. No finding waiver, cycle reset or additional review cycle is implied. |
 | D58 | The user grants the temporary missing-publication-scan-coverage waiver for all new folders and documents we create outside the current checked paths (test_report.log, artifacts/rogue-tests/, artifacts/quality/), including new contents in those folders. Reason: the broader scanner remains its separate deferred slice. Expiry stays 2026-12-01 end of day UTC. Existing no-secrets obligations and current checks remain mandatory; this grants neither actual secret publication nor a scanner-implementation claim. Pre-existing unscanned content is not automatically included by editing it. This direct session decision grants current manual-work authority; future controller admission binds to D49 user-approved evidence, including user merge of the plan recording the waiver, not an agent-created GitHub approval. Preserve the known finding as scoped/time-limited user-waived, not fixed; no silent renewal. |
-| D59 | The user requests per-review cost/usage visibility and deliberate high/medium effort instead of an unknown default or routine extra-high. Explicitly pass medium for routine focused reviews/rechecks and high for initial plan, security, architecture/state/trust-boundary and integrated reviews; record rationale for high on broader rechecks. Other effort levels need explicit user decision. Collect metadata-only per-attempt requested/reported model/effort, duration, turns/tool calls, uncached/cache-read/cache-write/output tokens and provider USD estimate, including failed/retried/probe calls. Deduplicate invocations and token subsets, preserve missing data and historical effort as unknown, and distinguish estimates from actual subscription billing/quota. Backfill available logs now and pin effort in the next launcher; this authorizes narrow manual-review telemetry support, not stage-controller or feature implementation. |
+| D59 | The user requests per-review cost/usage visibility and deliberate high/medium effort instead of an unknown default or routine extra-high. Explicitly pass medium for routine focused reviews/rechecks and high for initial plan, security, architecture/state/trust-boundary and integrated reviews; record rationale for high on broader rechecks. Other effort levels need explicit user decision. Collect metadata-only per-attempt requested/reported model/effort, duration, turns/tool calls, uncached/cache-read/cache-write/output tokens and provider USD estimate, including failed/retried/probe calls. Deduplicate invocations and token subsets, preserve missing data and historical effort as unknown, and distinguish estimates from actual subscription billing/quota. Preserve available historical usage records; implement launch/collection helpers after plan merge under the current planning-only boundary. |
 
 ## Requirements
 
@@ -518,7 +527,7 @@ Read-only probes performed during 2026-11-01/02; overnight observations are iden
 | `command -v claude`; `claude --version`; `claude --help` | Claude Code 2.1.316, non-interactive execution available | No successful model call or authentication established by these probes. |
 | `claude auth status --json`, filtered to status/method/provider only | Authenticated, claude.ai, firstParty | No credential values inspected or printed; status alone does not prove a working model call. |
 | Tool-disabled Claude print-mode probe, restricted mode, empty MCP configuration, no session persistence, 45-second timeout | Sandboxed attempt timed out without output; one elevated retry returned `REVIEW_PROBE_OK`, reporting `claude-opus-5-5`, no permission denials | Establishes a working model call under elevated execution, not effectiveness of file/tool restrictions or completion of an artifact review. |
-| Read AGENTS.md and CI/Makefile at base `805cc03` | Base rules assumed main, unlimited review rounds and Codex-first reviewers | The plan PR proposes explicit rulebook alignment; no controller enforcement is claimed. |
+| Read AGENTS.md and CI/Makefile at base `805cc03` | Base rules assumed main, unlimited review rounds and Codex-first reviewers | The plan proposes rulebook alignment after plan merge; no controller enforcement is claimed. |
 | `gh api user`, selecting account metadata only | Authenticated account is `gunaseelan-sivanandam` | Shared user/agent account attribution is not proof of human action. |
 | Repository metadata API, selecting visibility/default branch/permissions only | Public repository, default branch main, current account has admin/push permission | No setting or credential changed; agent merge prevention is not a GitHub permission boundary here. |
 | Ruleset 26054924 API, selecting conditions/enforcement/rule types | Active; includes only `refs/heads/main`; pull-request and required-status-check rules present | Does not establish fixture-branch protection; D48 verifies acceptance separately. |
@@ -583,31 +592,32 @@ Additional decision-significant states:
 
 ## Authored source changes
 
-- User-authorized Claude review launch and usage helpers now: `scripts/review_usage.py`,
-  `scripts/run_claude_review.py`, `tests/tools/test_review_usage.py` and metadata-only
-  `review_usage.json`. These small reporting/invocation helpers do not implement the stage
-  controller. Record targeted/full tooling validation and remaining limits in the implementation
-  log, STATUS and slice index before the plan PR; CI conclusions remain separate provider facts.
+- After plan approval: implement `scripts/review_usage.py`, `scripts/run_claude_review.py`
+  and their tests for explicit effort and metadata-only per-attempt usage. Existing review usage
+  records remain historical evidence; no executable helper is delivered in this planning PR.
 - Requirements: formalize the controller obligation matrix in `docs/orchestration_requirements.md` after plan approval; retain service requirements in their existing home and extend existing trace tooling to both sources.
 - Architecture: specify the host controller, reviewed interfaces, states and boundaries in
   `docs/orchestration_architecture.md`; keep existing service architectures authoritative in `docs/architecture.md`.
 - Proof: use the existing static-test/gate model for mechanically verified orchestration
   requirements and their tooling negative controls. Deterministic controller tests are not Jira/
   SPIRE harness E2E. Pin actual live fixture evidence separately as described in the test plan.
-- Rulebook in the plan PR: align reviewer selection, bounded fix cycles, explicit target branches,
+- Rulebook after plan merge: align reviewer selection, bounded fix cycles, explicit target branches,
   staged specification/design/tests, required evidence/N/A completion and finding disposition
   with the user's agreed workflow. These are proposed policy text, not proof of a working controller.
 - Implementation after approval: versioned guidelines/checklists, controller, structured records,
   test/trace entries and existing-gate integration. No new standalone CI job is assumed.
 - Templates: align plan/test-plan/review fields in implementation while preserving frozen slices.
 
-## Claude review launch and usage
+## Planned Claude review launch and usage
+
+The following describes the future helper interface. These commands are not available from
+this planning PR; the earlier prepared implementation is deferred until plan approval.
 
 The launcher runs one already-authorized Claude review and records effort/usage. It does not
 select stages or grant additional rounds. Telemetry covers every attempt: initial reviews,
 ordinary fix/rechecks, explicitly authorized extensions, retries, failures and probes. The word
 "manual" in earlier records describes invocation before a controller existed, not a human
-review or a restriction to exceptional rounds. The current launcher still refuses exhausted
+review or a restriction to exceptional rounds. The planned launcher must refuse exhausted
 budgets; recording an extension does not implement an extension-admission bypass.
 
 The frozen view contains source/shared/authority directories, each role's own history and prompt,
@@ -623,18 +633,18 @@ effort; include requested model, process exit/termination, timestamps and measur
 when known. The wrapper creates an immutable request before launch and a complete per-attempt
 usage receipt afterward. Actual invocation omits --dry-run only under the existing authorization;
 existing attempt files must never be overwritten. Keep private raw streams outside publication.
-The launcher admits only the initial review (cycle 0) and fix cycles 1–3, using the frozen
+The planned launcher admits only the initial review (cycle 0) and fix cycles 1–3, using the frozen
 manifest's declared cycle and cumulative completed_cycles_before count. An exhausted or
 inconsistent count fails before any reviewer process starts; no CLI flag bypasses that check.
-This checks declared admission metadata, not a completed persistent-controller reconciliation
+This proposed check covers declared admission metadata, not a completed persistent-controller reconciliation
 mechanism. Direct shell calls or editing that metadata are not technically prevented by this
-manual helper. The user's earlier open-ended extension is revoked; six historical cycles remain
+planned helper. The user's earlier open-ended extension is revoked; six historical cycles remain
 consumed for this bundle, and no further model review is admitted under the restored limit.
 
 ## Retirement and compatibility
 
 - Preserve completed slice records unchanged.
-- The plan PR replaces the old Codex-first reviewer rule, unlimited review loop, main-only
+- Implementation after plan approval will replace the old Codex-first reviewer rule, unlimited review loop, main-only
   approval assumption and single pre-implementation tests step with the user's agreed workflow.
   Current bootstrap follows the user's explicit session instructions and all non-conflicting
   standing rules; the agreed process is executed manually until the controller is accepted.
@@ -658,10 +668,10 @@ consumed for this bundle, and no further model review is admitted under the rest
 ### Bootstrap and artifact completion
 
 The user's grill-me decisions govern this manual bootstrap as direct instructions; current
-non-conflicting repository rules still apply. The plan PR carries the aligned AGENTS.md text,
-including different-model reviews, one initial review plus three fix cycles, staged requirements/
-architecture/tests and explicit approved branch targets. It does not claim those policies are
-already mechanically enforced. Implementation still waits for the user's plan merge.
+non-conflicting repository rules still apply. AGENTS.md alignment follows the user's plan merge,
+including different-model reviews, bounded fix cycles, staged requirements/architecture/tests
+and explicit approved branch targets. This PR specifies those proposed changes without adopting
+them as standing rules or implementing enforcement.
 
 A review unit is a declared artifact or fixed bundle, such as the plan plus test plan. One
 submission of that bundle consumes one shared cycle after all required reviewers assess it;
@@ -725,8 +735,8 @@ quality separately. Direct host actions remain instruction-only unless a stronge
   The compact table shows role/cycle/attempt, effort, status, duration and USD estimate and links
   the complete JSON. Backfill covers available supplied logs only; earlier feasibility probes
   without logs are excluded from row and missing-invocation counts, not assumed free.
-  The user explicitly authorized a small manual-review usage extractor and metered launcher now;
-  these do not implement stage orchestration, grant review approval or authorize feature runtime.
+  Earlier helper preparation is historical work. The current user clarification defers helper
+  delivery until plan merge; this PR preserves usage records without executable tooling.
 - Manual-review CLI feasibility: local Claude Code help documents `--safe-mode` as disabling
   CLAUDE.md/customization loading while preserving auth. A tool-free safe-mode/restricted probe
   returned `SAFE_MODE_PROBE_OK`, exit 0, provider model `claude-opus-5-5` (2026-11-02).
@@ -830,4 +840,4 @@ expired publication pauses for the required decision while unaffected work may p
 
 Current originating-reviewer dispositions, outstanding findings, user decisions and review-cycle
 accounting are recorded in `plan_review.md`. Stage-controller/feature implementation requires plan
-approval; D59's narrow manual telemetry helpers were separately authorized by the user.
+approval. Under the current planning-only boundary, helper delivery also follows plan merge.
