@@ -30,7 +30,9 @@ is first); every heading carries its date.
 - Validation: `make lint` passes against `poc/slice-2-review-launcher` and against
   `origin/poc/agentic-sdlc` (slices 1 to 3 together). `make tooling-test`: 376 pytest pass; the 6
   shell cases of `tests/tools/test_lint_changed_files.py` need `shellcheck`, which could not be
-  installed on this machine, so they run only in CI. Deliberately breaking the gate (honouring `noqa`
+  installed on this machine; they passed in CI (a `workflow_dispatch` run on `a09ab0d`: tooling-test
+  382 pytest and 9 shell passed; gate-consistency failed only on "CI job lint is not a required
+  check", which the owner's user action 2 resolves). Deliberately breaking the gate (honouring `noqa`
   on limits, reading the configuration from the change, ignoring the value, no rename matching, no
   header check) made at least one test fail each time. Full E2E suite on a clean stack at `89c9cbe`:
   120/120 passed, 1 warning (M5-T55, env-gated skip); then `make qa-deploy` with image users inspected

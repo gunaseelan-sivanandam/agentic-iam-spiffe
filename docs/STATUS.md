@@ -44,7 +44,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 | Check | Date | Result |
 | --- | --- | --- |
 | Full E2E suite, clean stack, `make e2e` on `poc/slice-3-changed-files-lint` (`89c9cbe`; slice 2 at `642b840` gave the same) | 2026-11-08 | 120/120 passed; 1 warning (M5-T55 env-gated skip); `make qa-deploy` (image users inspected) and `make qa-evidence` PASSED after it |
-| `make lint` on slices 1 to 3 against `origin/poc/agentic-sdlc`; `make tooling-test` | 2026-11-08 | lint PASSED; 376 pytest pass, the 6 shell cases of the lint tests need `shellcheck` (CI only) |
+| `make lint` on slices 1 to 3 against `origin/poc/agentic-sdlc`; `make tooling-test` | 2026-11-08 | lint PASSED; 376 pytest pass locally, and all 382 (the 6 shell cases need `shellcheck`) in CI's tooling-test job on `a09ab0d` |
 | Full E2E suite, clean stack, `make e2e` on `poc/slice-1-rules` (`7ab71c5`) | 2026-11-07 | 120/120 passed; 1 warning (M5-T55 env-gated skip) |
 | `make qa-deploy` (image users inspected) and `make qa-evidence` after that run | 2026-11-07 | both PASSED; qa-evidence: validated 119, skipped 1 |
 | `make qa-quality` (qa-trace in `--mode pr --base origin/poc/agentic-sdlc`) and `make tooling-test` on `poc/slice-1-rules` | 2026-11-07 | PASSED; gap gate: 0 new gaps, 113 coverage gaps remain; 230 pytest, 9 shell |
