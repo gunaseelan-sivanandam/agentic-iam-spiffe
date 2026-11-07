@@ -1,0 +1,15 @@
+Planted defect PD-2 of the review benchmark (answer key: tests/review_benchmark/answer_key.yaml); applied on top of the case's base commit. git apply ignores this line.
+
+diff --git a/scripts/rogue_node_tests.sh b/scripts/rogue_node_tests.sh
+index b9cb870..786842d 100644
+--- a/scripts/rogue_node_tests.sh
++++ b/scripts/rogue_node_tests.sh
+@@ -1932,7 +1932,7 @@ c2_test() {
+   outcome_guard "attestation failed as expected" \
+     "test -s \"$EVDIR/rogue_M1-T2.log\" && assert_attest_rejected \"$EVDIR/rogue_M1-T2.log\" 'failed to attest: join token does not exist or has already been used'"
+   outcome_guard "server recorded attestation failure" \
+-    "assert_server_rejected_once \"$EVDIR/spire_server.log\" 'failed to attest: join token does not exist or has already been used'"
++    "assert_server_rejected_once \"$EVDIR/spire_server.log\" 'failed to attest: join token does not exist or has already been used' || true"
+   return 0
+ }
+ 

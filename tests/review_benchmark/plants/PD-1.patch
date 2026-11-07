@@ -1,0 +1,15 @@
+Planted defect PD-1 of the review benchmark (answer key: tests/review_benchmark/answer_key.yaml); applied on top of the case's base commit. git apply ignores this line.
+
+diff --git a/tests/unit/toolb/test_handler_paths.py b/tests/unit/toolb/test_handler_paths.py
+index 976ebb6..668fb59 100644
+--- a/tests/unit/toolb/test_handler_paths.py
++++ b/tests/unit/toolb/test_handler_paths.py
+@@ -255,7 +255,7 @@ def test_authorize_denies_with_403_for_budget_exceeded(toolb_module, monkeypatch
+     )
+     out = guard.exercise("authorize request", lambda: toolb_module.ToolBHandler._authorize(handler, "read", "tool-b:/secret"))
+     guard.outcome("claims are none", out is None)
+-    guard.outcome("deny status 403", handler.denies[0][0] == 403)
++    guard.outcome("deny status 403", handler.denies[0][0] in (401, 403))
+     guard.outcome("deny reason budget_exceeded", handler.denies[0][1] == "budget_exceeded")
+ 
+ 

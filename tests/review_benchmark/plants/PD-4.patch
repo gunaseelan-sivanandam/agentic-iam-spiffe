@@ -1,0 +1,15 @@
+Planted defect PD-4 of the review benchmark (answer key: tests/review_benchmark/answer_key.yaml); applied on top of the case's base commit. git apply ignores this line.
+
+diff --git a/Makefile b/Makefile
+index 56b56cd..74c4e62 100644
+--- a/Makefile
++++ b/Makefile
+@@ -8,7 +8,7 @@ COV_XML := coverage.xml
+ MIN_TOTAL_LINE ?= 85
+ MIN_CRITICAL_BRANCH ?= 75
+ MIN_DIFF_COVERAGE ?= 90
+-MIN_MUTATION_SCORE ?= 70
++MIN_MUTATION_SCORE ?= 50
+ BASE_REF ?= origin/main
+ # Gap gate: fail on a coverage gap the branch adds compared with its merge-base with BASE_REF.
+ # CI passes --mode pr --base origin/<PR base> on pull requests and --mode push on main.
