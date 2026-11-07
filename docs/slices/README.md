@@ -13,6 +13,7 @@ The workflow that produces and closes a bundle is defined in [`AGENTS.md`](../..
 
 | Slice | Milestone | Status | Dates | Notes |
 | --- | --- | --- | --- | --- |
+| [agentic-sdlc-poc](agentic-sdlc-poc/) | — | Plan for slices 1–3 under review (on `poc/agentic-sdlc`) | 2026-11-07 | Agent-run delivery PoC: rules, review launcher and benchmark, changed-files lint; slices 4–8 and #21 (outline) follow the benchmark report. Supersedes PR #26 |
 | [backlog-issues](backlog-issues/) | — | Implemented (PR #19) | 2026-10-31 | Open items of `later_slices.md` moved to GitHub issues (labels `slice`, `user-action`); `AGENTS.md` start-here row and close-out rule |
 | [ci-evidence-trace](ci-evidence-trace/) | — | Implemented (PR #11, #12) | 2026-10-31 | Slice 2 of agentic-delivery-process: CI E2E as a required check, no secrets in evidence, static tests and gap gate in the trace model |
 | [agentic-delivery-process](agentic-delivery-process/) | — | Implemented (slice 1 of 3; PR #5, #6) | 2026-10-29 | Slice 1 (lean, D20): exact E2E outcomes, key-holder list and `qa-deploy`; decisions D1–D20. Slice 2 became `ci-evidence-trace`; slice 3 is a draft (GitHub issue #16) |
