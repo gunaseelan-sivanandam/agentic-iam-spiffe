@@ -235,14 +235,20 @@ def score(case: Case, report: dict[str, Any]) -> dict[str, list[str]]:
     matched: set[str] = set()
     for expected in case.expected:
         at_location = [f for f in findings if _at_location(f, expected["locations"])]
-        outcome = _expected_outcome(at_location, expected["terms"])
-        if outcome:
-            result[outcome].append(expected["id"])
-        if outcome != "detected" and _seen_as_advisory(at_location, expected["terms"]):
-            result["advisory_only"].append(expected["id"])
+        for label in _expected_labels(at_location, expected["terms"]):
+            result[label].append(expected["id"])
         matched.update(f["id"] for f in at_location if f.get("kind") == "blocking")
     result["unmatched_blocking"] = [f["id"] for f in findings if f.get("kind") == "blocking" and f["id"] not in matched]
     return result
+
+
+def _expected_labels(at_location: list[dict[str, Any]], terms: list[str]) -> list[str]:
+    """The score columns one expected finding goes to; "advisory_only" whenever it was seen but not detected."""
+    outcome = _expected_outcome(at_location, terms)
+    labels = [outcome] if outcome else []
+    if outcome != "detected" and _seen_as_advisory(at_location, terms):
+        labels.append("advisory_only")
+    return labels
 
 
 def _seen_as_advisory(at_location: list[dict[str, Any]], terms: list[str]) -> bool:
