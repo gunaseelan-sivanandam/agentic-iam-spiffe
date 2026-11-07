@@ -46,6 +46,11 @@
 - Runtime proof:
 - Rulebook (`AGENTS.md`): process rules this slice adds or changes, or none.
 
+## Checks this slice adds
+- For every new check or process step (gate, job, document, register, exception class, review
+  step): the failure it catches, what it costs, and the simpler alternative that was considered.
+  The user approves each addition. If the slice adds none, say so explicitly.
+
 ## Retirement and compatibility
 - List what old logic, compatibility behavior, docs, tests, or artifacts must be removed or kept temporarily.
 - If nothing is retired, say so explicitly.

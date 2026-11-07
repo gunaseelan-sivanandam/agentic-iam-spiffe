@@ -5,6 +5,29 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-11-07 Slice agentic-sdlc-poc 1: the PoC's rules
+
+- Branch `poc/slice-1-rules`, from `poc/agentic-sdlc` after PR #31 (the plan for slices 1–3).
+- `AGENTS.md`: "Ask before growing" asks for the failure a new check catches, its cost and the
+  simpler alternative (POC-D6); new rules "Threat model changes" (POC-D13) and "Discovered issues"
+  (POC-D12), which step 4 carries into the PR body. The review loop has a limit: round 1 plus at most
+  three fix rounds, then the user decides (POC-D4); the original reviewer rechecks rejections, and a
+  fix goes to the origin with a search for the same cause (POC-D5). The reviewer is a fresh headless
+  Claude session in a frozen copy under the base branch's rules, with explicit effort (POC-D3);
+  "Models and usage limits" replaces the Codex-first rule (POC-D2). Step 1 implements from the plan
+  as merged on the integration branch, by the base branch's rules on a rule-changing branch
+  (POC-D15). The Git rules name the integration branch and the PoC branch scheme (POC-D1) and the
+  code-owner review (POC-D11). The not-yet-gated standards state the lint limits of POC-D8; coding
+  rule 8 asks for a purpose comment in every new file and names that say what things do (POC-D7).
+- `.github/CODEOWNERS` names the owner; the `poc/agentic-sdlc` ruleset requires a code-owner review.
+- `Makefile`: `BASE_REF` defaults to `origin/poc/agentic-sdlc`; `tests/unit/AGENTS.md` no longer
+  hard-codes `origin/main` in its diff-coverage example. The slice templates: `plan.md` asks the
+  POC-D6 questions for every check a slice adds; `test_plan.md` no longer names Codex as reviewer.
+- Validation: `make qa-quality` (qa-trace against the merge-base with `origin/poc/agentic-sdlc`: 0
+  new gaps; unit traceability, unit guard, docs-check, test-lint, qa-deploy) and `make
+  tooling-test` (230 pytest, 9 shell) passed. No tests added or changed: the slice changes rules,
+  and its proof is the independent review (test plan).
+
 ## 2026-10-31 Slice backlog-issues: open work tracked as GitHub issues
 
 - Branch `backlog-issues`, from `main` after PR #12 (slice `ci-evidence-trace` complete).

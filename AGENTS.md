@@ -45,11 +45,21 @@ them.
   enough. KMS, HSM, Vault, per-key ownership proofs, CI-runner isolation and supply-chain controls
   are out of scope unless the user asks.
 - **Ask before growing.** If a change makes the process bigger or more complex (a new gate, job,
-  document, register, exception class or review step), say so and ask the user first. Prefer the
-  smallest check that catches an honest mistake.
+  document, register, exception class or review step), say so and ask the user first. Every new
+  check or process step states the failure it catches, what it costs and the simpler alternative
+  that was considered; the user approves each addition. Prefer the smallest check that catches an
+  honest mistake.
+- **Threat model changes.** No agent changes, widens or narrows an approved threat model (this
+  section's, or a plan's), in any stage or review round, without the user's approval. A proposed
+  change is a decision concern for the user; reviewers judge against the approved model meanwhile.
 - **Few exceptions.** Fix rather than except. Do not open an OPL, exception entry or plan note for a
   finding outside the threat model; one line in the review report is enough. Every exception must
   fit on one line and have an expiry.
+- **Discovered issues.** Every issue found during the work is preserved and reported in the final
+  handoff (the PR body) with its disposition and any tracking reference, whether it is
+  pre-existing, introduced by the change, unrelated, or outside the threat model. Reporting an issue
+  neither makes it blocking nor authorizes fixing it; an issue outside the threat model needs no
+  OPL.
 - **Review findings.** Give reviewers this section as context. Only these block:
   - a concrete false green or an OPL-005-class miss inside the threat model, with a failure scenario;
   - a contradiction;
@@ -58,15 +68,23 @@ them.
   Everything else is advisory. It is listed once and is not fixed by default. Implementation details
   become notes for the implementation PR. Reviewers should expect production-hardening ideas (see
   the simplifications above) and report them as advisory at most.
-- **Review loop.** There is no round limit: review rounds continue until no blocking finding is
-  open. The author (the fixer) answers every finding in writing, either fixed (where) or rejected
-  (why). A rejection needs a reason the reviewer can check, for example: the failure scenario does
-  not happen (with the evidence), it is outside the threat model, it is already covered by a named
-  test or gate, or it does not meet the blocking criteria above. A finding labelled blocking that
-  does not meet them is not fixed by default. The next round sees each rejection and either accepts
-  it or re-raises it with new evidence; a finding still disputed after that goes to the user, who
-  decides. The review ends when every blocking finding is fixed, accepted as rejected, or decided by
-  the user.
+- **Review loop.** A review unit (one change under review; a plan and its test plan are one unit)
+  gets an initial review, round 1, and at most three fix rounds, rounds 2 to 4. Several reviewers in
+  one round count as one round. Rounds continue until no blocking finding is open; after round 4,
+  open blockers go to the user, and only the user can allow more rounds. A new revision keeps the
+  count; only the user resets it, by an explicit act recorded with the user's words. The author
+  (the fixer) answers every finding in writing, either fixed (where) or rejected (why). A rejection
+  needs a reason the reviewer can check, for example: the failure scenario does not happen (with
+  the evidence), it is outside the threat model, it is already covered by a named test or gate, or
+  it does not meet the blocking criteria above. A finding labelled blocking that does not meet them
+  is not fixed by default. In the next round the original reviewer (the same model and review role,
+  in a fresh session given its own earlier report and the author's answers) sees each rejection and
+  either accepts it or re-raises it with new evidence; a finding still disputed after that goes to
+  the user, who decides. A fix goes to the origin of the problem, and the author searches for the
+  same cause elsewhere and says where it looked
+  ([DPL-007](docs/delivery_problem_log.md#dpl-007-plan-review-answered-every-finding-by-adding-mechanisms)).
+  The review ends when every blocking finding is fixed, accepted as rejected, or decided by the
+  user.
 
 ## Operating model (black-box first)
 - Treat the system as a black box first:
@@ -131,7 +149,9 @@ template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>
    the repository (file ownership, an API, CI history) records the probe and its result under
    environment facts; never assume it. An [independent review](#independent-review) of both runs
    before the user sees them. The user approves the plan by merging the plan PR; implement only from
-   the plan as merged on `origin/main`.
+   the plan as merged on the integration branch (see [Git rules](#git-rules)). On a branch that
+   changes this file or the slice templates, the author works by the base branch's version until
+   the change merges.
 2. **Tests first.** Add UT/E2E only from the reviewed `test_plan.md`. Update requirements,
    architecture, and `trace/tests.yaml` before making runtime code pass. If a test needs a new
    assumption, return to step 1.
@@ -164,15 +184,27 @@ template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>
      miss) found or fixed;
    - open a GitHub issue for work found but not done (label `slice` or `user-action`) and lock its
      conversation right away, and close the issues the change finishes (`Closes #N` in the PR body);
-   - put the independent review's answers to the implementation questions in the PR body.
+   - put the independent review's answers to the implementation questions, and every discovered
+     issue with its disposition (see [PoC scope and proportion](#poc-scope-and-proportion)), in the
+     PR body.
 
 ### Independent review
-- **Reviewer.** Never the author. Use `codex exec` in a read-only sandbox; if Codex is unavailable,
-  a Claude model with a clean context. The report says which reviewer ran and why. The reviewer
-  gets the intent (the approved plan, or the request), the change, and this file, and may read the
-  whole repository; it never gets the author's reasoning. The prompts used so far are recorded
-  verbatim in the slice review records (for example
+- **Reviewer.** Never the author: a fresh headless Claude session confined to a frozen copy of the
+  repository at the reviewed commit, without the review unit's review files (its review record
+  and attempt log). It loads no instruction or settings files from the copy and receives the
+  approved `AGENTS.md` and `tests/unit/AGENTS.md` from the PR's base branch. A recheck receives its
+  own earlier report and the author's answers in its prompt. Effort is always explicit: medium for
+  routine focused reviews and rechecks; high for initial plan, security, architecture and
+  integrated reviews. The report says which reviewer ran, with which model and effort. The reviewer
+  gets the intent (the approved plan, or the request), the change, and the approved rules, and may
+  read the whole frozen copy; it never gets the author's reasoning. Until the review launcher of
+  the agentic-SDLC PoC (slice 2) exists, the exact review command is recorded in the slice's review
+  record. The prompts used so far are recorded verbatim in the slice review records (for example
   [`review_1b.md`](docs/slices/agentic-delivery-process/review_1b.md#reviewer-prompts-verbatim)).
+- **Models and usage limits.** Agents use Claude models. Codex is used only for scoped
+  implementation, and only while Claude's 5-hour or weekly usage is above 70%. Reviews run on
+  Claude; when a usage limit is reached, work pauses until it resets. The review benchmark may also
+  measure Codex as a reviewer; the default reviewer model is decided from its results.
 - **Plan review** (step 1). The reviewer reviews `plan.md` and `test_plan.md` for security, test
   adequacy and consistency, under [PoC scope and proportion](#poc-scope-and-proportion).
   `docs/slices/<id>/plan_review.md` keeps each round's report verbatim, the SHA-256 of the files
@@ -226,9 +258,14 @@ never replaces it.
 | E2E evidence | `make qa-evidence` | in the CI `e2e` job; local, after the E2E run | every test has premise/exercise/outcome evidence and a PASS line; no file of the publication set (`PUBLICATION_SET` in the `Makefile`: `test_report.log`, `artifacts/rogue-tests/`, `artifacts/quality/`) holds a secret by shape: a PEM private key, a base64 PKCS#8 private key, base64 of a PEM private key, a base64 or base64url run of ≥ 200 characters with ≥ 20 distinct ones outside certificates, a `JIRA_API_TOKEN=` or `Authorization:` line with a value, or an Atlassian API token; an unreadable file fails; a finding names the file and kind, never the value |
 
 Standards that are **not** gated yet (follow them for new and changed code):
+- Deterministic tools before judgment. Every new or changed function stays within cyclomatic
+  complexity 10 (`radon cc`), 50 statements, 12 branches and 5 arguments; names follow the standard
+  naming conventions without exceptions; ruff's security rules (`S`) pass. A change must not add or
+  worsen a violation; existing violations stay. The agentic-SDLC PoC (slice 3) gates these limits
+  on changed files.
 - `ruff check services scripts` stays clean.
-- Cyclomatic complexity ≤ 10 per new or changed function (`radon cc`). Existing functions above the
-  limit are tracked as debt in `docs/STATUS.md`; do not make them worse.
+- Existing functions above the complexity limit are tracked as debt in `docs/STATUS.md`; do not make
+  them worse.
 - `mypy` and `bandit` are not configured in this repo.
 
 ## Coding rules
@@ -241,6 +278,9 @@ Standards that are **not** gated yet (follow them for new and changed code):
 7. Secrets this repository creates are stored in a standard, recognisable format (private keys as
    PKCS#8 PEM), so the evidence secret check finds them by shape. Secrets created by others (SPIRE
    key stores, join tokens, Jira tokens) keep their format.
+8. Every new file starts with a comment that says what the file is for (in Python, the module
+   docstring; file types without comments, such as JSON, are exempt). Names say what a file,
+   function or component does.
 
 ## Documentation rules
 - One home per fact. Before adding a document, check the [Start here](#start-here) table; extend the
@@ -257,10 +297,16 @@ Standards that are **not** gated yet (follow them for new and changed code):
 ## Git rules
 - No `Co-Authored-By` trailers for AI assistants in commit messages.
 - Agents act on GitHub as `gunaseelan-agent` and open pull requests; only the user approves and
-  merges into `main`. Before a GitHub write, check that `gh api user --jq .login` prints
-  `gunaseelan-agent`; if not, stop and tell the user.
-- Open pull requests against `main`; avoid stacking. A stacked PR is merged only after its base
-  shows `main` (GitHub retargets it when the base branch is deleted) ([DPL-008](docs/delivery_problem_log.md#dpl-008-a-stacked-pr-was-merged-into-its-stale-base-branch-instead-of-main)).
+  merges into the integration branch. Before a GitHub write, check that `gh api user --jq .login`
+  prints `gunaseelan-agent`; if not, stop and tell the user.
+- Open pull requests against the integration branch: `main`, or `poc/agentic-sdlc` for work on the
+  agentic-SDLC PoC. PoC work happens on `poc/agentic-sdlc`; each slice uses a branch
+  `poc/slice-<n>-<topic>` and merges back by PR with the user's approval. `main` is not changed by
+  the PoC until the user decides.
+- Avoid stacking. A stacked PR is merged only after its base shows the integration branch (GitHub
+  retargets it when the base branch is deleted) ([DPL-008](docs/delivery_problem_log.md#dpl-008-a-stacked-pr-was-merged-into-its-stale-base-branch-instead-of-main)).
+- On `poc/agentic-sdlc` only the user's approval counts: `.github/CODEOWNERS` names the user, and
+  the branch's ruleset requires a code-owner review.
 
 ## Environment
 - Docker Engine + Docker Compose v2. Linux, or macOS with Rancher Desktop.

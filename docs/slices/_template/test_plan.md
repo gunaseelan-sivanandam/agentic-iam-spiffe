@@ -48,7 +48,8 @@ Every negative test has a twin. A `probe@` value is observed before any change; 
 - Record any test-design assumptions that must be approved before implementation begins.
 
 ## Independent review at the implementation PR
-A reviewer that is not the author (Codex, or a clean-context Claude) answers in the PR body:
+A reviewer that is not the author ([AGENTS.md — Independent review](../../../AGENTS.md#independent-review))
+answers in the PR body:
 1. *Tests:* for each new or changed test, which wrong failure would still pass it (service down,
    another status, the right status with another reason, another component answering, a missing
    value or empty file read as success)? Does its assertion match the expected-outcome row?
