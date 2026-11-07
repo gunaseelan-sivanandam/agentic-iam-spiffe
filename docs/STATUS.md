@@ -56,7 +56,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `poc/slice-2-review-launcher` | agentic-sdlc-poc slice 2: the review launcher, its attempt log, the benchmark and its stage-A report | PR into `poc/agentic-sdlc`, awaiting the owner's approval |
+| `poc/slice-3-changed-files-lint` | agentic-sdlc-poc slice 3: the changed-files lint gate (`make lint`, CI job `lint`) | PR into `poc/agentic-sdlc`; after `lint` has run there once, the owner adds it to the PoC ruleset's required checks |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
@@ -86,10 +86,12 @@ Full entries, root causes and lessons in [`docs/delivery_problem_log.md`](delive
   (OPL-006).
 - Some test titles claim more than their guards check (`M5-T19`, `M5-T21`, `M5-T34`, `M5-T35`,
   `M5-T36`); `docs/test_spec.md` notes each one.
-- Functions above the complexity target of 10 (`radon cc services scripts -n C`): 16, the worst being
-  `scripts/validate_e2e_evidence.py:main` (32), `scripts/validate_traceability.py:_parse_unit_tests`
-  (25), `jira-mcp-gateway do_POST` (23), and capiss `log_mint_decision` (23). The trace validator's
-  `main` (63) was split in slice `ci-evidence-trace` B.
+- Functions above the complexity limit of 10, measured as `make lint` measures it (ruff C901 over
+  `services`, `scripts` and `tests`, re-measured on 2026-11-08): 12, the worst being
+  `scripts/validate_e2e_evidence.py:main` (19), capiss `resource_mint` (19),
+  `scripts/validate_traceability.py:_parse_unit_tests` (18), `scripts/validate_unit_traceability.py:main`
+  (17) and `services/shared/enforcement_contract.py:verify_chain_contract` (17). `make lint` fails a
+  change that makes one of them worse. (Radon counted 16, with boolean operators.)
 - `make qa-trace` scans only `services/` and `scripts/` for DD tags, so `DD-918`, `DD-920`, and
   `DD-921` in the top-level `varambu` script are not indexed.
 - **Open decision (user):** mutation testing mutates covered lines only

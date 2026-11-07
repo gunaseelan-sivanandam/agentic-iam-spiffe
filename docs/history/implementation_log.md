@@ -5,6 +5,30 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-11-08 Slice agentic-sdlc-poc 3: changed-files lint
+
+- Branch `poc/slice-3-changed-files-lint`, built on `poc/slice-2-review-launcher`; its PR opens after
+  slice 2 merges, rebased onto `poc/agentic-sdlc`.
+- `make lint` (`scripts/lint_changed_files.py`): for every file the change adds, modifies or renames,
+  ruff and shellcheck run on the merge-base and the new version; a finding key (file, rule, enclosing
+  function or line text) that occurs more often or with a higher value fails, so existing violations
+  stay and a pure rename keeps its key. `ruff_changed_files.toml`, read from the merge-base: ruff's
+  default rules, C901 ≤ 10, PLR0912/0913/0915 (12 branches, 5 arguments, 50 statements), N, S (except
+  `assert` in `tests/`); the limit, naming, F401 and F841 rules run with `--ignore-noqa`. Added
+  Python, shell, YAML, TOML, Dockerfile and Rego files need a purpose comment. A missing base or tool
+  fails the run.
+- CI job `lint` (PRs only); `requirements-dev.txt` pins `ruff==0.15.18` and `shellcheck-py==0.11.0.1`;
+  `RULESET_URL` names the `poc/agentic-sdlc` ruleset, so `gate-consistency` checks the integration
+  branch's required checks. `AGENTS.md`: a gates row for `lint`; the not-gated standards keep only the
+  whole-tree `ruff check` and the debt list. `docs/STATUS.md`: the complexity debt re-measured with
+  ruff C901 (12 functions, radon counted 16).
+- Validation: `make lint` passes against `poc/slice-2-review-launcher` and against
+  `origin/poc/agentic-sdlc` (slices 1 to 3 together). `make tooling-test`: 369 pytest pass; the 6
+  shell cases of `tests/tools/test_lint_changed_files.py` need `shellcheck`, which could not be
+  installed on this machine, so they run only in CI. Deliberately breaking the gate (honouring `noqa`
+  on limits, reading the configuration from the change, ignoring the value, no rename matching, no
+  header check) made at least one test fail each time.
+
 ## 2026-11-08 Slice agentic-sdlc-poc 2: review launcher and benchmark
 
 - Branch `poc/slice-2-review-launcher`, built on `poc/slice-1-rules` (slice 1) and rebased onto
