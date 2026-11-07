@@ -2381,3 +2381,10 @@ no decision changed:
   settings file.
 - Round 2, SEC-R2-B1 and SEC's decision concern: the named credential types that the stopgap scanner
   does not recognise. The plan keeps its generic statement, which #21 needs.
+
+## Pointer added after revision 2's review
+
+On 2026-11-07, at the user's request, the inputs for slice 4's grill-me were recorded in issue
+[#33](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/33), and the plan's slice-4 row now points to it. The PoC branch's `docs/STATUS.md` points
+to the plan and to #33 as well. No decision changed.
+
