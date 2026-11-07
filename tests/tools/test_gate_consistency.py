@@ -66,7 +66,7 @@ def test_job_without_row_fails() -> None:
 
 
 def test_job_that_is_not_a_required_check_fails() -> None:
-    assert gc.check(AGENTS, WORKFLOW, _ruleset("qa-trace")) == ["CI job qa-deploy is not a required check of the main ruleset"]
+    assert gc.check(AGENTS, WORKFLOW, _ruleset("qa-trace")) == ["CI job qa-deploy is not a required check of the integration branch's ruleset"]
 
 
 def test_required_check_without_job_fails() -> None:

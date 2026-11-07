@@ -185,5 +185,5 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-python-deps
-      - name: Check that AGENTS.md CI gates, CI jobs and main's required checks agree
+      - name: Check that AGENTS.md CI gates, CI jobs and the integration branch's required checks agree
         run: make gate-consistency

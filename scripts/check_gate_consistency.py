@@ -4,7 +4,8 @@
 Three lists must name the same gates:
 - the rows of the AGENTS.md "Quality gates" table whose "Enforced by" starts with "CI";
 - the jobs of .github/workflows/ci.yml, each of which must run `make <its own name>`;
-- the required status checks of the `main` ruleset, read from the public GitHub API without a token
+- the required status checks of the integration branch's ruleset (`RULESET_URL` in the Makefile: the
+  `poc/agentic-sdlc` ruleset on the PoC branch), read from the public GitHub API without a token
   (or from a JSON file in tests). A ruleset that cannot be read or parsed fails the check.
 """
 
@@ -87,7 +88,7 @@ def check(agents_text: str, workflow_text: str, ruleset: object) -> list[str]:
     problems = [f"gate {g} is enforced by CI in AGENTS.md but has no CI job" for g in sorted(gates - set(jobs))]
     problems += [f"CI job {j} has no row enforced by CI in the AGENTS.md quality gates" for j in sorted(set(jobs) - gates)]
     problems += [f"CI job {j} does not run `make {j}`" for j in sorted(jobs) if not runs_own_target(j, jobs[j])]
-    problems += [f"CI job {j} is not a required check of the main ruleset" for j in sorted(set(jobs) - required)]
+    problems += [f"CI job {j} is not a required check of the integration branch's ruleset" for j in sorted(set(jobs) - required)]
     problems += [f"required check {c} is not a CI job" for c in sorted(required - set(jobs))]
     return problems
 

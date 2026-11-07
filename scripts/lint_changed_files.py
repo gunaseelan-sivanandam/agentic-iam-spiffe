@@ -32,7 +32,7 @@ CONFIG = "ruff_changed_files.toml"
 NO_NOQA_RULES = "C901,PLR0912,PLR0913,PLR0915,N,F401,F841"
 SHELL_SHEBANG = re.compile(r"^#!\s*(?:/usr/bin/env\s+)?(?:/bin/|/usr/bin/)?(?:ba|da|k|z)?sh\b")
 TOOL_DIRECTIVE = re.compile(r"^#\s*(?:shellcheck\b|-\*-|yaml-language-server\b|noqa\b|type:)")
-VALUE = re.compile(r"\((\d+) > \d+\)")
+LIMIT_VALUE = re.compile(r"\((\d+) > \d+\)")
 HEADER_SUFFIXES = {".py", ".sh", ".yml", ".yaml", ".toml", ".rego"}
 
 
@@ -42,6 +42,8 @@ class LintError(Exception):
 
 @dataclass(frozen=True)
 class Change:
+    """One changed file: its Git status (A, M, T, R or C), its path, and its path at the merge-base."""
+
     status: str
     path: str
     old_path: str | None
@@ -49,6 +51,8 @@ class Change:
 
 @dataclass(frozen=True)
 class Finding:
+    """One ruff or shellcheck finding: its key, the number in its message (if any), its line and message."""
+
     key: tuple[str, str, str]
     value: int | None
     line: int
@@ -62,9 +66,10 @@ def git(*args: str) -> str:
     return result.stdout
 
 
-def show(rev: str, path: str) -> str | None:
-    result = subprocess.run(["git", "show", f"{rev}:{path}"], capture_output=True, text=True, check=False)  # noqa: S603, S607 - fixed argv
-    return result.stdout if result.returncode == 0 else None
+def read_at_revision(rev: str, path: str) -> str | None:
+    """A file's text at a revision (undecodable bytes replaced, so binary files are skipped, not fatal)."""
+    result = subprocess.run(["git", "show", f"{rev}:{path}"], capture_output=True, check=False)  # noqa: S603, S607 - fixed argv
+    return result.stdout.decode("utf-8", errors="replace") if result.returncode == 0 else None
 
 
 def changed_files(merge_base: str) -> list[Change]:
@@ -161,7 +166,7 @@ def _python_finding(context: FileContext, code: str, row: int, message: str) -> 
         scope = context.renames.get(function, function)
     else:
         scope = context.lines[row - 1].strip() if 0 < row <= len(context.lines) else ""
-    value = VALUE.search(message)
+    value = LIMIT_VALUE.search(message)
     return Finding((context.path, code, scope), int(value.group(1)) if value else None, row, message)
 
 
@@ -202,10 +207,10 @@ def shell_findings(path: str, text: str) -> list[Finding]:
 
 def file_findings(change: Change, merge_base: str, config_text: str) -> tuple[list[Finding], list[Finding]]:
     """Findings of the merge-base version (under the new path) and of the new version of one file."""
-    new_text = show("HEAD", change.path)
+    new_text = read_at_revision("HEAD", change.path)
     if new_text is None:
         raise LintError(f"cannot read {change.path} at HEAD")
-    old_text = show(merge_base, change.old_path) if change.old_path else None
+    old_text = read_at_revision(merge_base, change.old_path) if change.old_path else None
     if is_shell(change.path, new_text):
         old = shell_findings(change.path, old_text) if old_text is not None else []
         return old, shell_findings(change.path, new_text)
@@ -261,7 +266,7 @@ def _comment_header(path: str, text: str) -> str | None:
 
 def lint(base: str) -> list[str]:
     merge_base = git("merge-base", base, "HEAD").strip()
-    config_text = show(merge_base, CONFIG) or show("HEAD", CONFIG)
+    config_text = read_at_revision(merge_base, CONFIG) or read_at_revision("HEAD", CONFIG)
     if config_text is None:
         raise LintError(f"{CONFIG} exists neither at the merge-base nor at HEAD")
     problems = []
@@ -269,7 +274,7 @@ def lint(base: str) -> list[str]:
         old, new = file_findings(change, merge_base, config_text)
         problems += added_or_worse(old, new)
         if change.status in "AC":
-            header = header_problem(change.path, show("HEAD", change.path) or "")
+            header = header_problem(change.path, read_at_revision("HEAD", change.path) or "")
             problems += [header] if header else []
     return problems
 

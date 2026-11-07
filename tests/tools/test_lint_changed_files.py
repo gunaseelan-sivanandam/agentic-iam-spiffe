@@ -76,7 +76,7 @@ def repo(tmp_path: Path) -> Repo:
     return Repo(root)
 
 
-def fn(name: str, ifs: int = 0, statements: int = 0, if_else: int = 0, args: int = 1) -> str:
+def function_source(name: str, ifs: int = 0, statements: int = 0, if_else: int = 0, args: int = 1) -> str:
     """A function with complexity 1 + ifs, `statements` assignments, `if_else` pairs and `args` arguments."""
     params = ", ".join(f"a{i}" for i in range(args))
     body = [f"a0 = a0 + {i}" for i in range(statements)]
@@ -87,12 +87,12 @@ def fn(name: str, ifs: int = 0, statements: int = 0, if_else: int = 0, args: int
     return f"def {name}({params}):\n{inner}\n"
 
 
-def method(name: str, ifs: int) -> str:
+def method_source(name: str, ifs: int) -> str:
     """The same function indented as a method of a class."""
-    return "".join("    " + line if line.strip() else line for line in fn(name, ifs=ifs).splitlines(keepends=True))
+    return "".join("    " + line if line.strip() else line for line in function_source(name, ifs=ifs).splitlines(keepends=True))
 
 
-def module(*functions: str) -> str:
+def module_source(*functions: str) -> str:
     return DOC + "\n\n".join(functions)
 
 
@@ -100,49 +100,49 @@ def module(*functions: str) -> str:
 
 
 def test_new_function_at_the_complexity_limit_passes(repo: Repo) -> None:
-    repo.base({"services/a.py": module(fn("keep"))})
-    repo.change({"services/a.py": module(fn("keep"), fn("new_fn", ifs=9))})
+    repo.base({"services/a.py": module_source(function_source("keep"))})
+    repo.change({"services/a.py": module_source(function_source("keep"), function_source("new_fn", ifs=9))})
     assert repo.lint()[0] == 0
 
 
 def test_new_function_over_the_complexity_limit_fails(repo: Repo) -> None:
-    repo.base({"services/a.py": module(fn("keep"))})
-    repo.change({"services/a.py": module(fn("keep"), fn("new_fn", ifs=10))})
+    repo.base({"services/a.py": module_source(function_source("keep"))})
+    repo.change({"services/a.py": module_source(function_source("keep"), function_source("new_fn", ifs=10))})
     code, out = repo.lint()
     assert code == 1 and "C901" in out and "(11 > 10)" in out
 
 
 @pytest.mark.parametrize(("before", "after"), [(8, 12), (11, 13)], ids=["9-to-13", "12-to-14"])
 def test_existing_function_made_more_complex_fails(repo: Repo, before: int, after: int) -> None:
-    repo.base({"services/a.py": module(fn("work", ifs=before))})
-    repo.change({"services/a.py": module(fn("work", ifs=after))})
+    repo.base({"services/a.py": module_source(function_source("work", ifs=before))})
+    repo.change({"services/a.py": module_source(function_source("work", ifs=after))})
     code, out = repo.lint()
     assert code == 1 and "C901" in out
 
 
 def test_over_limit_function_improved_passes(repo: Repo) -> None:
-    repo.base({"services/a.py": module(fn("work", ifs=13))})
-    repo.change({"services/a.py": module(fn("work", ifs=11))})
+    repo.base({"services/a.py": module_source(function_source("work", ifs=13))})
+    repo.change({"services/a.py": module_source(function_source("work", ifs=11))})
     assert repo.lint()[0] == 0
 
 
 def test_over_limit_function_renamed_with_an_unchanged_body_passes(repo: Repo) -> None:
-    repo.base({"services/a.py": module(fn("old_name", ifs=11))})
-    repo.change({"services/a.py": module(fn("new_name", ifs=11))})
+    repo.base({"services/a.py": module_source(function_source("old_name", ifs=11))})
+    repo.change({"services/a.py": module_source(function_source("new_name", ifs=11))})
     assert repo.lint()[0] == 0
 
 
 def test_over_limit_function_renamed_and_raised_fails(repo: Repo) -> None:
-    repo.base({"services/a.py": module(fn("old_name", ifs=11))})
-    repo.change({"services/a.py": module(fn("new_name", ifs=12))})
+    repo.base({"services/a.py": module_source(function_source("old_name", ifs=11))})
+    repo.change({"services/a.py": module_source(function_source("new_name", ifs=12))})
     assert repo.lint()[0] == 1
 
 
 def test_method_raised_in_one_class_fails_while_the_same_name_elsewhere_is_unchanged(repo: Repo) -> None:
-    base = DOC + "class A:\n" + method("run", 11) + "\n\nclass B:\n" + method("run", 11)
+    base = DOC + "class A:\n" + method_source("run", 11) + "\n\nclass B:\n" + method_source("run", 11)
     repo.base({"services/a.py": base})
-    repo.change({"services/a.py": DOC + "class A:\n" + method("run", 11) + "\n\nclass B:\n"
-                 + method("run", 12)})
+    repo.change({"services/a.py": DOC + "class A:\n" + method_source("run", 11) + "\n\nclass B:\n"
+                 + method_source("run", 12)})
     code, out = repo.lint()
     assert code == 1 and "(13 > 10)" in out and "(12 > 10)" not in out
 
@@ -151,14 +151,14 @@ def test_method_raised_in_one_class_fails_while_the_same_name_elsewhere_is_uncha
 
 
 def test_unchanged_over_limit_function_in_a_modified_file_passes(repo: Repo) -> None:
-    repo.base({"services/a.py": module(fn("debt", ifs=12), fn("other"))})
-    repo.change({"services/a.py": module(fn("debt", ifs=12), fn("other", statements=2))})
+    repo.base({"services/a.py": module_source(function_source("debt", ifs=12), function_source("other"))})
+    repo.change({"services/a.py": module_source(function_source("debt", ifs=12), function_source("other", statements=2))})
     assert repo.lint()[0] == 0
 
 
 def test_edit_that_keeps_an_over_limit_function_at_the_same_complexity_passes(repo: Repo) -> None:
-    repo.base({"services/a.py": module(fn("debt", ifs=12))})
-    repo.change({"services/a.py": module(fn("debt", ifs=12, statements=1))})
+    repo.base({"services/a.py": module_source(function_source("debt", ifs=12))})
+    repo.change({"services/a.py": module_source(function_source("debt", ifs=12, statements=1))})
     assert repo.lint()[0] == 0
 
 
@@ -166,24 +166,24 @@ def test_edit_that_keeps_an_over_limit_function_at_the_same_complexity_passes(re
 
 
 def test_functions_at_the_size_limits_pass(repo: Repo) -> None:
-    repo.base({"services/a.py": module(fn("keep"))})
-    repo.change({"services/a.py": module(fn("keep"), fn("stmts", statements=50), fn("branches", if_else=6),
-                                         fn("arguments", args=5))})
+    repo.base({"services/a.py": module_source(function_source("keep"))})
+    repo.change({"services/a.py": module_source(function_source("keep"), function_source("stmts", statements=50), function_source("branches", if_else=6),
+                                         function_source("arguments", args=5))})
     assert repo.lint()[0] == 0
 
 
-@pytest.mark.parametrize(("function", "rule"), [(fn("big", statements=51), "PLR0915"), (fn("big", if_else=6, ifs=1), "PLR0912"),
-                                                (fn("big", args=6), "PLR0913")], ids=["51-statements", "13-branches", "6-arguments"])
+@pytest.mark.parametrize(("function", "rule"), [(function_source("big", statements=51), "PLR0915"), (function_source("big", if_else=6, ifs=1), "PLR0912"),
+                                                (function_source("big", args=6), "PLR0913")], ids=["51-statements", "13-branches", "6-arguments"])
 def test_functions_over_the_size_limits_fail(repo: Repo, function: str, rule: str) -> None:
-    repo.base({"services/a.py": module(fn("keep"))})
-    repo.change({"services/a.py": module(fn("keep"), function)})
+    repo.base({"services/a.py": module_source(function_source("keep"))})
+    repo.change({"services/a.py": module_source(function_source("keep"), function)})
     code, out = repo.lint()
     assert code == 1 and rule in out
 
 
 def test_fixing_one_six_argument_function_while_adding_another_fails(repo: Repo) -> None:
-    repo.base({"services/a.py": module(fn("first", args=6))})
-    repo.change({"services/a.py": module(fn("first", args=5), fn("second", args=6))})
+    repo.base({"services/a.py": module_source(function_source("first", args=6))})
+    repo.change({"services/a.py": module_source(function_source("first", args=5), function_source("second", args=6))})
     code, out = repo.lint()
     assert code == 1 and "PLR0913" in out
 
@@ -192,27 +192,27 @@ def test_fixing_one_six_argument_function_while_adding_another_fails(repo: Repo)
 
 
 def test_justified_noqa_on_a_security_rule_and_on_e402_passes(repo: Repo) -> None:
-    repo.base({"scripts/a.py": module(fn("keep"))})
-    repo.change({"scripts/a.py": module(fn("keep")) + "\nimport subprocess  # noqa: E402 - after the helpers on purpose\n\n\n"
+    repo.base({"scripts/a.py": module_source(function_source("keep"))})
+    repo.change({"scripts/a.py": module_source(function_source("keep")) + "\nimport subprocess  # noqa: E402 - after the helpers on purpose\n\n\n"
                  "def run_ls():\n    return subprocess.run(['ls'], check=False)  # noqa: S603, S607 - fixed argv, no shell\n"})
     assert repo.lint()[0] == 0
 
 
 @pytest.mark.parametrize(("addition", "rule"), [
-    (fn("big", ifs=10).replace("):\n", "):  # noqa: C901\n", 1), "C901"),
+    (function_source("big", ifs=10).replace("):\n", "):  # noqa: C901\n", 1), "C901"),
     ("\nimport json  # noqa: F401\n", "F401"),
 ], ids=["noqa-c901", "noqa-f401"])
 def test_noqa_does_not_silence_a_limit_or_an_unused_import(repo: Repo, addition: str, rule: str) -> None:
-    repo.base({"services/a.py": module(fn("keep"))})
-    repo.change({"services/a.py": module(fn("keep")) + "\n\n" + addition})
+    repo.base({"services/a.py": module_source(function_source("keep"))})
+    repo.change({"services/a.py": module_source(function_source("keep")) + "\n\n" + addition})
     code, out = repo.lint()
     assert code == 1 and rule in out
 
 
 def test_raising_the_limit_in_the_changed_config_does_not_loosen_the_gate(repo: Repo) -> None:
-    repo.base({"services/a.py": module(fn("keep"))})
+    repo.base({"services/a.py": module_source(function_source("keep"))})
     loosened = CONFIG.read_text().replace("max-complexity = 10", "max-complexity = 30")
-    repo.change({"ruff_changed_files.toml": loosened, "services/a.py": module(fn("keep"), fn("big", ifs=12))})
+    repo.change({"ruff_changed_files.toml": loosened, "services/a.py": module_source(function_source("keep"), function_source("big", ifs=12))})
     code, out = repo.lint()
     assert code == 1 and "C901" in out
 
@@ -221,34 +221,34 @@ def test_raising_the_limit_in_the_changed_config_does_not_loosen_the_gate(repo: 
 
 
 def test_new_unused_import_fails(repo: Repo) -> None:
-    repo.base({"services/a.py": module(fn("keep"))})
-    repo.change({"services/a.py": DOC + "import json\n\n\n" + fn("keep")})
+    repo.base({"services/a.py": module_source(function_source("keep"))})
+    repo.change({"services/a.py": DOC + "import json\n\n\n" + function_source("keep")})
     code, out = repo.lint()
     assert code == 1 and "F401" in out
 
 
 def test_new_snake_case_function_passes(repo: Repo) -> None:
-    repo.base({"services/a.py": module(fn("keep"))})
-    repo.change({"services/a.py": module(fn("keep"), fn("snake_case_name"))})
+    repo.base({"services/a.py": module_source(function_source("keep"))})
+    repo.change({"services/a.py": module_source(function_source("keep"), function_source("snake_case_name"))})
     assert repo.lint()[0] == 0
 
 
 @pytest.mark.parametrize(("path", "name"), [("services/a.py", "camelCase"), ("tests/test_a.py", "test_intent_TTFF")])
 def test_new_name_outside_the_conventions_fails(repo: Repo, path: str, name: str) -> None:
-    repo.base({path: module(fn("keep"))})
-    repo.change({path: module(fn("keep"), fn(name))})
+    repo.base({path: module_source(function_source("keep"))})
+    repo.change({path: module_source(function_source("keep"), function_source(name))})
     code, out = repo.lint()
     assert code == 1 and "N802" in out
 
 
 def test_assert_in_a_new_test_passes(repo: Repo) -> None:
-    repo.base({"tests/test_a.py": module(fn("keep"))})
-    repo.change({"tests/test_a.py": module(fn("keep"), "def test_x():\n    assert 1 + 1 == 2\n")})
+    repo.base({"tests/test_a.py": module_source(function_source("keep"))})
+    repo.change({"tests/test_a.py": module_source(function_source("keep"), "def test_x():\n    assert 1 + 1 == 2\n")})
     assert repo.lint()[0] == 0
 
 
 def test_shell_true_in_a_new_script_fails(repo: Repo) -> None:
-    repo.base({"scripts/a.py": module(fn("keep"))})
+    repo.base({"scripts/a.py": module_source(function_source("keep"))})
     repo.change({"scripts/b.py": DOC + "import subprocess\n\n\ndef run(cmd):\n    return subprocess.run(cmd, shell=True, check=False)\n"})
     code, out = repo.lint()
     assert code == 1 and "S602" in out
@@ -278,14 +278,16 @@ def test_new_script_with_a_shellcheck_finding_fails(repo: Repo, path: str) -> No
 # --- Headers -----------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("path", ["services/new.py", "services/_private.py", "services/pkg/__init__.py"])
-def test_new_python_file_with_a_docstring_passes_and_without_fails(repo: Repo, path: str) -> None:
+@pytest.mark.parametrize(("good", "bad"), [("services/new.py", "services/other.py"),
+                                           ("services/_private.py", "services/_other.py"),
+                                           ("services/pkg/__init__.py", "services/pkg2/__init__.py")])
+def test_new_python_file_with_a_docstring_passes_and_without_fails(repo: Repo, good: str, bad: str) -> None:
     repo.base({"README.md": "base\n"})
-    repo.change({path: DOC + "VALUE = 1\n"})
+    repo.change({good: DOC + "VALUE = 1\n"})
     assert repo.lint()[0] == 0
-    repo.change({path.replace(".py", "_two.py"): "VALUE = 1\n"})
+    repo.change({bad: "VALUE = 1\n"})
     code, out = repo.lint()
-    assert code == 1 and "module docstring" in out
+    assert code == 1 and f"{bad}: an added Python file needs a module docstring" in out
 
 
 @pytest.mark.parametrize(("path", "good"), [
@@ -308,39 +310,84 @@ def test_new_file_with_a_purpose_comment_passes(repo: Repo, path: str, good: str
     ("config/new.toml", "key = 1\n"),
     ("services/x/Dockerfile", "FROM scratch\n"),
     ("services/opa/new.rego", "package x\n"),
-    ("scripts/coding.py", "# -*- coding: utf-8 -*-\nVALUE = 1\n"),
-])
+    ("config/coding.toml", "# -*- coding: utf-8 -*-\nkey = 1\n"),
+    ("config/schema.yaml", "# yaml-language-server: $schema=schema.json\nkey: value\n"),
+    ("config/noqa.toml", "# noqa: E501\nkey = 1\n"),
+    ("config/typed.toml", "# type: ignore\nkey = 1\n"),
+], ids=["shell", "shell-directive-only", "yaml", "toml", "dockerfile", "rego", "coding-directive",
+        "yaml-language-server", "noqa", "type-comment"])
 def test_new_file_without_a_purpose_comment_fails(repo: Repo, path: str, bad: str) -> None:
     repo.base({"README.md": "base\n"})
     repo.change({path: bad})
     code, out = repo.lint()
-    assert code == 1 and path in out
+    assert code == 1 and f"{path}: an added file needs a first-line comment" in out
+
+
+def test_new_python_file_with_only_a_coding_line_fails(repo: Repo) -> None:
+    repo.base({"README.md": "base\n"})
+    repo.change({"scripts/coding.py": "# -*- coding: utf-8 -*-\nVALUE = 1\n"})
+    code, out = repo.lint()
+    assert code == 1 and "scripts/coding.py: an added Python file needs a module docstring" in out
+
+
+def test_added_binary_file_is_skipped_without_an_error(repo: Repo) -> None:
+    repo.base({"README.md": "base\n"})
+    (repo.root / "docs").mkdir()
+    (repo.root / "docs" / "diagram.png").write_bytes(bytes(range(256)) * 4)
+    repo.change({})
+    code, out = repo.lint()
+    assert code == 0 and "PASSED" in out
 
 
 # --- Renames, merge-base and failing closed ----------------------------------------------------
 
 
 def test_renamed_file_with_unchanged_violations_passes_and_gaining_one_fails(repo: Repo) -> None:
-    repo.base({"services/old.py": module(fn("debt", ifs=12))})
+    repo.base({"services/old.py": module_source(function_source("debt", ifs=12))})
     repo.change({}, renames={"services/old.py": "services/new.py"})
     assert repo.lint()[0] == 0
-    repo.change({"services/new.py": module(fn("debt", ifs=12), fn("more", ifs=11))})
+    repo.change({"services/new.py": module_source(function_source("debt", ifs=12), function_source("more", ifs=11))})
     code, out = repo.lint()
     assert code == 1 and "C901" in out and "more" in out
 
 
 def test_base_that_moved_on_does_not_fail_files_the_change_did_not_touch(repo: Repo) -> None:
-    repo.base({"services/a.py": module(fn("keep"))})
-    repo.change({"services/a.py": module(fn("keep"), fn("small"))})
+    """The base fixes a violation after the branch point; compared with the base tip instead of the
+    merge-base, the change's untouched copy of that file would look like a new violation."""
+    repo.base({"services/a.py": module_source(function_source("keep")),
+               "services/debt.py": DOC + "import json\n"})
+    repo.change({"services/a.py": module_source(function_source("keep"), function_source("small"))})
     _git(repo.root, "checkout", "-q", "main")
-    _write(repo.root, "services/other.py", "import json\n")
-    _commit(repo.root, "base moves on with a violation")
+    _write(repo.root, "services/debt.py", DOC + "VALUE = 1\n")
+    _commit(repo.root, "base fixes its violation")
     _git(repo.root, "checkout", "-q", "change")
     assert repo.lint()[0] == 0
 
 
+def _tool_dir(tmp_path: Path, ruff_script: str | None) -> str:
+    """A PATH with git and python, and a fake ruff (or none)."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for tool in ("git", "python3"):
+        (bin_dir / tool).symlink_to(shutil.which(tool) or tool)
+    if ruff_script is not None:
+        (bin_dir / "ruff").write_text(ruff_script, encoding="utf-8")
+        (bin_dir / "ruff").chmod(0o755)
+    return str(bin_dir)
+
+
+@pytest.mark.parametrize("ruff_script", [None, "#!/bin/sh\necho 'config error' >&2\nexit 2\n"],
+                         ids=["ruff-missing", "ruff-error"])
+def test_missing_or_failing_tool_fails_the_run(repo: Repo, tmp_path: Path, ruff_script: str | None) -> None:
+    repo.base({"services/a.py": module_source(function_source("keep"))})
+    repo.change({"services/a.py": module_source(function_source("keep"), function_source("more"))})
+    result = subprocess.run([sys.executable, str(SCRIPT), "--base", "main"], cwd=repo.root, capture_output=True,  # noqa: S603 - the gate under test
+                            text=True, check=False, env={**os.environ, "PATH": _tool_dir(tmp_path, ruff_script)})
+    assert result.returncode == 2 and "ruff" in result.stderr
+
+
 def test_missing_base_reference_fails_with_a_message(repo: Repo) -> None:
-    repo.base({"services/a.py": module(fn("keep"))})
+    repo.base({"services/a.py": module_source(function_source("keep"))})
     code, out = repo.lint(base="origin/does-not-exist")
     assert code == 2 and "merge-base" in out
 
