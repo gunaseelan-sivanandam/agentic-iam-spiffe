@@ -42,6 +42,9 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Last verification
 | Check | Date | Result |
 | --- | --- | --- |
+| Full E2E suite, clean stack, `make e2e` on `poc/slice-1-rules` (`7ab71c5`) | 2026-11-07 | 120/120 passed; 1 warning (M5-T55 env-gated skip) |
+| `make qa-deploy` (image users inspected) and `make qa-evidence` after that run | 2026-11-07 | both PASSED; qa-evidence: validated 119, skipped 1 |
+| `make qa-quality` (qa-trace in `--mode pr --base origin/poc/agentic-sdlc`) and `make tooling-test` on `poc/slice-1-rules` | 2026-11-07 | PASSED; gap gate: 0 new gaps, 113 coverage gaps remain; 230 pytest, 9 shell |
 | Full E2E suite, clean stack, `make e2e` on `slice/ci-evidence-trace-b` | 2026-10-31 | 120/120 passed; 1 warning (M5-T55 env-gated skip) |
 | `make qa-deploy` (image users inspected) and `make qa-evidence` after that run | 2026-10-31 | both PASSED; qa-evidence: validated 119, skipped 1, no secret findings, the qa-deploy report accepted (passed, inspected, digests match) |
 | `make qa-quality` (qa-trace in `--mode pr --base origin/main`, unit traceability, unit guard, docs-check, test-lint, qa-deploy) | 2026-10-31 | PASSED; gap gate: 0 new gaps, 25 closed; 113 coverage gaps remain (91 requirements without proof, 18 DD without UT, 4 tests without requirements); REQ-SEC-K1, K2, K4 not proved (known violations OPL-005, -006, -008), D2 not proved (grace until 2027-01-31), the other six and REQ-T-R9 proved statically |

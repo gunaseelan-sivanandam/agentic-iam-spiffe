@@ -25,8 +25,10 @@ is first); every heading carries its date.
   POC-D6 questions for every check a slice adds; `test_plan.md` no longer names Codex as reviewer.
 - Validation: `make qa-quality` (qa-trace against the merge-base with `origin/poc/agentic-sdlc`: 0
   new gaps; unit traceability, unit guard, docs-check, test-lint, qa-deploy) and `make
-  tooling-test` (230 pytest, 9 shell) passed. No tests added or changed: the slice changes rules,
-  and its proof is the independent review (test plan).
+  tooling-test` (230 pytest, 9 shell) passed. Full E2E suite on a clean stack at `7ab71c5`: 120/120
+  passed, 1 warning (M5-T55, env-gated skip); then `make qa-deploy` with image users inspected and
+  `make qa-evidence` (validated 119, skipped 1) passed. No tests added or changed: the slice changes
+  rules, and its proof is the independent review ([`review_slice_1.md`](../slices/agentic-sdlc-poc/review_slice_1.md)).
 
 ## 2026-10-31 Slice backlog-issues: open work tracked as GitHub issues
 

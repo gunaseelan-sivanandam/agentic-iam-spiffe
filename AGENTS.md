@@ -150,8 +150,8 @@ template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>
    environment facts; never assume it. An [independent review](#independent-review) of both runs
    before the user sees them. The user approves the plan by merging the plan PR; implement only from
    the plan as merged on the integration branch (see [Git rules](#git-rules)). On a branch that
-   changes this file or the slice templates, the author works by the base branch's version until
-   the change merges.
+   changes the rulebook (this file, `tests/unit/AGENTS.md`) or the slice templates, the author works
+   by the base branch's version until the change merges.
 2. **Tests first.** Add UT/E2E only from the reviewed `test_plan.md`. Update requirements,
    architecture, and `trace/tests.yaml` before making runtime code pass. If a test needs a new
    assumption, return to step 1.
@@ -179,7 +179,8 @@ template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>
    - add a dated entry to `docs/history/implementation_log.md` (what changed, validation results,
      what was not run and why);
    - update `docs/STATUS.md` and the slice's row in `docs/slices/README.md`;
-   - add or close entries in `docs/open_problem_log.md` for problems found or fixed, and in
+   - add or close entries in `docs/open_problem_log.md` for problems inside the threat model found
+     or fixed, and in
      `docs/delivery_problem_log.md` for delivery misses (a step skipped, a false claim, a review
      miss) found or fixed;
    - open a GitHub issue for work found but not done (label `slice` or `user-action`) and lock its
@@ -199,7 +200,7 @@ template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>
   gets the intent (the approved plan, or the request), the change, and the approved rules, and may
   read the whole frozen copy; it never gets the author's reasoning. Until the review launcher of
   the agentic-SDLC PoC (slice 2) exists, the exact review command is recorded in the slice's review
-  record. The prompts used so far are recorded verbatim in the slice review records (for example
+  record (`plan_review.md` for a plan, `review_<unit>.md` for an implementation). The prompts used so far are recorded verbatim in the slice review records (for example
   [`review_1b.md`](docs/slices/agentic-delivery-process/review_1b.md#reviewer-prompts-verbatim)).
 - **Models and usage limits.** Agents use Claude models. Codex is used only for scoped
   implementation, and only while Claude's 5-hour or weekly usage is above 70%. Reviews run on
@@ -258,14 +259,12 @@ never replaces it.
 | E2E evidence | `make qa-evidence` | in the CI `e2e` job; local, after the E2E run | every test has premise/exercise/outcome evidence and a PASS line; no file of the publication set (`PUBLICATION_SET` in the `Makefile`: `test_report.log`, `artifacts/rogue-tests/`, `artifacts/quality/`) holds a secret by shape: a PEM private key, a base64 PKCS#8 private key, base64 of a PEM private key, a base64 or base64url run of ≥ 200 characters with ≥ 20 distinct ones outside certificates, a `JIRA_API_TOKEN=` or `Authorization:` line with a value, or an Atlassian API token; an unreadable file fails; a finding names the file and kind, never the value |
 
 Standards that are **not** gated yet (follow them for new and changed code):
-- Deterministic tools before judgment. Every new or changed function stays within cyclomatic
-  complexity 10 (`radon cc`), 50 statements, 12 branches and 5 arguments; names follow the standard
-  naming conventions without exceptions; ruff's security rules (`S`) pass. A change must not add or
-  worsen a violation; existing violations stay. The agentic-SDLC PoC (slice 3) gates these limits
-  on changed files.
+- Deterministic tools before judgment. No new or changed function adds or worsens a violation of
+  these limits: cyclomatic complexity 10 (`radon cc`), 50 statements, 12 branches and 5 arguments;
+  the standard naming conventions, without exceptions; ruff's security rules (`S`). Existing
+  violations stay; functions above the complexity limit are tracked as debt in `docs/STATUS.md`. The
+  agentic-SDLC PoC (slice 3) gates these limits on changed files.
 - `ruff check services scripts` stays clean.
-- Existing functions above the complexity limit are tracked as debt in `docs/STATUS.md`; do not make
-  them worse.
 - `mypy` and `bandit` are not configured in this repo.
 
 ## Coding rules
