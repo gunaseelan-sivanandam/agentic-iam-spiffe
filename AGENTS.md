@@ -180,9 +180,8 @@ template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>
      what was not run and why);
    - update `docs/STATUS.md` and the slice's row in `docs/slices/README.md`;
    - add or close entries in `docs/open_problem_log.md` for problems inside the threat model found
-     or fixed, and in
-     `docs/delivery_problem_log.md` for delivery misses (a step skipped, a false claim, a review
-     miss) found or fixed;
+     or fixed, and in `docs/delivery_problem_log.md` for delivery misses (a step skipped, a false
+     claim, a review miss) found or fixed;
    - open a GitHub issue for work found but not done (label `slice` or `user-action`) and lock its
      conversation right away, and close the issues the change finishes (`Closes #N` in the PR body);
    - put the independent review's answers to the implementation questions, and every discovered
@@ -259,11 +258,11 @@ never replaces it.
 | E2E evidence | `make qa-evidence` | in the CI `e2e` job; local, after the E2E run | every test has premise/exercise/outcome evidence and a PASS line; no file of the publication set (`PUBLICATION_SET` in the `Makefile`: `test_report.log`, `artifacts/rogue-tests/`, `artifacts/quality/`) holds a secret by shape: a PEM private key, a base64 PKCS#8 private key, base64 of a PEM private key, a base64 or base64url run of ≥ 200 characters with ≥ 20 distinct ones outside certificates, a `JIRA_API_TOKEN=` or `Authorization:` line with a value, or an Atlassian API token; an unreadable file fails; a finding names the file and kind, never the value |
 
 Standards that are **not** gated yet (follow them for new and changed code):
-- Deterministic tools before judgment. No new or changed function adds or worsens a violation of
-  these limits: cyclomatic complexity 10 (`radon cc`), 50 statements, 12 branches and 5 arguments;
-  the standard naming conventions, without exceptions; ruff's security rules (`S`). Existing
-  violations stay; functions above the complexity limit are tracked as debt in `docs/STATUS.md`. The
-  agentic-SDLC PoC (slice 3) gates these limits on changed files.
+- Deterministic tools before judgment. No change adds or worsens a violation, in a new or changed
+  file, of these limits: cyclomatic complexity 10 (`radon cc`), 50 statements, 12 branches and 5
+  arguments per function; the standard naming conventions, without exceptions; ruff's security
+  rules (`S`). Existing violations stay; functions above the complexity limit are tracked as debt
+  in `docs/STATUS.md`. The agentic-SDLC PoC (slice 3) gates these limits on changed files.
 - `ruff check services scripts` stays clean.
 - `mypy` and `bandit` are not configured in this repo.
 
