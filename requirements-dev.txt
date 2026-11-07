@@ -9,3 +9,5 @@ pytest-repeat
 diff-cover
 mutmut==3.5.0
 PyYAML
+ruff==0.15.18
+shellcheck-py==0.11.0.1

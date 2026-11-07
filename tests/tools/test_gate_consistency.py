@@ -102,7 +102,7 @@ def test_missing_ruleset_source_fails_closed() -> None:
 
 def test_repository_table_and_workflow_agree_with_the_planned_required_checks() -> None:
     """Positive control: today's AGENTS.md and ci.yml with the required checks after this slice."""
-    planned = _ruleset("docs-check", "e2e", "gate-consistency", "qa-deploy", "qa-trace", "test-lint",
+    planned = _ruleset("docs-check", "e2e", "gate-consistency", "lint", "qa-deploy", "qa-trace", "test-lint",
                        "tooling-test", "unit-diff-cov", "unit-guard-check", "unit-mutation", "unit-trust")
     problems = gc.check((ROOT / "AGENTS.md").read_text(encoding="utf-8"),
                         (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"), planned)

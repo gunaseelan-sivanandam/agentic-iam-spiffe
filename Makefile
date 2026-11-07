@@ -15,13 +15,15 @@ BASE_REF ?= origin/poc/agentic-sdlc
 # Gap gate: fail on a coverage gap the branch adds compared with its merge-base with BASE_REF.
 # CI passes --mode pr --base origin/<PR base> on pull requests and --mode push on main.
 QA_TRACE_ARGS ?= --mode pr --base $(BASE_REF)
-# The main ruleset, readable without a token; gate-consistency compares its required checks with CI.
-RULESET_URL ?= https://api.github.com/repos/gunaseelan-sivanandam/agentic-iam-spiffe/rulesets/26054924
+# The integration branch's ruleset (poc/agentic-sdlc), readable without a token; gate-consistency
+# compares its required checks with CI. Set it back to the main ruleset (26054924) when the PoC
+# merges into main.
+RULESET_URL ?= https://api.github.com/repos/gunaseelan-sivanandam/agentic-iam-spiffe/rulesets/26764115
 MUTATION_MAX_CHILDREN ?= 2
 # Everything a test run publishes (CI uploads exactly this); qa-evidence checks it for secrets.
 PUBLICATION_SET := test_report.log artifacts/rogue-tests artifacts/quality
 
-.PHONY: unit unit-guard-check unit-invariants unit-boundary unit-negative-controls unit-hybrid-critical unit-flake unit-cov unit-diff-cov traceability-check unit-mutation unit-trust qa-trace qa-evidence qa-quality docs-check tooling-test test-lint qa-deploy jira-live-smoke print-publication-set e2e gate-consistency
+.PHONY: unit unit-guard-check unit-invariants unit-boundary unit-negative-controls unit-hybrid-critical unit-flake unit-cov unit-diff-cov traceability-check unit-mutation unit-trust qa-trace qa-evidence qa-quality docs-check tooling-test test-lint qa-deploy jira-live-smoke print-publication-set e2e gate-consistency lint
 
 unit:
 	$(PYTEST) $(TEST_DIR)
@@ -113,6 +115,10 @@ qa-deploy:
 
 gate-consistency:
 	$(PYTHON) scripts/check_gate_consistency.py --ruleset-url $(RULESET_URL)
+
+# Changed-files lint: fails on violations the branch adds or worsens against its merge-base with BASE_REF.
+lint:
+	$(PYTHON) scripts/lint_changed_files.py --base $(BASE_REF)
 
 tooling-test:
 	$(PYTEST) -q tests/tools

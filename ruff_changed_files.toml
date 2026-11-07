@@ -1,0 +1,18 @@
+# Lint limits for new and changed files (agentic-sdlc-poc slice 3, POC-D8), read only by
+# scripts/lint_changed_files.py (`make lint`), which takes this file from the merge-base so a change
+# cannot loosen the limits it is checked against. Plain `ruff check` does not read it.
+target-version = "py310"
+
+[lint]
+extend-select = ["C901", "PLR0912", "PLR0913", "PLR0915", "N", "S"]
+
+[lint.mccabe]
+max-complexity = 10
+
+[lint.pylint]
+max-branches = 12
+max-args = 5
+max-statements = 50
+
+[lint.per-file-ignores]
+"tests/**" = ["S101"]

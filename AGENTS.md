@@ -251,22 +251,21 @@ never replaces it.
 | Documentation | `make docs-check` | CI | every harness test and every static test in `trace/tests.yaml` has a `docs/test_spec.md` heading and vice versa; relative links and `#anchors` in live docs resolve; every tracked image in `docs/` is referenced and every `.puml` has its `.svg`; every slice bundle is in the slice index; `TEST_ONLY=` examples name real tests |
 | QA tooling tests | `make tooling-test` | CI | `tests/tools/` (pytest) and `tests/shell/` pass |
 | E2E outcome lint | `make test-lint` | CI | no outcome guard in `scripts/rogue_node_tests.sh` accepts several outcomes (`assert_file_any`, broad error regexes, `!= 200`), swallows failure (`\|\| true`), checks only a non-zero exit, or is a test of negative greps only; a multi-outcome guard needs `# test-lint: alternate: <reason>` |
+| Changed-files lint | `make lint` | CI, PRs only (own job) | in every file the PR adds, modifies or renames, no ruff or shellcheck finding that is new or worse than at the merge-base (a finding is keyed by file, rule and enclosing function, or line text, and compared by count and value, so existing violations stay and a pure rename is not new): ruff's default rules, complexity C901 ≤ 10, at most 12 branches, 5 arguments and 50 statements per function (PLR0912, PLR0913, PLR0915), naming (N) without exceptions, security (S, except `assert` in `tests/`); the limit, naming, F401 and F841 rules ignore `noqa`; the configuration `ruff_changed_files.toml` is read from the merge-base, so a change cannot loosen it; every added Python, shell, YAML, TOML, Dockerfile or Rego file starts with a purpose comment; a missing base or tool fails |
 | Deployment register | `make qa-deploy` | CI (without image inspection; the `e2e` job runs it with image users inspected) | every service's image, user, networks, ports, mounts, secret env names and privileges match `security/invariants.yaml`; every protected asset reaches only its holders, except unexpired known violations of open OPLs; register holders equal the `REQ-SEC` `Holders:` lines; non-root except the grandfathered baseline until 2027-01-31 |
 | Unit guard integrity | `make unit-guard-check` | CI | every unit test has premise, exercise, outcome guards |
 | Unit trust bundle | `make unit-trust` | CI | total line coverage ≥ 85%; branch coverage ≥ 75% on `services/capability-issuer/app.py` and `services/tool-b/server.py`; unit traceability check; invariant, negative-control, hybrid-critical suites; invariant flake check ×5 |
 | Diff coverage | `make unit-diff-cov` | CI, PRs only (own job) | ≥ 90% of changed lines in `services/capability-issuer/` and `services/tool-b/` |
 | Mutation | `make unit-mutation` | CI | score ≥ 70% (capiss and tool-b), counting untested and skipped mutants as not killed; an empty run fails |
-| Gate consistency | `make gate-consistency` | CI | every row this table marks as enforced by CI has a CI job of the same name that runs `make <name>`; every CI job has such a row; every CI job is a required check of the `main` ruleset and every required check is a job (the ruleset is read from the public GitHub API; a failed read fails) |
+| Gate consistency | `make gate-consistency` | CI | every row this table marks as enforced by CI has a CI job of the same name that runs `make <name>`; every CI job has such a row; every CI job is a required check of the integration branch's ruleset (`RULESET_URL` in the `Makefile`) and every required check is a job (the ruleset is read from the public GitHub API; a failed read fails) |
 | Full E2E suite | `make e2e` | CI, every push/PR; and local on a clean stack, required in step 4 | all pass; warnings reviewed. The CI job then runs `make qa-deploy` with image users inspected and `make qa-evidence`, and uploads the publication set for 14 days only if the secret check found nothing |
 | E2E evidence | `make qa-evidence` | in the CI `e2e` job; local, after the E2E run | every test has premise/exercise/outcome evidence and a PASS line; no file of the publication set (`PUBLICATION_SET` in the `Makefile`: `test_report.log`, `artifacts/rogue-tests/`, `artifacts/quality/`) holds a secret by shape: a PEM private key, a base64 PKCS#8 private key, base64 of a PEM private key, a base64 or base64url run of ≥ 200 characters with ≥ 20 distinct ones outside certificates, a `JIRA_API_TOKEN=` or `Authorization:` line with a value, or an Atlassian API token; an unreadable file fails; a finding names the file and kind, never the value |
 
 Standards that are **not** gated yet (follow them for new and changed code):
-- Deterministic tools before judgment. No change adds or worsens a violation, in a new or changed
-  file, of these limits: cyclomatic complexity 10 (`radon cc`), 50 statements, 12 branches and 5
-  arguments per function; the standard naming conventions, without exceptions; ruff's security
-  rules (`S`). Existing violations stay; functions above the complexity limit are tracked as debt
-  in `docs/STATUS.md`. The agentic-SDLC PoC (slice 3) gates these limits on changed files.
-- `ruff check services scripts` stays clean.
+- `ruff check services scripts` (ruff's default rules; it does not read `ruff_changed_files.toml`)
+  stays clean on the whole tree; `make lint` gates only the files a PR changes.
+- Functions above the complexity limit (ruff C901, as `make lint` measures it) are tracked as debt
+  in `docs/STATUS.md`; do not make them worse.
 - `mypy` and `bandit` are not configured in this repo.
 
 ## Coding rules
