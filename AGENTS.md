@@ -197,10 +197,12 @@ template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>
   routine focused reviews and rechecks; high for initial plan, security, architecture and
   integrated reviews. The report says which reviewer ran, with which model and effort. The reviewer
   gets the intent (the approved plan, or the request), the change, and the approved rules, and may
-  read the whole frozen copy; it never gets the author's reasoning. Until the review launcher of
-  the agentic-SDLC PoC (slice 2) exists, the exact review command is recorded in the slice's review
-  record (`plan_review.md` for a plan, `review_<unit>.md` for an implementation). The prompts used so far are recorded verbatim in the slice review records (for example
-  [`review_1b.md`](docs/slices/agentic-delivery-process/review_1b.md#reviewer-prompts-verbatim)).
+  read the whole frozen copy; it never gets the author's reasoning. Reviews run through
+  `scripts/run_independent_review.py`, which builds the reviewer's call and prompt and records every
+  attempt, and the round it belongs to, in the slice's `review_attempts.jsonl`. The slice's review
+  record (`plan_review.md` for a plan, `review_<unit>.md` for an implementation) keeps each task
+  prompt and report verbatim with the author's answers (earlier records hold the exact command, for
+  example [`review_1b.md`](docs/slices/agentic-delivery-process/review_1b.md#reviewer-prompts-verbatim)).
 - **Models and usage limits.** Agents use Claude models. Codex is used only for scoped
   implementation, and only while Claude's 5-hour or weekly usage is above 70%. Reviews run on
   Claude; when a usage limit is reached, work pauses until it resets. The review benchmark may also

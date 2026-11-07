@@ -5,6 +5,33 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-11-08 Slice agentic-sdlc-poc 2: review launcher and benchmark
+
+- Branch `poc/slice-2-review-launcher`, built on `poc/slice-1-rules` (slice 1, PR #34) until that
+  merges; its PR opens after slice 1 merges, rebased onto `poc/agentic-sdlc`.
+- `scripts/run_independent_review.py`: one review round per invocation. Each reviewer is a fresh
+  headless Claude session in a frozen `git archive` copy without the unit's review record and attempt
+  log, with only Read, Grep and Glob, `--safe-mode`, `--setting-sources ""`, `dontAsk`, no MCP servers,
+  no saved session and only `PATH`, `HOME` and `LANG`; the approved rules come from the fetched base
+  branch, the change as a diff without the withheld files. The append-only attempt log
+  (`docs/slices/<id>/review_attempts.jsonl`, under an OS lock) admits rounds (POC-D4: round 1 plus
+  three fix rounds, an extension or reset reference used once), marks interrupted attempts and
+  releases a report only after its end entry. Paused, failed, pending, empty and escaped reviews and
+  the publication check fail closed; `invocation_from_entry` rebuilds an entry's call and hashes.
+- `scripts/run_review_benchmark.py` and `tests/review_benchmark/` (answer key, two prompts, four
+  planted patches): leak search before every case, deterministic scoring, a 26-call budget that holds
+  across invocations, a stop at a usage limit with resume, the canary and its twin. Stage A ran 24
+  calls; the [report](../slices/agentic-sdlc-poc/benchmark_report.md) recommends the short prompt
+  and one reviewer, a fix for the empty-review rule that failed 5 of 22 reviews, and review
+  questions for defects of absence, which neither prompt found (1 of 4 paired real misses detected).
+- `AGENTS.md`: reviews run through the launcher; the review record keeps task prompts and reports.
+- Review: two rounds through the launcher ([`review_slice_2.md`](../slices/agentic-sdlc-poc/review_slice_2.md)).
+  Round 1 found two blockers (a canary that passed without a completed run; a budget that held only
+  within one invocation), both fixed with tests; round 2 accepted every answer.
+- Validation: `make tooling-test` (327 pytest, 9 shell) and `make qa-quality` passed. Deliberately
+  breaking each confinement, admission, budget and canary rule made at least one test fail. No
+  service, compose file or E2E harness changed.
+
 ## 2026-11-07 Slice agentic-sdlc-poc 1: the PoC's rules
 
 - Branch `poc/slice-1-rules`, from `poc/agentic-sdlc` after PR #31 (the plan for slices 1–3).
