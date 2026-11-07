@@ -177,6 +177,12 @@ def test_location_without_a_term_goes_to_triage() -> None:
     assert result["detected"] == [] and result["location_only"] == ["E1"]
 
 
+def test_advisory_finding_with_a_term_is_listed_even_beside_a_blocking_one_without() -> None:
+    findings = [_finding("X1", problem="unclear naming"), _finding("X2", kind="advisory")]
+    result = bench.score(_key_case(), {"findings": findings, "verdict": "no"})
+    assert result["detected"] == [] and result["location_only"] == ["E1"] and result["advisory_only"] == ["E1"]
+
+
 @pytest.mark.parametrize("finding", [_finding("X1", line=4), _finding("X1", file="other.py"), _finding("X1", kind="advisory")],
                          ids=["line-outside-range", "other-file", "not-blocking"])
 def test_finding_elsewhere_or_not_blocking_is_not_detected(finding: dict) -> None:

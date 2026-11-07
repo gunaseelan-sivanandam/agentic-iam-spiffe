@@ -69,7 +69,7 @@ unmatched blocking finding:
 | Case | Expected defect | Short | Checklist | Note |
 | --- | --- | --- | --- | --- |
 | RM-1 | DPL-001: the whole key directory mounted into tool-b | **confirmed** (F1, `compose/spiffe.compose.yml:97`) | **confirmed** (F1, same line) | Both name the private key reaching the verifier |
-| RM-2 | DPL-002: token values written into E2E evidence | not found (location-only F3 rejected: unconditional `echo` after an assertion, another defect) | not found (automatic match F1 **rejected**: quoting inside guard strings; "secret" names the `/secret` route) | Neither prompt saw token values written to evidence |
+| RM-2 | DPL-002: token values written into E2E evidence | **seen, rated advisory**: F8 (`scripts/rogue_node_tests.sh:1604`, advisory) says the M3 tests write live bearer tokens to `token.txt` and the uploaded evidence; not a detection, which needs a blocking finding. The location-only match F3 is rejected (an unconditional `echo` after an assertion, another defect) | not found (automatic match F1 **rejected**: quoting inside guard strings; "secret" names the `/secret` route) | The automatic score hid F8: a blocking finding without a term at the same location made the case "location only" (fixed in the runner after this run, review round 3) |
 | RM-3 | DPL-004: ten requirements without proof | not found | not found | Both reviewed `qa_deploy.py` code instead |
 | RM-4 | DPL-005: gates in a CI job named for another gate | not found | not found | Both reviewed `test_lint.py` and its test plan |
 | RM-5 | DPL-009: diff-cover keeps only the last `--include` | incomplete | incomplete | Both reviews failed the empty-review rule (below) |
@@ -120,8 +120,8 @@ the reviews, so it is the first thing to address in the next slice (recommendati
 | Duration per review | 13 to 251 seconds; real misses 82 to 251, planted and clean cases 15 to 49 |
 | Output tokens | 189,149 in total; 1,003 to 22,320 per review |
 | CLI cost estimate | USD 13.27 in total (an estimate, not the subscription's billing) |
-| 5-hour window | 20% before the run, 35% after; under 1 point per review |
-| Weekly window | 2% before, 4% after |
+| 5-hour window | 20% after slice 2's review round 2 (attempt log), 22% at the first benchmark call, 35% after the last; under 1 point per review |
+| Weekly window | 2% at the first benchmark call, 4% after the last |
 
 This is far below the plan's estimate (8 to 10 points of the 5-hour window per review), which was
 measured before the account's plan changed on 2026-11-07.
@@ -135,11 +135,14 @@ measured before the account's plan changed on 2026-11-07.
    diff as a read of the paths would be the simpler alternative, but it weakens the check that a
    review looked at the code. This is the user's decision (slice 4).
 3. **Real misses:** the reviewer finds code defects well (all four plants, and many real extra
-   defects) but none of the defects of absence or placement (DPL-002, DPL-004, DPL-005): proof
-   missing for a requirement, values that should not be kept, a gate run under another job's name.
-   Neither prompt asked about them. Slice 4's stage rules should put these as concrete review
-   questions (each new requirement's proof, what evidence keeps, where each gate runs) and measure
-   them on RM-2 to RM-4 before more reviewers are added.
+   defects). Of the three real misses not detected, two are defects of absence or placement that
+   neither prompt found: DPL-004 (proof missing for new requirements) and DPL-005 (gates run under
+   another job's name); neither prompt asked about them. The third, DPL-002 (token values in
+   evidence), the short-prompt reviewer saw but rated advisory, so it is a severity question: under
+   coding rule 1 a secret written into published evidence is a blocking defect. Slice 4's stage
+   rules should add concrete review questions (each new requirement's proof, where each gate runs)
+   and a severity rule for secrets in evidence or logs, and measure them on RM-2 to RM-4 before more
+   reviewers are added.
 4. **Number of reviewers:** one reviewer per review unit; the union of two prompts added nothing.
 5. **Stages B and C:** stage B (Opus, Sonnet and Codex) costs little quota by these figures, but its
    question is which model, and the bigger gap is the questions asked (recommendation 3). Suggested

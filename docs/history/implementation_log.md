@@ -22,15 +22,21 @@ is first); every heading carries its date.
   planted patches): leak search before every case, deterministic scoring, a 26-call budget that holds
   across invocations, a stop at a usage limit with resume, the canary and its twin. Stage A ran 24
   calls; the [report](../slices/agentic-sdlc-poc/benchmark_report.md) recommends the short prompt
-  and one reviewer, a fix for the empty-review rule that failed 5 of 22 reviews, and review
-  questions for defects of absence, which neither prompt found (1 of 4 paired real misses detected).
+  and one reviewer, a fix for the empty-review rule that failed 5 of 22 reviews, review questions
+  for defects of absence (DPL-004, DPL-005: neither prompt found them) and a severity rule for
+  secrets in evidence (DPL-002: seen, but rated advisory); 1 of 4 paired real misses detected.
 - `AGENTS.md`: reviews run through the launcher; the review record keeps task prompts and reports.
-- Review: two rounds through the launcher ([`review_slice_2.md`](../slices/agentic-sdlc-poc/review_slice_2.md)).
-  Round 1 found two blockers (a canary that passed without a completed run; a budget that held only
-  within one invocation), both fixed with tests; round 2 accepted every answer.
+- Review: four rounds through the launcher ([`review_slice_2.md`](../slices/agentic-sdlc-poc/review_slice_2.md)).
+  Round 1 found two blockers in the code (a canary that passed without a completed run; a budget
+  that held only within one invocation), both fixed with tests; round 2 accepted every answer.
+  Round 3 reviewed the report and close-out: its first attempt failed closed (a Markdown link
+  resolved from the copy root named a path outside the copy); the rerun found that the report
+  missed an advisory finding on DPL-002, fixed in the report and in the scoring; round 4 rechecked.
 - Validation: `make tooling-test` (327 pytest, 9 shell) and `make qa-quality` passed. Deliberately
   breaking each confinement, admission, budget and canary rule made at least one test fail. No
-  service, compose file or E2E harness changed.
+  service, compose file or E2E harness changed. Full E2E suite on a clean stack at `642b840`: 120/120
+  passed, 1 warning (M5-T55, env-gated skip); then `make qa-deploy` with image users inspected and
+  `make qa-evidence` (validated 119, skipped 1) passed.
 
 ## 2026-11-07 Slice agentic-sdlc-poc 1: the PoC's rules
 

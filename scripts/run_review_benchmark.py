@@ -238,19 +238,24 @@ def score(case: Case, report: dict[str, Any]) -> dict[str, list[str]]:
         outcome = _expected_outcome(at_location, expected["terms"])
         if outcome:
             result[outcome].append(expected["id"])
+        if outcome != "detected" and _seen_as_advisory(at_location, expected["terms"]):
+            result["advisory_only"].append(expected["id"])
         matched.update(f["id"] for f in at_location if f.get("kind") == "blocking")
     result["unmatched_blocking"] = [f["id"] for f in findings if f.get("kind") == "blocking" and f["id"] not in matched]
     return result
 
 
+def _seen_as_advisory(at_location: list[dict[str, Any]], terms: list[str]) -> bool:
+    """A finding that names the defect but is not rated blocking (seen, not detected)."""
+    return any(_has_term(f, terms) for f in at_location if f.get("kind") != "blocking")
+
+
 def _expected_outcome(at_location: list[dict[str, Any]], terms: list[str]) -> str | None:
-    """Detected (blocking with a term), location only (blocking, no term), advisory only (term, not blocking)."""
+    """Detected (a blocking finding with a term) or location only (blocking, no term)."""
     blocking = [f for f in at_location if f.get("kind") == "blocking"]
     if any(_has_term(f, terms) for f in blocking):
         return "detected"
-    if blocking:
-        return "location_only"
-    return "advisory_only" if any(_has_term(f, terms) for f in at_location) else None
+    return "location_only" if blocking else None
 
 
 def _at_location(finding: dict[str, Any], locations: list[dict[str, Any]]) -> bool:
