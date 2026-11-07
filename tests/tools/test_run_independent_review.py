@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "run_independent_review.py"
@@ -32,7 +34,6 @@ _spec.loader.exec_module(launcher)
 RECORD = "docs/slices/demo/review_demo.md"
 LOG = "docs/slices/demo/review_attempts.jsonl"
 REVIEWED = "scripts/review_me.py"
-PEM = "-----BEGIN PRIVATE KEY-----\nMIIBVQIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEA\n-----END PRIVATE KEY-----"
 PR_COMMENT = "https://github.com/owner/repo/pull/7#issuecomment-123"
 
 
@@ -563,8 +564,16 @@ def test_review_reads_with_relative_and_absolute_paths_inside_the_copy_count(fx:
 # --- Publication check -------------------------------------------------------------------------
 
 
+def _pem_private_key() -> str:
+    """A throwaway key made at test time, so no key-shaped text is committed."""
+    key = ec.generate_private_key(ec.SECP256R1())
+    return key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                             serialization.NoEncryption()).decode("ascii")
+
+
 def test_secret_in_the_reply_leaves_no_report_and_no_end_entry(fx: Fixture, capsys: pytest.CaptureFixture[str]) -> None:
-    finding = {"id": "X", "kind": "advisory", "file": REVIEWED, "line": 1, "problem": PEM, "evidence": "e",
+    pem = _pem_private_key()
+    finding = {"id": "X", "kind": "advisory", "file": REVIEWED, "line": 1, "problem": pem, "evidence": "e",
                "failure_scenario": "f"}
     fx.scenario({"result": {"structured_output": {"findings": [finding], "verdict": "yes"}}})
     assert _run(fx) == 3
@@ -573,7 +582,7 @@ def test_secret_in_the_reply_leaves_no_report_and_no_end_entry(fx: Fixture, caps
     assert not _report(fx, start).exists() and not Path(str(_report(fx, start)) + ".partial").exists()
     err = capsys.readouterr().err
     assert "PEM private key" in err and start["report_path"] in err
-    assert "MIIBVQIBADAN" not in err
+    assert pem.splitlines()[1] not in err
 
 
 # --- Usage limits and retries ------------------------------------------------------------------
