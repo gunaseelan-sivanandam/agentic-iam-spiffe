@@ -279,19 +279,24 @@ def make_frozen_copy(repo: Path, commit: str, dest: Path, withheld: list[str], d
             target.unlink()
     if diff_base is None:
         return None
-    merge_base = git(repo, "merge-base", diff_base, commit).strip()
-    excludes = [f":(exclude){path}" for path in withheld]
-    diff = git(repo, "diff", merge_base, commit, "--", ".", *excludes)
+    diff = change_diff(repo, diff_base, commit, withheld)
     (dest / INPUTS_DIR).mkdir()
     (dest / INPUTS_DIR / "change.diff").write_text(diff, encoding="utf-8")
     return sha256_text(diff)
 
 
+def change_diff(repo: Path, diff_base: str, commit: str, withheld: list[str]) -> str:
+    """The change from the merge-base with `diff_base` to `commit`, without the withheld paths."""
+    merge_base = git(repo, "merge-base", diff_base, commit).strip()
+    excludes = [f":(exclude){path}" for path in withheld]
+    return git(repo, "diff", merge_base, commit, "--", ".", *excludes)
+
+
 def build_prompt(inputs: ReviewInputs, task: str, has_diff: bool) -> str:
-    withheld = ", ".join(inputs.withheld) or "none"
+    withheld = ", ".join(sorted(inputs.withheld)) or "none"
     diff_line = (f"The file {INPUTS_DIR}/change.diff is the change: the diff from the merge-base with the base "
                  "branch to the reviewed commit, without the withheld paths.\n" if has_diff else "")
-    paths = "\n".join(f"- {path}" for path in inputs.review_paths)
+    paths = "\n".join(f"- {path}" for path in sorted(inputs.review_paths))
     return (
         "You are an independent reviewer. You are not the author, and you have not seen the author's "
         "reasoning.\n\n"
@@ -386,8 +391,8 @@ def tool_paths(name: str, args: dict[str, Any]) -> list[str]:
 
 def relative_to_copy(path: str, copy_root: Path) -> str | None:
     """The path relative to the copy (relative parts and `..` removed), or None when it lies outside."""
-    root = os.path.normpath(str(copy_root))
-    resolved = os.path.normpath(os.path.join(root, path))
+    root = os.path.realpath(copy_root)
+    resolved = os.path.realpath(os.path.join(root, path))
     if os.path.commonpath([root, resolved]) != root:
         return None
     return os.path.relpath(resolved, root)
@@ -475,7 +480,7 @@ def structured_reply(result: dict[str, Any]) -> Any:
         return None
 
 
-def _interrupted_call(summary: StreamSummary, returncode: int, stats: dict[str, Any]) -> CallOutcome | None:
+def _paused_or_unfinished_call(summary: StreamSummary, returncode: int, stats: dict[str, Any]) -> CallOutcome | None:
     """A usage-limit pause, a provider or CLI error (retried), or output without a result (failed)."""
     limit = summary.rate_limit or {}
     if limit and limit.get("status") not in PROCEEDING_STATUSES:
@@ -491,9 +496,9 @@ def _interrupted_call(summary: StreamSummary, returncode: int, stats: dict[str, 
 def classify(summary: StreamSummary, returncode: int, copy_root: Path, review_paths: list[str]) -> CallOutcome:
     """Decide an attempt's status from its stream; only a confined, non-empty, well-formed reply completes."""
     stats = call_stats(summary, copy_root)
-    interrupted = _interrupted_call(summary, returncode, stats)
-    if interrupted is not None:
-        return interrupted
+    unfinished = _paused_or_unfinished_call(summary, returncode, stats)
+    if unfinished is not None:
+        return unfinished
     if stats["outside_calls"]:
         return CallOutcome("failed", "a call named a path outside the copy", stats=stats)
     if stats["denied"]:
@@ -565,7 +570,7 @@ def recover(log: AttemptLog, repo: Path) -> None:
         end = ends.get(start["attempt"])
         if end is None:
             log.append({"event": "end", "attempt": start["attempt"], "status": "interrupted", "ended_at": utc_now(),
-                        "reason": "no end entry: the launcher stopped during the attempt"})
+                        "reason": "no end entry: the launcher stopped, or the publication check withheld the report"})
         elif end["status"] == "completed" and partial.is_file() and sha256_bytes(partial.read_bytes()) == end["report_sha256"]:
             partial.replace(repo / start["report_path"])
             continue
@@ -590,6 +595,7 @@ def admit_round(entries: list[dict[str, Any]], unit: str, round_no: int, labels:
     check_reference(extension, "extension")
     check_reference(reset, "reset")
     starts = [e for e in entries if e.get("event") == "start" and e.get("unit") == unit]
+    _check_references_unused(starts, round_no, extension, reset)
     count = _current_count(starts, reset is not None, round_no)
     if round_no > ROUND_LIMIT and extension is None:
         raise ReviewRefusedError(f"round {round_no} is past the limit of {ROUND_LIMIT}; it needs the user's extension reference")
@@ -598,6 +604,15 @@ def admit_round(entries: list[dict[str, Any]], unit: str, round_no: int, labels:
         return Admission(count, _same_round(rounds[round_no], labels, verdicts, round_no))
     _check_next_round(rounds, verdicts, round_no, labels)
     return Admission(count, list(labels))
+
+
+def _check_references_unused(starts: list[dict[str, Any]], round_no: int, extension: str | None,
+                             reset: str | None) -> None:
+    """A user's reset starts one count, and an extension admits one round; neither is used twice."""
+    if reset is not None and reset in {e.get("reset") for e in starts}:
+        raise ReviewRefusedError("this reset reference was already used; continue the count without --reset")
+    if extension is not None and extension in {e.get("extension") for e in starts if e["round"] != round_no}:
+        raise ReviewRefusedError("this extension reference already admitted another round")
 
 
 def _current_count(starts: list[dict[str, Any]], reset: bool, round_no: int) -> int:
@@ -824,6 +839,12 @@ def invocation_from_entry(entry: dict[str, Any], repo: Path, prompt_file: Path) 
         "schema_sha256": sha256_text(SCHEMA_JSON),
         "tree": git(repo, "rev-parse", f"{entry['commit']}^{{tree}}").strip(),
     }
+    diff = change_diff(repo, entry["base_commit"], entry["commit"], list(entry["withheld_sha256"]))
+    inputs = ReviewInputs(entry["commit"], entry["tree"], entry["base"], entry["base_commit"],
+                          approved_rules(repo, entry["base_commit"]), recomputed["paths_sha256"],
+                          recomputed["withheld_sha256"])
+    recomputed["diff_sha256"] = sha256_text(diff)
+    recomputed["full_prompt_sha256"] = sha256_text(build_prompt(inputs, prompt_file.read_text(encoding="utf-8"), True))
     mismatches = [name for name, value in recomputed.items() if entry.get(name) != value]
     return build_invocation(entry["model"], entry["effort"]), mismatches
 

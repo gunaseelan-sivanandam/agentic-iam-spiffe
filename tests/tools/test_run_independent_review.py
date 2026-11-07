@@ -242,7 +242,7 @@ def test_invocation_and_hashes_are_rebuilt_from_a_log_entry(fx: Fixture) -> None
     assert mismatches == []
     fx.prompt.write_text("A changed task.\n", encoding="utf-8")
     _argv, mismatches = launcher.invocation_from_entry(start, fx.work, fx.prompt)
-    assert mismatches == ["prompt_sha256"]
+    assert mismatches == ["prompt_sha256", "full_prompt_sha256"]
 
 
 # --- Attempt log -------------------------------------------------------------------------------
@@ -361,6 +361,24 @@ def test_partial_report_of_a_failed_attempt_is_deleted(fx: Fixture) -> None:
     assert not (fx.work / (report + ".partial")).exists() and not (fx.work / report).exists()
 
 
+def test_partial_report_without_an_end_entry_is_deleted_and_the_attempt_interrupted(fx: Fixture) -> None:
+    report = "artifacts/reviews/unit1/a.json"
+    _write(fx.work, report + ".partial", json.dumps({"findings": [], "verdict": "yes"}))
+    _write(fx.work, LOG, json.dumps(_start("unit1/c1/r1/A/1", ["A"], "A", report)) + "\n")
+    assert _run(fx) == 0
+    assert not (fx.work / (report + ".partial")).exists() and not (fx.work / report).exists()
+    assert fx.log()[1] == {**fx.log()[1], "attempt": "unit1/c1/r1/A/1", "status": "interrupted"}
+
+
+def test_symlinked_copy_root_still_counts_reads_inside_the_copy(tmp_path: Path) -> None:
+    real = tmp_path / "real"
+    (real / "scripts").mkdir(parents=True)
+    link = tmp_path / "link"
+    link.symlink_to(real)
+    assert launcher.relative_to_copy(str(real / "scripts" / "x.py"), link) == "scripts/x.py"
+    assert launcher.relative_to_copy(str(tmp_path / "outside.txt"), link) is None
+
+
 def test_corrupt_log_line_is_refused(fx: Fixture) -> None:
     _write(fx.work, LOG, "not json\n")
     assert _run(fx) == 2
@@ -434,6 +452,22 @@ def test_reference_that_is_not_a_pr_comment_is_refused() -> None:
         _admit([], 1, ["A"], extension="https://example.org/approve")
     with pytest.raises(launcher.ReviewRefusedError, match="PR comment"):
         _admit([], 1, ["A"], reset="https://github.com/owner/repo/pull/7")
+
+
+def test_a_reference_admits_once() -> None:
+    entries: list[dict] = []
+    for round_no in (1, 2, 3, 4):
+        entries += _done(round_no, "A", "no", ["A"])
+    round_five = _done(5, "A", "no", ["A"])
+    round_five[0]["extension"] = PR_COMMENT
+    with pytest.raises(launcher.ReviewRefusedError, match="already admitted another round"):
+        _admit(entries + round_five, 6, ["A"], extension=PR_COMMENT)
+    assert _admit(entries + round_five[:1], 5, ["A"], extension=PR_COMMENT).to_run == ["A"]  # same round again
+    reset_start = _done(1, "A", None, ["A"], status="failed")
+    reset_start[0].update(count=2, reset=PR_COMMENT)
+    with pytest.raises(launcher.ReviewRefusedError, match="already used"):
+        _admit(entries + reset_start, 1, ["A"], reset=PR_COMMENT)
+    assert _admit(entries + reset_start, 1, ["A"]).count == 2
 
 
 def test_reset_starts_a_new_count_at_round_one() -> None:
