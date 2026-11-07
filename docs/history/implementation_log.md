@@ -22,12 +22,19 @@ is first); every heading carries its date.
   branch's required checks. `AGENTS.md`: a gates row for `lint`; the not-gated standards keep only the
   whole-tree `ruff check` and the debt list. `docs/STATUS.md`: the complexity debt re-measured with
   ruff C901 (12 functions, radon counted 16).
+- Review: two rounds through the launcher ([`review_slice_3.md`](../slices/agentic-sdlc-poc/review_slice_3.md)).
+  Round 1 found two test gaps that let a regression pass (no `__init__.py` without a docstring; tool
+  directives never run on the comment-header file types), both fixed with tests, and six advisories
+  (tool errors, stale "main ruleset" wording, binary files, a merge-base test that could not fail,
+  names, loose header assertions), all fixed; round 2 accepted every answer.
 - Validation: `make lint` passes against `poc/slice-2-review-launcher` and against
-  `origin/poc/agentic-sdlc` (slices 1 to 3 together). `make tooling-test`: 369 pytest pass; the 6
+  `origin/poc/agentic-sdlc` (slices 1 to 3 together). `make tooling-test`: 376 pytest pass; the 6
   shell cases of `tests/tools/test_lint_changed_files.py` need `shellcheck`, which could not be
   installed on this machine, so they run only in CI. Deliberately breaking the gate (honouring `noqa`
   on limits, reading the configuration from the change, ignoring the value, no rename matching, no
-  header check) made at least one test fail each time.
+  header check) made at least one test fail each time. Full E2E suite on a clean stack at `89c9cbe`:
+  120/120 passed, 1 warning (M5-T55, env-gated skip); then `make qa-deploy` with image users inspected
+  and `make qa-evidence` (validated 119, skipped 1) passed.
 
 ## 2026-11-08 Slice agentic-sdlc-poc 2: review launcher and benchmark
 
