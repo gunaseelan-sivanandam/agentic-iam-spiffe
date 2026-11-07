@@ -1,9 +1,14 @@
 # Project Status
 
-Last updated: 2026-11-04. Update this page at the end of every slice (see `AGENTS.md`, slice workflow step 4).
+Last updated: 2026-11-07. Update this page at the end of every slice (see `AGENTS.md`, slice workflow step 4).
 Detailed history: [`docs/history/implementation_log.md`](history/implementation_log.md).
 
 ## Where the project stands
+- **Agent-run delivery PoC** on the branch `poc/agentic-sdlc`, kept off `main`: the plan
+  [agentic-sdlc-poc](slices/agentic-sdlc-poc/plan.md) (PR #31) approves slices 1–3 (rules, review
+  launcher and benchmark, changed-files lint) and outlines slices 4–8. Next: slice 1. Slice 4's
+  grill-me inputs are in [#33](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/33); agents taking backlog items the owner did not write is
+  [#32](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/32).
 - **Implemented milestones:** M1, M2, M2.5, M3, M4 (reduced scope), M4a, M4b, M5.
   M5 covers the Codex → Jira MCP path, the `varambu` demo CLI with capiss audit, and the
   full-chain audit trace (`varambu trace`). See the milestone table in [`README.md`](../README.md#milestones).
@@ -45,7 +50,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `plan/delivery-orchestration` | Plan staged agent delivery and meter manual reviews | PR #26 open |
+| `poc/plan-slices-1-3` | Plan agentic-sdlc-poc: roadmap to the complete delivery cycle, and slices 1–3 | PR #31 into `poc/agentic-sdlc`, awaiting the owner's approval (PR #26 closed as superseded) |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
