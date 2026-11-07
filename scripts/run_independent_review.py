@@ -844,7 +844,8 @@ def invocation_from_entry(entry: dict[str, Any], repo: Path, prompt_file: Path) 
                           approved_rules(repo, entry["base_commit"]), recomputed["paths_sha256"],
                           recomputed["withheld_sha256"])
     recomputed["diff_sha256"] = sha256_text(diff)
-    recomputed["full_prompt_sha256"] = sha256_text(build_prompt(inputs, prompt_file.read_text(encoding="utf-8"), True))
+    has_diff = entry["diff_sha256"] is not None
+    recomputed["full_prompt_sha256"] = sha256_text(build_prompt(inputs, prompt_file.read_text(encoding="utf-8"), has_diff))
     mismatches = [name for name, value in recomputed.items() if entry.get(name) != value]
     return build_invocation(entry["model"], entry["effort"]), mismatches
 
