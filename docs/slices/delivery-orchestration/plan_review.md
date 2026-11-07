@@ -1,5 +1,35 @@
 # Independent plan review — delivery-orchestration
 
+## Current planning revision — 2026-11-07
+
+The user requested updating the plan/test plan from the combined incremental proposal and removing
+stale information. The active plan now defines slices 0, 1, 2, 3, 4a, 4b, 5 and 6; user-selected
+orchestrator and author/fixer roles; cross-model review in both directions; guideline/checklist
+ownership; originating-reviewer finding decisions from slice 2; and explicit deferred mechanisms
+with narrower claims. Separate clean delivery and failure evaluation remain required before the
+isolation pilot. The active test plan assigns evidence to each capability as it is introduced.
+
+Removed superseded two-slice sequencing, Codex-only authorship, historical environment/version
+probes and instructions requiring now-deferred mechanisms from the active planning documents.
+The plan's historical-decision table records the retained, amended and deferred obligations.
+Original reports, dispositions and usage below remain preserved; they do not govern the revised
+scope or approve this candidate. Six historical completed fix cycles remain consumed for this
+bundle, with no reset, new reviewer invocation or transferred disposition authority.
+
+This edit changes only planning documents, this review-status note and the slice-index row.
+No rulebook, template, helper, executable test or operational document is changed. No commit,
+push or PR update is part of this editing step. `make docs-check` and diff whitespace checks
+pass; no runtime or independent-acceptance result is claimed. The earlier OPA image-user failure
+remains an outstanding verification issue for future applicable quality acceptance.
+
+The user subsequently requested updating existing PR #26 with this revision. Publication is
+authorized; independent acceptance, implementation and additional review cycles are not inferred.
+
+## Historical review and publication records
+
+All dated sections below describe earlier candidates and decisions. Current scope is in the
+2026-11-07 plan/test plan; historical model approvals cannot be carried to those revised inputs.
+
 ## Current scope correction — planning only, 2026-11-05
 
 The user clarified that this grill-me stage delivers plan/test-plan artifacts only; related
