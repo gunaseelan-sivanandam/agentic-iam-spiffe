@@ -58,7 +58,8 @@ def tool_result(call_id: str, is_error: bool) -> dict:
 
 
 def build_stream(scenario: dict, cwd: str) -> list[dict]:
-    events: list[dict] = [{"type": "system", "subtype": "init"}]
+    offered = scenario.get("offered", ["Glob", "Grep", "Read", "StructuredOutput"])
+    events: list[dict] = [{"type": "system", "subtype": "init", **({"tools": offered} if offered is not None else {})}]
     calls = [("Read", {"file_path": path}) for path in scenario.get("reads", ["scripts/review_me.py"])]
     calls += [(name, args) for name, args in scenario.get("tool_uses", [])]
     errors, tool_errors = set(scenario.get("read_errors", [])), set(scenario.get("tool_errors", []))

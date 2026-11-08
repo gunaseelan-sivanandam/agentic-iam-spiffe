@@ -31,9 +31,10 @@ PEM_CERTIFICATE_BLOCK = re.compile(r"-----BEGIN CERTIFICATE-----.*?-----END CERT
 BASE64_RUN = re.compile(r"[A-Za-z0-9+/_-]{40,}={0,2}")
 # base64 of "-----BEGIN " when the PEM text starts the encoded data.
 BASE64_PEM_START = "LS0tLS1CRUdJTi"
-# The value may sit in a Markdown code span or in quotes, also JSON-escaped (\") as in a review
-# report, opened before or after the scheme: Authorization: `Bearer <token>`, Authorization: "<token>".
-QUOTE = r"(?:`|\\?['\"])?"
+# The value may sit in a Markdown code span of any fence length, or in quotes escaped any number of
+# times (\" in a JSON review report), opened before or after the scheme:
+# Authorization: `Bearer <token>`, Authorization: Bearer ``<token>``, Authorization: "<token>".
+QUOTE = r"(?:`+|\\*['\"])?"
 CREDENTIAL_LINE = re.compile(
     r"(?:JIRA_API_TOKEN\s*=|Authorization\s*:[ \t]*" + QUOTE + r"(?:(?:Bearer|Basic|Token)[ \t]+)?)[ \t]*"
     + QUOTE + r"(?P<value>[^\s'\"`]+)",

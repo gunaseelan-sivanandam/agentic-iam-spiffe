@@ -88,6 +88,9 @@ SECRET_FIXTURES = {
     "quoted Authorization header": lambda: ('Authorization: "Bearer ' + secrets.token_hex(16) + '"\n', "credential line"),
     "JSON-escaped Authorization header": lambda: (json.dumps({"problem": "Authorization: \"" + secrets.token_hex(16) + "\""}),
                                                   "credential line"),
+    "double-backtick code span": lambda: ("Authorization: Bearer ``" + secrets.token_hex(16) + "``\n", "credential line"),
+    "twice JSON-escaped header": lambda: (json.dumps(json.dumps({"h": 'Authorization: "' + secrets.token_hex(16) + '"'})),
+                                          "credential line"),
     "Atlassian API token": lambda: ("token ATATT3x" + secrets.token_urlsafe(30) + "\n", "Atlassian API token"),
 }
 

@@ -352,6 +352,7 @@ class StreamSummary:
     denials: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
     denied_ids: set[str] = field(default_factory=set)
     failed_ids: set[str] = field(default_factory=set)  # calls whose result was an error: a failed Read read nothing
+    offered: set[str] | None = None  # the tools the session's init event offers; None when it names none
     rate_limit: dict[str, Any] | None = None
     result: dict[str, Any] | None = None
 
@@ -370,7 +371,10 @@ def parse_stream(text: str) -> StreamSummary:
 
 def _add_event(summary: StreamSummary, event: dict[str, Any]) -> None:
     kind = event.get("type")
-    if kind == "assistant":
+    if kind == "system" and event.get("subtype") == "init":
+        tools = event.get("tools")
+        summary.offered = {str(t) for t in tools} if isinstance(tools, list) and tools else None
+    elif kind == "assistant":
         summary.tool_uses += _tool_uses(event)
     elif kind == "user":
         summary.failed_ids |= _failed_results(event)
@@ -451,11 +455,13 @@ def summarise_paths(summary: StreamSummary, copy_root: Path) -> tuple[list[str],
 
 
 def _other_tools(summary: StreamSummary) -> dict[str, list[str]]:
-    """Calls to tools other than Read, Grep and Glob: those that ran fail the review; those whose result was an
-    error (a tool the CLI does not offer) are only logged."""
+    """Calls to tools other than Read, Grep and Glob fail the review. Only a call that cannot have run is
+    logged instead: one to a tool the session's init event did not offer, answered with an error."""
     other = [c for c in summary.tool_uses if c.name not in REVIEW_TOOLS]
-    return {"other_tools": sorted({c.name for c in other if c.call_id not in summary.failed_ids}),
-            "other_tools_failed": sorted({c.name for c in other if c.call_id in summary.failed_ids})}
+    not_offered = {c.call_id for c in other
+                   if summary.offered is not None and c.name not in summary.offered and c.call_id in summary.failed_ids}
+    return {"other_tools": sorted({c.name for c in other if c.call_id not in not_offered}),
+            "other_tools_not_offered": sorted({c.name for c in other if c.call_id in not_offered})}
 
 
 def call_stats(summary: StreamSummary, copy_root: Path) -> dict[str, Any]:

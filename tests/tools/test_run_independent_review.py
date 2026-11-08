@@ -255,7 +255,7 @@ START_FIELDS = {"event", "attempt", "unit", "count", "round", "round_reviewers",
                 "schema_sha256", "extension", "reset", "report_path", "started_at"}
 END_FIELDS = {"event", "attempt", "status", "reason", "ended_at", "verdict", "report_sha256", "duration_ms", "turns",
               "tokens", "cost_usd_estimate", "tool_calls", "paths_read", "denied", "outside_calls", "outside",
-              "other_tools", "other_tools_failed", "utilization"}
+              "other_tools", "other_tools_not_offered", "utilization"}
 
 
 def test_log_has_one_start_and_one_end_entry_with_the_planned_fields(fx: Fixture) -> None:
@@ -576,7 +576,22 @@ def test_call_to_a_tool_the_cli_does_not_offer_does_not_fail_the_review(fx: Fixt
     fx.scenario({"tool_uses": [["Bash", {"command": "ls"}]], "tool_errors": ["Bash"]})
     assert _run(fx) == 0
     end = _ends(fx)[0]
-    assert end["status"] == "completed" and end["other_tools"] == [] and end["other_tools_failed"] == ["Bash"]
+    assert end["status"] == "completed" and end["other_tools"] == [] and end["other_tools_not_offered"] == ["Bash"]
+
+
+def test_offered_tool_that_ran_with_an_error_still_fails(fx: Fixture) -> None:
+    """An error result does not show that a call never ran: a Bash command can run and exit non-zero."""
+    fx.scenario({"offered": ["Bash", "Glob", "Grep", "Read"], "tool_uses": [["Bash", {"command": "false"}]],
+                 "tool_errors": ["Bash"]})
+    assert _run(fx) == 1
+    end = _ends(fx)[0]
+    assert end["status"] == "failed" and end["other_tools"] == ["Bash"] and end["other_tools_not_offered"] == []
+
+
+def test_without_an_offered_tool_list_an_erroring_call_still_fails(fx: Fixture) -> None:
+    fx.scenario({"offered": None, "tool_uses": [["Bash", {"command": "ls"}]], "tool_errors": ["Bash"]})
+    assert _run(fx) == 1
+    assert _ends(fx)[0]["other_tools"] == ["Bash"]
 
 
 def test_reports_of_the_same_unit_in_two_slices_do_not_overwrite_each_other(fx: Fixture) -> None:
