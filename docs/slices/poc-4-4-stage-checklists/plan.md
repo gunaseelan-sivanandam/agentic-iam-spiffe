@@ -4,7 +4,7 @@ Plan of slice 4.4 of the agentic-SDLC PoC (issue #41, part of slice 4, #33): res
 review practice for each artifact type, write a short checklist with blocking criteria for each, check
 the lists against the delivery problem log, and give each review its stage's list as the minimum.
 
-Status: draft, 2026-11-08, revised after plan review round 1. Approved when the owner merges slice
+Status: draft, 2026-11-08, revised after plan review rounds 1 and 2. Approved when the owner merges slice
 4's single plan PR.
 
 **Order of work:** after 4.1 (the checklist section, the severity rules), 4.2 and 4.3, and after 4.5's

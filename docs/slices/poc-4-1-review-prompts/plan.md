@@ -4,7 +4,7 @@ Plan of slice 4.1 of the agentic-SDLC PoC (issue #38, part of slice 4, #33): eve
 opens with an open mandate, rechecks verify instead of trusting, and every finding carries a
 severity that says what the author must do with it.
 
-Status: draft, 2026-11-08, revised after plan review round 1. Approved when the owner merges slice
+Status: draft, 2026-11-08, revised after plan review rounds 1 and 2. Approved when the owner merges slice
 4's single plan PR into `poc/agentic-sdlc` (owner, 2026-11-08: one plan PR for all six sub-issues,
 one final PR).
 

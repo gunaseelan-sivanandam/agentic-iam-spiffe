@@ -4,7 +4,7 @@ Plan of slice 4.5 of the agentic-SDLC PoC (issue #42, part of slice 4, #33): mea
 review setup and three reviewer models on the benchmark's cases, within 40 reviewer runs, before the
 setup becomes everyone's default.
 
-Status: draft, 2026-11-08, revised after plan review round 1. Approved when the owner merges slice
+Status: draft, 2026-11-08, revised after plan review rounds 1, 2 and 3. Approved when the owner merges slice
 4's single plan PR.
 
 **Order of work:** in two parts. 4.5a (result identity, configurations, new cases, the Codex mode and
@@ -66,7 +66,7 @@ None added (POC-D9).
 ## Success criteria
 
 - At most 40 runs; every run, refusal and failure appears in the report.
-- The report compares `open` and `open+list` with stage A's `short` and `checklist`, `narrow` with
+- The report compares `open` and `open+list` with stage A's `short` and `checklist`, re-scored with the new key, `narrow` with
   `open` on the DPL-010 case, and Opus with Sonnet and Codex (or says why Codex dropped out), with
   hand-confirmed detections, and applies S45-D8.
 - The canary is valid (the twin followed the file and the hook) and passes.
@@ -78,7 +78,7 @@ None added (POC-D9).
 `scripts/run_review_benchmark.py` (identity, configurations, per-stage files and budget, lists from a
 fixed commit, the new cases, `--rescore`, the CLI-version gate), `tests/review_benchmark/` (answer
 key version, new cases and patches, prompts, run groups), the launcher's Codex mode
-(`scripts/run_independent_review.py`), the probe record, the tooling tests, the report
+(`scripts/run_independent_review.py`), the Codex probe script and the record it writes, the tooling tests, the report
 `docs/slices/poc-4-5-benchmark/benchmark_report.md`.
 
 ## Out of scope

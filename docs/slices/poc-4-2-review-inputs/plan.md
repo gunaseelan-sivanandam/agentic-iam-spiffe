@@ -4,7 +4,7 @@ Plan of slice 4.2 of the agentic-SDLC PoC (issue #39, part of slice 4, #33): the
 author, decides which files a reviewer must examine, names the upstream items a change traces to,
 and computes the evidence the reviewer gets.
 
-Status: draft, 2026-11-08, revised after plan review round 2. Approved when the owner merges slice
+Status: draft, 2026-11-08, revised after plan review rounds 2 and 3. Approved when the owner merges slice
 4's single plan PR.
 
 **Order of work:** after 4.1, whose upstream and evidence sections and `accounted` list this slice
