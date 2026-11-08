@@ -1,5 +1,8 @@
 # Slice Test Plan
 
+Test plan of slice `<slice-id>`: one sentence on what its tests prove. Replace this paragraph; it is
+the document's purpose line (`AGENTS.md`, coding rule 8).
+
 ## Goal
 - Describe what this test plan proves about the approved slice behavior.
 
@@ -56,5 +59,9 @@ answers in the PR body:
 2. *Keys:* does the change make a key, socket or secret reachable by a service outside the holder
    list, through a compose mount, an env var, a Dockerfile `COPY`, an entrypoint or script that
    copies or writes it, or a shared volume?
+3. *Names and headers:* does each new file start with a comment that says what the file is for
+   ([AGENTS.md, coding rule 8](../../../AGENTS.md#coding-rules)), and do its names say what each part
+   does?
 
-A "yes" to either blocks, under [AGENTS.md — PoC scope and proportion](../../../AGENTS.md#poc-scope-and-proportion).
+A "yes" to question 1 or 2 blocks, under [AGENTS.md — PoC scope and proportion](../../../AGENTS.md#poc-scope-and-proportion).
+Findings on question 3 are fix-or-defer: the author fixes them or the user defers them.

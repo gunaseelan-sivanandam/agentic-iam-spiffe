@@ -369,3 +369,21 @@ Approvable within the threat model: yes
 | Cosmetic line breaks | **Fixed** (step 4's OPL bullet reflowed). | `AGENTS.md`, step 4 |
 
 The review ended after round 2: every finding is fixed or accepted, and no blocking finding is open.
+
+## The owner's decisions (PR #34)
+
+The owner answered the questions of the PR body in a PR comment on 2026-11-08
+([#34 comment](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/pull/34#issuecomment-6720990541)),
+verbatim:
+
+> S1-C1 - Use Claude
+> S1-C2, scope of POC-D7: All the files
+> S1-C3: I assume this is okay
+> S1-A4: Yes
+
+| Question | Applied | Where |
+| --- | --- | --- |
+| S1-C1 (reviewer model) | No change: reviews run on Claude, as POC-D2 and this record already say. | — |
+| S1-C2 (scope of POC-D7) | Coding rule 8 covers every file: Markdown starts with a `#` title and a paragraph that says what the document is for; every other format with comments starts with a first comment or line; only formats without comment syntax (JSON, JSONL) and binary files are exempt. The two slice templates start with a purpose paragraph to replace. Slice 3's lint gate checks the Markdown title and paragraph as well. This widens the plan's slice-3 list of checked file types, by the owner's decision. | `AGENTS.md` coding rule 8; `_template/plan.md`, `_template/test_plan.md`; slice 3 |
+| S1-C3 (gate-consistency before slice 3) | No change: slice 3 moves `gate-consistency` to the PoC ruleset as planned. | — |
+| S1-A4 (names question) | The template's implementation-review questions gain question 3, names and headers; its findings are fix-or-defer. `AGENTS.md` step 4's description of the implementation review says the same. | `_template/test_plan.md`; `AGENTS.md`, Independent review |

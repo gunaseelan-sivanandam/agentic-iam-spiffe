@@ -1,5 +1,8 @@
 # Slice Plan
 
+Plan of slice `<slice-id>`: one sentence on what the slice delivers and why. Replace this paragraph;
+it is the document's purpose line (`AGENTS.md`, coding rule 8).
+
 ## Goal
 - Describe the slice outcome in one paragraph.
 

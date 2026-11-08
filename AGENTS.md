@@ -216,8 +216,9 @@ template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>
   system-under-test threat the slice touches.
 - **Implementation review** (step 4). The reviewer answers the questions in the test-plan template
   (`docs/slices/_template/test_plan.md`: which wrong failure would still pass each new or changed
-  test, and whether a key, socket or secret now reaches a service outside its holders) in the PR
-  body. A "yes" blocks, under the same review loop.
+  test, whether a key, socket or secret now reaches a service outside its holders, and whether each
+  new file's purpose comment and names say what it does) in the PR body. A "yes" to the first two
+  blocks, under the same review loop; findings on purpose comments and names are fix-or-defer.
 - **Fixes stay within the agreed decisions** (the plan's decisions, or the request, and this file).
   Before answering a finding with a new mechanism, the author names the upstream choice that causes
   it and weighs changing that choice; removing or changing a mechanism is preferred over adding one.
@@ -276,9 +277,12 @@ Standards that are **not** gated yet (follow them for new and changed code):
 7. Secrets this repository creates are stored in a standard, recognisable format (private keys as
    PKCS#8 PEM), so the evidence secret check finds them by shape. Secrets created by others (SPIRE
    key stores, join tokens, Jira tokens) keep their format.
-8. Every new file starts with a comment that says what the file is for (in Python, the module
-   docstring; file types without comments, such as JSON, are exempt). Names say what a file,
-   function or component does.
+8. Every new file starts with a comment that says what the file is for: in Python the module
+   docstring; in Markdown a `#` title followed by a paragraph that says what the document is for;
+   in every other format with comments (shell, YAML, TOML, Dockerfile, Rego, patches, text and
+   others) a first comment or line after any shebang or YAML document marker. Only formats without
+   comment syntax (JSON, JSONL) and binary files are exempt. Names say what a file, function or
+   component does.
 
 ## Documentation rules
 - One home per fact. Before adding a document, check the [Start here](#start-here) table; extend the

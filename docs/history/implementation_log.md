@@ -23,6 +23,9 @@ is first); every heading carries its date.
 - `Makefile`: `BASE_REF` defaults to `origin/poc/agentic-sdlc`; `tests/unit/AGENTS.md` no longer
   hard-codes `origin/main` in its diff-coverage example. The slice templates: `plan.md` asks the
   POC-D6 questions for every check a slice adds; `test_plan.md` no longer names Codex as reviewer.
+- The owner's answers in PR #34 (2026-11-08): coding rule 8 covers every file, Markdown included
+  (only JSON, JSONL and binary files are exempt), the slice templates start with a purpose
+  paragraph, and the template's implementation review gains a names-and-headers question.
 - Validation: `make qa-quality` (qa-trace against the merge-base with `origin/poc/agentic-sdlc`: 0
   new gaps; unit traceability, unit guard, docs-check, test-lint, qa-deploy) and `make
   tooling-test` (230 pytest, 9 shell) passed. Full E2E suite on a clean stack at `7ab71c5`: 120/120
