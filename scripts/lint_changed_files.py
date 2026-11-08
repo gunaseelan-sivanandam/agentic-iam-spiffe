@@ -32,6 +32,8 @@ CONFIG = "ruff_changed_files.toml"
 NO_NOQA_RULES = "C901,PLR0912,PLR0913,PLR0915,N,F401,F841"
 SHELL_SHEBANG = re.compile(r"^#!\s*(?:/usr/bin/env\s+)?(?:/bin/|/usr/bin/)?(?:ba|da|k|z)?sh\b")
 TOOL_DIRECTIVE = re.compile(r"^#\s*(?:shellcheck\b|-\*-|yaml-language-server\b|noqa\b|type:)")
+# A line that starts a heading, list, table, code block or HTML comment, not a paragraph.
+NOT_A_PARAGRAPH = re.compile(r"^(?:#|[-*+] |\d+[.)] |\||```|~~~|<)")
 LIMIT_VALUE = re.compile(r"\((\d+) > \d+\)")
 HEADER_SUFFIXES = {".py", ".sh", ".yml", ".yaml", ".toml", ".rego"}
 
@@ -259,7 +261,7 @@ def _python_header(path: str, text: str) -> str | None:
 def _markdown_header(path: str, text: str) -> str | None:
     """A Markdown file starts with a `#` title followed by a paragraph (AGENTS.md coding rule 8)."""
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    if len(lines) >= 2 and lines[0].startswith("# ") and not lines[1].startswith("#"):
+    if len(lines) >= 2 and lines[0].startswith("# ") and not NOT_A_PARAGRAPH.match(lines[1]):
         return None
     return f"{path}: an added Markdown file needs a `#` title followed by a paragraph that says what it is for"
 
