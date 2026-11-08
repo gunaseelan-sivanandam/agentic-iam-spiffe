@@ -3182,7 +3182,7 @@ Also: a Docker socket mount counts as a mount fact.
 
 **Requirement:** REQ-T-R9. Test evidence holds no token value, private key or credential.
 
-**How:** guards work in a scratch directory; the harness publishes each test's evidence with every token-shaped value replaced by its SHA-256 fingerprint. `make qa-evidence` then checks every file of the publication set (`test_report.log`, `artifacts/rogue-tests/`, `artifacts/quality/`) for secret shapes (PEM private key, base64 PKCS#8 key, base64 of a PEM key, token-shaped runs, credential lines, Atlassian tokens), names file and kind only, and fails on an unreadable file or directory. CI uploads the evidence only when the check found nothing.
+**How:** guards work in a scratch directory; the harness publishes each test's evidence with every token-shaped value replaced by its SHA-256 fingerprint. `make qa-evidence` then checks every file of the publication set (`test_report.log`, `artifacts/rogue-tests/`, `artifacts/quality/`) for secret shapes (PEM private key, base64 PKCS#8 key, base64 of a PEM key, token-shaped runs, credential lines with a token-like value, Atlassian tokens), names file and kind only, and fails on an unreadable file or directory. CI uploads the evidence only when the check found nothing.
 
 **Negative controls** (`tests/tools/test_evidence_secrets.py`): each secret shape is found; the token-shape boundaries (199/200/201 characters, 19/20 distinct); a token anywhere in the publication set fails `qa-evidence`; an unlistable directory fails; CI uploads exactly the checked set, only after the check.
 

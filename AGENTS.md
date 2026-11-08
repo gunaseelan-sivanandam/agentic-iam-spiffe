@@ -205,8 +205,9 @@ template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>
   example [`review_1b.md`](docs/slices/agentic-delivery-process/review_1b.md#reviewer-prompts-verbatim)).
 - **Models and usage limits.** Agents use Claude models. Codex is used only for scoped
   implementation, and only while Claude's 5-hour or weekly usage is above 70%. Reviews run on
-  Claude; when a usage limit is reached, work pauses until it resets. The review benchmark may also
-  measure Codex as a reviewer; the default reviewer model is decided from its results.
+  Claude; when a usage limit is reached, work pauses until it resets. The review benchmark and slice
+  4's critique of the stage checklists may also use Codex as a reviewer, only when a probe shows it
+  confined to its copy (slice 4.5); the default reviewer model is decided from the benchmark's results.
 - **Plan review** (step 1). The reviewer reviews `plan.md` and `test_plan.md` for security, test
   adequacy and consistency, under [PoC scope and proportion](#poc-scope-and-proportion).
   `docs/slices/<id>/plan_review.md` keeps each round's report verbatim, the SHA-256 of the files
@@ -259,7 +260,7 @@ never replaces it.
 | Mutation | `make unit-mutation` | CI | score ≥ 70% (capiss and tool-b), counting untested and skipped mutants as not killed; an empty run fails |
 | Gate consistency | `make gate-consistency` | CI | every row this table marks as enforced by CI has a CI job of the same name that runs `make <name>`; every CI job has such a row; every CI job is a required check of the integration branch's ruleset (`RULESET_URL` in the `Makefile`) and every required check is a job (the ruleset is read from the public GitHub API; a failed read fails) |
 | Full E2E suite | `make e2e` | CI, every push/PR; and local on a clean stack, required in step 4 | all pass; warnings reviewed. The CI job then runs `make qa-deploy` with image users inspected and `make qa-evidence`, and uploads the publication set for 14 days only if the secret check found nothing |
-| E2E evidence | `make qa-evidence` | in the CI `e2e` job; local, after the E2E run | every test has premise/exercise/outcome evidence and a PASS line; no file of the publication set (`PUBLICATION_SET` in the `Makefile`: `test_report.log`, `artifacts/rogue-tests/`, `artifacts/quality/`) holds a secret by shape: a PEM private key, a base64 PKCS#8 private key, base64 of a PEM private key, a base64 or base64url run of ≥ 200 characters with ≥ 20 distinct ones outside certificates, a `JIRA_API_TOKEN=` or `Authorization:` line with a value, or an Atlassian API token; an unreadable file fails; a finding names the file and kind, never the value |
+| E2E evidence | `make qa-evidence` | in the CI `e2e` job; local, after the E2E run | every test has premise/exercise/outcome evidence and a PASS line; no file of the publication set (`PUBLICATION_SET` in the `Makefile`: `test_report.log`, `artifacts/rogue-tests/`, `artifacts/quality/`) holds a secret by shape: a PEM private key, a base64 PKCS#8 private key, base64 of a PEM private key, a base64 or base64url run of ≥ 200 characters with ≥ 20 distinct ones outside certificates, a `JIRA_API_TOKEN=` or `Authorization:` line with a token-like value (20 characters or more, or a digit), or an Atlassian API token; an unreadable file fails; a finding names the file and kind, never the value |
 
 Standards that are **not** gated yet (follow them for new and changed code):
 - Functions above the complexity limit (ruff C901, as `make lint` measures it) are tracked as debt

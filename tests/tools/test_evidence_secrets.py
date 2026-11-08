@@ -84,6 +84,13 @@ SECRET_FIXTURES = {
                                                        "base64 PKCS#8 private key"),
     "JIRA_API_TOKEN line": lambda: ("JIRA_API_TOKEN=" + secrets.token_hex(12) + "\n", "credential line"),
     "Authorization Bearer header": lambda: ("Authorization: Bearer " + secrets.token_hex(16) + "\n", "credential line"),
+    "Authorization header in a code span": lambda: ("Authorization: `Bearer " + secrets.token_hex(16) + "`\n", "credential line"),
+    "quoted Authorization header": lambda: ('Authorization: "Bearer ' + secrets.token_hex(16) + '"\n', "credential line"),
+    "JSON-escaped Authorization header": lambda: (json.dumps({"problem": "Authorization: \"" + secrets.token_hex(16) + "\""}),
+                                                  "credential line"),
+    "double-backtick code span": lambda: ("Authorization: Bearer ``" + secrets.token_hex(16) + "``\n", "credential line"),
+    "twice JSON-escaped header": lambda: (json.dumps(json.dumps({"h": 'Authorization: "' + secrets.token_hex(16) + '"'})),
+                                          "credential line"),
     "Atlassian API token": lambda: ("token ATATT3x" + secrets.token_urlsafe(30) + "\n", "Atlassian API token"),
 }
 
@@ -117,6 +124,13 @@ ACCEPTED = {
     "3000-character run of one character": lambda: "A" * 3000,
     "credential line naming a variable": lambda: 'curl -H "Authorization: Bearer $token" https://tool-b\n',
     "credential env name without a value": lambda: "JIRA_API_TOKEN=\n",
+    # Prose and code that name the header, as review reports quote them (slice 4 plan reviews).
+    "header name in a code span": lambda: "fake `token` and `Authorization: Bearer` values\n",
+    "header format string": lambda: "printf 'Authorization: Bearer %s\\r\\n' \"$bearer\"\n",
+    "quoted escaped newline": lambda: '"JIRA_API_TOKEN=\\n"\n',
+    "header parameter type": lambda: "def call(authorization: str) -> None:\n",
+    "JSON-escaped concatenation": lambda: json.dumps('"Authorization: Bearer " + fake_token') + "\n",
+    "JSON-escaped ellipsis after the header": lambda: json.dumps({"p": "a `Authorization: `Bearer \u2026`` line"}) + "\n",
 }
 
 
@@ -131,6 +145,15 @@ def test_accepted_shapes_pass(name: str) -> None:
 ])
 def test_token_shape_boundaries(length: int, distinct: int, found: bool) -> None:
     assert ("token-shaped value" in _kinds(_run(length, distinct))) is found
+
+
+@pytest.mark.parametrize(("value", "found"), [
+    ("a" * 19, False), ("a" * 20, True), ("a" * 21, True),
+    ("abcdef", False), ("abc1ef", True),
+])
+def test_credential_value_boundaries(value: str, found: bool) -> None:
+    """A credential value is token-like: 20 characters or more, or a digit (MIN_CREDENTIAL_LENGTH)."""
+    assert ("credential line" in _kinds("Authorization: Bearer " + value + "\n")) is found
 
 
 # --- the check reads only the publication set, and fails closed ----------------
@@ -341,3 +364,14 @@ def test_harness_counts_a_failed_publish_and_fails_the_run(tmp_path: Path) -> No
     assert not scratch.exists()
     harness = (ROOT / "scripts" / "rogue_node_tests.sh").read_text(encoding="utf-8")
     assert 'if [ "$PUBLISH_FAILED" -ne 0 ]; then' in harness.split("printf '\\nTotal:")[-1]
+
+
+def test_rulebook_code_span_is_not_a_credential_but_a_header_value_is() -> None:
+    """The rulebook describes this check in code spans; review reports quote it (slice 4 plan reviews)."""
+    assert es.scan_text("a `JIRA_API_TOKEN=` or `Authorization:` line with a value", "doc.md") == []
+    assert [f.kind for f in es.scan_text("Authorization: Bearer " + "abc123def456", "log.txt")] == ["credential line"]
+
+
+def test_the_rulebook_passes_the_secret_check() -> None:
+    assert es.scan_text((ROOT / "AGENTS.md").read_text(encoding="utf-8"), "AGENTS.md") == []
+
