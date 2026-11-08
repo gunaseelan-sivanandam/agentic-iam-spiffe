@@ -5,6 +5,53 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-11-08 Slice agentic-sdlc-poc 2: review launcher and benchmark
+
+- Branch `poc/slice-2-review-launcher`, built on `poc/slice-1-rules` (slice 1) and rebased onto
+  `poc/agentic-sdlc` after PR #34 merged; `git range-diff` showed every slice-2 commit unchanged.
+- `scripts/run_independent_review.py`: one review round per invocation. Each reviewer is a fresh
+  headless Claude session in a frozen `git archive` copy without the unit's review record and attempt
+  log, with only Read, Grep and Glob, `--safe-mode`, `--setting-sources ""`, `dontAsk`, no MCP servers,
+  no saved session and only `PATH`, `HOME` and `LANG`; the approved rules come from the fetched base
+  branch, the change as a diff without the withheld files. The append-only attempt log
+  (`docs/slices/<id>/review_attempts.jsonl`, under an OS lock) admits rounds (POC-D4: round 1 plus
+  three fix rounds, an extension or reset reference used once), marks interrupted attempts and
+  releases a report only after its end entry. Paused, failed, pending, empty and escaped reviews and
+  the publication check fail closed; `invocation_from_entry` rebuilds an entry's call and hashes.
+- `scripts/run_review_benchmark.py` and `tests/review_benchmark/` (answer key, two prompts, four
+  planted patches): leak search before every case, deterministic scoring, a 26-call budget that holds
+  across invocations, a stop at a usage limit with resume, the canary and its twin. Stage A ran 24
+  calls; the [report](../slices/agentic-sdlc-poc/benchmark_report.md) recommends the short prompt
+  and one reviewer, a fix for the empty-review rule that failed 5 of 22 reviews, review questions
+  for defects of absence (DPL-004, DPL-005: neither prompt found them) and a severity rule for
+  secrets in evidence (DPL-002: seen, but rated advisory); 1 of 4 paired real misses detected.
+- `AGENTS.md`: reviews run through the launcher; the review record keeps task prompts and reports.
+- Review: six rounds through the launcher ([`review_slice_2.md`](../slices/agentic-sdlc-poc/review_slice_2.md)).
+  Round 1 found two blockers in the code (a canary that passed without a completed run; a budget
+  that held only within one invocation), both fixed with tests; round 2 accepted every answer.
+  Round 3 reviewed the report and close-out: its first attempt failed closed (a call named a path
+  outside the copy, probably a Markdown link resolved from the copy root; the cause cannot be
+  confirmed, because the CLI did not deny that call and the log then kept no detail); the rerun found that the report
+  missed an advisory finding on DPL-002, fixed in the report and in the scoring; round 4 rechecked.
+  Round 5, an extension the owner asked for before merging, had an open mandate, the coverage report
+  and the record and attempt log as evidence. It found two blockers that rounds 1 to 4 missed: a
+  failed Read counted as reading a file, and the record kept prompts with placeholders and reports
+  only rendered, so the log's hashes matched nothing in the repository. Both are fixed; the record
+  now keeps every prompt and report verbatim (checked against the log). Of its advisories, four are
+  fixed (an advisory-only column, outside calls logged with their tool and denial, any tool other
+  than Read, Grep or Glob fails the review, overstated counts and claims), the simpler alternative
+  is not applied, and the rest are slice-4 inputs (issue #33) and slice-7 inputs (issue #36).
+  Round 6, a recheck the owner asked for, opened the changed code for every answer and accepted
+  them all. Its advisories led to a test for the advisory-only column, a probe of how the CLI
+  reports a failed Read (CLI 2.1.319: an error result with the matching call ID, as the fix
+  assumes), and DPL-010 in the delivery problem log.
+- Validation: `make tooling-test` (332 pytest, 9 shell) and `make qa-quality` passed. Deliberately
+  breaking the main confinement, admission, budget and canary rules made at least one test fail; not
+  every defensive refusal path has a test (round 5). No
+  service, compose file or E2E harness changed. Full E2E suite on a clean stack at `642b840`: 120/120
+  passed, 1 warning (M5-T55, env-gated skip); then `make qa-deploy` with image users inspected and
+  `make qa-evidence` (validated 119, skipped 1) passed.
+
 ## 2026-11-07 Slice agentic-sdlc-poc 1: the PoC's rules
 
 - Branch `poc/slice-1-rules`, from `poc/agentic-sdlc` after PR #31 (the plan for slices 1–3).

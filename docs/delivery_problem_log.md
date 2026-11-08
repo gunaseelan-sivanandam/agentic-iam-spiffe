@@ -300,3 +300,66 @@ Fix the mechanism that makes the mistake possible (stale base branches), not onl
 ### Lesson
 A gate without a negative control can be silently empty. Prove each gate fails on the case it exists for.
 
+
+## DPL-010: Slice 2's reviews accepted answers on the author's word, and closed questions let gaps through
+
+- Status: Open (preventive actions are inputs for slice 4, issue #33)
+- Found: 2026-11-08, by the owner (untested refusal paths in the review launcher) and by slice 2's review
+  round 5, an extra round the owner asked for before merging PR #35
+
+### What happened
+- The review launcher's defensive refusal paths have no test, for example refusing when `AGENTS.md`
+  is missing on the base or when the record path is invalid. Review rounds 1 to 4 did not report it,
+  and the slice was called done without measuring coverage. The owner found it by asking where the
+  gaps were.
+- A Read that failed (a file too large to read, a missing file) counted as reading a file under
+  review. That is a false green in the launcher's rule that a review must open the files under
+  review. Rounds 1 to 4 missed it (round 5, R5-B1).
+- The review record claimed to keep every prompt and report verbatim, but held prompts with
+  placeholders and reports only in rendered form. The attempt log's hashes therefore matched nothing
+  in the repository. The claim was false in the very PR that added the `AGENTS.md` rule requiring it
+  (R5-B2).
+- Recheck rounds accepted answers without opening the changed code:
+  - Round 2 accepted launcher fixes after opening only the benchmark files.
+  - Round 4 accepted, in 17 seconds, an answer claiming an "Advisory only" report column that did not
+    exist (R5-A1, R5-A6).
+
+### Root causes
+Why it happened:
+- RC1: tests were derived only from the test plan's rows. Checks added during implementation got no
+  test, and coverage was not measured before the slice was called done.
+- RC2: the record was written for reading (rendered reports, placeholders), and its "verbatim" claim
+  was never checked against the attempt log.
+- RC3: the fake CLI sent no tool results, so no test could show a failed Read. How the real CLI
+  reports one was assumed, not probed.
+
+Why review did not catch it:
+- RC4: the author's review prompts asked closed questions ("name any test-plan row that has no
+  test", "accept or re-raise") and gave no open mandate to look for what is missing.
+- RC5: rechecks accepted answers on the author's word; nothing asked them to open the changed code
+  and its test.
+- RC6: reviewers got no coverage report and cannot run one, and the review record and attempt log
+  were withheld from every round, so no reviewer checked them.
+
+### Actions
+- Corrective (PR #35):
+  - Failed Reads no longer count as reading a file, and a call to any tool other than Read, Grep or
+    Glob fails the review.
+  - Each call that names a path outside the copy is logged with its tool and whether it was denied.
+  - The record keeps every prompt and report verbatim; each block's hash was checked against the
+    attempt log.
+  - The report gained an "Advisory only" column, with a test.
+  - How the CLI reports a failed Read was probed on 2026-11-08 (CLI 2.1.319: an error result with the
+    matching call ID).
+  - By the owner's decision, the untested refusal paths stay as they are in this PR.
+- Preventive (pending, slice 4, issue #33):
+  - every stage's prompt opens with an open mandate, and specific questions are a minimum;
+  - every stage gets the evidence (coverage, tool-computed lists of what is missing), not the
+    author's conclusions;
+  - a recheck opens the changed code and tests for each answer it accepts, and says what it read;
+  - an open final review;
+  - a check of review records against the attempt log (slice 6 candidate).
+
+### Lesson
+A question decides what an agent looks at. Give every stage the open mandate and the evidence, and
+make rechecks verify the fix rather than trust the answer.
