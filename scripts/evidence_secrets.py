@@ -38,6 +38,10 @@ CREDENTIAL_LINE = re.compile(
 # A value that names a variable or a redaction marker is not a credential, nor is a Markdown code
 # span (a value starting with a backtick), as in the rulebook's description of this very check.
 PLACEHOLDER = re.compile(r"^(?:\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|<[^>]*>|\[?REDACTED\]?|\*+|Bearer|Basic|`.*)$", re.IGNORECASE)
+# A credential value is token-like: the ones this system handles (capiss and Jira tokens, SVIDs, Basic
+# credentials) are long or carry digits. A short value without a digit is a word of prose or code that
+# names the header ("Bearer`", "%s\r\n", "str"), as review reports quoting the repository do.
+MIN_CREDENTIAL_LENGTH = 20
 ATLASSIAN_TOKEN = re.compile(r"ATATT3[A-Za-z0-9_=-]{20,}")
 
 
@@ -112,7 +116,7 @@ def scan_text(text: str, path: str) -> list[Finding]:
         line = _line_of(text, match.start())
         findings += [Finding(path, line, kind) for kind in _run_kinds(match.group(0))]
     for match in CREDENTIAL_LINE.finditer(text):
-        if not PLACEHOLDER.match(match.group("value")):
+        if _is_credential_value(match.group("value")):
             findings.append(Finding(path, _line_of(text, match.start()), "credential line"))
     findings += [Finding(path, _line_of(text, m.start()), "Atlassian API token") for m in ATLASSIAN_TOKEN.finditer(text)]
     return sorted(set(findings), key=lambda f: (f.line, f.kind))
@@ -159,6 +163,12 @@ def scan(paths: list[Path]) -> tuple[list[Finding], list[str]]:
 
 def fingerprint(value: str) -> str:
     return "sha256:" + hashlib.sha256(value.encode("ascii")).hexdigest()
+
+
+def _is_credential_value(value: str) -> bool:
+    if PLACEHOLDER.match(value):
+        return False
+    return len(value) >= MIN_CREDENTIAL_LENGTH or any(c.isdigit() for c in value)
 
 
 def _is_token_shaped(run: str) -> bool:
