@@ -84,7 +84,7 @@ Run from repo root.
   ```
 - Diff coverage gate:
   ```bash
-  make unit-diff-cov BASE_REF=origin/main
+  make unit-diff-cov  # compares with BASE_REF, by default the integration branch
   ```
 - Mutation gate:
   ```bash

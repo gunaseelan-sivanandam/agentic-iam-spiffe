@@ -6,7 +6,9 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Where the project stands
 - **Agent-run delivery PoC** on the branch `poc/agentic-sdlc`, kept off `main`: the plan
   [agentic-sdlc-poc](slices/agentic-sdlc-poc/plan.md) (PR #31) approves slices 1–3 (rules, review
-  launcher and benchmark, changed-files lint) and outlines slices 4–8. Next: slice 1. Slice 4's
+  launcher and benchmark, changed-files lint) and outlines slices 4–8. Slice 1 (rules: review limits,
+  reviewer, integration branch, code owner, purpose headers) is in a PR; slices 2 and 3 are built on
+  it and get their PRs after it merges. Slice 4's
   grill-me inputs are in [#33](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/33); agents taking backlog items the owner did not write is
   [#32](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/32).
 - **Implemented milestones:** M1, M2, M2.5, M3, M4 (reduced scope), M4a, M4b, M5.
@@ -40,6 +42,9 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Last verification
 | Check | Date | Result |
 | --- | --- | --- |
+| Full E2E suite, clean stack, `make e2e` on `poc/slice-1-rules` (`7ab71c5`) | 2026-11-07 | 120/120 passed; 1 warning (M5-T55 env-gated skip) |
+| `make qa-deploy` (image users inspected) and `make qa-evidence` after that run | 2026-11-07 | both PASSED; qa-evidence: validated 119, skipped 1 |
+| `make qa-quality` (qa-trace in `--mode pr --base origin/poc/agentic-sdlc`) and `make tooling-test` on `poc/slice-1-rules` | 2026-11-07 | PASSED; gap gate: 0 new gaps, 113 coverage gaps remain; 230 pytest, 9 shell |
 | Full E2E suite, clean stack, `make e2e` on `slice/ci-evidence-trace-b` | 2026-10-31 | 120/120 passed; 1 warning (M5-T55 env-gated skip) |
 | `make qa-deploy` (image users inspected) and `make qa-evidence` after that run | 2026-10-31 | both PASSED; qa-evidence: validated 119, skipped 1, no secret findings, the qa-deploy report accepted (passed, inspected, digests match) |
 | `make qa-quality` (qa-trace in `--mode pr --base origin/main`, unit traceability, unit guard, docs-check, test-lint, qa-deploy) | 2026-10-31 | PASSED; gap gate: 0 new gaps, 25 closed; 113 coverage gaps remain (91 requirements without proof, 18 DD without UT, 4 tests without requirements); REQ-SEC-K1, K2, K4 not proved (known violations OPL-005, -006, -008), D2 not proved (grace until 2027-01-31), the other six and REQ-T-R9 proved statically |
@@ -50,7 +55,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `poc/plan-slices-1-3` | Plan agentic-sdlc-poc: roadmap to the complete delivery cycle, and slices 1–3 | PR #31 into `poc/agentic-sdlc`, awaiting the owner's approval (PR #26 closed as superseded) |
+| `poc/slice-1-rules` | agentic-sdlc-poc slice 1: the PoC's rules in `AGENTS.md`, the slice templates, `CODEOWNERS` and the `Makefile` default `BASE_REF` | PR into `poc/agentic-sdlc`, awaiting the owner's approval |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).

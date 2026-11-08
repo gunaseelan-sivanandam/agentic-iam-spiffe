@@ -1,0 +1,3 @@
+# Code owners: only the repository owner's approval counts as the code-owner review that the
+# poc/agentic-sdlc ruleset requires (AGENTS.md, Git rules).
+* @gunaseelan-sivanandam

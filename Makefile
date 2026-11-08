@@ -9,7 +9,9 @@ MIN_TOTAL_LINE ?= 85
 MIN_CRITICAL_BRANCH ?= 75
 MIN_DIFF_COVERAGE ?= 90
 MIN_MUTATION_SCORE ?= 70
-BASE_REF ?= origin/main
+# The integration branch (AGENTS.md, Git rules): PoC work merges into poc/agentic-sdlc, so local gate
+# runs compare against it. Set it back to origin/main when the PoC merges into main.
+BASE_REF ?= origin/poc/agentic-sdlc
 # Gap gate: fail on a coverage gap the branch adds compared with its merge-base with BASE_REF.
 # CI passes --mode pr --base origin/<PR base> on pull requests and --mode push on main.
 QA_TRACE_ARGS ?= --mode pr --base $(BASE_REF)
