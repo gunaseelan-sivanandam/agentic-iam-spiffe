@@ -64,6 +64,19 @@ jobs:
       - name: Lint E2E outcome checks
         run: make test-lint
 
+  lint:
+    # PRs only: it compares the files the PR changes with the PR's merge-base.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-python-deps
+      - name: Lint the files the PR adds, changes or renames, against its merge-base
+        run: make lint BASE_REF="origin/${{ github.base_ref }}"
+
   qa-deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -172,5 +185,5 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-python-deps
-      - name: Check that AGENTS.md CI gates, CI jobs and main's required checks agree
+      - name: Check that AGENTS.md CI gates, CI jobs and the integration branch's required checks agree
         run: make gate-consistency

@@ -5,6 +5,53 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-11-08 Slice agentic-sdlc-poc 3: changed-files lint
+
+- Branch `poc/slice-3-changed-files-lint`, built on `poc/slice-2-review-launcher` and rebased onto
+  `poc/agentic-sdlc` after PR #35 merged. `git range-diff` showed every code commit unchanged; two
+  commits changed only where conflicts in the status lines and the shared attempt log were resolved.
+- `make lint` (`scripts/lint_changed_files.py`): for every file the change adds, modifies or renames,
+  ruff and shellcheck run on the merge-base and the new version; a finding key (file, rule, enclosing
+  function or line text) that occurs more often or with a higher value fails, so existing violations
+  stay and a pure rename keeps its key. By the owner's answer in PR #34 (coding rule 8 covers every
+  file), added Markdown files need a `#` title and a paragraph too. `ruff_changed_files.toml`, read
+  from the merge-base: ruff's
+  default rules, C901 ≤ 10, PLR0912/0913/0915 (12 branches, 5 arguments, 50 statements), N, S (except
+  `assert` in `tests/`); the limit, naming, F401 and F841 rules run with `--ignore-noqa`. Added
+  Python, shell, YAML, TOML, Dockerfile and Rego files need a purpose comment. A missing base or tool
+  fails the run.
+- CI job `lint` (PRs only); `requirements-dev.txt` pins `ruff==0.15.18` and `shellcheck-py==0.11.0.1`;
+  `RULESET_URL` names the `poc/agentic-sdlc` ruleset, so `gate-consistency` checks the integration
+  branch's required checks. `AGENTS.md`: a gates row for `lint`; the not-gated standards keep only the
+  whole-tree `ruff check` and the debt list. `docs/STATUS.md`: the complexity debt re-measured with
+  ruff C901 (12 functions, radon counted 16).
+- Review: four rounds through the launcher ([`review_slice_3.md`](../slices/agentic-sdlc-poc/review_slice_3.md)).
+  Round 1 found two test gaps that let a regression pass (no `__init__.py` without a docstring; tool
+  directives never run on the comment-header file types), both fixed with tests, and six advisories
+  (tool errors, stale "main ruleset" wording, binary files, a merge-base test that could not fail,
+  names, loose header assertions), all fixed; round 2 accepted every answer. Round 3 reviewed the
+  Markdown check added for the owner's answer in PR #34 (verdict yes; its advisory fixed after the
+  round). Round 4, an open-mandate review with the review record and attempt log as evidence (the
+  lesson of DPL-010), found two blockers: no test ran the gate on a modified or renamed shell script,
+  and these records were stale. Both are fixed, as are five advisories (a syntax-error test, a
+  missing-shellcheck test, a note that uncommitted changes are not linted, Dockerfile parser
+  directives, wording). The rest are slice-4 inputs.
+- Validation: `make lint` passes against `origin/poc/agentic-sdlc`, and `make qa-quality` (qa-trace,
+  unit traceability, unit guard, docs-check, test-lint, qa-deploy) passes. `make tooling-test`: all
+  tests pass locally except the 9 shell cases of `tests/tools/test_lint_changed_files.py`, which
+  need `shellcheck` (not installable on this machine). They run for the first time on the reviewed
+  commit in the PR's CI; an earlier CI run (`workflow_dispatch` on `a09ab0d`) passed the 6 shell
+  cases that existed then. In that run gate-consistency failed only on "CI job lint is not a required
+  check", which the owner's user action 2 resolves. Deliberately breaking the gate (honouring `noqa`
+  on limits, reading the configuration from the change, ignoring the value, no rename matching, no
+  header check) made at least one test fail each time. Full E2E suite on a clean stack at `89c9cbe`:
+  120/120 passed, 1 warning (M5-T55, env-gated skip); then `make qa-deploy` with image users inspected
+  and `make qa-evidence` (validated 119, skipped 1) passed; the later changes touch only the lint
+  gate, its tests and documents, no runtime code.
+- When the PoC merges into `main`, reset `RULESET_URL` to the `main` ruleset and the `Makefile`
+  default `BASE_REF`, reword the `CODEOWNERS` comment, and decide whether `lint` becomes a required
+  check on `main`.
+
 ## 2026-11-08 Slice agentic-sdlc-poc 2: review launcher and benchmark
 
 - Branch `poc/slice-2-review-launcher`, built on `poc/slice-1-rules` (slice 1) and rebased onto

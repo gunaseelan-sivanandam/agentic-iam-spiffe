@@ -7,8 +7,8 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 - **Agent-run delivery PoC** on the branch `poc/agentic-sdlc`, kept off `main`: the plan
   [agentic-sdlc-poc](slices/agentic-sdlc-poc/plan.md) (PR #31) approves slices 1–3 (rules, review
   launcher and benchmark, changed-files lint) and outlines slices 4–8. Slice 1 (rules: review limits,
-  reviewer, integration branch, code owner, purpose headers) merged in PR #34. Slice 2 (review
-  launcher and benchmark) is in a PR; slice 3 is built on it and gets its PR after it merges. Slice
+  reviewer, integration branch, code owner, purpose headers) merged in PR #34, slice 2 (review
+  launcher and benchmark) in PR #35; slice 3 (changed-files lint) is in a PR. Slice
   2's [benchmark report](slices/agentic-sdlc-poc/benchmark_report.md) is the other input for slice 4. Slice 4's
   grill-me inputs are in [#33](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/33); agents taking backlog items the owner did not write is
   [#32](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/32).
@@ -43,6 +43,8 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Last verification
 | Check | Date | Result |
 | --- | --- | --- |
+| Full E2E suite, clean stack, `make e2e` on `poc/slice-3-changed-files-lint` (`89c9cbe`; slice 2 at `642b840` gave the same) | 2026-11-08 | 120/120 passed; 1 warning (M5-T55 env-gated skip); `make qa-deploy` (image users inspected) and `make qa-evidence` PASSED after it |
+| `make lint` and `make qa-quality` on slice 3 against `origin/poc/agentic-sdlc`; `make tooling-test` | 2026-11-08 | lint and qa-quality PASSED; tooling tests pass locally except the 9 shell cases, which need `shellcheck` and run in the PR's CI |
 | Full E2E suite, clean stack, `make e2e` on `poc/slice-1-rules` (`7ab71c5`) | 2026-11-07 | 120/120 passed; 1 warning (M5-T55 env-gated skip) |
 | `make qa-deploy` (image users inspected) and `make qa-evidence` after that run | 2026-11-07 | both PASSED; qa-evidence: validated 119, skipped 1 |
 | `make qa-quality` (qa-trace in `--mode pr --base origin/poc/agentic-sdlc`) and `make tooling-test` on `poc/slice-1-rules` | 2026-11-07 | PASSED; gap gate: 0 new gaps, 113 coverage gaps remain; 230 pytest, 9 shell |
@@ -56,7 +58,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `poc/slice-2-review-launcher` | agentic-sdlc-poc slice 2: the review launcher, its attempt log, the benchmark and its stage-A report | PR into `poc/agentic-sdlc`, awaiting the owner's approval |
+| `poc/slice-3-changed-files-lint` | agentic-sdlc-poc slice 3: the changed-files lint gate (`make lint`, CI job `lint`) | PR into `poc/agentic-sdlc`; after `lint` has run there once, the owner adds it to the PoC ruleset's required checks |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
@@ -86,10 +88,12 @@ Full entries, root causes and lessons in [`docs/delivery_problem_log.md`](delive
   (OPL-006).
 - Some test titles claim more than their guards check (`M5-T19`, `M5-T21`, `M5-T34`, `M5-T35`,
   `M5-T36`); `docs/test_spec.md` notes each one.
-- Functions above the complexity target of 10 (`radon cc services scripts -n C`): 16, the worst being
-  `scripts/validate_e2e_evidence.py:main` (32), `scripts/validate_traceability.py:_parse_unit_tests`
-  (25), `jira-mcp-gateway do_POST` (23), and capiss `log_mint_decision` (23). The trace validator's
-  `main` (63) was split in slice `ci-evidence-trace` B.
+- Functions above the complexity limit of 10, measured as `make lint` measures it (ruff C901 over
+  `services`, `scripts` and `tests`, re-measured on 2026-11-08): 12, the worst being
+  `scripts/validate_e2e_evidence.py:main` (19), capiss `resource_mint` (19),
+  `scripts/validate_traceability.py:_parse_unit_tests` (18), `scripts/validate_unit_traceability.py:main`
+  (17) and `services/shared/enforcement_contract.py:verify_chain_contract` (17). `make lint` fails a
+  change that makes one of them worse. (Radon counted 16, with boolean operators.)
 - `make qa-trace` scans only `services/` and `scripts/` for DD tags, so `DD-918`, `DD-920`, and
   `DD-921` in the top-level `varambu` script are not indexed.
 - **Open decision (user):** mutation testing mutates covered lines only
