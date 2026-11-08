@@ -7,8 +7,8 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 - **Agent-run delivery PoC** on the branch `poc/agentic-sdlc`, kept off `main`: the plan
   [agentic-sdlc-poc](slices/agentic-sdlc-poc/plan.md) (PR #31) approves slices 1–3 (rules, review
   launcher and benchmark, changed-files lint) and outlines slices 4–8. Slice 1 (rules: review limits,
-  reviewer, integration branch, code owner, purpose headers) merged in PR #34. Slice 2 (review
-  launcher and benchmark) is in a PR; slice 3 is built on it and gets its PR after it merges. Slice
+  reviewer, integration branch, code owner, purpose headers) merged in PR #34, slice 2 (review
+  launcher and benchmark) in PR #35; slice 3 (changed-files lint) is in a PR. Slice
   2's [benchmark report](slices/agentic-sdlc-poc/benchmark_report.md) is the other input for slice 4. Slice 4's
   grill-me inputs are in [#33](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/33); agents taking backlog items the owner did not write is
   [#32](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/32).

@@ -7,8 +7,9 @@ is first); every heading carries its date.
 
 ## 2026-11-08 Slice agentic-sdlc-poc 3: changed-files lint
 
-- Branch `poc/slice-3-changed-files-lint`, built on `poc/slice-2-review-launcher`; its PR opens after
-  slice 2 merges, rebased onto `poc/agentic-sdlc`.
+- Branch `poc/slice-3-changed-files-lint`, built on `poc/slice-2-review-launcher` and rebased onto
+  `poc/agentic-sdlc` after PR #35 merged. `git range-diff` showed every code commit unchanged; two
+  commits changed only where conflicts in the status lines and the shared attempt log were resolved.
 - `make lint` (`scripts/lint_changed_files.py`): for every file the change adds, modifies or renames,
   ruff and shellcheck run on the merge-base and the new version; a finding key (file, rule, enclosing
   function or line text) that occurs more often or with a higher value fails, so existing violations
