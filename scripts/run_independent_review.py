@@ -337,10 +337,21 @@ def cli_version() -> str:
     return result.stdout.strip().splitlines()[0] if result.returncode == 0 and result.stdout.strip() else "unknown"
 
 
+@dataclass(frozen=True)
+class ToolCall:
+    """One tool call of the reviewer: the tool's name, its input and the call's ID in the stream."""
+
+    name: str
+    args: dict[str, Any]
+    call_id: str
+
+
 @dataclass
 class StreamSummary:
-    tool_uses: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
+    tool_uses: list[ToolCall] = field(default_factory=list)
     denials: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
+    denied_ids: set[str] = field(default_factory=set)
+    failed_ids: set[str] = field(default_factory=set)  # calls whose result was an error: a failed Read read nothing
     rate_limit: dict[str, Any] | None = None
     result: dict[str, Any] | None = None
 
@@ -361,19 +372,34 @@ def _add_event(summary: StreamSummary, event: dict[str, Any]) -> None:
     kind = event.get("type")
     if kind == "assistant":
         summary.tool_uses += _tool_uses(event)
+    elif kind == "user":
+        summary.failed_ids |= _failed_results(event)
     elif kind == "rate_limit_event":
         summary.rate_limit = event.get("rate_limit_info") or {}
     elif kind == "result":
-        summary.result = event
-        summary.denials += [(str(d.get("tool_name")), d.get("tool_input") or {})
-                            for d in event.get("permission_denials") or [] if isinstance(d, dict)]
+        _add_result(summary, event)
 
 
-def _tool_uses(event: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+def _add_result(summary: StreamSummary, event: dict[str, Any]) -> None:
+    summary.result = event
+    denials = [d for d in event.get("permission_denials") or [] if isinstance(d, dict)]
+    summary.denials += [(str(d.get("tool_name")), d.get("tool_input") or {}) for d in denials]
+    summary.denied_ids |= {str(d.get("tool_use_id")) for d in denials}
+
+
+def _tool_uses(event: dict[str, Any]) -> list[ToolCall]:
     """Tool calls of an assistant message; the structured reply is not a tool call on the copy."""
     blocks = (event.get("message") or {}).get("content") or []
-    return [(str(b.get("name")), b.get("input") or {}) for b in blocks
+    return [ToolCall(str(b.get("name")), b.get("input") or {}, str(b.get("id"))) for b in blocks
             if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") != "StructuredOutput"]
+
+
+def _failed_results(event: dict[str, Any]) -> set[str]:
+    """IDs of the tool calls whose result in this message is an error."""
+    content = (event.get("message") or {}).get("content")
+    blocks = content if isinstance(content, list) else []
+    return {str(b.get("tool_use_id")) for b in blocks
+            if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("is_error")}
 
 
 def tool_paths(name: str, args: dict[str, Any]) -> list[str]:
@@ -407,19 +433,19 @@ class CallOutcome:
     paused_until: int | None = None
 
 
-def summarise_paths(summary: StreamSummary, copy_root: Path) -> tuple[list[str], list[dict[str, str]], int]:
-    """Paths read inside the copy, denied calls, and the number of calls that named an outside path."""
-    read, outside = set(), 0
-    for name, args in summary.tool_uses:
-        for path in tool_paths(name, args):
-            rel = relative_to_copy(path, copy_root)
-            outside += rel is None
-            if rel is not None and name == "Read":
-                read.add(rel)
+def summarise_paths(summary: StreamSummary, copy_root: Path) -> tuple[list[str], list[dict[str, str]], list[dict[str, Any]]]:
+    """Paths read inside the copy (by a Read that did not fail), denied calls, and the calls that named
+    a path outside the copy, each with its tool and whether the CLI denied it (never the path)."""
+    read, outside = set(), []
+    for call in summary.tool_uses:
+        rels = [relative_to_copy(path, copy_root) for path in tool_paths(call.name, call.args)]
+        if None in rels:
+            outside.append({"tool": call.name, "denied": call.call_id in summary.denied_ids})
+        elif call.name == "Read" and call.call_id not in summary.failed_ids:
+            read.update(str(rel) for rel in rels)
     denied = []
     for name, args in summary.denials:
         rels = [relative_to_copy(p, copy_root) for p in tool_paths(name, args)]
-        outside += any(rel is None for rel in rels)
         denied.append({"tool": name, "path": "<outside the copy>" if None in rels else str(rels[0])})
     return sorted(read), denied, outside
 
@@ -438,7 +464,9 @@ def call_stats(summary: StreamSummary, copy_root: Path) -> dict[str, Any]:
         "tool_calls": len(summary.tool_uses),
         "paths_read": read,
         "denied": denied,
-        "outside_calls": outside,
+        "outside_calls": len(outside),
+        "outside": outside,
+        "other_tools": sorted({c.name for c in summary.tool_uses} - set(REVIEW_TOOLS)),
         "utilization": {
             "status": (summary.rate_limit or {}).get("status"),
             "five_hour": (windows.get("five_hour") or {}).get("utilization"),
@@ -499,6 +527,8 @@ def classify(summary: StreamSummary, returncode: int, copy_root: Path, review_pa
     unfinished = _paused_or_unfinished_call(summary, returncode, stats)
     if unfinished is not None:
         return unfinished
+    if stats["other_tools"]:
+        return CallOutcome("failed", "a call used a tool other than Read, Grep and Glob", stats=stats)
     if stats["outside_calls"]:
         return CallOutcome("failed", "a call named a path outside the copy", stats=stats)
     if stats["denied"]:

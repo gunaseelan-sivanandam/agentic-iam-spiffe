@@ -254,7 +254,8 @@ START_FIELDS = {"event", "attempt", "unit", "count", "round", "round_reviewers",
                 "prompt_sha256", "full_prompt_sha256", "paths_sha256", "withheld_sha256", "diff_sha256",
                 "schema_sha256", "extension", "reset", "report_path", "started_at"}
 END_FIELDS = {"event", "attempt", "status", "reason", "ended_at", "verdict", "report_sha256", "duration_ms", "turns",
-              "tokens", "cost_usd_estimate", "tool_calls", "paths_read", "denied", "outside_calls", "utilization"}
+              "tokens", "cost_usd_estimate", "tool_calls", "paths_read", "denied", "outside_calls", "outside",
+              "other_tools", "utilization"}
 
 
 def test_log_has_one_start_and_one_end_entry_with_the_planned_fields(fx: Fixture) -> None:
@@ -553,6 +554,31 @@ def test_empty_or_escaped_review_fails_and_releases_no_report(fx: Fixture, scena
     assert _run(fx) == 1
     assert [e["status"] for e in _ends(fx)] == ["failed"]
     assert not _report(fx, fx.log()[0]).exists()
+
+
+def test_failed_read_of_the_only_path_under_review_does_not_count(fx: Fixture) -> None:
+    fx.scenario({"reads": [REVIEWED, "AGENTS.md"], "read_errors": [REVIEWED]})
+    assert _run(fx) == 1
+    end = _ends(fx)[0]
+    assert end["status"] == "failed" and end["reason"] == "the review read none of the paths under review"
+    assert end["paths_read"] == ["AGENTS.md"]
+
+
+def test_call_to_a_tool_other_than_read_grep_and_glob_fails(fx: Fixture) -> None:
+    fx.scenario({"tool_uses": [["Bash", {"command": "ls"}]]})
+    assert _run(fx) == 1
+    end = _ends(fx)[0]
+    assert end["status"] == "failed" and end["other_tools"] == ["Bash"]
+    assert not _report(fx, fx.log()[0]).exists()
+
+
+def test_outside_calls_are_logged_with_tool_and_denial_but_no_path(fx: Fixture) -> None:
+    fx.scenario({"reads": [REVIEWED, "/etc/hostname"], "denials": [["Read", {"file_path": "/etc/hostname"}]],
+                 "tool_uses": [["Grep", {"pattern": "x", "path": "{cwd}/.."}]]})
+    assert _run(fx) == 1
+    end = _ends(fx)[0]
+    assert end["outside"] == [{"tool": "Read", "denied": True}, {"tool": "Grep", "denied": False}]
+    assert "hostname" not in json.dumps(end) and end["outside_calls"] == 2
 
 
 def test_review_reads_with_relative_and_absolute_paths_inside_the_copy_count(fx: Fixture) -> None:

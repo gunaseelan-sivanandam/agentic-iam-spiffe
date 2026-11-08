@@ -8,6 +8,7 @@ input and the files it could see. A scenario may set:
     exit          the exit code (default 0)
     raw_stdout    print exactly this instead of a built stream
     reads         paths for Read calls ("{cwd}" is replaced by the working directory)
+    read_errors   paths among `reads` whose Read result is an error (for example a file too large to read)
     tool_uses     [name, input] pairs for other tool calls
     denials       [name, input] pairs for the result's permission_denials
     rate_limit    {"status", "five_hour", "seven_day", "resetsAt"}, or null for no event
@@ -45,15 +46,24 @@ def record_call(home: Path, stdin: str) -> None:
     (calls / f"{time.time_ns()}-{os.getpid()}.json").write_text(json.dumps(record), encoding="utf-8")
 
 
-def tool_use(name: str, args: dict, cwd: str) -> dict:
+def tool_use(name: str, args: dict, cwd: str, call_id: str) -> dict:
     args = {k: v.replace("{cwd}", cwd) if isinstance(v, str) else v for k, v in args.items()}
-    return {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": name, "input": args}]}}
+    return {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": call_id, "name": name, "input": args}]}}
+
+
+def tool_result(call_id: str, is_error: bool) -> dict:
+    return {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": call_id, "is_error": is_error,
+                                                     "content": "error" if is_error else "ok"}]}}
 
 
 def build_stream(scenario: dict, cwd: str) -> list[dict]:
-    events = [{"type": "system", "subtype": "init"}]
-    events += [tool_use("Read", {"file_path": path}, cwd) for path in scenario.get("reads", ["scripts/review_me.py"])]
-    events += [tool_use(name, args, cwd) for name, args in scenario.get("tool_uses", [])]
+    events: list[dict] = [{"type": "system", "subtype": "init"}]
+    calls = [("Read", {"file_path": path}) for path in scenario.get("reads", ["scripts/review_me.py"])]
+    calls += [(name, args) for name, args in scenario.get("tool_uses", [])]
+    errors = set(scenario.get("read_errors", []))
+    for index, (name, args) in enumerate(calls):
+        events.append(tool_use(name, args, cwd, f"tu{index}"))
+        events.append(tool_result(f"tu{index}", name == "Read" and args.get("file_path") in errors))
     limit = scenario.get("rate_limit", {"status": "allowed", "five_hour": 0.1, "seven_day": 0.05, "resetsAt": 1})
     if limit is not None:
         windows = {"five_hour": {"utilization": limit.get("five_hour"), "resetsAt": limit.get("resetsAt")},
@@ -62,7 +72,9 @@ def build_stream(scenario: dict, cwd: str) -> list[dict]:
             "status": limit["status"], "resetsAt": limit.get("resetsAt"), "unifiedWindows": windows}})
     result = scenario.get("result", {"structured_output": DEFAULT_REPLY})
     if result is not None:
-        denials = [{"tool_name": n, "tool_input": a} for n, a in scenario.get("denials", [])]
+        ids = {json.dumps([n, a]): f"tu{i}" for i, (n, a) in enumerate(calls)}
+        denials = [{"tool_name": n, "tool_use_id": ids.get(json.dumps([n, a]), "denied"), "tool_input": a}
+                   for n, a in scenario.get("denials", [])]
         events.append({"type": "result", "subtype": "success", "is_error": result.get("is_error", False),
                        "num_turns": 3, "duration_ms": 1000, "total_cost_usd": 0.01,
                        "usage": {"input_tokens": 1, "output_tokens": 2}, "permission_denials": denials,

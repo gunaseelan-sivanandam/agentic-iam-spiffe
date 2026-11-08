@@ -393,7 +393,8 @@ def canary_outcome(prepared: PreparedCase, stream_text: str) -> dict[str, Any]:
 def _outside_reads(summary: Any, marker: str) -> tuple[int, int]:
     """Reads of the outside marker that went through, and those the CLI denied."""
     denied_inputs = {json.dumps(a, sort_keys=True) for _n, a in summary.denials}
-    reads = [json.dumps(a, sort_keys=True) for n, a in summary.tool_uses if n == "Read" and marker in str(a.get("file_path", ""))]
+    reads = [json.dumps(c.args, sort_keys=True) for c in summary.tool_uses
+             if c.name == "Read" and marker in str(c.args.get("file_path", ""))]
     denied = sum(r in denied_inputs for r in reads)
     return len(reads) - denied, denied
 
@@ -551,16 +552,17 @@ def decide(short: dict[str, int], checklist: dict[str, int]) -> str:
 def report(repo: Path, key: AnswerKey) -> str:
     lines = load_results(repo, key)
     comparison = compare_prompts(lines, key)
-    rows = ["| Case | Kind | Prompt | Status | Verdict | Detected | Location only | Unmatched blocking | Tries |",
-            "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+    rows = ["| Case | Kind | Prompt | Status | Verdict | Detected | Location only | Advisory only | Unmatched blocking | Tries |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for line in lines:
         if "prompt" in line:
             score_ = line.get("score", {})
             rows.append(f"| {line['case']} | {line['kind']} | {line['prompt']} | {line['status']} | {line.get('verdict', '')} | "
                         f"{', '.join(score_.get('detected', []))} | {', '.join(score_.get('location_only', []))} | "
-                        f"{', '.join(score_.get('unmatched_blocking', []))} | {line.get('tries', '')} |")
+                        f"{', '.join(score_.get('advisory_only', []))} | {', '.join(score_.get('unmatched_blocking', []))} | "
+                        f"{line.get('tries', '')} |")
         else:
-            rows.append(f"| {line['case']} | {line['kind']} | — | {line.get('status', 'canary')} | | | | | |")
+            rows.append(f"| {line['case']} | {line['kind']} | — | {line.get('status', 'canary')} | | | | | | |")
     return "\n".join([f"Answer key SHA-256: `{key.sha256}`; prompts SHA-256: `{key.prompts_sha256}`.", "",
                       *rows, "", "Comparison of the automatic detections, before hand confirmation (the report applies "
                       "the decision rule again to the confirmed ones):", f"`{json.dumps(comparison, sort_keys=True)}`"])

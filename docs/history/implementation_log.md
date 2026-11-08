@@ -26,14 +26,23 @@ is first); every heading carries its date.
   for defects of absence (DPL-004, DPL-005: neither prompt found them) and a severity rule for
   secrets in evidence (DPL-002: seen, but rated advisory); 1 of 4 paired real misses detected.
 - `AGENTS.md`: reviews run through the launcher; the review record keeps task prompts and reports.
-- Review: four rounds through the launcher ([`review_slice_2.md`](../slices/agentic-sdlc-poc/review_slice_2.md)).
+- Review: five rounds through the launcher ([`review_slice_2.md`](../slices/agentic-sdlc-poc/review_slice_2.md)).
   Round 1 found two blockers in the code (a canary that passed without a completed run; a budget
   that held only within one invocation), both fixed with tests; round 2 accepted every answer.
-  Round 3 reviewed the report and close-out: its first attempt failed closed (a Markdown link
-  resolved from the copy root named a path outside the copy); the rerun found that the report
+  Round 3 reviewed the report and close-out: its first attempt failed closed (a call named a path
+  outside the copy, probably a Markdown link resolved from the copy root; the cause cannot be
+  confirmed, because the CLI did not deny that call and the log then kept no detail); the rerun found that the report
   missed an advisory finding on DPL-002, fixed in the report and in the scoring; round 4 rechecked.
-- Validation: `make tooling-test` (327 pytest, 9 shell) and `make qa-quality` passed. Deliberately
-  breaking each confinement, admission, budget and canary rule made at least one test fail. No
+  Round 5, an extension the owner asked for before merging, had an open mandate, the coverage report
+  and the record and attempt log as evidence. It found two blockers that rounds 1 to 4 missed: a
+  failed Read counted as reading a file, and the record kept prompts with placeholders and reports
+  only rendered, so the log's hashes matched nothing in the repository. Both are fixed; the record
+  now keeps every prompt and report verbatim (checked against the log). Of its advisories, three are
+  fixed (an advisory-only column, outside calls logged with their tool and denial, any tool other
+  than Read, Grep or Glob fails the review), and the rest are slice-4 and slice-7 inputs.
+- Validation: `make tooling-test` (331 pytest, 9 shell) and `make qa-quality` passed. Deliberately
+  breaking the main confinement, admission, budget and canary rules made at least one test fail; not
+  every defensive refusal path has a test (round 5). No
   service, compose file or E2E harness changed. Full E2E suite on a clean stack at `642b840`: 120/120
   passed, 1 warning (M5-T55, env-gated skip); then `make qa-deploy` with image users inspected and
   `make qa-evidence` (validated 119, skipped 1) passed.
