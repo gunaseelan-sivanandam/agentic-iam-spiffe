@@ -199,3 +199,66 @@ The review ended after round 2: every finding is fixed or accepted, and no block
 The residual nit in F3 (shellcheck's missing-tool and error paths have no test of their own) is
 listed in the PR.
 
+
+## Round 3 (focused review of the Markdown header check, medium effort)
+
+After round 2 closed, the owner answered slice 1's question S1-C2 in PR #34 ("All the files"), so
+the lint gate's header check was extended to Markdown. Reviewed commit `92cbd6c`; attempt
+`slice_3/c1/r3/impl/1`: 59 seconds, 14 turns, 12 tool calls (all inside the copy,
+none denied), 3,851 output tokens, CLI cost estimate USD 0.35; afterwards the 5-hour window
+stood at 4% and the weekly window at 5%. Status completed, verdict "yes". Paths under review:
+`scripts/lint_changed_files.py`, `tests/tools/test_lint_changed_files.py`, `AGENTS.md`.
+
+### Task prompt (verbatim)
+
+````text
+This is review round 3 of the implementation review of slice 3 of the agentic-SDLC PoC (the changed-files lint gate), by the original reviewer: a focused review of one change made after round 2 closed with verdict "yes". Open files by their path from the copy root; Markdown links are relative to the file that contains them.
+
+## The intent of this change
+
+The owner answered a question of slice 1's PR (#34) on 2026-11-08: asked whether POC-D7 ("Every new file starts with a comment that says what the file is for") covers Markdown and other documents or only code and configuration, the owner wrote "All the files". Slice 1 now words coding rule 8 accordingly: Markdown starts with a `#` title followed by a paragraph that says what the document is for; only JSON, JSONL and binary files are exempt; formats the lint does not parse are left to a new review question. This slice's lint gate therefore also checks added Markdown files: a `#` title followed by a paragraph (a first non-empty line after the title that is not a heading). The plan's slice-3 list of checked types is widened by that decision. Slice 1's change is on its own branch and not part of this diff.
+
+## What changed since round 2
+
+scripts/lint_changed_files.py (`header_problem`, `_markdown_header`, the module docstring), tests/tools/test_lint_changed_files.py (`test_new_markdown_file_needs_a_title_and_a_purpose_paragraph`), the AGENTS.md "Changed-files lint" row and the implementation-log entry. Removing the Markdown branch from `header_problem` makes three of the new cases fail (checked).
+
+## Questions to answer
+
+1. Does the check do what the intent says, and do the tests show it can fail? Which wrong behaviour would still pass them?
+2. Does the change contradict anything, or claim more than it does? Would any Markdown file added by slices 2 or 3 now fail the check (the gate runs on every PR's added files)?
+3. Any other blocking problem?
+
+Under the approved rules, a new finding counts only if it blocks, except simpler alternatives and decision concerns.
+````
+
+### Report (verbatim, rendered from the released JSON)
+
+Verdict: **yes** (approvable within the threat model).
+
+#### R3-A1 (advisory) — `scripts/lint_changed_files.py:262`
+
+- **Problem:** The Markdown check only requires that the second non-empty line does not start with `#`. Any non-heading line after the title counts as the purpose paragraph: a list item, a table row, a code fence, an HTML comment or a link-only line. So `# Notes` followed by ```` ``` ```` or `- item` passes. The tests cover a missing title, a heading straight after the title and a title on its own; they do not cover any of these non-paragraph cases.
+- **Evidence:** `_markdown_header`: `lines[0].startswith("# ") and not lines[1].startswith("#")`. The parametrized cases at tests/tools/test_lint_changed_files.py:342-347 are title-and-paragraph, no-title, title-then-heading and title-only.
+- **Failure scenario:** An agent adds `docs/x.md` that starts with `# X` and then a table or a code block, with no sentence saying what the document is for. The gate passes. This is an honest-mistake miss of coding rule 8, but the intent defines a paragraph only as "a first non-empty line after the title that is not a heading", so the code matches the approved wording and this is not a false green against the intent. Any judgment beyond that is left to review.
+
+#### R3-A2 (advisory) — `AGENTS.md:253`
+
+- **Problem:** The Changed-files lint row cites "coding rule 8" for the Markdown title-and-paragraph requirement. Coding rule 8 at this commit (and at the base) still says only "Every new file starts with a comment … file types without comments, such as JSON, are exempt". The Markdown wording comes from slice 1's separate branch. Until that branch merges, the gate enforces a reading of rule 8 that the rule text in this tree does not state.
+- **Evidence:** The intent says slice 1's change is on its own branch and not part of this diff. The AGENTS.md coding rules section at base reads rule 8 without Markdown wording.
+- **Failure scenario:** This branch merges before slice 1's rule-8 change. For a while the rulebook's rule 8 and the gate row describe Markdown differently. No false green results (the gate is stricter, not looser), so this is advisory: merge order, or one clause in the row.
+
+#### R3-A3 (advisory) — `docs/slices/agentic-sdlc-poc/review_slice_3.md:0`
+
+- **Problem:** This branch adds review_slice_3.md, so the new check will run on it in this PR's own lint job. The file is withheld from the review copy, so I could not confirm it passes. Every existing Markdown file in the copy outside docs/archive starts with `# ` (no front matter, no leading HTML comment). The sibling record review_slice_1.md starts with `# Review record …`, a blank line and then a paragraph, which passes. Slice 2's Markdown files are in the merge-base and are not added files for this PR.
+- **Evidence:** A multiline grep for files whose first character is not `#` found only docs/archive/SECURITY_MODEL.md, which this PR does not add. A grep for files starting with `---` found none. The diff adds no other .md file.
+- **Failure scenario:** If review_slice_3.md started with something other than a `# ` title and a paragraph, the PR's lint job would fail. That would be a visible red, not a false green, and it is easy to fix.
+
+### Author's answers
+
+| Finding | Answer | Where |
+| --- | --- | --- |
+| R3-A1 | **Fixed** after the round: a line that starts a heading, list, table, code block or HTML comment is not a purpose paragraph; four new test cases. Not rechecked: it follows the reviewer's description, and no blocking finding is open. | `NOT_A_PARAGRAPH`, `_markdown_header`; `test_new_markdown_file_needs_a_title_and_a_purpose_paragraph` |
+| R3-A2 | **No change**: slices merge in order, so slice 1's rule-8 wording is on `poc/agentic-sdlc` before this slice's PR opens. | — |
+| R3-A3 | **Confirmed**: `make lint` passes on this branch, `review_slice_3.md` included, and every file slices 1 to 3 add passes the header check. | — |
+
+The review ended after round 3: no blocking finding is open.
