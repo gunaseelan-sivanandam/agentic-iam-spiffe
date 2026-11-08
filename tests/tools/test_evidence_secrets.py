@@ -84,6 +84,10 @@ SECRET_FIXTURES = {
                                                        "base64 PKCS#8 private key"),
     "JIRA_API_TOKEN line": lambda: ("JIRA_API_TOKEN=" + secrets.token_hex(12) + "\n", "credential line"),
     "Authorization Bearer header": lambda: ("Authorization: Bearer " + secrets.token_hex(16) + "\n", "credential line"),
+    "Authorization header in a code span": lambda: ("Authorization: `Bearer " + secrets.token_hex(16) + "`\n", "credential line"),
+    "quoted Authorization header": lambda: ('Authorization: "Bearer ' + secrets.token_hex(16) + '"\n', "credential line"),
+    "JSON-escaped Authorization header": lambda: (json.dumps({"problem": "Authorization: \"" + secrets.token_hex(16) + "\""}),
+                                                  "credential line"),
     "Atlassian API token": lambda: ("token ATATT3x" + secrets.token_urlsafe(30) + "\n", "Atlassian API token"),
 }
 
@@ -358,8 +362,8 @@ def test_harness_counts_a_failed_publish_and_fails_the_run(tmp_path: Path) -> No
     assert 'if [ "$PUBLISH_FAILED" -ne 0 ]; then' in harness.split("printf '\\nTotal:")[-1]
 
 
-def test_markdown_code_span_is_not_a_credential_but_a_header_value_is() -> None:
-    """The rulebook describes this check in a code span; review reports quote it (slice 4 plan reviews)."""
+def test_rulebook_code_span_is_not_a_credential_but_a_header_value_is() -> None:
+    """The rulebook describes this check in code spans; review reports quote it (slice 4 plan reviews)."""
     assert es.scan_text("a `JIRA_API_TOKEN=` or `Authorization:` line with a value", "doc.md") == []
     assert [f.kind for f in es.scan_text("Authorization: Bearer " + "abc123def456", "log.txt")] == ["credential line"]
 

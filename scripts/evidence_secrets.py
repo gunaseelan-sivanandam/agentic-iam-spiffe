@@ -31,16 +31,19 @@ PEM_CERTIFICATE_BLOCK = re.compile(r"-----BEGIN CERTIFICATE-----.*?-----END CERT
 BASE64_RUN = re.compile(r"[A-Za-z0-9+/_-]{40,}={0,2}")
 # base64 of "-----BEGIN " when the PEM text starts the encoded data.
 BASE64_PEM_START = "LS0tLS1CRUdJTi"
+# The value may sit in a Markdown code span or in quotes, also JSON-escaped (\") as in a review
+# report, opened before or after the scheme: Authorization: `Bearer <token>`, Authorization: "<token>".
+QUOTE = r"(?:`|\\?['\"])?"
 CREDENTIAL_LINE = re.compile(
-    r"(?:JIRA_API_TOKEN\s*=|Authorization\s*:[ \t]*(?:(?:Bearer|Basic|Token)[ \t]+)?)[ \t]*['\"]?(?P<value>[^\s'\"]+)",
+    r"(?:JIRA_API_TOKEN\s*=|Authorization\s*:[ \t]*" + QUOTE + r"(?:(?:Bearer|Basic|Token)[ \t]+)?)[ \t]*"
+    + QUOTE + r"(?P<value>[^\s'\"`]+)",
     re.IGNORECASE,
 )
-# A value that names a variable or a redaction marker is not a credential, nor is a Markdown code
-# span (a value starting with a backtick), as in the rulebook's description of this very check.
-PLACEHOLDER = re.compile(r"^(?:\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|<[^>]*>|\[?REDACTED\]?|\*+|Bearer|Basic|`.*)$", re.IGNORECASE)
+# A value that names a variable or a redaction marker is not a credential.
+PLACEHOLDER = re.compile(r"^(?:\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|<[^>]*>|\[?REDACTED\]?|\*+|Bearer|Basic)$", re.IGNORECASE)
 # A credential value is token-like: the ones this system handles (capiss and Jira tokens, SVIDs, Basic
 # credentials) are long or carry digits. A short value without a digit is a word of prose or code that
-# names the header ("Bearer`", "%s\r\n", "str"), as review reports quoting the repository do.
+# names the header ("%s\r\n", "str", "line"), as review reports quoting the repository do.
 MIN_CREDENTIAL_LENGTH = 20
 ATLASSIAN_TOKEN = re.compile(r"ATATT3[A-Za-z0-9_=-]{20,}")
 
