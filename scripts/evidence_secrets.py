@@ -34,10 +34,11 @@ BASE64_PEM_START = "LS0tLS1CRUdJTi"
 # The value may sit in a Markdown code span of any fence length, or in quotes escaped any number of
 # times (\" in a JSON review report), opened before or after the scheme:
 # Authorization: `Bearer <token>`, Authorization: Bearer ``<token>``, Authorization: "<token>".
+# A value ends at a backslash: no credential holds one, and JSON writes "…" after a header name as \u2026.
 QUOTE = r"(?:`+|\\*['\"])?"
 CREDENTIAL_LINE = re.compile(
     r"(?:JIRA_API_TOKEN\s*=|Authorization\s*:[ \t]*" + QUOTE + r"(?:(?:Bearer|Basic|Token)[ \t]+)?)[ \t]*"
-    + QUOTE + r"(?P<value>[^\s'\"`]+)",
+    + QUOTE + r"(?P<value>[^\s'\"`\\]+)",
     re.IGNORECASE,
 )
 # A value that names a variable or a redaction marker is not a credential.

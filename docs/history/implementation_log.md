@@ -7,13 +7,14 @@ is first); every heading carries its date.
 
 ## 2026-11-08 Fixes to the review launcher and the secret check (slice 4 plan branch)
 
-- Branch `poc/slice-4-plans`, commits `f070669`, `d56c69a`, `f8b6200` and `8d80ce8`
+- Branch `poc/slice-4-plans`, commits `f070669`, `d56c69a`, `f8b6200`, `8d80ce8` and the commit that ends a
+  credential value at a backslash
   ([plan](../slices/agentic-sdlc-poc/plan_launcher_fixes.md), [DPL-011](../delivery_problem_log.md#dpl-011-slice-2s-launcher-and-the-secret-check-broke-on-slice-4s-parallel-plan-reviews)).
 - `scripts/run_independent_review.py`: report paths hold the slice directory; a call to a tool the
   session's init event did not offer, answered with an error, is logged (`other_tools_not_offered`)
   instead of failing the review.
 - `scripts/evidence_secrets.py`: a credential line needs a token-like value (20 characters or more, or
-  a digit), found also in code spans and quotes; `AGENTS.md`'s E2E evidence row, `docs/test_spec.md`
+  a digit), found also in code spans and quotes, and ending at a backslash; `AGENTS.md`'s E2E evidence row, `docs/test_spec.md`
   (EVID-T1) and `trace/tests.yaml` (a new negative control) say so.
 - Validation: `pytest tests/tools/test_evidence_secrets.py tests/tools/test_run_independent_review.py`
   140 passed; `make qa-trace`, `make docs-check` and `make lint` passed. The full tooling suite has

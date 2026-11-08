@@ -130,6 +130,7 @@ ACCEPTED = {
     "quoted escaped newline": lambda: '"JIRA_API_TOKEN=\\n"\n',
     "header parameter type": lambda: "def call(authorization: str) -> None:\n",
     "JSON-escaped concatenation": lambda: json.dumps('"Authorization: Bearer " + fake_token') + "\n",
+    "JSON-escaped ellipsis after the header": lambda: json.dumps({"p": "a `Authorization: `Bearer \u2026`` line"}) + "\n",
 }
 
 

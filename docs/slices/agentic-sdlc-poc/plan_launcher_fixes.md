@@ -4,7 +4,7 @@ Short plan of four commits on `poc/slice-4-plans` that fix code merged with slic
 written after the fixes, because plan review 4.6 (A12) and the fixes review (A5) pointed out that
 every change needs a plan, however small. The owner approves it with slice 4's plan PR.
 
-Status: implemented on `poc/slice-4-plans` (`f070669`, `d56c69a`, `f8b6200`, `8d80ce8`), 2026-11-08;
+Status: implemented on `poc/slice-4-plans` (`f070669`, `d56c69a`, `f8b6200`, `8d80ce8` and the commit that adds this line), 2026-11-08;
 reviewed as unit `launcher_fixes` ([`review_launcher_fixes.md`](review_launcher_fixes.md)).
 
 ## Problem
@@ -30,7 +30,7 @@ withheld, or a real credential published.
 | F1 | The report path includes the record's slice directory: `artifacts/reviews/<slice dir>/<unit>/<attempt>.json`. | default (the slice directory already separates attempt logs) |
 | F2 | A call to a tool other than Read, Grep and Glob fails the review, as R5-A4 decided, except a call to a tool that the session's init event did not offer, answered with an error: it cannot have run, so it is logged as `other_tools_not_offered`. A stream without a tool list fails closed. | R5-A4 (slice 2); fixes review round 1, A1; default (the init list as the evidence) |
 | F3 | A credential line counts only when its value is token-like: 20 characters or longer, or with a digit. Every credential this system handles is (capiss and Jira tokens, SVIDs, Basic credentials). | default; decision concern for the owner (it narrows EVID-T1's rule) |
-| F4 | The credential rule finds a value in a Markdown code span of any fence length, or in quotes escaped any number of times, before or after the scheme. | plan review 4.4, A9; fixes review round 1, A2 |
+| F4 | The credential rule finds a value in a Markdown code span of any fence length, or in quotes escaped any number of times, before or after the scheme. A value ends at a backslash: no credential holds one, and JSON writes an ellipsis after the header name as `\u2026`, which has digits. | plan review 4.4, A9; fixes review round 1, A2; the author, when a released report quoting "Bearer …" failed the widened rule |
 
 ## Tests
 
