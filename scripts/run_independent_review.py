@@ -450,6 +450,14 @@ def summarise_paths(summary: StreamSummary, copy_root: Path) -> tuple[list[str],
     return sorted(read), denied, outside
 
 
+def _other_tools(summary: StreamSummary) -> dict[str, list[str]]:
+    """Calls to tools other than Read, Grep and Glob: those that ran fail the review; those whose result was an
+    error (a tool the CLI does not offer) are only logged."""
+    other = [c for c in summary.tool_uses if c.name not in REVIEW_TOOLS]
+    return {"other_tools": sorted({c.name for c in other if c.call_id not in summary.failed_ids}),
+            "other_tools_failed": sorted({c.name for c in other if c.call_id in summary.failed_ids})}
+
+
 def call_stats(summary: StreamSummary, copy_root: Path) -> dict[str, Any]:
     result = summary.result or {}
     usage = result.get("usage") or {}
@@ -466,7 +474,7 @@ def call_stats(summary: StreamSummary, copy_root: Path) -> dict[str, Any]:
         "denied": denied,
         "outside_calls": len(outside),
         "outside": outside,
-        "other_tools": sorted({c.name for c in summary.tool_uses} - set(REVIEW_TOOLS)),
+        **_other_tools(summary),
         "utilization": {
             "status": (summary.rate_limit or {}).get("status"),
             "five_hour": (windows.get("five_hour") or {}).get("utilization"),
@@ -730,7 +738,9 @@ def start_entry(spec: RoundSpec, inputs: ReviewInputs, reviewer: Reviewer, attem
         "prompt_sha256": sha256_bytes(reviewer.prompt_file.read_bytes()), "full_prompt_sha256": extra["prompt_sha"],
         "paths_sha256": inputs.review_paths, "withheld_sha256": inputs.withheld, "diff_sha256": extra["diff_sha"],
         "schema_sha256": sha256_text(SCHEMA_JSON), "extension": spec.refs[0], "reset": spec.refs[1],
-        "report_path": str(REPORT_DIR / spec.unit / f"{attempt.replace('/', '_')}.json"), "started_at": utc_now(),
+        # Unit names repeat across slices (every plan review is "plan"); the slice directory keeps paths apart.
+        "report_path": str(REPORT_DIR / Path(spec.record).parent.name / spec.unit / f"{attempt.replace('/', '_')}.json"),
+        "started_at": utc_now(),
     }
 
 

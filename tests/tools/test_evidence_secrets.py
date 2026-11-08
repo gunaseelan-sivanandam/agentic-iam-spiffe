@@ -341,3 +341,14 @@ def test_harness_counts_a_failed_publish_and_fails_the_run(tmp_path: Path) -> No
     assert not scratch.exists()
     harness = (ROOT / "scripts" / "rogue_node_tests.sh").read_text(encoding="utf-8")
     assert 'if [ "$PUBLISH_FAILED" -ne 0 ]; then' in harness.split("printf '\\nTotal:")[-1]
+
+
+def test_markdown_code_span_is_not_a_credential_but_a_header_value_is() -> None:
+    """The rulebook describes this check in a code span; review reports quote it (slice 4 plan reviews)."""
+    assert es.scan_text("a `JIRA_API_TOKEN=` or `Authorization:` line with a value", "doc.md") == []
+    assert [f.kind for f in es.scan_text("Authorization: Bearer abc123def456", "log.txt")] == ["credential line"]
+
+
+def test_the_rulebook_passes_the_secret_check() -> None:
+    assert es.scan_text((ROOT / "AGENTS.md").read_text(encoding="utf-8"), "AGENTS.md") == []
+

@@ -9,6 +9,7 @@ input and the files it could see. A scenario may set:
     raw_stdout    print exactly this instead of a built stream
     reads         paths for Read calls ("{cwd}" is replaced by the working directory)
     read_errors   paths among `reads` whose Read result is an error (for example a file too large to read)
+    tool_errors   names of other tools whose result is an error (for example a tool the CLI does not offer)
     tool_uses     [name, input] pairs for other tool calls
     denials       [name, input] pairs for the result's permission_denials
     rate_limit    {"status", "five_hour", "seven_day", "resetsAt"}, or null for no event
@@ -60,10 +61,11 @@ def build_stream(scenario: dict, cwd: str) -> list[dict]:
     events: list[dict] = [{"type": "system", "subtype": "init"}]
     calls = [("Read", {"file_path": path}) for path in scenario.get("reads", ["scripts/review_me.py"])]
     calls += [(name, args) for name, args in scenario.get("tool_uses", [])]
-    errors = set(scenario.get("read_errors", []))
+    errors, tool_errors = set(scenario.get("read_errors", [])), set(scenario.get("tool_errors", []))
     for index, (name, args) in enumerate(calls):
+        failed = (name == "Read" and args.get("file_path") in errors) or name in tool_errors
         events.append(tool_use(name, args, cwd, f"tu{index}"))
-        events.append(tool_result(f"tu{index}", name == "Read" and args.get("file_path") in errors))
+        events.append(tool_result(f"tu{index}", failed))
     limit = scenario.get("rate_limit", {"status": "allowed", "five_hour": 0.1, "seven_day": 0.05, "resetsAt": 1})
     if limit is not None:
         windows = {"five_hour": {"utilization": limit.get("five_hour"), "resetsAt": limit.get("resetsAt")},

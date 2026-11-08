@@ -35,8 +35,9 @@ CREDENTIAL_LINE = re.compile(
     r"(?:JIRA_API_TOKEN\s*=|Authorization\s*:[ \t]*(?:(?:Bearer|Basic|Token)[ \t]+)?)[ \t]*['\"]?(?P<value>[^\s'\"]+)",
     re.IGNORECASE,
 )
-# A value that names a variable or a redaction marker is not a credential.
-PLACEHOLDER = re.compile(r"^(?:\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|<[^>]*>|\[?REDACTED\]?|\*+|Bearer|Basic)$", re.IGNORECASE)
+# A value that names a variable or a redaction marker is not a credential, nor is a Markdown code
+# span (a value starting with a backtick), as in the rulebook's description of this very check.
+PLACEHOLDER = re.compile(r"^(?:\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|<[^>]*>|\[?REDACTED\]?|\*+|Bearer|Basic|`.*)$", re.IGNORECASE)
 ATLASSIAN_TOKEN = re.compile(r"ATATT3[A-Za-z0-9_=-]{20,}")
 
 
