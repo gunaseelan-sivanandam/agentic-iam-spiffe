@@ -7,8 +7,8 @@ is first); every heading carries its date.
 
 ## 2026-11-08 Slice agentic-sdlc-poc 2: review launcher and benchmark
 
-- Branch `poc/slice-2-review-launcher`, built on `poc/slice-1-rules` (slice 1, PR #34) until that
-  merges; its PR opens after slice 1 merges, rebased onto `poc/agentic-sdlc`.
+- Branch `poc/slice-2-review-launcher`, built on `poc/slice-1-rules` (slice 1) and rebased onto
+  `poc/agentic-sdlc` after PR #34 merged; `git range-diff` showed every slice-2 commit unchanged.
 - `scripts/run_independent_review.py`: one review round per invocation. Each reviewer is a fresh
   headless Claude session in a frozen `git archive` copy without the unit's review record and attempt
   log, with only Read, Grep and Glob, `--safe-mode`, `--setting-sources ""`, `dontAsk`, no MCP servers,
