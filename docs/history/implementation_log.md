@@ -25,21 +25,32 @@ is first); every heading carries its date.
   branch's required checks. `AGENTS.md`: a gates row for `lint`; the not-gated standards keep only the
   whole-tree `ruff check` and the debt list. `docs/STATUS.md`: the complexity debt re-measured with
   ruff C901 (12 functions, radon counted 16).
-- Review: two rounds through the launcher ([`review_slice_3.md`](../slices/agentic-sdlc-poc/review_slice_3.md)).
+- Review: four rounds through the launcher ([`review_slice_3.md`](../slices/agentic-sdlc-poc/review_slice_3.md)).
   Round 1 found two test gaps that let a regression pass (no `__init__.py` without a docstring; tool
   directives never run on the comment-header file types), both fixed with tests, and six advisories
   (tool errors, stale "main ruleset" wording, binary files, a merge-base test that could not fail,
-  names, loose header assertions), all fixed; round 2 accepted every answer.
-- Validation: `make lint` passes against `poc/slice-2-review-launcher` and against
-  `origin/poc/agentic-sdlc` (slices 1 to 3 together). `make tooling-test`: 376 pytest pass; the 6
-  shell cases of `tests/tools/test_lint_changed_files.py` need `shellcheck`, which could not be
-  installed on this machine; they passed in CI (a `workflow_dispatch` run on `a09ab0d`: tooling-test
-  382 pytest and 9 shell passed; gate-consistency failed only on "CI job lint is not a required
-  check", which the owner's user action 2 resolves). Deliberately breaking the gate (honouring `noqa`
+  names, loose header assertions), all fixed; round 2 accepted every answer. Round 3 reviewed the
+  Markdown check added for the owner's answer in PR #34 (verdict yes; its advisory fixed after the
+  round). Round 4, an open-mandate review with the review record and attempt log as evidence (the
+  lesson of DPL-010), found two blockers: no test ran the gate on a modified or renamed shell script,
+  and these records were stale. Both are fixed, as are five advisories (a syntax-error test, a
+  missing-shellcheck test, a note that uncommitted changes are not linted, Dockerfile parser
+  directives, wording). The rest are slice-4 inputs.
+- Validation: `make lint` passes against `origin/poc/agentic-sdlc`, and `make qa-quality` (qa-trace,
+  unit traceability, unit guard, docs-check, test-lint, qa-deploy) passes. `make tooling-test`: all
+  tests pass locally except the 9 shell cases of `tests/tools/test_lint_changed_files.py`, which
+  need `shellcheck` (not installable on this machine). They run for the first time on the reviewed
+  commit in the PR's CI; an earlier CI run (`workflow_dispatch` on `a09ab0d`) passed the 6 shell
+  cases that existed then. In that run gate-consistency failed only on "CI job lint is not a required
+  check", which the owner's user action 2 resolves. Deliberately breaking the gate (honouring `noqa`
   on limits, reading the configuration from the change, ignoring the value, no rename matching, no
   header check) made at least one test fail each time. Full E2E suite on a clean stack at `89c9cbe`:
   120/120 passed, 1 warning (M5-T55, env-gated skip); then `make qa-deploy` with image users inspected
-  and `make qa-evidence` (validated 119, skipped 1) passed.
+  and `make qa-evidence` (validated 119, skipped 1) passed; the later changes touch only the lint
+  gate, its tests and documents, no runtime code.
+- When the PoC merges into `main`, reset `RULESET_URL` to the `main` ruleset and the `Makefile`
+  default `BASE_REF`, reword the `CODEOWNERS` comment, and decide whether `lint` becomes a required
+  check on `main`.
 
 ## 2026-11-08 Slice agentic-sdlc-poc 2: review launcher and benchmark
 

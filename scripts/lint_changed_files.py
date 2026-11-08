@@ -31,7 +31,7 @@ CONFIG = "ruff_changed_files.toml"
 # Rules whose `noqa` is ignored: the limits, naming, and unused imports and variables (POC-D8).
 NO_NOQA_RULES = "C901,PLR0912,PLR0913,PLR0915,N,F401,F841"
 SHELL_SHEBANG = re.compile(r"^#!\s*(?:/usr/bin/env\s+)?(?:/bin/|/usr/bin/)?(?:ba|da|k|z)?sh\b")
-TOOL_DIRECTIVE = re.compile(r"^#\s*(?:shellcheck\b|-\*-|yaml-language-server\b|noqa\b|type:)")
+TOOL_DIRECTIVE = re.compile(r"^#\s*(?:shellcheck\b|-\*-|yaml-language-server\b|noqa\b|type:|(?:syntax|escape|check)=)")
 # A line that starts a heading, list, table, code block or HTML comment, not a paragraph.
 NOT_A_PARAGRAPH = re.compile(r"^(?:#|[-*+] |\d+[.)] |\||```|~~~|<)")
 LIMIT_VALUE = re.compile(r"\((\d+) > \d+\)")
@@ -44,7 +44,7 @@ class LintError(Exception):
 
 @dataclass(frozen=True)
 class Change:
-    """One changed file: its Git status (A, M, T, R or C), its path, and its path at the merge-base."""
+    """One changed file: its Git status (A, M, T or R), its path, and its path at the merge-base."""
 
     status: str
     path: str
@@ -75,13 +75,14 @@ def read_at_revision(rev: str, path: str) -> str | None:
 
 
 def changed_files(merge_base: str) -> list[Change]:
-    """Added, modified and renamed files between the merge-base and HEAD; deletions need no lint."""
+    """Added, modified and renamed files between the merge-base and HEAD; deletions need no lint.
+    `-M` detects renames, not copies, so a copied file arrives as added."""
     fields = git("diff", "--name-status", "-M", "-z", merge_base, "HEAD").split("\0")
     changes, index = [], 0
     while index < len(fields) - 1:
         status = fields[index][0]
-        if status in "RC":
-            changes.append(Change(status, fields[index + 2], fields[index + 1] if status == "R" else None))
+        if status == "R":
+            changes.append(Change(status, fields[index + 2], fields[index + 1]))
             index += 3
             continue
         if status in "AMT":
@@ -148,7 +149,7 @@ def python_findings(path: str, text: str, config_text: str, renames: dict[str, s
     except SyntaxError:
         spans = []
     context = FileContext(path, spans, text.splitlines(), renames)
-    unique = {(r["code"], r["location"]["row"], r["message"]) for r in raw}
+    unique = {(r["code"] or "syntax-error", r["location"]["row"], r["message"]) for r in raw}
     return [_python_finding(context, code, row, message) for code, row, message in sorted(unique)]
 
 
@@ -285,7 +286,7 @@ def lint(base: str) -> list[str]:
     for change in changed_files(merge_base):
         old, new = file_findings(change, merge_base, config_text)
         problems += added_or_worse(old, new)
-        if change.status in "AC":
+        if change.status == "A":
             header = header_problem(change.path, read_at_revision("HEAD", change.path) or "")
             problems += [header] if header else []
     return problems
@@ -295,6 +296,8 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Fail on lint violations a change adds or worsens.")
     parser.add_argument("--base", required=True, help="the base reference, e.g. origin/poc/agentic-sdlc")
     args = parser.parse_args(argv)
+    if git("status", "--porcelain", "--untracked-files=no").strip():
+        print("[lint] note: uncommitted changes are not linted; the gate checks the committed HEAD", file=sys.stderr)
     try:
         problems = lint(args.base)
     except LintError as error:

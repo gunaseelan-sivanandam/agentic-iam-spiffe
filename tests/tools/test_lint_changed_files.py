@@ -275,6 +275,32 @@ def test_new_script_with_a_shellcheck_finding_fails(repo: Repo, path: str) -> No
     assert code == 1 and "SC2086" in out
 
 
+SHELL_WITH_DEBT = "#!/usr/bin/env bash\n# Prints its argument for the lint tests.\necho $1\n"
+
+
+@pytest.mark.parametrize(("added_line", "fails"), [("echo \"done\"\n", False), ("echo $2\n", True)],
+                         ids=["existing-finding-stays", "new-finding-fails"])
+def test_modified_shell_script_fails_only_on_a_new_finding(repo: Repo, added_line: str, fails: bool) -> None:
+    repo.base({"scripts/run.sh": SHELL_WITH_DEBT})
+    repo.change({"scripts/run.sh": SHELL_WITH_DEBT + added_line})
+    code, out = repo.lint()
+    assert (code, "SC2086" in out) == ((1, True) if fails else (0, False))
+
+
+def test_renamed_shell_script_with_unchanged_findings_passes(repo: Repo) -> None:
+    repo.base({"scripts/run.sh": SHELL_WITH_DEBT})
+    repo.change({}, renames={"scripts/run.sh": "scripts/start.sh"})
+    assert repo.lint()[0] == 0
+
+
+def test_missing_shellcheck_fails_the_run_for_a_changed_shell_script(repo: Repo, tmp_path: Path) -> None:
+    repo.base({"scripts/run.sh": SHELL_WITH_DEBT})
+    repo.change({"scripts/run.sh": SHELL_WITH_DEBT + "echo \"done\"\n"})
+    result = subprocess.run([sys.executable, str(SCRIPT), "--base", "main"], cwd=repo.root, capture_output=True,  # noqa: S603 - the gate under test
+                            text=True, check=False, env={**os.environ, "PATH": _tool_dir(tmp_path, None)})
+    assert result.returncode == 2 and "shellcheck is not installed" in result.stderr
+
+
 # --- Headers -----------------------------------------------------------------------------------
 
 
@@ -314,8 +340,9 @@ def test_new_file_with_a_purpose_comment_passes(repo: Repo, path: str, good: str
     ("config/schema.yaml", "# yaml-language-server: $schema=schema.json\nkey: value\n"),
     ("config/noqa.toml", "# noqa: E501\nkey = 1\n"),
     ("config/typed.toml", "# type: ignore\nkey = 1\n"),
+    ("services/y/Dockerfile", "# syntax=docker/dockerfile:1\nFROM scratch\n"),
 ], ids=["shell", "shell-directive-only", "yaml", "toml", "dockerfile", "rego", "coding-directive",
-        "yaml-language-server", "noqa", "type-comment"])
+        "yaml-language-server", "noqa", "type-comment", "dockerfile-directive"])
 def test_new_file_without_a_purpose_comment_fails(repo: Repo, path: str, bad: str) -> None:
     repo.base({"README.md": "base\n"})
     repo.change({path: bad})
@@ -404,13 +431,29 @@ def test_missing_or_failing_tool_fails_the_run(repo: Repo, tmp_path: Path, ruff_
     assert result.returncode == 2 and "ruff" in result.stderr
 
 
+def test_changed_module_that_does_not_parse_fails_with_a_finding(repo: Repo) -> None:
+    repo.base({"services/a.py": module_source(function_source("keep"))})
+    repo.change({"services/a.py": module_source(function_source("keep")) + "\ndef broken(:\n    pass\n"})
+    code, out = repo.lint()
+    assert code == 1 and "invalid-syntax" in out
+
+
+def test_uncommitted_changes_are_reported_as_not_linted(repo: Repo) -> None:
+    repo.base({"services/a.py": module_source(function_source("keep"))})
+    repo.change({"services/a.py": module_source(function_source("keep"), function_source("small"))})
+    _write(repo.root, "services/a.py", module_source(function_source("keep"), function_source("big", ifs=12)))
+    result = subprocess.run([sys.executable, str(SCRIPT), "--base", "main"], cwd=repo.root, capture_output=True,  # noqa: S603 - the gate under test
+                            text=True, check=False)
+    assert result.returncode == 0 and "uncommitted changes are not linted" in result.stderr
+
+
 def test_missing_base_reference_fails_with_a_message(repo: Repo) -> None:
     repo.base({"services/a.py": module_source(function_source("keep"))})
     code, out = repo.lint(base="origin/does-not-exist")
     assert code == 2 and "merge-base" in out
 
 
-def test_plain_ruff_check_keeps_the_default_rules_and_passes_on_the_tree() -> None:
+def test_plain_ruff_check_passes_on_the_tree() -> None:
     result = subprocess.run(["ruff", "check", "--no-cache", "services", "scripts"], cwd=ROOT, capture_output=True,  # noqa: S603, S607 - fixed argv
                             text=True, check=False)
     assert result.returncode == 0, result.stdout
