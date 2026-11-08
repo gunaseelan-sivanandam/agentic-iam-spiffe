@@ -30,10 +30,10 @@ No unit tests under `tests/unit/`: no service code changes. All tests are toolin
 | Mandates verbatim | Each mode's prompt holds its mandate text verbatim; the final prompt has no checklist section and names the other units' records present in the copy | A final prompt given a stage list still has no checklist section | S41-D4 | plan |
 | Recheck inputs | A recheck prompt holds the reviewer's earlier released report, the record's answers section for that attempt (and no other part of the record) and the evidence section; the start entry holds the section's SHA-256 | Refused before any call when: the same unit and label have no completed attempt in the previous round; a completed attempt of the same label exists only in another unit, or only before a reset (it is not used); the released file is missing; its hash differs from the end entry; the answers section is missing or empty. A marker sentence elsewhere in the review record never appears in the prompt. With two reviewers, each prompt holds only the answers to its own report. | S41-D5 | plan |
 | Schema severity | Findings with each severity and each new kind are accepted | A finding without `severity`, with kind `blocking` or `advisory`, or a `simpler_alternative` that is not `low`, makes the attempt "failed" and the report is not released | S41-D6 | plan |
-| Answers section | A table with one row per finding, each answer starting with `fixed:`, `deferred: #N`, `rejected:` or `owner:`, is accepted | Refused before any call: a row with another first word; a `fixed:` path that does not exist in the copy | S41-D7, S41-D8 | plan |
+| Answers section | A table with one row per finding, each answer starting with `fixed:`, `deferred: #N`, `rejected:` or `owner:`, is accepted; a `fixed:` path the change deletes or renames is accepted | Refused before any call: a row with another first word; a `fixed:` answer naming no path; a `fixed:` path that neither exists in the copy nor is deleted or renamed by the change | S41-D7, S41-D8 | plan |
 | Accounted | A recheck that lists every answer in `accounted`, with `opened` paths it read, completes | The attempt fails when: an answer is missing from `accounted`; an `opened` path is not among the read paths; a file named in a `fixed:` answer was not read | S41-D8 | plan |
 | Severity counts | The end entry's `severity_counts` equals the count of each severity in the released report, with zero for those that do not occur | — | S41-D9 | plan |
-| Rebuild | `invocation_from_entry` rebuilds a recheck's full prompt from its entry, the earlier report and the answers section, and its `full_prompt_sha256` matches | A changed answers section gives a mismatch | S41-D5 | plan |
+| Rebuild | `invocation_from_entry` rebuilds a recheck's full prompt from its entry, the earlier report, the answers section and the evidence text, and its `full_prompt_sha256` matches | A changed answers section, or changed evidence, gives a mismatch | S41-D5 | plan |
 | Benchmark scoring | A new report with a `blocking` severity scores as detected; stage A's results are read as before; the report column reads "Not blocking"; the canary asks for a low finding | — | S41-D13 | plan; `existing@c325e7d` (stage A results) |
 
 ## E2E test plan
@@ -56,7 +56,8 @@ None. No harness test, service, compose file or image changes.
 ## Review notes
 
 The rule texts in `AGENTS.md` (S41-D6, D7, D10, D11, D12) are proved by review, not by a test. The
-review quotes the text that states each one, and checks that each sentence S41-D12 names is changed.
+review quotes the text that states each one, checks that each sentence S41-D12 names is changed, and
+checks every other hit of "advisory" and "blocking" in `AGENTS.md` against S41-D6.
 
 ## Independent review at the implementation PR
 

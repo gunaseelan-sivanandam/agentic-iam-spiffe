@@ -30,11 +30,11 @@ slice 2.
 | Upstream question | Every prompt contains the question verbatim | — | S42-D4 | plan |
 | Uncovered lines | A changed script with an untested new branch lists that branch's lines; the #44 note is present; a changed `services/` file names its gate, or "no coverage gate" | — | S42-D5 | plan |
 | Trace gaps | A gap on an upstream item is listed and marked new, existing or accepted | — | S42-D5 | plan |
-| CI results | The jobs of a run whose head is the reviewed commit are shown, from a fake API response | A run of another commit is never shown; no matching run shows "no CI run for this commit" | S42-D5 | plan |
+| CI results | The jobs of a run whose head is the reviewed commit are shown with status and conclusion, from a fake API response; a running job shows "in_progress", not a pass | A run of another commit is never shown; no matching run shows "no CI run for this commit" | S42-D5 | plan |
 | Evidence from the commit | An uncommitted edit in the working tree does not change the evidence | — | S42-D5 | plan |
 | Accounted entries | A report listing every evidence entry as `explained` or `flagged` completes | A report that leaves out an entry fails; a `flagged` entry naming no finding of the report fails | S42-D6 | plan |
 | Failures shown | A failing command shows "failed: <command>: <reason>"; a test run with a failing test shows coverage and the test's name; the start entry holds each item's status | A failed coverage run never shows "100%" or no entries | S42-D7 | plan |
-| Clean environment | The evidence commands see only `PATH`, `LANG` and a scratch `HOME`; output paths are relative | Evidence holding the author's `HOME` path or the scratch root is refused before any call | S42-D8 | plan |
+| Clean environment | The evidence commands see only `PATH`, `LANG` and a scratch `HOME`; output paths are relative; a failing test's traceback through site-packages shows `<home>` and `<python>` | Evidence still holding the author's `HOME` path or the scratch root after the replacement is refused before any call | S42-D8 | plan |
 | Evidence hash | The start entry's evidence SHA-256 matches the evidence text in the prompt | — | S42-D9 | plan |
 | Required diff base | Calling `make_frozen_copy`, `build_prompt` or `invocation_from_entry` without `diff_base` raises `TypeError`; every prompt names `change.diff` | — | S42-D10 | plan |
 | Benchmark inputs | A case's paths come first, the rest of the diff follows, upstream items are named, and no evidence section entries appear | — | S42-D11 | plan |

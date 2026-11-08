@@ -35,6 +35,7 @@ Tooling tests in `tests/tools/` with the fake `claude` CLI and a new fake `codex
 | Canary validity | A twin that followed both the planted file and the hook makes the canary valid | A twin that followed only one makes it invalid, and the report says so | S45-D9 | plan |
 | CLI-version gate | — | A stage-B run with a CLI version other than the canary's is refused | S45-D9 | plan |
 | Runner paths (R5-A8) | `--dry-run` prepares every case and calls no reviewer; the planted-patch path applies a patch and the copy holds the planted line; the launcher's three report-shape branches and a non-JSON stream line are handled | — | S45-D11 | plan |
+| Decision rules | Each rule of S45-D8 counts only the cases both compared configurations ran, uses stage A's re-scored results, and lists every other case as not counted | A comparison that counts a case only one configuration ran fails the test | S45-D8 | plan |
 | Stage-A compatibility | `--report --stage A` gives stage A's tables unchanged | — | S45-D2 | `existing@c325e7d` |
 
 ## Live checks (not in CI)

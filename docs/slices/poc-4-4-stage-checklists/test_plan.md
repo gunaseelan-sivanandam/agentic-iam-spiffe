@@ -25,7 +25,7 @@ Tooling tests in `tests/tools/`.
 | Types present | Exactly the six artifact types have a list | A list for "final review" or "handoff" fails | S44-D1 | plan |
 | Sources researched | `research.md` has a section for each source named in S44-D1; a paid standard's section is marked "title only" | A named source without a section fails | S44-D1, S44-D2 | plan |
 | Missing-things questions | The proof question is in the plan-and-test-plan, requirements, unit-test and E2E-test lists; the CI-job question in the plan-and-test-plan and code lists | — | S44-D5 | plan |
-| `--stage` | A review with `--stage requirements` gets the base commit's requirements list; two `--stage` values give both lists; the start entry records each stage and its SHA-256 | Refused before any call: a list changed on the branch under review reaches its own review (it must not); an unknown name; an initial review without `--stage` when the base has lists; a final review with `--stage` | S44-D7 | plan |
+| `--stage` | A review with `--stage requirements` gets the base commit's requirements list, also when the branch under review changes that list (the review gets the base's text); two `--stage` values give both lists; the start entry records each stage and its SHA-256 | Refused before any call: an unknown name; an initial review without `--stage` when the base has lists; a final review with `--stage` | S44-D7 | plan |
 | No lists at the base | A review whose base has no `docs/review_checklists/` runs, and its prompt and start entry say "no checklist at base <commit>" | — | S44-D7 | plan |
 | Benchmark lists | A benchmark case on a commit without lists gets the list of its artifact type from the runner's fixed commit, and the result's identity records that commit | — | S44-D12 | plan |
 
