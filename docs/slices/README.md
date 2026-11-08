@@ -13,7 +13,7 @@ The workflow that produces and closes a bundle is defined in [`AGENTS.md`](../..
 
 | Slice | Milestone | Status | Dates | Notes |
 | --- | --- | --- | --- | --- |
-| [agentic-sdlc-poc](agentic-sdlc-poc/) | — | Slices 1–3 merged (PR #34, #35, #37); slice 4 split into the six bundles below | 2026-11-07, 2026-11-08 | Agent-run delivery PoC: rules, review launcher and benchmark, changed-files lint; slices 4–8 and #21 (outline) follow the benchmark report. Supersedes PR #26 |
+| [agentic-sdlc-poc](agentic-sdlc-poc/) | — | Slices 1–3 merged (PR #34, #35, #37); slice 4 split into the six bundles below, built in this order: 4.1, 4.2, 4.3, 4.5a (identity, configurations, cases, Codex mode and probe), 4.4, 4.5b (runs and report), 4.6. Launcher fixes found by slice 4's plan reviews: [plan](agentic-sdlc-poc/plan_launcher_fixes.md) | 2026-11-07, 2026-11-08 | Agent-run delivery PoC: rules, review launcher and benchmark, changed-files lint; slices 4–8 and #21 (outline) follow the benchmark report. Supersedes PR #26 |
 | [poc-4-1-review-prompts](poc-4-1-review-prompts/) | — | Plan under review (slice 4 plan PR) | 2026-11-08 | Slice 4.1 of agentic-sdlc-poc (#38): open mandate first, bounded rechecks, severity order |
 | [poc-4-2-review-inputs](poc-4-2-review-inputs/) | — | Plan under review (slice 4 plan PR) | 2026-11-08 | Slice 4.2 of agentic-sdlc-poc (#39): files from the diff, upstream items, evidence computed by tools |
 | [poc-4-3-review-records](poc-4-3-review-records/) | — | Plan under review (slice 4 plan PR) | 2026-11-08 | Slice 4.3 of agentic-sdlc-poc (#40): review records written by the launcher and checked by `docs-check` |

@@ -363,3 +363,52 @@ Why review did not catch it:
 ### Lesson
 A question decides what an agent looks at. Give every stage the open mandate and the evidence, and
 make rechecks verify the fix rather than trust the answer.
+
+
+## DPL-011: Slice 2's launcher and the secret check broke on slice 4's parallel plan reviews
+
+- Status: Open (fixes and their tests are in slice 4's plan PR; closed when it merges)
+- Introduced: slice 2 (`5a5aba7`, PR #35), which wrote report paths from the unit name, added R5-A4's
+  rule on other tools and applied the evidence secret check to review reports
+- Found: 2026-11-08, by the author, when slice 4's six plan reviews ran in parallel through the
+  launcher
+
+### What happened
+- Five of six round-1 plan reviews were lost. Every unit was named `plan`, and the report file name
+  held only the unit and the attempt, so the six reviews wrote one file.
+- A review failed because the reviewer called `Bash`, which the CLI does not offer; the call ran
+  nothing. R5-A4's fix failed every call to another tool.
+- The publication check withheld four reports that held no secret. Its credential rule read words
+  after `Authorization:` in prose and code (a code span, a format string, an escaped newline) as
+  values. A withheld report is never written, so the cause had to be inferred from the repository's
+  own matching lines.
+- The first fix, a code-span placeholder, hid a real value in "Authorization: `Bearer <token>`" (plan
+  review 4.4, A9). The fixes review found two more such forms, and that an error result does not show
+  that a call never ran.
+
+### Root causes
+Why it happened:
+- RC1: slice 2's tests ran one review unit per slice; several slices at once, with the same unit
+  name, were never tried.
+- RC2: the secret check's rules were written and tested for log lines. Slice 2 applied them to review
+  reports, which are prose about this repository, without a test on prose.
+- RC3: R5-A4's fix keyed on the tool name only. How the CLI answers a call to a tool it does not
+  offer was not probed.
+
+Why review did not catch it:
+- RC4: slice 2's reviews judged the launcher against its test plan, which had one unit per slice and
+  no report quoting the repository. No question asked how the next user would run it.
+
+### Actions
+- Corrective ([plan](slices/agentic-sdlc-poc/plan_launcher_fixes.md)): the report path holds the
+  slice directory (`f070669`); only a call to a tool the init event did not offer, answered with an
+  error, is logged instead of failing (`8d80ce8`); a credential value must be token-like (`d56c69a`)
+  and is found in code spans and quotes (`f8b6200`, `8d80ce8`).
+- Preventive: tests for two slices with the same unit, for prose and quoted forms of the header, for
+  the rulebook passing the check, and for offered and unoffered tools. Pending in 4.1 (S41-D1): the
+  launcher's output section tells reviewers to write `<token>` for any credential, so a review of the
+  secret check is not withheld for a made-up example.
+
+### Lesson
+Try a tool the way its next user will run it: in parallel, with the same names, on its own prose.
+

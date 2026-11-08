@@ -205,8 +205,9 @@ template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>
   example [`review_1b.md`](docs/slices/agentic-delivery-process/review_1b.md#reviewer-prompts-verbatim)).
 - **Models and usage limits.** Agents use Claude models. Codex is used only for scoped
   implementation, and only while Claude's 5-hour or weekly usage is above 70%. Reviews run on
-  Claude; when a usage limit is reached, work pauses until it resets. The review benchmark may also
-  measure Codex as a reviewer; the default reviewer model is decided from its results.
+  Claude; when a usage limit is reached, work pauses until it resets. The review benchmark and slice
+  4's critique of the stage checklists may also use Codex as a reviewer, only when a probe shows it
+  confined to its copy (slice 4.5); the default reviewer model is decided from the benchmark's results.
 - **Plan review** (step 1). The reviewer reviews `plan.md` and `test_plan.md` for security, test
   adequacy and consistency, under [PoC scope and proportion](#poc-scope-and-proportion).
   `docs/slices/<id>/plan_review.md` keeps each round's report verbatim, the SHA-256 of the files
