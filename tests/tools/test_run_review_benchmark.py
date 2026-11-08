@@ -387,3 +387,15 @@ def test_a_rerun_does_not_record_a_finished_case_again(repo: tuple[Repo, str, st
     assert bench.main(["--run"], repo=r.root) == 0
     assert bench.main(["--run"], repo=r.root) == 0
     assert [(line["case"], line["status"]) for line in r.results()] == [("C1", "refused")]
+
+
+def test_report_shows_an_advisory_only_match_in_its_own_column(repo: tuple[Repo, str, str]) -> None:
+    r, base, commit = repo
+    r.key([_case("C1", base, commit)])
+    r.scenario({"reads": [REVIEWED], "result": {"structured_output": {
+        "findings": [_finding("X1", kind="advisory")], "verdict": "yes"}}})
+    assert bench.main(["--run"], repo=r.root) == 0
+    table = bench.report(r.root, bench.load_key(r.root)).splitlines()
+    header = [cell.strip() for cell in next(line for line in table if line.startswith("| Case")).split("|")]
+    row = [cell.strip() for cell in next(line for line in table if line.startswith("| C1 | real_miss | short")).split("|")]
+    assert row[header.index("Advisory only")] == "E1" and row[header.index("Detected")] == ""

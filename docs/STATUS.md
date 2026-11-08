@@ -73,7 +73,8 @@ Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
 
 ## Open delivery problems
 Full entries, root causes and lessons in [`docs/delivery_problem_log.md`](delivery_problem_log.md).
-- None. DPL-008 closed on 2026-11-04 (automatic deletion of merged head branches is on).
+- **DPL-010** Slice 2's reviews accepted answers on the author's word, and closed questions let gaps
+  through (preventive actions pending in slice 4, issue #33). DPL-008 closed on 2026-11-04.
 
 ## Known gaps and debt
 - `M5-T55` (live Jira upstream) only runs with `JIRA_MCP_UPSTREAM_MODE=live`; default runs skip it.

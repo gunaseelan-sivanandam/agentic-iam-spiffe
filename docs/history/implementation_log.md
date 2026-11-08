@@ -26,7 +26,7 @@ is first); every heading carries its date.
   for defects of absence (DPL-004, DPL-005: neither prompt found them) and a severity rule for
   secrets in evidence (DPL-002: seen, but rated advisory); 1 of 4 paired real misses detected.
 - `AGENTS.md`: reviews run through the launcher; the review record keeps task prompts and reports.
-- Review: five rounds through the launcher ([`review_slice_2.md`](../slices/agentic-sdlc-poc/review_slice_2.md)).
+- Review: six rounds through the launcher ([`review_slice_2.md`](../slices/agentic-sdlc-poc/review_slice_2.md)).
   Round 1 found two blockers in the code (a canary that passed without a completed run; a budget
   that held only within one invocation), both fixed with tests; round 2 accepted every answer.
   Round 3 reviewed the report and close-out: its first attempt failed closed (a call named a path
@@ -37,10 +37,15 @@ is first); every heading carries its date.
   and the record and attempt log as evidence. It found two blockers that rounds 1 to 4 missed: a
   failed Read counted as reading a file, and the record kept prompts with placeholders and reports
   only rendered, so the log's hashes matched nothing in the repository. Both are fixed; the record
-  now keeps every prompt and report verbatim (checked against the log). Of its advisories, three are
+  now keeps every prompt and report verbatim (checked against the log). Of its advisories, four are
   fixed (an advisory-only column, outside calls logged with their tool and denial, any tool other
-  than Read, Grep or Glob fails the review), and the rest are slice-4 and slice-7 inputs.
-- Validation: `make tooling-test` (331 pytest, 9 shell) and `make qa-quality` passed. Deliberately
+  than Read, Grep or Glob fails the review, overstated counts and claims), the simpler alternative
+  is not applied, and the rest are slice-4 inputs (issue #33) and slice-7 inputs (issue #36).
+  Round 6, a recheck the owner asked for, opened the changed code for every answer and accepted
+  them all. Its advisories led to a test for the advisory-only column, a probe of how the CLI
+  reports a failed Read (CLI 2.1.319: an error result with the matching call ID, as the fix
+  assumes), and DPL-010 in the delivery problem log.
+- Validation: `make tooling-test` (332 pytest, 9 shell) and `make qa-quality` passed. Deliberately
   breaking the main confinement, admission, budget and canary rules made at least one test fail; not
   every defensive refusal path has a test (round 5). No
   service, compose file or E2E harness changed. Full E2E suite on a clean stack at `642b840`: 120/120
