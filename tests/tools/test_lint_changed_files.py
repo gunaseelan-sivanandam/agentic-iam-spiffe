@@ -339,6 +339,19 @@ def test_added_binary_file_is_skipped_without_an_error(repo: Repo) -> None:
     assert code == 0 and "PASSED" in out
 
 
+@pytest.mark.parametrize(("text", "passes"), [
+    ("# Notes\n\nNotes on the lint tests.\n\n## Detail\n", True),
+    ("Notes on the lint tests.\n", False),
+    ("# Notes\n\n## Detail\n\ntext\n", False),
+    ("# Notes\n", False),
+], ids=["title-and-paragraph", "no-title", "title-then-heading", "title-only"])
+def test_new_markdown_file_needs_a_title_and_a_purpose_paragraph(repo: Repo, text: str, passes: bool) -> None:
+    repo.base({"README.md": "# Readme\n\nbase\n"})
+    repo.change({"docs/notes.md": text})
+    code, out = repo.lint()
+    assert (code, "docs/notes.md: an added Markdown file needs" in out) == ((0, False) if passes else (1, True))
+
+
 # --- Renames, merge-base and failing closed ----------------------------------------------------
 
 

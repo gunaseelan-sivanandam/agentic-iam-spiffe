@@ -12,7 +12,9 @@ is first); every heading carries its date.
 - `make lint` (`scripts/lint_changed_files.py`): for every file the change adds, modifies or renames,
   ruff and shellcheck run on the merge-base and the new version; a finding key (file, rule, enclosing
   function or line text) that occurs more often or with a higher value fails, so existing violations
-  stay and a pure rename keeps its key. `ruff_changed_files.toml`, read from the merge-base: ruff's
+  stay and a pure rename keeps its key. By the owner's answer in PR #34 (coding rule 8 covers every
+  file), added Markdown files need a `#` title and a paragraph too. `ruff_changed_files.toml`, read
+  from the merge-base: ruff's
   default rules, C901 ≤ 10, PLR0912/0913/0915 (12 branches, 5 arguments, 50 statements), N, S (except
   `assert` in `tests/`); the limit, naming, F401 and F841 rules run with `--ignore-noqa`. Added
   Python, shell, YAML, TOML, Dockerfile and Rego files need a purpose comment. A missing base or tool

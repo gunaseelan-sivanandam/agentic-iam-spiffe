@@ -7,7 +7,7 @@ findings outside a function and for shellcheck. A function whose body, without i
 function at the merge-base keeps that function's key, so a pure rename is not new. The change fails
 when a key occurs more often than at the merge-base, or when its value (the number in the message,
 such as the complexity) is higher. Every added Python, shell, YAML, TOML, Dockerfile or Rego file
-must start with a purpose comment. The ruff configuration is read from the merge-base when it exists
+must start with a purpose comment, and every added Markdown file with a title and a paragraph. The ruff configuration is read from the merge-base when it exists
 there, so a change cannot loosen the limits it is checked against. A missing base fails the run.
 
 Usage (from the repository root): python3 scripts/lint_changed_files.py --base <ref>   (make lint)
@@ -241,6 +241,8 @@ def header_problem(path: str, text: str) -> str | None:
     name = Path(path).name
     if path.endswith(".py"):
         return _python_header(path, text)
+    if path.endswith(".md"):
+        return _markdown_header(path, text)
     if Path(path).suffix in HEADER_SUFFIXES or name == "Dockerfile" or name.startswith("Dockerfile.") or is_shell(path, text):
         return _comment_header(path, text)
     return None
@@ -252,6 +254,14 @@ def _python_header(path: str, text: str) -> str | None:
     except SyntaxError:
         return f"{path}: cannot parse the file to find its module docstring"
     return None if docstring and docstring.strip() else f"{path}: an added Python file needs a module docstring that says what the file is for"
+
+
+def _markdown_header(path: str, text: str) -> str | None:
+    """A Markdown file starts with a `#` title followed by a paragraph (AGENTS.md coding rule 8)."""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if len(lines) >= 2 and lines[0].startswith("# ") and not lines[1].startswith("#"):
+        return None
+    return f"{path}: an added Markdown file needs a `#` title followed by a paragraph that says what it is for"
 
 
 def _comment_header(path: str, text: str) -> str | None:
