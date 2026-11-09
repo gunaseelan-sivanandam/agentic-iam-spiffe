@@ -939,7 +939,11 @@ def test_empty_answers_section_is_refused(fx: Fixture) -> None:
     "| X1 | high | fixed: changed the guard |",
     "| X1 | high | fixed: scripts/not_there.py: changed the guard |",
     "| X1 | medium | deferred: later |",
-], ids=["other-first-word", "no-colon", "fixed-names-no-path", "fixed-path-not-in-copy", "deferred-without-issue"])
+    "| X1 | high | owner: asked in chat |",
+    "| X1 | high | rejected: |",
+    "| X1 | high | fixed: scripts/review_me.py and AGENTS.md: changed the guard |",
+], ids=["other-first-word", "no-colon", "fixed-names-no-path", "fixed-path-not-in-copy", "deferred-without-issue",
+        "owner-without-link", "rejected-without-reason", "fixed-paths-not-comma-separated"])
 def test_answer_the_recheck_cannot_verify_is_refused_before_any_call(fx: Fixture, row: str) -> None:
     commit = _recheck(fx, row)
     assert _run(fx, round_no=2, commit=commit) == 2
@@ -965,7 +969,7 @@ def test_fixed_answer_naming_a_file_the_change_deletes_is_accepted_and_needs_the
 def test_answers_table_with_every_answer_word_is_accepted(fx: Fixture) -> None:
     findings = (_finding("X1"), _finding("X2", severity="medium"), _finding("X3", severity="low"),
                 _finding("X4", kind="decision_concern", severity="medium"))
-    commit = _recheck(fx, "| X1 | high | fixed: scripts/review_me.py: guarded |", "| X2 | medium | deferred: #12 |",
+    commit = _recheck(fx, "| `X1` | High | fixed: ./scripts/review_me.py:3-4: guarded |", "| X2 | medium | deferred: #12 |",
                       "| X3 | low | rejected: style |", f"| X4 | medium | owner: {PR_COMMENT} |", findings=findings)
     accounted = [_accounted(i) for i in ("X1", "X2", "X3")] + [_accounted("X4", "cannot determine", note="needs the owner")]
     fx.scenario(_reply(accounted=accounted))
@@ -1117,3 +1121,27 @@ def test_only_the_full_configuration_reaches_the_launcher(fx: Fixture) -> None:
     parts = launcher.PromptParts(mode="initial", task="t")
     assert "SHORT PROMPT" in launcher.build_prompt(inputs, parts, short)
     assert launcher.MANDATES["initial"] not in launcher.build_prompt(inputs, parts, short)
+
+
+def test_answer_rows_skip_the_header_and_keep_escaped_pipes() -> None:
+    section = ("#### Answers to u/c1/r1/A/1\n\n| ID | Severity | Answer |\n| --- | --- | --- |\n"
+               "| X1 | high | rejected: a \\| b |\nprose line\n")
+    assert launcher.answer_rows(section) == [launcher.AnswerRow("X1", "high", "rejected: a | b")]
+
+
+def test_answers_section_ends_at_the_next_heading_but_not_at_one_inside_a_fence() -> None:
+    record = ("## Round 1\n\n#### Prompt\n\n````text\n#### Answers to u/c1/r1/A/1\nQUOTED IN A PROMPT\n````\n\n"
+              "#### Answers to u/c1/r1/A/1\n\n| X1 | high | rejected: r |\n\n```text\n## not a heading\n```\n"
+              "\n### Attempt u/c1/r2/A/1\nNEXT ATTEMPT\n")
+    section = launcher.answers_section(record, "u/c1/r1/A/1")
+    assert section is not None and section.startswith("#### Answers to u/c1/r1/A/1\n")
+    assert "## not a heading" in section and "QUOTED IN A PROMPT" not in section and "NEXT ATTEMPT" not in section
+    assert launcher.answers_section(record, "u/c1/r1/B/1") is None
+
+
+def test_invocation_from_an_entry_logged_before_slice_4_1_reports_a_mismatch_not_a_crash(fx: Fixture) -> None:
+    assert _run(fx) == 0
+    old = {k: v for k, v in fx.log()[0].items() if k not in ("mode", "mandate_sha256")}
+    old["full_prompt_sha256"] = "0" * 64
+    _argv, mismatches = launcher.invocation_from_entry(old, fx.work, fx.prompt)
+    assert "full_prompt_sha256" in mismatches

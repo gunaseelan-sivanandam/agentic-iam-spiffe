@@ -1014,7 +1014,7 @@ def answer_rows(section: str) -> list[AnswerRow]:
         cells = [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", line.strip())[1:-1]]
         if len(cells) != 3 or set(cells[0]) <= set("-: ") or cells[0].lower() == "id":
             continue
-        rows.append(AnswerRow(*cells))
+        rows.append(AnswerRow(cells[0].strip("`"), cells[1].strip("`").lower(), cells[2]))
     return rows
 
 
@@ -1025,7 +1025,30 @@ def fixed_paths(answer: str) -> list[str]:
         return []
     named = rest.split(": ", 1)[0]
     paths = [p.strip().strip("`").strip() for p in named.split(",")]
-    return [re.sub(r":\d+(?:-\d+)?$", "", p) for p in paths if p]
+    return [os.path.normpath(re.sub(r":\d+(?:-\d+)?$", "", p)) for p in paths if p and " " not in p]
+
+
+def answer_word(answer: str) -> str | None:
+    """The first word of an answer (S41-D7), or None when it is not one of the four."""
+    word = answer.split(":", 1)[0].strip()
+    return word if word in ANSWER_WORDS and ":" in answer else None
+
+
+def answer_format_problem(row: AnswerRow) -> str | None:
+    """Why an answer does not have its word's form (S41-D7); the launcher and the record check share this rule."""
+    word = answer_word(row.answer)
+    rest = row.answer.split(":", 1)[1].strip() if word else ""
+    if word is None:
+        return f"answer to {row.finding} does not start with fixed:, deferred:, rejected: or owner:"
+    if word == "fixed" and not fixed_paths(row.answer):
+        return f"fixed answer to {row.finding} names no path (fixed: <path>: <what changed>)"
+    if word == "deferred" and not re.match(r"^#\d+\b", rest):
+        return f"deferred answer to {row.finding} names no issue (deferred: #N)"
+    if word == "rejected" and not rest:
+        return f"rejected answer to {row.finding} gives no reason"
+    if word == "owner" and not re.search(r"https://\S+", rest):
+        return f"owner answer to {row.finding} gives no link"
+    return None
 
 
 def changed_away(repo: Path, diff_base: str, commit: str) -> set[str]:
@@ -1045,16 +1068,10 @@ def check_answers(rows: list[AnswerRow], exists: Any, away: set[str]) -> tuple[s
         raise ReviewRefusedError("the answers section holds no answer rows")
     must_read: list[str] = []
     for row in rows:
-        word = row.answer.split(":", 1)[0].strip()
-        if word not in ANSWER_WORDS or ":" not in row.answer:
-            raise ReviewRefusedError(f"answer to {row.finding} does not start with fixed:, deferred:, rejected: or owner:")
-        if word == "deferred" and not re.match(r"^deferred:\s*#\d+", row.answer):
-            raise ReviewRefusedError(f"deferred answer to {row.finding} names no issue (deferred: #N)")
-        if word != "fixed":
-            continue
-        paths = fixed_paths(row.answer)
-        if not paths:
-            raise ReviewRefusedError(f"fixed answer to {row.finding} names no path (fixed: <path>: <what changed>)")
+        problem = answer_format_problem(row)
+        if problem:
+            raise ReviewRefusedError(problem)
+        paths = fixed_paths(row.answer) if answer_word(row.answer) == "fixed" else []
         missing = [p for p in paths if not exists(p) and p not in away]
         if missing:
             raise ReviewRefusedError(f"fixed answer to {row.finding} names a path that is not in the copy: {missing[0]}")
@@ -1373,7 +1390,7 @@ def invocation_from_entry(entry: dict[str, Any], repo: Path, prompt_file: Path,
     """Rebuild a start entry's CLI call and prompt, and list every input hash that no longer matches the entry.
 
     A recheck's inputs are loaded as the launcher loads them unless `recheck` gives them."""
-    record, mode = _entry_record(entry), entry["mode"]
+    record, mode = _entry_record(entry), entry.get("mode", "initial")  # entries before slice 4.1 have no mode
     withheld = list(entry["withheld_sha256"])
     if mode == "recheck" and recheck is None:
         recheck = _entry_recheck(entry, repo, record)
