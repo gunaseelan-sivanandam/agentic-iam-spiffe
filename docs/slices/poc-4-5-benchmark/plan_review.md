@@ -7,7 +7,7 @@ Record of the plan review of slice 4.5 (#42), benchmark in the agentic-SDLC PoC:
 - Every prompt and report block below was checked against the log before the push. A report lost to the report-path collision (DPL-011) or withheld by the publication check has no block.
 - Until slice 4.1 adds the `accounted` field, a recheck lists the answers it accepted, and the files it opened, in a finding with ID `ACCOUNTED`.
 
-The owner granted one more round on 2026-11-09 ("I accept your recommendations for my decisions", decision 5 of the proposal). The launcher needs that extension as a PR comment link, so round 5 waits for the agent account's reinstatement.
+The owner granted one more round on 2026-11-09 ("I accept your recommendations for my decisions", decision 5 of the proposal). The launcher needs that extension as a link to the owner's PR comment, so round 5 runs once that comment exists.
 
 ## Round 1
 

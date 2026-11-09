@@ -142,4 +142,4 @@ or high as detections), S45-D5 (the cases), S45-D6 (the split), S45-D7 (a sample
 
 The owner granted one more review round for this plan on 2026-11-09 ("I accept your recommendations
 for my decisions", decision 5 of the proposal). The launcher needs that extension as a PR comment
-link, which waits for the agent account's reinstatement.
+link.

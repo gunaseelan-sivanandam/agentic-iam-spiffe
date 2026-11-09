@@ -16,7 +16,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
   2. before slice 5: QA-tooling gaps ([#44](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/44)) and publication scanning ([#21](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/21));
   3. slice 5 (one real backlog item through the whole cycle) and slice 6 (gates that run shows);
      inputs recorded on 2026-11-09 from the research of agent-first delivery (owner's decision; they
-     become issues once the agent account is back):
+     become issues when they can be opened again):
      - slice 5: design the authoring agents' prompts from 4.4's research; count rounds, re-raises and
        retries from the attempt logs and check the review limits against them; record misses found
        after a final review against the mandate used;

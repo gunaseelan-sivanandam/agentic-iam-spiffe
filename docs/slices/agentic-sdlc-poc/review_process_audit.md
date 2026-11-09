@@ -193,5 +193,5 @@ One element is outside your copy: the `grill-me` skill that `AGENTS.md`'s slice 
 | A9 | medium | fixed: docs/slices/poc-4-5-benchmark/plan.md, docs/STATUS.md: S45-D8: the owner chooses the final mandate by reason; slice 5 records misses found after a final review against the mandate used |
 | A10 | medium | fixed: docs/slices/poc-4-5-benchmark/plan.md: S45-D7: blinded confirmation, with a second confirmer on a sample |
 | A11 | medium | fixed: docs/slices/poc-4-5-benchmark/plan.md: S45-D8 reports empty-review failures and unread files per configuration |
-| A12 | low | rejected: deferred to slice 5, which counts rounds, re-raises and retries from the attempt logs (docs/STATUS.md); an issue follows once the agent account is back |
-| A13 | low | rejected: deferred to slice 6's candidates, one stated reason per gate threshold (docs/STATUS.md); an issue follows once the agent account is back |
+| A12 | low | rejected: deferred to slice 5, which counts rounds, re-raises and retries from the attempt logs (docs/STATUS.md); an issue follows when issues can be opened again |
+| A13 | low | rejected: deferred to slice 6's candidates, one stated reason per gate threshold (docs/STATUS.md); an issue follows when issues can be opened again |
