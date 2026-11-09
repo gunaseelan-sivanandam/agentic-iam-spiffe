@@ -10,9 +10,10 @@ The minimum questions for reviewing unit and tooling tests, and the author's gui
 4. Does each test assert something, and say what each assertion checks when it has several, with no assertion that is always true? [S:test-smells]
 5. Does conditional logic inside a test change what it checks? [S:test-smells]
 6. Does every fail-closed or refusal path of the new code have a test that triggers it? [S:owasp-code-review]
-7. Does a test depend on external files or services, the order of tests, sleeps or the clock? [S:fowler-nondeterminism]
+7. Does a test depend on files or services outside its own fixture (other than the repository files it exists to check), on the order of tests, on sleeps or on the clock? [S:fowler-nondeterminism] [S:test-smells]
 8. Does a test assert an error path explicitly rather than catching and ignoring the error? [S:test-smells]
 9. Are the literal values in assertions explained, for example as boundary values below, at and above a limit? [S:test-smells]
+10. Does each fake, stub or mock behave like the real dependency in what the test relies on, as a recorded probe or a contract test shows, and does each check get the kinds of input it will meet in use? [S:fowler-pyramid]
 
 ## Blocks at this stage
 

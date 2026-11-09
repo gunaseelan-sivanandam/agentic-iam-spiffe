@@ -371,6 +371,20 @@ def test_rejected_finding_that_the_next_round_re_raises_still_fails(fx: base.Fix
     assert any("unit1/c1/r1/A/1: X1 is a rejected blocking finding that no later round accepted" in p for p in _problems(fx))
 
 
+def test_an_acceptance_in_a_next_round_attempt_that_did_not_complete_settles_nothing(fx: base.Fixture) -> None:
+    """4.4 critique, C-14: only a completed attempt's released report can accept a rejection; a Report block put
+    into a failed attempt's section by hand does not."""
+    _completed(fx, base._finding("X1", severity="blocking"))
+    commit = base._answers(fx, "unit1/c1/r1/A/1", "| X1 | blocking | rejected: the scenario does not happen |")
+    fx.scenario(base._reply(accounted=[base._accounted("X1")]))  # leaves EV1 out, so the launcher fails it
+    assert base._run(fx, round_no=2, commit=commit) == 1
+    assert fx.log()[-1]["status"] == "failed"
+    accepting = json.dumps({"findings": [], "accounted": [base._accounted("X1")], "verdict": "yes"}, indent=2)
+    _record(fx).write_text(_record(fx).read_text().rstrip("\n") + f"\n\n#### Report\n\n```json\n{accepting}\n```\n")
+    problems = _problems(fx)
+    assert any("X1 is a rejected blocking finding that no later round accepted" in p for p in problems), problems
+
+
 def test_a_later_owner_answer_to_the_re_raised_finding_settles_the_rejection(fx: base.Fixture) -> None:
     _completed(fx, base._finding("X1", severity="high"))
     commit = base._answers(fx, "unit1/c1/r1/A/1", "| X1 | high | rejected: the scenario does not happen |")
@@ -397,3 +411,24 @@ def test_prompt_block_hashes_as_logged_whatever_the_task_files_line_ends(fx: bas
     section = records.parse_record(_record(fx).read_bytes().decode("utf-8"))[0]["unit1/c1/r1/A/1"]
     assert section.blocks["prompt"] == task
     assert _problems(fx) == []
+
+
+# --- Recovery paths the 4.4 critique found untested (CR-B8) -------------------------------------------------------
+
+
+def _launcher_section(attempt: str) -> str:
+    start = {"round": 2, "attempt": attempt, "reviewer": "A", "model": "m", "effort": "medium", "mode": "recheck",
+             "commit": "c" * 40, "base_commit": "b" * 40}
+    return records.start_text(start, "task\n", "evidence\n", "")
+
+
+def test_recovery_removes_the_round_heading_written_with_its_first_unlogged_section() -> None:
+    kept = "# Review record\n\nAn author's paragraph.\n"
+    text = kept + "\n" + _launcher_section("unit1/c1/r2/A/1")
+    assert "## Round 2" in text
+    assert records.truncate_unlogged_tail(text, logged=set()) == kept
+
+
+def test_finishing_an_attempt_the_record_has_no_section_for_is_refused() -> None:
+    with pytest.raises(ValueError, match="no section for attempt unit1/c1/r2/A/1"):
+        records.finish("# Review record\n", "unit1/c1/r2/A/1", "Status: completed.", "{}\n")

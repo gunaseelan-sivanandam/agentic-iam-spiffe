@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-11-07. Update this page at the end of every slice (see `AGENTS.md`, slice workflow step 4).
+Last updated: 2026-11-10. Update this page at the end of every slice (see `AGENTS.md`, slice workflow step 4).
 Detailed history: [`docs/history/implementation_log.md`](history/implementation_log.md).
 
 ## Where the project stands
@@ -12,8 +12,10 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
   checklists (#41), benchmark (#42), stage rules (#43). Agents taking backlog items the owner did not
   write is [#32](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/32).
 - **Open PoC work, in "needed before" order:**
-  1. now: slice 4 ([#33](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/33), sub-issues #38–#43); the owner's
-     decision file: [`slice_4_decisions.md`](slices/agentic-sdlc-poc/slice_4_decisions.md);
+  1. now: slice 4 ([#33](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/33), sub-issues #38–#43), implemented on
+     the branch `poc/slice-4-implementation` for one final PR: 4.1 to 4.3 and 4.5a implemented and reviewed;
+     4.4's stage checklists implemented and critiqued by two models; 4.5b (the benchmark runs) and 4.6 next.
+     Progress and the owner's decisions: [`slice_4_decisions.md`](slices/agentic-sdlc-poc/slice_4_decisions.md);
      Next, before slice 5: a slice of author prompts and their benchmark (owner, 2026-11-09: "let's
      continue this slice for just review, after this let's run a new slice of author prompts and
      benchmark them, since the review prompts are finalized that would give us bit of data for

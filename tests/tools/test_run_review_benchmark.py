@@ -880,6 +880,14 @@ def test_second_confirmer_sees_a_seeded_sample_without_configurations_and_its_ca
     assert bench.agreement(r.root) == "Second confirmer: agrees with the author on 3 of 5 sampled findings."
 
 
+def test_a_run_of_stage_a_is_refused_before_any_call(repo: tuple[Repo, str, str]) -> None:
+    r, base, commit = repo
+    r.key([_case("C1", base, commit)], stage="A")
+    with pytest.raises(bench.BenchmarkRefusedError, match="stage A is closed"):
+        bench.run_benchmark(r.root, bench.load_key(r.root), 26)
+    assert r.calls() == 0
+
+
 def test_second_confirmer_is_refused_when_the_stage_budget_is_spent(repo: tuple[Repo, str, str]) -> None:
     r, _base, _commit = repo
     r.key([])

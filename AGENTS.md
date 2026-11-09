@@ -68,10 +68,10 @@ them.
   - an approved decision without a test;
   - a secret written into logs, evidence or any published record.
 
-  A finding also blocks when it meets the "Blocks at this stage" section of its stage's checklist in
-  [`docs/review_checklists/`](docs/review_checklists/): for example a requirement no test could
-  verify, a design that lets an asset reach a non-holder, or a test that can pass while the
-  behaviour is broken.
+  A finding also blocks when it meets the "Blocks at this stage" section of a checklist the review
+  received (its `--stage`) in [`docs/review_checklists/`](docs/review_checklists/): for example a
+  requirement no test could verify, a design that lets an asset reach a non-holder, or a test that
+  can pass while the behaviour is broken.
 
   A blocking finding is fixed before merge, or the user decides. **High** is a real defect or false
   claim below that bar, for example a misleading document, new behaviour without a test or an

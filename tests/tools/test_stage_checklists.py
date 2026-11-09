@@ -48,12 +48,27 @@ def research_keys(text: str) -> dict[str, str]:
     return sections
 
 
+# A source that gave nothing: unread, unreachable, or a paid standard cited by title only (S44-D1, S44-D2).
+GAVE_NOTHING = ("No item is taken from it", "title only")
+LIST_FILES = {"P": "plan-and-test-plan", "R": "requirements", "A": "architecture-and-interfaces", "U": "unit-tests",
+              "E": "e2e-tests", "C": "code"}
+QUESTION_ID = re.compile(r"\b([PRAUEC])(\d{1,2})\b")
+
+
+def usable_keys(text: str) -> set[str]:
+    """The source keys a question may cite: sections of the research record that gave something."""
+    return {key for key, body in research_keys(text).items()
+            if not any(mark in " ".join(body.split()) for mark in GAVE_NOTHING)}
+
+
 def list_problems(text: str, keys: set[str]) -> list[str]:
     """Why a list does not have the agreed form (S44-D3, S44-D4, S44-D9)."""
     lines = text.splitlines()
     problems = []
     if not lines or not lines[0].startswith("# ") or len(lines) < 3 or not lines[2].strip():
         problems.append("no title and purpose paragraph")
+    section = text.split("## Questions\n", 1)[-1].split("\n## ", 1)[0].splitlines()
+    problems += [f"not a numbered question: {line[:40]}" for line in section if line.strip() and not QUESTION.match(line)]
     questions = [m.group(2) for line in lines if (m := QUESTION.match(line))]
     if len(questions) > 12:
         problems.append(f"{len(questions)} questions")
@@ -77,7 +92,7 @@ def draft(text: str, title: str) -> list[str]:
 
 
 def test_every_list_has_the_agreed_form_and_cites_researched_sources() -> None:
-    keys = set(research_keys(RESEARCH.read_text()))
+    keys = usable_keys(RESEARCH.read_text())
     for path in sorted(LISTS.glob("*.md")):
         assert list_problems(path.read_text(), keys) == [], path.name
 
@@ -88,9 +103,13 @@ def test_every_list_has_the_agreed_form_and_cites_researched_sources() -> None:
     (lambda t: t.replace("[S:google-looking-for]", "[S:nowhere]", 1), "unknown source"),
     (lambda t: t.replace("[S:google-looking-for]", "[S:DPL-010]", 1), "a DPL entry"),
     (lambda t: t.replace("## Blocks at this stage", "## Something else"), "no Blocks"),
-], ids=["thirteen-questions", "untagged-question", "unknown-key", "dpl-as-source", "no-blocks-section"])
+    (lambda t: t.replace("[S:google-looking-for]", "[S:cert]", 1), "unknown source cert"),
+    (lambda t: t.replace("[S:google-looking-for]", "[S:iso29148]", 1), "unknown source iso29148"),
+    (lambda t: t.replace("\n1. ", "\n- ", 1), "not a numbered question"),
+], ids=["thirteen-questions", "untagged-question", "unknown-key", "dpl-as-source", "no-blocks-section",
+        "source-that-gave-nothing", "title-only-standard", "bulleted-question"])
 def test_the_form_check_fails_on_each_kind_of_violation(edit: object, problem: str) -> None:
-    keys = set(research_keys(RESEARCH.read_text())) | {"DPL-010"}
+    keys = usable_keys(RESEARCH.read_text()) | {"DPL-010"}
     text = edit((LISTS / "code.md").read_text())  # type: ignore[operator]
     assert any(problem in p for p in list_problems(text, keys))
 
@@ -135,9 +154,34 @@ def test_every_dpl_entry_is_mapped() -> None:
         assert f"| DPL-{n:03d} " in mapping
 
 
+def named_question_problems(research: str, lists: dict[str, str]) -> list[str]:
+    """Question IDs that the candidate table or the DPL mapping names and no list has (4.4 critique, CR-B4)."""
+    counts = {letter: sum(1 for line in lists[name].splitlines() if QUESTION.match(line))
+              for letter, name in LIST_FILES.items()}
+    problems = []
+    for heading, column in (("## Candidate items and where they went", 3), ("## The delivery problem log as a test", 3)):
+        table = research.split(heading, 1)[1].split("\n## ", 1)[0]
+        for row in (line.split(" | ") for line in table.splitlines() if line.startswith("| ") and "---" not in line):
+            cell = row[column - 1] if len(row) >= column else ""
+            problems += [f"{m.group(0)} in {row[0][2:30]}" for m in QUESTION_ID.finditer(cell)
+                         if int(m.group(2)) > counts[m.group(1)]]
+    return problems
+
+
+def test_every_question_the_research_record_names_exists() -> None:
+    lists = {name: (LISTS / f"{name}.md").read_text() for name in LIST_FILES.values()}
+    assert named_question_problems(RESEARCH.read_text(), lists) == []
+
+
+def test_a_mapping_that_names_a_question_no_list_has_fails() -> None:
+    lists = {name: (LISTS / f"{name}.md").read_text() for name in LIST_FILES.values()}
+    text = RESEARCH.read_text().replace("| A2; C11 (the claim", "| A2; C19 (the claim", 1)
+    assert any(p.startswith("C19") for p in named_question_problems(text, lists))
+
+
 @pytest.mark.parametrize("title", ["initial", "recheck", "final"])
 def test_each_draft_mandate_sentence_has_a_source_and_names_its_failure_mode(title: str) -> None:
-    keys = set(research_keys(RESEARCH.read_text()))
+    keys = usable_keys(RESEARCH.read_text())
     sentences = draft(RESEARCH.read_text(), title)
     assert len(sentences) >= 3
     for sentence in sentences:

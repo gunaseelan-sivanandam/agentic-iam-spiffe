@@ -11,8 +11,10 @@ The minimum questions for reviewing the E2E harness, `trace/tests.yaml` and `doc
 5. Does any evidence a test leaves hold a secret, a token value or key material? [S:owasp-code-review]
 6. Does the test exercise the system through its real boundary (the proxy and its mutual TLS), not around it? [S:fowler-pyramid]
 7. Is the test isolated from live external services unless it is an explicitly gated live test? [S:fowler-pyramid]
-8. Does each trace entry name only requirements the test proves, and does any requirement lose its only runtime proof? [S:reqview-29148]
+8. Does each trace entry name only requirements the test proves, and does any requirement lose its only runtime proof? [S:reqview-29148] [S:owner]
 9. Does a guard accept several outcomes, or check a condition that is always true? [S:test-smells]
+10. Does each new or changed entry of `docs/test_spec.md` say what the test really does: its premise, exercise, outcome and evidence? [S:google-looking-for]
+11. Does the change loosen, skip or quarantine an existing guard or test (an `alternate` marker, a removed negative case, an `accepted_gaps` row), and does each say why and until when? [S:fowler-nondeterminism]
 
 ## Blocks at this stage
 
