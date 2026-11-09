@@ -27,16 +27,34 @@ from pathlib import Path
 from typing import Any
 
 ATTEMPT_HEADING = re.compile(r"^### Attempt (\S+)\s*$")
+ATTEMPT_ID = re.compile(r"^[A-Za-z0-9_-]+/c\d+/r\d+/[A-Za-z0-9_-]+/\d+$")  # the launcher's attempt IDs
 BLOCK_LABEL = re.compile(r"^#### (Prompt|Evidence|Report)\s*$")
 HEADING = re.compile(r"^#{1,4} ")
-OPEN_FENCE = re.compile(r"^(`{3,}|~{3,})[\w-]*\s*$")
+# One fence rule for every reader of a record (CommonMark): up to three spaces of indent, three or more backticks
+# or tildes, then any info string; a backtick fence's info string holds no backtick.
+OPEN_FENCE = re.compile(r"^ {0,3}(`{3,}(?=[^`]*$)|~{3,})")
 STATUS = "Status: "
+STARTED = f"{STATUS}started."
 
 
 def fenced(text: str, info: str = "") -> str:
-    """A fenced block one backtick longer than the longest backtick run inside the text."""
+    """A fenced block one backtick longer than the longest backtick run inside the text. Only one final newline is
+    dropped, so the block's lines plus one newline give the text back exactly, blank last lines included."""
     fence = "`" * max([3, *(len(run) + 1 for run in re.findall(r"`+", text))])
-    return f"{fence}{info}\n{text.rstrip(chr(10))}\n{fence}"
+    body = text[:-1] if text.endswith("\n") else text
+    return f"{fence}{info}\n{body}\n{fence}"
+
+
+def lines_of(text: str) -> list[str]:
+    """A record's lines, split on newlines only, so that no other character ends a line (as `str.splitlines` would
+    with a form feed or a carriage return) and a block's text survives a round trip unchanged."""
+    return text.split("\n")
+
+
+def closes(line: str, opener: str) -> bool:
+    """Whether a line closes a fence opened by `opener`: the same character, at least as long, nothing else."""
+    run = line.strip()
+    return bool(run) and set(run) == {opener[0]} and len(run) >= len(opener) and len(line) - len(line.lstrip()) <= 3
 
 
 def _fence_end(lines: list[str], index: int) -> int:
@@ -45,9 +63,17 @@ def _fence_end(lines: list[str], index: int) -> int:
     if not opener:
         return index
     for close in range(index + 1, len(lines)):
-        if lines[close].strip() == opener.group(1):
+        if closes(lines[close], opener.group(1)):
             return close
     return len(lines) - 1
+
+
+def next_fence(line: str, fence: str) -> str:
+    """The open fence after reading a line, for readers that go line by line (the launcher's answers section)."""
+    if fence:
+        return "" if closes(line, fence) else fence
+    opener = OPEN_FENCE.match(line)
+    return opener.group(1) if opener else ""
 
 
 @dataclass
@@ -66,10 +92,11 @@ def _block_after(lines: list[str], index: int) -> tuple[str | None, int]:
     """The fenced block at the first non-blank line from `index`, and the index after it."""
     while index < len(lines) and not lines[index].strip():
         index += 1
-    if index >= len(lines) or not OPEN_FENCE.match(lines[index]):
+    opener = OPEN_FENCE.match(lines[index]) if index < len(lines) else None
+    if opener is None:
         return None, index
     close = _fence_end(lines, index)
-    if close == index or lines[close].strip() != OPEN_FENCE.match(lines[index]).group(1):  # type: ignore[union-attr]
+    if close == index or not closes(lines[close], opener.group(1)):
         return None, len(lines)
     return "\n".join(lines[index + 1:close]) + "\n", close + 1
 
@@ -77,7 +104,7 @@ def _block_after(lines: list[str], index: int) -> tuple[str | None, int]:
 def parse_record(text: str) -> tuple[dict[str, AttemptSection], list[str]]:
     """The attempt sections of a record by attempt ID, and problems of its form (a heading twice, a label without a
     fenced block). A fence outside a labelled block, for example in an answers section, is skipped as a whole."""
-    lines = text.splitlines()
+    lines = lines_of(text)
     sections: dict[str, AttemptSection] = {}
     problems: list[str] = []
     current: AttemptSection | None = None
@@ -132,21 +159,17 @@ def round_heading(start: dict[str, Any]) -> str:
 def start_text(start: dict[str, Any], task: str, evidence: str, record_text: str) -> str:
     """The section an attempt begins with: its heading, what ran, a started status, and its Prompt and Evidence."""
     heading = round_heading(start)
-    lines = [] if heading in record_text.splitlines() else [heading, ""]
+    lines = [] if heading in lines_of(record_text) else [heading, ""]
     lines += [f"### Attempt {start['attempt']}", "",
               f"Reviewer `{start['reviewer']}`: `{start['model']}`, effort {start['effort']}, mode {start['mode']}, "
               f"commit `{start['commit'][:12]}`, base `{start['base_commit'][:12]}`.", "",
-              f"{STATUS}started.", "", "#### Prompt", "", fenced(task, "markdown"), "",
+              STARTED, "", "#### Prompt", "", fenced(task, "markdown"), "",
               "#### Evidence", "", fenced(evidence, "text"), ""]
     return "\n".join(lines) + "\n"
 
 
-def status_text(end: dict[str, Any] | None, withheld: bool = False) -> str:
+def status_text(end: dict[str, Any]) -> str:
     """An attempt's status line, from its end entry."""
-    if withheld:
-        return f"{STATUS}withheld: the publication check found a secret in the report; nothing was released."
-    if end is None:
-        return f"{STATUS}started."
     line = f"{STATUS}{end['status']}"
     if end.get("verdict"):
         line += f"; approvable within the threat model: {end['verdict']}"
@@ -159,7 +182,7 @@ def finish(text: str, attempt: str, status: str, report: str | None) -> str:
     """The record with the attempt's status line replaced and, for a released report, a Report block added at the
     end of the attempt's own section, so parallel attempts never interleave. A section already holding a Report block
     keeps it."""
-    lines = text.splitlines()
+    lines = lines_of(text)
     section = parse_record(text)[0].get(attempt)
     if section is None:
         raise ValueError(f"the record has no section for attempt {attempt}")
@@ -170,26 +193,49 @@ def finish(text: str, attempt: str, status: str, report: str | None) -> str:
         while end > section.start and not lines[end - 1].strip():
             end -= 1
         lines[end:end] = ["", "#### Report", "", *fenced(report, "json").splitlines()]
-    return "\n".join(lines) + "\n"
+    return "\n".join(lines)
+
+
+def _launcher_wrote(attempt: str, section: AttemptSection, lines: list[str]) -> bool:
+    """Whether a section is exactly what the launcher writes before its start entry: an attempt ID of its form, the
+    started status, its Prompt and Evidence blocks, and nothing after them but blank lines up to the end of the file."""
+    if not ATTEMPT_ID.match(attempt) or section.status is None or lines[section.status] != STARTED:
+        return False
+    if set(section.blocks) != {"prompt", "evidence"} or section.end != len(lines):
+        return False
+    evidence_label = max(i for i in range(section.start, section.end) if lines[i] == "#### Evidence")
+    return not any(line.strip() for line in lines[_fence_end(lines, _first_fence(lines, evidence_label)) + 1:])
+
+
+def _first_fence(lines: list[str], index: int) -> int:
+    while index < len(lines) and not OPEN_FENCE.match(lines[index]):
+        index += 1
+    return index
 
 
 def truncate_unlogged_tail(text: str, logged: set[str]) -> str:
-    """Remove trailing attempt sections the attempt log does not hold: what a launcher killed between writing the
-    section and logging its start leaves. Only the tail can be such a section, since both are written in one step."""
-    while True:
-        sections = parse_record(text)[0]
-        tail = max(sections.items(), key=lambda item: item[1].start, default=None)
-        if tail is None or tail[0] in logged:
-            return text
-        lines = text.splitlines()
-        text = "\n".join(lines[:tail[1].start]).rstrip("\n") + "\n"
+    """Remove a trailing attempt section the attempt log does not hold: what a launcher killed between writing the
+    section and logging its start leaves. Only a section exactly as the launcher writes it is removed, so an author's
+    text is never cut; any other unlogged heading is left for the record check to report."""
+    sections = parse_record(text)[0]
+    tail = max(sections.items(), key=lambda item: item[1].start, default=None)
+    lines = lines_of(text)
+    if tail is None or tail[0] in logged or not _launcher_wrote(tail[0], tail[1], lines):
+        return text
+    kept_lines = lines[:tail[1].start]
+    while kept_lines and not kept_lines[-1].strip():
+        kept_lines.pop()
+    if kept_lines and kept_lines[-1].startswith("## Round "):
+        kept_lines.pop()  # the round heading the launcher wrote with this, its round's first section
+    kept = "\n".join(kept_lines).rstrip("\n") + "\n"
+    return kept
 
 
 def write_atomically(path: Path, text: str) -> None:
     """Replace the file with the text in one rename, so a reader never sees half of it."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp")
-    temporary.write_text(text, encoding="utf-8")
+    temporary.write_bytes(text.encode("utf-8"))  # exact bytes: no newline translation on any platform
     with open(temporary, "rb") as handle:
         os.fsync(handle.fileno())
     os.replace(temporary, path)

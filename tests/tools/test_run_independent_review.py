@@ -700,12 +700,14 @@ def _pem_private_key() -> str:
                              serialization.NoEncryption()).decode("ascii")
 
 
-def test_secret_in_the_reply_leaves_no_report_and_no_end_entry(fx: Fixture, capsys: pytest.CaptureFixture[str]) -> None:
+def test_secret_in_the_reply_leaves_no_report_and_a_withheld_end_entry(fx: Fixture,
+                                                                      capsys: pytest.CaptureFixture[str]) -> None:
     pem = _pem_private_key()
     fx.scenario(_reply([_finding("X", severity="low", problem=pem)]))
     assert _run(fx) == 3
     start = fx.log()[0]
-    assert [e["event"] for e in fx.log()] == ["start"]
+    assert [e["event"] for e in fx.log()] == ["start", "end"] and fx.log()[1]["status"] == "withheld"
+    assert fx.log()[1]["report_sha256"] is None and pem.splitlines()[1] not in (fx.work / LOG).read_text()
     assert not _report(fx, start).exists() and not Path(str(_report(fx, start)) + ".partial").exists()
     err = capsys.readouterr().err
     assert "PEM private key" in err and start["report_path"] in err
@@ -764,7 +766,7 @@ def _sections_in_order(prompt: str) -> list[str]:
     for line in prompt.splitlines():
         if not fence and line.startswith("## "):
             headings.append(line[3:])
-        fence = launcher._next_fence(line, fence)
+        fence = launcher._RECORDS.next_fence(line, fence)
     return headings
 
 

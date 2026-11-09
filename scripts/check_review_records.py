@@ -12,7 +12,8 @@ no such field and are not checked, S43-D5):
 - a recheck's logged answers hash equals the hash of the answers section it names, so answers edited after the
   recheck read them fail;
 - every finding of a released report has an answer its severity and kind allow (the launcher's own rule), and a
-  rejected blocking or high finding is accepted by the next round's report or carries an `owner:` link.
+  rejected blocking or high finding is accepted by the next round's report, or carries an `owner:` link in its own
+  row or in a later round's answer to the same finding (a re-raised finding keeps its ID).
 
 A block is the fenced block right after a Prompt, Evidence or Report label under an attempt heading; any other fence,
 for example one inside an answers section, is not a block.
@@ -62,7 +63,7 @@ class LoggedAttempt:
 
 
 def logged_attempts(log: Path) -> dict[str, LoggedAttempt]:
-    entries = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines() if line.strip()]
+    entries = [json.loads(line) for line in log.read_bytes().decode("utf-8").splitlines() if line.strip()]
     ends = {e["attempt"]: e for e in entries if e.get("event") == "end"}
     return {e["attempt"]: LoggedAttempt(e, ends.get(e["attempt"])) for e in entries if e.get("event") == "start"}
 
@@ -73,7 +74,8 @@ def record_of(start: dict[str, Any]) -> str:
 
 
 def _block_problems(attempt: str, logged: LoggedAttempt, section: AttemptSection) -> list[str]:
-    problems = [f"{attempt}: {name} block appears {count} times" for name, count in section.counts.items() if count > 1]
+    problems = [f"{attempt}: the {name.capitalize()} block appears {count} times" for name, count in section.counts.items()
+                if count > 1]
     for name, key in LOG_FIELDS.items():
         block = section.blocks.get(name)
         if block is None:
@@ -119,6 +121,22 @@ def _next_round_accepts(attempts: dict[str, LoggedAttempt], sections: dict[str, 
     return False
 
 
+def _later_owner_answer(attempts: dict[str, LoggedAttempt], record_text: str, start: dict[str, Any],
+                        finding: str) -> bool:
+    """Whether a later round of the same reviewer answers the same finding (a re-raised finding keeps its ID) with
+    `owner:`: how a rejection that the recheck re-raised reaches the owner without editing answers a recheck read."""
+    for attempt, logged in attempts.items():
+        later = logged.start
+        if (later.get("unit"), later.get("count"), later.get("reviewer")) != (
+                start.get("unit"), start.get("count"), start.get("reviewer")) or later.get("round", 0) <= start.get("round", 0):
+            continue
+        section = launcher.answers_section(record_text, attempt)
+        rows = launcher.answer_rows(section) if section else []
+        if any(r.finding == finding and launcher.answer_word(r.answer) == "owner" for r in rows):
+            return True
+    return False
+
+
 def _finding_answer_problems(attempt: str, report: dict[str, Any], record_text: str,
                              context: tuple[dict[str, LoggedAttempt], dict[str, AttemptSection]]) -> list[str]:
     """S43-D4: every finding of a released report has an answer its severity and kind allow."""
@@ -134,8 +152,10 @@ def _finding_answer_problems(attempt: str, report: dict[str, Any], record_text: 
     severities = {f["id"]: f.get("severity") for f in report["findings"]}
     for row in rows:
         rejected = launcher.answer_word(row.answer) == "rejected" and severities.get(row.finding) in ("blocking", "high")
-        if rejected and not OWNER_LINK.search(row.answer) and not _next_round_accepts(
-                attempts, sections, attempts[attempt].start, row.finding):
+        start = attempts[attempt].start
+        settled = (OWNER_LINK.search(row.answer) or _next_round_accepts(attempts, sections, start, row.finding)
+                   or _later_owner_answer(attempts, record_text, start, row.finding))
+        if rejected and not settled:
             problems.append(f"{attempt}: {row.finding} is a rejected {severities[row.finding]} finding that no later "
                             "round accepted and no owner link covers")
     return problems
@@ -150,7 +170,7 @@ def check_log(root: Path, log: Path) -> list[str]:
         if not path.is_file():
             problems.append(f"{record}: missing; the attempt log names it")
             continue
-        text = path.read_text(encoding="utf-8")
+        text = path.read_bytes().decode("utf-8")  # exact bytes: no newline translation, blocks hash as written
         sections, form = records.parse_record(text)
         problems += [f"{record}: {p}" for p in form]
         mine = {a: logged for a, logged in checked.items() if record_of(logged.start) == record}

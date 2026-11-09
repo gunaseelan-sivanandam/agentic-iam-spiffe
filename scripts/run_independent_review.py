@@ -904,7 +904,7 @@ class AttemptLog:
     def _record_text(self, unit: str) -> str:
         if self.record is None:
             raise RuntimeError("this attempt log has no review record")
-        return self.record.read_text(encoding="utf-8") if self.record.is_file() else _RECORDS.new_record(
+        return self.record.read_bytes().decode("utf-8") if self.record.is_file() else _RECORDS.new_record(
             str(self.record), unit)
 
     def start_attempt(self, entry: dict[str, Any], task: str, evidence: str) -> None:
@@ -926,7 +926,7 @@ class AttemptLog:
     def truncate_record(self, logged: set[str]) -> None:
         with self._mutex:
             if self.record is not None and self.record.is_file():
-                text = self.record.read_text(encoding="utf-8")
+                text = self.record.read_bytes().decode("utf-8")
                 kept = _RECORDS.truncate_unlogged_tail(text, logged)
                 if kept != text:
                     _RECORDS.write_atomically(self.record, kept)
@@ -1062,19 +1062,6 @@ def _check_previous_round(previous: list[str], verdicts: dict[tuple[int, str], s
 
 ANSWERS_HEADING = re.compile(r"^#### Answers to (\S+)\s*$")
 HEADING = re.compile(r"^#{1,4} ")
-FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
-
-
-def _next_fence(line: str, fence: str) -> str:
-    """The open fence after this line: a fence opens on ``` or ~~~ and closes on a bare run at least as long."""
-    match = FENCE.match(line)
-    if not match:
-        return fence
-    run = match.group(1)
-    if not fence:
-        return run
-    closes = run[0] == fence[0] and len(run) >= len(fence) and line.strip() == run
-    return "" if closes else fence
 
 
 def answers_section(record_text: str, attempt: str) -> str | None:
@@ -1082,7 +1069,7 @@ def answers_section(record_text: str, attempt: str) -> str | None:
     inside fenced blocks (a prompt block quoting an answers section) count for neither."""
     section: list[str] | None = None
     fence = ""
-    for line in record_text.splitlines():
+    for line in _RECORDS.lines_of(record_text):
         heading = not fence and HEADING.match(line)
         if section is not None and heading:
             break
@@ -1091,7 +1078,7 @@ def answers_section(record_text: str, attempt: str) -> str | None:
         else:
             match = ANSWERS_HEADING.match(line) if heading else None
             section = [line] if match and match.group(1) == attempt else None
-        fence = _next_fence(line, fence)
+        fence = _RECORDS.next_fence(line, fence)
     return "\n".join(section).strip() + "\n" if section is not None else None
 
 
@@ -1383,7 +1370,7 @@ def plan_reviews(spec: RoundSpec, inputs: ReviewInputs, entries: list[dict[str, 
 
     plans = []
     for reviewer in reviewers:
-        task = reviewer.prompt_file.read_text(encoding="utf-8")
+        task = reviewer.prompt_file.read_bytes().decode("utf-8")  # no newline translation: prompt_sha256 is of the bytes
         recheck, accounting = None, Accounting(dict(evidence_items))
         if mode == "recheck":
             recheck = load_recheck(spec.repo, record_text, *earlier_attempt(entries, spec.unit, spec.count,
@@ -1482,11 +1469,7 @@ def run_attempts(ctx: RoundContext, plan: ReviewPlan) -> str:
         outcome = call_reviewer(ctx.copy_root, prompt, plan.reviewer, ctx.inputs.must_open_one_of, plan.accounting)
         read = set(outcome.stats.get("paths_read", []))
         outcome.stats["paths_not_read"] = [path for path in ctx.inputs.review_paths if path not in read]  # S42-D2
-        try:
-            status = finish_attempt(ctx.spec.repo, ctx.log, start, outcome, tries)
-        except PublicationBlockedError:
-            ctx.log.finish_record(start["attempt"], _RECORDS.status_text(None, withheld=True), None)
-            raise
+        status = finish_attempt(ctx.spec.repo, ctx.log, start, outcome, tries)
         if outcome.status != "provider_error":
             return status
     return "pending"
@@ -1516,7 +1499,13 @@ def finish_attempt(repo: Path, log: AttemptLog, start: dict[str, Any], outcome: 
         log.finish_record(start["attempt"], _RECORDS.status_text(end), None)
         return status
     report_text = json.dumps(outcome.report, indent=2, sort_keys=True) + "\n"
-    check_publishable(report_text, start["report_path"])
+    try:
+        check_publishable(report_text, start["report_path"])
+    except PublicationBlockedError:
+        end.update(status="withheld", reason="the publication check found a secret in the report; nothing was released")
+        log.append(end)  # the end entry holds counts and paths, never the report
+        log.finish_record(start["attempt"], _RECORDS.status_text(end), None)
+        raise
     partial = repo / (start["report_path"] + ".partial")
     partial.parent.mkdir(parents=True, exist_ok=True)
     partial.write_text(report_text, encoding="utf-8")
@@ -1547,7 +1536,7 @@ def _guarded_attempts(ctx: RoundContext, plan: ReviewPlan) -> str:
     try:
         return run_attempts(ctx, plan)
     except PublicationBlockedError as blocked:
-        print(f"[review] {plan.reviewer.label}: publication check withheld the report and its end entry: {blocked}",
+        print(f"[review] {plan.reviewer.label}: the publication check withheld the report: {blocked}",
               file=sys.stderr)
         return "withheld"
 
@@ -1676,7 +1665,7 @@ def invocation_from_entry(entry: dict[str, Any], repo: Path, prompt_file: Path, 
     }
     records = final_records(repo, entry["commit"], record, diff_base, withheld) if mode == "final" else ()
     shared = RoundInputs(records, upstream, evidence)
-    parts = make_parts(mode, prompt_file.read_text(encoding="utf-8"), entry["unit"], recheck, shared)
+    parts = make_parts(mode, prompt_file.read_bytes().decode("utf-8"), entry["unit"], recheck, shared)
     recomputed["full_prompt_sha256"] = sha256_text(build_prompt(inputs, parts, diff_base=diff_base))
     mismatches = [name for name, value in recomputed.items() if entry.get(name) != value]
     return build_invocation(entry["model"], entry["effort"]), mismatches

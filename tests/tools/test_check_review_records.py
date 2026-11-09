@@ -94,11 +94,12 @@ def test_withheld_attempt_keeps_its_prompt_and_evidence_and_says_it_was_withheld
     fx.scenario(base._reply([base._finding("X", severity="low", problem=pem)]))
     assert base._run(fx) == 3
     text = _record(fx).read_text()
-    assert "Status: withheld: the publication check found a secret in the report" in text
+    assert "Status: withheld (the publication check found a secret in the report" in text
     assert pem.splitlines()[1] not in text and "#### Report" not in text
     assert _problems(fx) == []
-    base._run(fx, labels=("A",))  # the next run marks the attempt interrupted in the log; the record stays valid
-    assert _problems(fx) == []
+    fx.scenario(base._reply())
+    assert base._run(fx) == 0  # the next run reruns the reviewer; the withheld status stays as it was
+    assert "Status: withheld (the publication check" in _record(fx).read_text() and _problems(fx) == []
 
 
 def test_killed_attempt_gets_an_interrupted_status_line_and_the_check_passes(fx: base.Fixture) -> None:
@@ -116,10 +117,25 @@ def test_killed_attempt_gets_an_interrupted_status_line_and_the_check_passes(fx:
 
 def test_section_written_but_never_logged_is_removed_by_the_next_run(fx: base.Fixture) -> None:
     _completed(fx)
-    _record(fx).write_text(_record(fx).read_text() + "\n### Attempt unit1/c1/r1/B/1\n\nStatus: started.\n")
+    start = {**fx.log()[0], "attempt": "unit1/c1/r2/A/1", "round": 2}
+    text = _record(fx).read_text()
+    _record(fx).write_text(text + "\n" + records.start_text(start, "a task\n", "evidence\n", text))
     assert any("has a heading but no entry" in p for p in _problems(fx))
     assert base._run(fx, unit="unit2") == 0  # any run of the same record recovers it first
-    assert "unit1/c1/r1/B/1" not in _record(fx).read_text() and _problems(fx) == []
+    after = _record(fx).read_text()
+    assert "unit1/c1/r2/A/1" not in after and "## Round 2" not in after and _problems(fx) == []
+
+
+@pytest.mark.parametrize("tail", ["### Attempt notes\n\nThe author's own text.\n",
+                                  "### Attempt unit1/c1/r9/A/1\n\nStatus: started.\n\nNot a launcher section.\n",
+                                  "  ```python title\n### Attempt unit1/c1/r9/A/1\n  ```\n"],
+                         ids=["word-heading", "unlogged-but-not-the-launchers", "inside-an-indented-fence"])
+def test_text_that_is_not_a_launcher_section_is_never_removed(fx: base.Fixture, tail: str) -> None:
+    _completed(fx, base._finding("X1"))
+    base._answers(fx, "unit1/c1/r1/A/1", "| X1 | high | fixed: scripts/review_me.py: g |", extra="\n" + tail)
+    before = _record(fx).read_text()
+    assert base._run(fx, unit="unit2") == 0
+    assert _record(fx).read_text().startswith(before)
 
 
 def test_parallel_reviewers_leave_two_whole_separate_sections(fx: base.Fixture) -> None:
@@ -301,3 +317,83 @@ def test_each_answer_the_rules_do_not_allow_fails(fx: base.Fixture, finding: dic
     if rows:
         base._answers(fx, "unit1/c1/r1/A/1", *rows)
     assert any(problem in p for p in _problems(fx)), _problems(fx)
+
+
+# --- Answers to review round 1 of the 4.3 implementation ----------------------------------------------------------
+
+
+def test_docs_check_reports_the_record_problems_through_run_checks(monkeypatch: pytest.MonkeyPatch) -> None:
+    spec = importlib.util.spec_from_file_location("check_docs_wiring", ROOT / "scripts" / "check_docs.py")
+    assert spec and spec.loader
+    docs = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(docs)
+    monkeypatch.setattr(docs, "check_records", lambda _root: ["records: PLANTED RECORD PROBLEM"])
+    problems = docs.run_checks(ROOT, ROOT / "scripts" / "rogue_node_tests.sh", ROOT / "docs" / "test_spec.md")
+    assert "records: PLANTED RECORD PROBLEM" in problems
+
+
+@pytest.mark.parametrize("block", ["Prompt", "Evidence"])
+def test_a_logged_attempt_without_its_prompt_or_evidence_block_fails(fx: base.Fixture, block: str) -> None:
+    _completed(fx)
+    _edit(fx, f"#### {block}\n", f"#### Not the {block.lower()}\n")
+    assert any(f"no {block} block" in p for p in _problems(fx))
+
+
+@pytest.mark.parametrize(("edit", "problem"), [
+    (("#### Report\n\n```", "#### Report\n\nnot a fence\n\n```"), "the Report label has no fenced block after it"),
+    (("### Attempt unit1/c1/r1/A/1\n", "### Attempt unit1/c1/r1/A/1\n\n### Attempt unit1/c1/r1/A/1\n"),
+     "has more than one heading"),
+], ids=["label-without-block", "heading-twice"])
+def test_malformed_record_forms_fail(fx: base.Fixture, edit: tuple[str, str], problem: str) -> None:
+    _completed(fx)
+    _edit(fx, *edit)
+    assert any(problem in p for p in _problems(fx)), _problems(fx)
+
+
+def test_a_label_twice_and_an_unclosed_fence_fail(fx: base.Fixture) -> None:
+    _completed(fx)
+    text = _record(fx).read_text()
+    evidence = records.parse_record(text)[0]["unit1/c1/r1/A/1"].blocks["evidence"]
+    _record(fx).write_text(text + f"\n#### Evidence\n\n```text\n{evidence}```\n")
+    assert any("Evidence block appears 2 times" in p for p in _problems(fx))
+    _record(fx).write_text(text.replace("#### Report\n\n````json", "#### Report\n\n`````json", 1)
+                           if "````json" in text else text.replace("#### Report\n\n```json", "#### Report\n\n````json", 1))
+    assert any("Report" in p for p in _problems(fx))
+
+
+def test_rejected_finding_that_the_next_round_re_raises_still_fails(fx: base.Fixture) -> None:
+    _completed(fx, base._finding("X1", severity="blocking"))
+    commit = base._answers(fx, "unit1/c1/r1/A/1", "| X1 | blocking | rejected: the scenario does not happen |")
+    fx.scenario(base._reply([base._finding("X1", severity="blocking")],
+                            accounted=[base._accounted("X1", "re-raised"), base._accounted("EV1", "explained")],
+                            verdict="no"))
+    assert base._run(fx, round_no=2, commit=commit) == 0
+    assert any("unit1/c1/r1/A/1: X1 is a rejected blocking finding that no later round accepted" in p for p in _problems(fx))
+
+
+def test_a_later_owner_answer_to_the_re_raised_finding_settles_the_rejection(fx: base.Fixture) -> None:
+    _completed(fx, base._finding("X1", severity="high"))
+    commit = base._answers(fx, "unit1/c1/r1/A/1", "| X1 | high | rejected: the scenario does not happen |")
+    fx.scenario(base._reply([base._finding("X1")], accounted=[base._accounted("X1", "re-raised"),
+                                                             base._accounted("EV1", "explained")], verdict="no"))
+    assert base._run(fx, round_no=2, commit=commit) == 0
+    base._answers(fx, "unit1/c1/r2/A/1", "| X1 | high | owner: docs/slices/demo/decisions.md |")
+    assert _problems(fx) == []
+
+
+def test_an_unreadable_attempt_log_is_reported(fx: base.Fixture) -> None:
+    base._write(fx.work, LOG, '{"event": "start", "attempt": "x"}\n')  # a start entry without its fields
+    base._write(fx.work, "docs/slices/broken/review_attempts.jsonl", "not json\n")
+    problems = _problems(fx)
+    assert any("docs/slices/broken/review_attempts.jsonl: cannot be read as an attempt log" in p for p in problems)
+
+
+@pytest.mark.parametrize("task", ["Review this.\n\n", "Line one.\r\nLine two.\r\n", "Page one.\fPage two.\n",
+                                  "Ends in two blank lines.\n\n\n"],
+                         ids=["blank-last-line", "crlf", "form-feed", "two-blank-lines"])
+def test_prompt_block_hashes_as_logged_whatever_the_task_files_line_ends(fx: base.Fixture, task: str) -> None:
+    fx.prompt.write_bytes(task.encode("utf-8"))
+    _completed(fx)
+    section = records.parse_record(_record(fx).read_bytes().decode("utf-8"))[0]["unit1/c1/r1/A/1"]
+    assert section.blocks["prompt"] == task
+    assert _problems(fx) == []
