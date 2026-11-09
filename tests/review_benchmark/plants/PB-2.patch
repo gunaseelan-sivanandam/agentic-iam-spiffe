@@ -1,3 +1,6 @@
+Planted defect PB-2 of the review benchmark, stage B (slice 4.5): an architecture data flow that hands the
+issuer's signing key pair to a verifier, a service outside the key's holders.
+
 diff --git a/docs/architecture.md b/docs/architecture.md
 index 8b07bda..11f3847 100644
 --- a/docs/architecture.md

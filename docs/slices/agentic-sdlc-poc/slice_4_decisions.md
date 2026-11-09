@@ -7,7 +7,7 @@ file current during the run and says in it what was decided on the owner's behal
 checklists, the benchmark counts, every decision concern, every parked unit, every process-growth proposal and
 every discovered issue with its disposition.
 
-Last updated: 2026-11-10, 4.1 to 4.3 reviewed; 4.5a in progress.
+Last updated: 2026-11-09, 4.1 to 4.3 reviewed; 4.5a in review (round 1 answered).
 
 ## Goal (the owner's, 2026-11-09)
 
@@ -88,7 +88,7 @@ Parked units, decision concerns and growth proposals collect below as the run go
 | 4.1 | Implemented (`59d0291` to `9413020`) | Ended after round 2. Round 1: approvable; 0 blocking, 2 high, 6 medium, 5 low. Round 2: attempt 1 failed the read check (issue 5); attempt 2 accepted all 13 answers and found nothing new |
 | 4.2 | Implemented (`381dc2b` to the round-2 fix) | Ended after round 2. Round 1: approvable; 0 blocking, 3 high, 4 medium, 3 low. Round 2: all 10 answers accepted, the 3 evidence entries explained; 1 new low finding, fixed |
 | 4.3 | Implemented (`89b8f2b` to the round-2 fixes) | Ended after round 2. Round 1: attempt 1 failed the schema check (issue 6); attempt 2 not approvable: 2 blocking, 1 high, 3 medium, 2 low. Round 2: approvable; all 8 answers accepted; 2 new low findings, fixed |
-| 4.5a | Implemented (benchmark identity, configurations, cases, scoring, blinding, canary, report) | Review next |
+| 4.5a | Implemented (benchmark identity, configurations, cases, scoring, blinding, canary, report) | Round 1: not approvable: 3 blocking, 3 high, 4 medium, 6 low; all answered; round 2 next |
 | 4.4, 4.5b, 4.6 | Not started | — |
 
 ## Decided by the author during the run
@@ -121,6 +121,12 @@ a decision concern below instead.
 | 4.5a | The DPL-010 case (`RM-6`) has one expected finding, "the refusal paths have no test", whose places are all the untested refusal paths and which an absence finding naming them also detects | Ten separate expected findings would weigh this one miss ten times in the counts |
 | 4.5a | Stage B's cases: the clean case CL-3 is `6feedfa` (a one-line README fix); the decoy DC-1 makes the harness's temp-file teardown non-fatal with `\|\| true` and a comment; the recheck case RC-1 puts stage A's PD-2 plant under a `fixed:` answer naming only `docs/test_spec.md` | Small, real or self-evidently correct changes; the decoy looks like a swallowed failure but is teardown after the status is decided |
 | 4.5a | Artifact types per case: requirements (RM-3, PB-1), architecture and interfaces (PB-2), E2E tests (RM-2, PB-3, RC-1, DC-1), code (RM-1, RM-4, RM-5, RM-6), plan and test plan (CL-1, CL-2, CL-3) | The list each case gets (S44-D12); a README and the rulebook's own documents are reviewed with the plan-and-test-plan list |
+| 4.5a | A result's prompt identity is the SHA-256 of the whole prompt and the reviewed commit | So any change to what the reviewer gets (the planted patch, the recheck inputs, the rules, the launcher's own sections) runs the review again (review round 1, H1) |
+| 4.5a | A failed review of a defect case counts as a miss, with the case in the denominator and in the discordant pairs | S45-D5 says so for the recheck case; leaving failures out favoured setups that fail on hard cases (review round 1, B2) |
+| 4.5a | A term counts only outside a verbatim quote of an expected line, in scoring and in the committed match rule | S45-D4's "a finding that only quotes the planted line goes to triage" (review round 1, B3) |
+| 4.5a | The repeats of S45-D6 run with `--run --repeat <case>` (at most two cases, the two compared setups) and count apart; the second confirmer runs with `--sample-confirmation` and `--second-confirmation 0` or `1`, each session counted in the 60 | The runner had no path for either (review round 1, H2, M2) |
+| 4.5a | Every case gets its base's rules, as the launcher gives a review the base branch's rules | Stage A gave real misses the rules of the reviewed commit, so RM-3 and RM-5 were judged by rules they themselves added (review round 1, L6) |
+| 4.5a | PB-3 is a new slice's test plan that retires the M3.S4 suite while claiming its requirements stay proved; `REQ-M4-E4` has no other proof | The first version edited `trace/tests.yaml`, which is not the test-plan row S45-D5 names (review round 1, L5) |
 | 4.5a | Stage A's results are read with the key committed at `c325e7d`; every call recorded for stage B counts against its 60, whatever key produced it | Stage A's report stays reproducible after the key's new version; a changed key cannot reset the budget |
 | 4.5a | The marker "Planted defect" refuses only author-written plants (planted, decoy, recheck), not a real miss rebuilt by a patch; leak terms that already occur in this repository's documents were dropped | The 2026 plan text at `c4f9ca2` uses the phrase; a word the base already holds reveals nothing |
 | 4.2 | `invocation_from_entry` refuses entries logged by 4.1's launcher with a clear message, as it refuses earlier ones | 4.2 retires 4.1's prompt layout (the file list from `--path`, empty upstream and evidence sections); its plan did not say so (review round 1, R1-4) |
@@ -156,6 +162,8 @@ a decision concern below instead.
 | --- | --- | --- | --- | --- |
 | 1 | Decision concern | 4.1 | S41-D8 makes a recheck read only the files a `fixed:` answer names. A `rejected:` answer that rests on a file ("already covered by `tests/…::test_x`") can be accepted without opening it, though the recheck mandate says to open "the tests that cover them" (4.1 review round 1, R1-5) | Extend the read check to every repository path any answer names; it is a few lines on data the launcher already has. Implemented as written until the owner decides |
 | 2 | Decision concern | 4.3 | S43-D3 fails a record whose answers changed after a recheck read them, and S43-D4 settles a rejected blocking or high finding only by the next round's acceptance or an `owner:` link. Read narrowly, a rejection the recheck re-raised could never be decided by the owner without editing answers the recheck read, and `make docs-check` would stay red (4.3 review round 1, R1-3). The check is also red between the answers commit and the recheck, by design | Keep the implemented reading: a later round's `owner:` answer to the same finding ID settles it. Confirm, or choose another way to record the owner's decision |
+
+| 3 | Decision concern | 4.5 | S45-D7 makes the author the blinded confirmer, so the blinding rests on the author not looking: the token map and the results with their configurations sit in the same folder as the export (4.5a review round 1, L4) | Keep: under the honest-mistake threat model the author confirms before opening the results again, and the Sonnet sample measures agreement. The alternative, the owner confirming, costs the owner's time |
 
 No unit is parked, and no process growth is proposed yet.
 

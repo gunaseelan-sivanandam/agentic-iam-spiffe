@@ -1,3 +1,6 @@
+Recheck case RC-1 of the review benchmark, stage B (slice 4.5): stage A's PD-2 plant (a guard that cannot
+fail), and a test-spec edit that an answer names as the fix although it changes nothing the guard does.
+
 diff --git a/docs/test_spec.md b/docs/test_spec.md
 index 7d0111c..05858f4 100644
 --- a/docs/test_spec.md

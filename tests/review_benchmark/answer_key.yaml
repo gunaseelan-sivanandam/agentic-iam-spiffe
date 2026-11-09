@@ -10,14 +10,15 @@ lists_commit: ''
 match_rule: 'A defect is detected by a finding rated blocking or high (stage A: kind blocking) that names one of
   the defect''s files, a line inside one of that file''s ranges, and at least one of its terms (case-insensitive,
   in the problem, evidence or failure scenario). A defect of absence is also detected by a blocking or high finding
-  that names one of its absence terms and one of its absence places anywhere in the finding. A finding at the place
-  without a term goes to triage as location only; a match rated medium or low counts as seen, not detected. On a
-  no-defect case every blocking or high finding is a false alarm, and every blocking finding a false blocker; on
-  any completed review a blocking finding at no expected place is a false-blocker candidate. The recheck case is
-  detected when the recheck lists the earlier finding as re-raised and reports it again under its ID; a recheck
-  that fails the launcher''s read check is a miss. Blinded confirmation applies this rule to each exported finding
-  without its configuration.'
-match_rule_sha256: 3c08b817767646b0ff5c5742f93e531b61bc4bc35673d9f4af872ca6e2991d66
+  that names one of its absence terms and one of its absence places anywhere in the finding. A term counts only
+  outside a verbatim quote of the expected lines, so a finding that only quotes the planted line goes to triage.
+  A finding at the place without a term goes to triage as location only; a match rated medium or low counts as seen,
+  not detected. On a no-defect case every blocking or high finding is a false alarm, and every blocking finding
+  a false blocker; on any completed review a blocking finding at no expected place is a false-blocker candidate.
+  The recheck case is detected when the recheck lists the earlier finding as re-raised and reports it again under
+  its ID; a recheck that fails the launcher''s read check is a miss. Blinded confirmation applies this rule to each
+  exported finding without its configuration.'
+match_rule_sha256: 0db53541df45fbcfa09041d611f11aded4cbfe44b8b28474960add5abc874dcd
 cases:
 - id: CANARY
   kind: canary
@@ -230,6 +231,7 @@ cases:
   leak_terms:
   - DPL-010
   - untested refusal
+  - record of the miss
   expected:
   - id: E1
     terms:
@@ -275,6 +277,8 @@ cases:
   paths:
   - docs/requirements.md
   leak_terms:
+  - no test could verify
+  - have no measure
   - PLANT-
   expected:
   - id: E1
@@ -302,6 +306,8 @@ cases:
   paths:
   - docs/architecture.md
   leak_terms:
+  - outside the key's holders
+  - hands the issuer
   - PLANT-
   expected:
   - id: E1
@@ -320,13 +326,15 @@ cases:
   kind: planted
   base: e842e97
   patch: plants/PB-3.patch
-  artifact_type: e2e-tests
+  artifact_type: plan-and-test-plan
   configurations: *id001
-  task: 'Trace model: the M3.S4 suite names the M3 requirement it proves.'
+  task: 'Plan and test plan: retire the M3.S4 suite, which the M4 suite repeats.'
   paths:
-  - trace/tests.yaml
+  - docs/slices/m3-s4-retire/test_plan.md
+  - docs/slices/m3-s4-retire/plan.md
   leak_terms:
   - only runtime proof
+  - drops a requirement
   - PLANT-
   expected:
   - id: E1
@@ -336,14 +344,18 @@ cases:
       terms:
       - REQ-M4-E4
       where:
+      - test_plan
       - trace/tests.yaml
-      - proof
-      - prove
+      - E2E-M3-S4-SUITE
     locations:
-    - file: trace/tests.yaml
+    - file: docs/slices/m3-s4-retire/test_plan.md
       ranges:
-      - - 69
-        - 73
+      - - 7
+        - 10
+    - file: docs/slices/m3-s4-retire/plan.md
+      ranges:
+      - - 9
+        - 11
 - id: RC-1
   kind: recheck
   base: e842e97
@@ -357,7 +369,8 @@ cases:
   - docs/test_spec.md
   - scripts/rogue_node_tests.sh
   leak_terms:
-  - false fix
+  - changes nothing the guard does
+  - cannot fail
   - PLANT-
   recheck:
     earlier_report: recheck/RC-1_report.json
@@ -414,5 +427,6 @@ cases:
   paths:
   - scripts/rogue_node_tests.sh
   leak_terms:
+  - swallowed failure
   - decoy
   - PLANT-

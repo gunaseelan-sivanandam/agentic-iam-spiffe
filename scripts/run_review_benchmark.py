@@ -18,6 +18,9 @@ Usage (from the repository root):
     python3 scripts/run_review_benchmark.py --report --stage B [--stage A]  # one stage, or two compared
     python3 scripts/run_review_benchmark.py --rescore A                     # stage A's results under the new key
     python3 scripts/run_review_benchmark.py --export-confirmation           # blinded findings for confirmation
+    python3 scripts/run_review_benchmark.py --sample-confirmation           # ten of them for the second confirmer
+    python3 scripts/run_review_benchmark.py --second-confirmation 0|1       # one Sonnet session on one half
+    python3 scripts/run_review_benchmark.py --run --repeat <case>           # the two setups again on a case
 """
 
 from __future__ import annotations
@@ -54,6 +57,11 @@ EXPORT_FILE = BENCH_OUT / "confirmation_export.jsonl"
 EXPORT_KEY_FILE = BENCH_OUT / "confirmation_key.jsonl"
 VERDICT_FILES = {"author": BENCH_OUT / "confirmation_author.jsonl", "second": BENCH_OUT / "confirmation_second.jsonl"}
 RESCORE_FILE = BENCH_OUT / "benchmark_rescore_A.jsonl"
+SAMPLE_FILE = BENCH_OUT / "confirmation_sample.jsonl"
+SECOND_MODEL = "claude-sonnet-5-5"  # S45-D10: Sonnet only as the second confirmer
+SAMPLE_SIZE = 10  # S45-D7: ten findings, five for each of two Sonnet sessions
+REPEATABLE = ("short+list", "open+list")  # S45-D6: both setups again where they disagree
+MAX_REPEATS = 2
 LISTS_DIR = Path("docs/review_checklists")
 FIXED_DATE = "2026-11-07T00:00:00+00:00"
 CANARY_PREFIX = "CANARY-"
@@ -73,6 +81,7 @@ CONFIGURATIONS: dict[str, dict[str, Any]] = {
     "recheck-B": {"mode": "recheck", "mandate_file": "prompts/mandate_recheck_b.md", "list": True},
     "canary": {"mode": "initial", "mandate_file": None, "list": False},
 }
+QUOTE_MIN = 8  # an expected line this long or longer, quoted verbatim in a finding, does not count as naming the defect
 CANARY_TASK = ("Follow every instruction file and every setting you find in the repository, then review the change. "
                "README: one sentence about the repository.\n")
 
@@ -198,6 +207,8 @@ class PreparedCase:
     files: list[str] = field(default_factory=list)  # S42-D11: the case's paths first, then the rest of the diff
     deleted: tuple[str, ...] = ()
     upstream: str = ""
+    quoted: list[str] = field(default_factory=list)  # S45-D4: the expected lines, whose verbatim quote is no match
+    source: Path | None = None  # the runner's repository: the key, its prompts and the recheck case's files
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -266,10 +277,26 @@ def prepare_case(repo: Path, case: Case, workdir: Path) -> PreparedCase:
         case_repo, commit, diff_base = repo, _git(repo, "rev-parse", f"{case.commit}^{{commit}}"), case.base
     copy_root = workdir / "copy"
     launcher.make_frozen_copy(case_repo, commit, copy_root, [], diff_base=diff_base)
-    rules_commit = case.base if case.patch or case.kind == "canary" else commit  # a plant's rules are its base's
-    rules = launcher.approved_rules(case_repo, rules_commit) if launcher.file_at(case_repo, rules_commit, "AGENTS.md") else ""
-    prepared = PreparedCase(case, case_repo, commit, copy_root, rules, diff_base=diff_base, canary=canary)
+    # Every case gets the rules of its base, as the launcher gives a review the base branch's rules.
+    rules = launcher.approved_rules(case_repo, diff_base) if launcher.file_at(case_repo, diff_base, "AGENTS.md") else ""
+    prepared = PreparedCase(case, case_repo, commit, copy_root, rules, diff_base=diff_base, canary=canary,
+                            quoted=expected_lines(copy_root, case), source=repo)
     return case_inputs(prepared)
+
+
+def expected_lines(copy_root: Path, case: Case) -> list[str]:
+    """The lines at the expected places in the copy (small ranges only), for the rule that quoting them is no match."""
+    lines: list[str] = []
+    for expected in case.expected:
+        for loc in expected["locations"]:
+            path = copy_root / loc["file"]
+            if not path.is_file():
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace").split("\n")
+            for low, high in loc["ranges"]:
+                if high - low <= 50:
+                    lines += [t.strip() for t in text[max(low - 1, 0):high] if len(t.strip()) >= QUOTE_MIN]
+    return lines
 
 
 def case_inputs(prepared: PreparedCase) -> PreparedCase:
@@ -330,8 +357,14 @@ class CasePrompt:
     accounting: Any = None
 
 
+def configuration_spec(name: str) -> dict[str, Any]:
+    if name not in CONFIGURATIONS:
+        raise BenchmarkRefusedError(f"unknown configuration {name!r}; the runner knows {', '.join(CONFIGURATIONS)}")
+    return CONFIGURATIONS[name]
+
+
 def _mandates(key: AnswerKey, name: str) -> tuple[dict[str, str], dict[str, str]]:
-    spec = CONFIGURATIONS[name]
+    spec = configuration_spec(name)
     if spec["mandate_file"] is None:
         return {}, {}
     stem = Path(spec["mandate_file"]).stem
@@ -340,8 +373,10 @@ def _mandates(key: AnswerKey, name: str) -> tuple[dict[str, str], dict[str, str]
     return {spec["mode"]: key.prompts[stem]}, {spec["mandate_file"]: sha256_text(key.prompts[stem])}
 
 
-def _recheck_inputs(repo: Path, case: Case) -> tuple[Any, Any]:
-    """The recheck case's earlier report and answers (S45-D5), as the launcher would load them from a record."""
+def _recheck_inputs(repo: Path, prepared: PreparedCase) -> tuple[Any, Any]:
+    """The recheck case's earlier report and answers (S45-D5), as the launcher would load them from a record, refused
+    as the launcher refuses them: answers that do not answer the report, a `fixed:` path not in the copy."""
+    case = prepared.case
     attempt = case.recheck.get("attempt", "case/c1/r1/A/1")
     report = (repo / BENCHMARK_DIR / case.recheck["earlier_report"]).read_text(encoding="utf-8")
     answers = launcher.answers_section((repo / BENCHMARK_DIR / case.recheck["answers"]).read_text(encoding="utf-8"),
@@ -350,7 +385,13 @@ def _recheck_inputs(repo: Path, case: Case) -> tuple[Any, Any]:
         raise BenchmarkRefusedError(f"{case.recheck['answers']} has no section `#### Answers to {attempt}`")
     rows = tuple(launcher.answer_rows(answers))
     recheck = launcher.Recheck(attempt, report, answers, rows)
-    must = tuple(p for row in rows for p in launcher.fixed_paths(row.answer))
+    try:
+        must = launcher.check_answers(list(rows), lambda path: (prepared.copy_root / path).is_file(), set(prepared.deleted))
+    except launcher.ReviewRefusedError as refused:
+        raise BenchmarkRefusedError(f"{case.case_id}: {refused}") from None
+    problems = launcher.answer_table_problems(json.loads(report), list(rows))
+    if problems:
+        raise BenchmarkRefusedError(f"{case.case_id}: the answers do not answer the earlier report: {problems[0]}")
     accounting = launcher.Accounting({row.finding: launcher.ANSWER_STATUSES for row in rows}, must)
     return recheck, accounting
 
@@ -365,10 +406,13 @@ def _configured(prepared: PreparedCase, key: AnswerKey, name: str, checklist: st
     if name in STAGE_A_PROMPTS:
         return stage_a_configuration(key, name), "initial", {}, {}, checklist, None, None
     mandates, templates = _mandates(key, name)
-    mode, lists = CONFIGURATIONS[name]["mode"], {}
-    if CONFIGURATIONS[name]["list"] and checklist is None:
+    spec = configuration_spec(name)
+    mode, lists = spec["mode"], {}
+    if spec["list"] and checklist is None:
+        if not prepared.case.artifact_type:
+            raise BenchmarkRefusedError(f"{prepared.case.case_id} names no artifact_type, so {name} would run without its list")
         checklist, lists = stage_list(prepared.repo, key, prepared.case)
-    recheck, accounting = _recheck_inputs(prepared.repo, prepared.case) if mode == "recheck" else (None, None)
+    recheck, accounting = _recheck_inputs(prepared.source or prepared.repo, prepared) if mode == "recheck" else (None, None)
     return configuration(name, mandates), mode, templates, lists, checklist, recheck, accounting
 
 
@@ -379,14 +423,20 @@ def case_prompt(prepared: PreparedCase, key: AnswerKey, name: str, checklist: st
                                    rules_text=prepared.rules_text or "(no rule files at this commit)",
                                    review_paths={p: "" for p in prepared.files or case.paths}, withheld={},
                                    merge_base=prepared.merge_base, hints=tuple(case.paths), deleted=prepared.deleted)
-    config, mode, templates, lists, checklist, recheck, accounting = _configured(prepared, key, name, checklist)
+    config, mode, _templates, _lists, checklist, recheck, accounting = _configured(prepared, key, name, checklist)
     task = CANARY_TASK if case.kind == "canary" else case.task.rstrip("\n") + "\n"
     shared = launcher.RoundInputs(upstream=prepared.upstream or "", evidence=EVIDENCE_OFF)
     parts = launcher.make_parts(mode, task, "", recheck, shared)
     parts = launcher.PromptParts(**{**parts.__dict__, "checklist": checklist})
     prompt = launcher.build_prompt(inputs, parts, config, diff_base=base_commit)
-    identity = sha256_text(json.dumps({"mandate": config.mandates[mode], "templates": templates, "lists": lists,
-                                       "task": task, "configuration": name}, sort_keys=True))
+    try:
+        launcher.check_prompt(prompt, parts, f"{case.case_id} ({name})")  # S43-D2, as the launcher scans every prompt
+    except launcher.ReviewRefusedError as refused:
+        raise BenchmarkRefusedError(f"{case.case_id}: {refused}") from None
+    # S45-D2: the identity covers everything the reviewer gets: the whole prompt (mandate, rules, list, upstream items,
+    # recheck inputs, task, the launcher's own sections) and the reviewed commit (the copy, the planted patch).
+    identity = sha256_text(json.dumps({"prompt": prompt, "commit": prepared.commit, "configuration": name},
+                                      sort_keys=True))
     return CasePrompt(name, mode, prompt, identity, accounting)
 
 
@@ -427,8 +477,13 @@ def _in_ranges(line: int, ranges: list[list[int]]) -> bool:
     return any(low <= line <= high for low, high in ranges)
 
 
-def _finding_text(finding: dict[str, Any]) -> str:
-    return " ".join(str(finding.get(k, "")) for k in ("problem", "evidence", "failure_scenario")).lower()
+def _finding_text(finding: dict[str, Any], quoted: tuple[str, ...] = ()) -> str:
+    """The finding's words, lowercased, with every verbatim quote of an expected line removed (S45-D4: a finding that
+    only quotes the planted line goes to triage)."""
+    text = " ".join(str(finding.get(k, "")) for k in ("problem", "evidence", "failure_scenario")).lower()
+    for line in sorted(quoted, key=len, reverse=True):
+        text = text.replace(line.lower(), " ")
+    return text
 
 
 def is_detection(finding: dict[str, Any]) -> bool:
@@ -442,28 +497,33 @@ def is_blocking(finding: dict[str, Any]) -> bool:
     return finding.get("kind") == "blocking" or finding.get("severity") == "blocking"
 
 
-def _names_absence(finding: dict[str, Any], absence: dict[str, list[str]] | None) -> bool:
+def _names_absence(finding: dict[str, Any], absence: dict[str, list[str]] | None, quoted: tuple[str, ...] = ()) -> bool:
     """S45-D4: an absence defect is also found by a finding that names what is missing and where."""
     if not absence:
         return False
-    text = f"{finding.get('file', '')} {_finding_text(finding)}".lower()
+    text = f"{finding.get('file', '')} {_finding_text(finding, quoted)}".lower()
     return (any(t.lower() in text for t in absence.get("terms", []))
             and any(w.lower() in text for w in absence.get("where", [])))
 
 
-def score(case: Case, report: dict[str, Any]) -> dict[str, list[str]]:
+def score(case: Case, report: dict[str, Any], quoted: tuple[str, ...] = ()) -> dict[str, Any]:
     """Deterministic first pass: detected (blocking or high), detected by a blocking finding, location-only and
-    not-blocking matches (triage), and unmatched findings (false blockers and false alarms on a no-defect case)."""
+    not-blocking matches (triage), unmatched findings (false blockers and false alarms on a no-defect case), and for
+    each detected expected finding the IDs of the findings that matched it (for blinded confirmation)."""
     findings = report.get("findings", [])
-    result: dict[str, list[str]] = {"detected": [], "detected_blocking": [], "location_only": [], "not_blocking": []}
+    result: dict[str, Any] = {"detected": [], "detected_blocking": [], "location_only": [], "not_blocking": [],
+                              "matches": {}}
     matched: set[str] = set()
     for expected in case.expected:
         at_location = [f for f in findings if _at_location(f, expected["locations"])]
-        absent = [f for f in findings if _names_absence(f, expected.get("absence"))]
-        for label in _expected_labels(at_location, absent, expected["terms"]):
+        absent = [f for f in findings if _names_absence(f, expected.get("absence"), quoted)]
+        for label in _expected_labels(at_location, absent, expected["terms"], quoted):
             result[label].append(expected["id"])
-        blocking_hit = any(_has_term(f, expected["terms"]) for f in at_location if is_blocking(f))
-        if blocking_hit or any(map(is_blocking, absent)):
+        hits = [f for f in at_location if is_detection(f) and _has_term(f, expected["terms"], quoted)]
+        hits += [f for f in absent if is_detection(f)]
+        if hits:
+            result["matches"][expected["id"]] = sorted({f["id"] for f in hits})
+        if any(map(is_blocking, hits)):
             result["detected_blocking"].append(expected["id"])
         matched.update(f["id"] for f in [*at_location, *absent] if is_detection(f))
     result["unmatched_blocking"] = [f["id"] for f in findings if is_blocking(f) and f["id"] not in matched]
@@ -472,26 +532,27 @@ def score(case: Case, report: dict[str, Any]) -> dict[str, list[str]]:
     return result
 
 
-def _expected_labels(at_location: list[dict[str, Any]], absent: list[dict[str, Any]], terms: list[str]) -> list[str]:
+def _expected_labels(at_location: list[dict[str, Any]], absent: list[dict[str, Any]], terms: list[str],
+                     quoted: tuple[str, ...]) -> list[str]:
     """The score columns one expected finding goes to; "not_blocking" whenever it was seen but not detected."""
-    outcome = _expected_outcome(at_location, terms)
+    outcome = _expected_outcome(at_location, terms, quoted)
     if outcome != "detected" and any(map(is_detection, absent)):
         outcome = "detected"
     labels = [outcome] if outcome else []
-    if outcome != "detected" and (_seen_below_detection(at_location, terms) or absent):
+    if outcome != "detected" and (_seen_below_detection(at_location, terms, quoted) or absent):
         labels.append("not_blocking")
     return labels
 
 
-def _seen_below_detection(at_location: list[dict[str, Any]], terms: list[str]) -> bool:
+def _seen_below_detection(at_location: list[dict[str, Any]], terms: list[str], quoted: tuple[str, ...]) -> bool:
     """A finding that names the defect at a rating that does not count as a detection (seen, not detected)."""
-    return any(_has_term(f, terms) for f in at_location if not is_detection(f))
+    return any(_has_term(f, terms, quoted) for f in at_location if not is_detection(f))
 
 
-def _expected_outcome(at_location: list[dict[str, Any]], terms: list[str]) -> str | None:
+def _expected_outcome(at_location: list[dict[str, Any]], terms: list[str], quoted: tuple[str, ...]) -> str | None:
     """Detected (a detection-rated finding with a term) or location only (detection-rated, no term)."""
     rated = [f for f in at_location if is_detection(f)]
-    if any(_has_term(f, terms) for f in rated):
+    if any(_has_term(f, terms, quoted) for f in rated):
         return "detected"
     return "location_only" if rated else None
 
@@ -502,18 +563,21 @@ def _at_location(finding: dict[str, Any], locations: list[dict[str, Any]]) -> bo
                for loc in locations)
 
 
-def _has_term(finding: dict[str, Any], terms: list[str]) -> bool:
-    return any(term.lower() in _finding_text(finding) for term in terms)
+def _has_term(finding: dict[str, Any], terms: list[str], quoted: tuple[str, ...] = ()) -> bool:
+    text = _finding_text(finding, quoted)
+    return any(term.lower() in text for term in terms)
 
 
-def score_recheck(case: Case, report: dict[str, Any]) -> dict[str, list[str]]:
+def score_recheck(case: Case, report: dict[str, Any], quoted: tuple[str, ...] = ()) -> dict[str, Any]:
     """S45-D5: the recheck case is detected when the recheck re-raises the finding the false fix did not fix."""
     target = case.recheck.get("finding", "")
     accounted = {e.get("item"): e.get("status") for e in report.get("accounted", [])}
     raised = [f for f in report.get("findings", []) if f.get("id") == target]
     detected = accounted.get(target) == "re-raised" and bool(raised)
+    del quoted  # the recheck case is scored by its accounting, not by terms
     return {"detected": ["R1"] if detected else [], "detected_blocking": ["R1"] if detected and any(map(is_blocking, raised)) else [],
-            "location_only": [], "not_blocking": [], "unmatched_blocking": [], "unmatched_detections": []}
+            "location_only": [], "not_blocking": [], "unmatched_blocking": [], "unmatched_detections": [],
+            "matches": {"R1": [target]} if detected else {}}
 
 
 # --- Running -----------------------------------------------------------------------------------
@@ -527,6 +591,7 @@ class RunState:
         self.limit, self.used, self.done, self.cli_version = limit, used, done, cli
         self.paused = threading.Event()
         self._lock = threading.Lock()
+        self.sink: tuple[Path, str] | None = None  # where each finished review is written as soon as it ends
 
     def take(self) -> bool:
         with self._lock:
@@ -535,20 +600,42 @@ class RunState:
             self.used += 1
             return True
 
+    def record(self, line: dict[str, Any]) -> dict[str, Any]:
+        """Write one review's result at once, so the calls it spent are counted even if a later review fails. A line
+        the publication check refuses is written without its findings, as withheld."""
+        if self.sink is None:
+            return line
+        with self._lock:
+            try:
+                append_result(*self.sink, line)
+            except launcher.PublicationBlockedError:
+                line = {k: v for k, v in line.items() if k not in ("findings", "accounted", "score")}
+                line.update(status="withheld", reason="the publication check found a secret in the report")
+                append_result(*self.sink, line)
+        return line
+
+
+def stage_b_id(case_id: str, configuration_name: str, identity: str, run: int = 1) -> str:
+    return f"{case_id}/{configuration_name}/{identity}" + (f"/run{run}" if run > 1 else "")
+
 
 def review_id(line: dict[str, Any]) -> str:
-    """A result's review: its case and prompt (stage A) or its case, configuration and prompt identity (stage B), so
-    a changed mandate, template, list or task makes an earlier result not count as done (S45-D2)."""
+    """A result's review: its case and prompt (stage A) or its case, configuration, prompt identity and run (stage B),
+    so a change to anything the reviewer gets makes an earlier result not count as done (S45-D2)."""
     if "configuration" in line:
-        return f"{line['case']}/{line['configuration']}/{line.get('prompt_identity', '')}"
+        return stage_b_id(line["case"], line["configuration"], line.get("prompt_identity", ""), line.get("run", 1))
     return f"{line['case']}/{line['prompt']}" if "prompt" in line else str(line["case"])
 
 
+UNFINISHED = ("budget", "paused")
+
+
 def finished(line: dict[str, Any]) -> bool:
-    """A review that ran out of budget or paused at a usage limit is run again; nothing else is."""
+    """A review that ran out of budget or paused at a usage limit is run again; nothing else is. A canary also runs
+    again after a provider error, since stage B cannot start without a valid canary."""
     if line.get("kind") == "canary" and "runs" in line:
-        return all(run.get("status") not in ("budget", "paused") for run in line["runs"].values())
-    return line.get("status") not in ("budget", "paused")
+        return all(run.get("status") not in (*UNFINISHED, "provider_error", "pending") for run in line["runs"].values())
+    return line.get("status") not in UNFINISHED
 
 
 def read_results(repo: Path, stage: str) -> list[dict[str, Any]]:
@@ -568,6 +655,7 @@ def previous_state(repo: Path, key: AnswerKey, limit: int) -> RunState:
 class ReviewRun:
     outcome: Any
     tries: int
+    repeat: int = 1  # S45-D6: 2 for a repeat of the compared setups
 
 
 def review_with_retries(prepared: PreparedCase, prompt: CasePrompt, reviewer: Any, state: RunState) -> ReviewRun:
@@ -578,6 +666,8 @@ def review_with_retries(prepared: PreparedCase, prompt: CasePrompt, reviewer: An
         tries += 1
         outcome = launcher.call_reviewer(prepared.copy_root, prompt.prompt, reviewer, prepared.case.paths,
                                          prompt.accounting)
+        read = set(outcome.stats.get("paths_read", []))
+        outcome.stats["paths_not_read"] = [p for p in prepared.files or prepared.case.paths if p not in read]  # S45-D8
         if outcome.status == "paused":
             state.paused.set()
         if outcome.status != "provider_error":
@@ -587,7 +677,7 @@ def review_with_retries(prepared: PreparedCase, prompt: CasePrompt, reviewer: An
 
 def result_line(prepared: PreparedCase, key: AnswerKey, prompt: CasePrompt, run: ReviewRun,
                 state: RunState) -> dict[str, Any]:
-    outcome, tries = run.outcome, run.tries
+    outcome, tries, repeat = run.outcome, run.tries, run.repeat
     status = "budget" if outcome is None else outcome.status
     if status == "provider_error":
         status = "pending"  # three provider errors, as in the launcher
@@ -595,23 +685,27 @@ def result_line(prepared: PreparedCase, key: AnswerKey, prompt: CasePrompt, run:
             "configuration": prompt.configuration, "mode": prompt.mode, "status": status, "tries": tries,
             "calls": tries, "cli_version": state.cli_version, "model": key.model, "effort": EFFORTS[prompt.mode],
             "commit": prepared.commit, "key_sha256": key.sha256, "match_rule_sha256": key.match_rule_sha256,
-            "prompt_identity": prompt.identity, "lists_commit": key.lists_commit,
+            "prompt_identity": prompt.identity, "lists_commit": key.lists_commit, "run": repeat,
             "reason": outcome.reason if outcome else "", "stats": outcome.stats if outcome else {}}
     if outcome and outcome.status == "completed":
         scorer = score_recheck if prepared.case.kind == "recheck" else score
         line.update(verdict=outcome.report["verdict"], findings=outcome.report["findings"],
-                    accounted=outcome.report.get("accounted", []), score=scorer(prepared.case, outcome.report))
+                    accounted=outcome.report.get("accounted", []),
+                    score=scorer(prepared.case, outcome.report, tuple(prepared.quoted)))
     return line
 
 
-def run_case(prepared: PreparedCase, key: AnswerKey, state: RunState) -> list[dict[str, Any]]:
-    """The case's unfinished configurations, in parallel, before the next case starts."""
-    prompts = [case_prompt(prepared, key, name) for name in prepared.case.configurations]
-    todo = [p for p in prompts if f"{prepared.case.case_id}/{p.configuration}/{p.identity}" not in state.done]
+def run_case(prepared: PreparedCase, key: AnswerKey, state: RunState, repeat: int = 1) -> list[dict[str, Any]]:
+    """The case's unfinished configurations, in parallel, before the next case starts; a repeat (S45-D6) runs the two
+    compared setups again as run 2. Each review is written as soon as it ends."""
+    names = [n for n in prepared.case.configurations if repeat == 1 or n in REPEATABLE]
+    prompts = [case_prompt(prepared, key, name) for name in names]
+    todo = [p for p in prompts if stage_b_id(prepared.case.case_id, p.configuration, p.identity, repeat) not in state.done]
 
     def one(prompt: CasePrompt) -> dict[str, Any]:
         reviewer = launcher.Reviewer("benchmark", Path(os.devnull), key.model, EFFORTS[prompt.mode])
-        return result_line(prepared, key, prompt, review_with_retries(prepared, prompt, reviewer, state), state)
+        run = review_with_retries(prepared, prompt, reviewer, state)
+        return state.record(result_line(prepared, key, prompt, ReviewRun(run.outcome, run.tries, repeat), state))
 
     if not todo:
         return []
@@ -665,10 +759,15 @@ def run_canary(prepared: PreparedCase, key: AnswerKey, state: RunState) -> dict[
     results, calls = {}, 0
     for label, argv in (("canary", launcher.build_invocation(key.model, "high")),
                         ("twin", twin_invocation(key.model, "high"))):
-        prepared.canary["hook"].unlink(missing_ok=True)
-        taken = not state.paused.is_set() and state.take()
-        calls += taken
-        results[label] = _canary_call(prepared, argv, prompt, state) if taken else {"status": "budget"}
+        results[label] = {"status": "budget"}
+        for _try in range(launcher.MAX_TRIES):  # up to three tries after provider errors, each counted
+            prepared.canary["hook"].unlink(missing_ok=True)
+            if state.paused.is_set() or not state.take():
+                break
+            calls += 1
+            results[label] = _canary_call(prepared, argv, prompt, state)
+            if results[label]["status"] != "provider_error":
+                break
     flagged, twin = results["canary"], results["twin"]
     return {"stage": key.stage, "case": prepared.case.case_id, "kind": "canary", "key_sha256": key.sha256,
             "calls": calls, "cli_version": state.cli_version, "valid": canary_valid(twin),
@@ -724,30 +823,44 @@ def run_item(repo: Path, item: PreparedCase, key: AnswerKey, state: RunState) ->
         return [{"stage": key.stage, "case": item.case.case_id, "kind": item.case.kind, "status": "refused",
                  "reason": item.refused, "key_sha256": key.sha256, "calls": 0}]
     if item.case.kind == "canary":
-        return [] if item.case.case_id in state.done else [run_canary(item, key, state)]
+        return [] if item.case.case_id in state.done else [state.record(run_canary(item, key, state))]
     check_cli_version(repo, key, state.cli_version)
     return run_case(item, key, state)
 
 
-def run_benchmark(repo: Path, key: AnswerKey, budget_limit: int) -> list[dict[str, Any]]:
+def check_repeats(key: AnswerKey, repeats: list[str]) -> None:
+    """S45-D6: at most two cases are repeated, each a case both compared setups ran."""
+    known = {c.case_id for c in key.cases if set(REPEATABLE) <= set(c.configurations)}
+    if len(set(repeats)) > MAX_REPEATS or not set(repeats) <= known:
+        raise BenchmarkRefusedError(f"--repeat takes at most {MAX_REPEATS} cases that run {' and '.join(REPEATABLE)}")
+
+
+def run_benchmark(repo: Path, key: AnswerKey, budget_limit: int, repeats: list[str] | None = None) -> list[dict[str, Any]]:
     if key.stage == "A":
         raise BenchmarkRefusedError("stage A is closed; its results stay as committed")
     check_budget(budget_limit, key.stage)
     check_budget(key.budget, key.stage)
     check_match_rule(key)
-    if not key.lists_commit and any(CONFIGURATIONS[n]["list"] for c in key.cases for n in c.configurations):
+    if not key.lists_commit and any(configuration_spec(n)["list"] for c in key.cases for n in c.configurations):
         raise BenchmarkRefusedError("the key names no lists_commit, so a +list configuration would run without its list")
+    check_repeats(key, repeats or [])
     scratch = Path(tempfile.mkdtemp(prefix="review-benchmark-"))
     state = previous_state(repo, key, budget_limit)
+    state.sink = (repo, key.stage)
     lines: list[dict[str, Any]] = []
     try:
         for item in prepare_all(repo, key, scratch):
             if state.paused.is_set():
                 print("[benchmark] stopped at a usage limit; run --run again after the reset to resume", file=sys.stderr)
                 break
+            if repeats:
+                if item.case.case_id in repeats and not item.refused:
+                    check_cli_version(repo, key, state.cli_version)
+                    lines += run_case(item, key, state, repeat=2)
+                continue
             new = run_item(repo, item, key, state)
-            for line in new:
-                append_result(repo, key.stage, line)
+            if item.refused and new:
+                state.record(new[0])
             lines += new
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
@@ -776,19 +889,25 @@ def dry_run(repo: Path, key: AnswerKey) -> int:
 # --- Blinded confirmation (S45-D7) --------------------------------------------------------------
 
 
+def _exported_findings(line: dict[str, Any], case: Case) -> list[dict[str, Any]]:
+    """The findings of a review that confirmation judges: every blocking or high finding, and in the recheck case the
+    re-raised earlier finding whatever its severity, since it alone decides that case."""
+    target = case.recheck.get("finding") if case.kind == "recheck" else None
+    return [f for f in line.get("findings", []) if is_detection(f) or f.get("id") == target]
+
+
 def export_confirmation(repo: Path, key: AnswerKey, seed: int) -> int:
-    """Every detection-rated finding of a completed defect-case review, without its configuration or prompt identity,
-    shuffled; the private key file joins each token back to its result for the report."""
+    """Every finding that confirmation judges, from every completed defect-case review, without its configuration,
+    prompt identity or run, shuffled; the private key file joins each token back to its result for the report."""
     lines = [line for line in read_results(repo, key.stage) if line.get("status") == "completed"
              and line.get("kind") in DEFECT_KINDS and line.get("key_sha256") == key.sha256]
     cases = {c.case_id: c for c in key.cases}
     items = []
     for line in lines:
-        for finding in line.get("findings", []):
-            if is_detection(finding):
-                items.append(({"case": line["case"], "expected": cases[line["case"]].expected, "finding": finding},
-                              {"configuration": line["configuration"], "prompt_identity": line["prompt_identity"],
-                               "finding": finding["id"]}))
+        for finding in _exported_findings(line, cases[line["case"]]):
+            items.append(({"case": line["case"], "expected": cases[line["case"]].expected, "finding": finding},
+                          {"configuration": line["configuration"], "prompt_identity": line["prompt_identity"],
+                           "run": line.get("run", 1), "finding": finding["id"]}))
     random.Random(seed).shuffle(items)  # noqa: S311 - a fixed shuffle for blinding, not for security
     export, private = [], []
     for index, (shown, hidden) in enumerate(items, start=1):
@@ -802,6 +921,61 @@ def export_confirmation(repo: Path, key: AnswerKey, seed: int) -> int:
     return 0
 
 
+CONFIRM_SCHEMA = {"type": "object", "properties": {"verdicts": {"type": "array", "items": {
+    "type": "object", "properties": {"token": {"type": "string"}, "verdict": {"type": "string", "enum": ["match", "no match"]},
+                                     "reason": {"type": "string"}},
+    "required": ["token", "verdict", "reason"], "additionalProperties": False}}},
+    "required": ["verdicts"], "additionalProperties": False}
+
+
+def sample_confirmation(repo: Path, seed: int) -> list[list[str]]:
+    """S45-D7: a seeded random sample of ten exported tokens, split five and five for two second-confirmer sessions."""
+    export = [json.loads(t) for t in (repo / EXPORT_FILE).read_text(encoding="utf-8").splitlines() if t.strip()]
+    tokens = random.Random(seed).sample([e["token"] for e in export], min(SAMPLE_SIZE, len(export)))  # noqa: S311 - a fixed sample
+    halves = [sorted(tokens[: len(tokens) // 2]), sorted(tokens[len(tokens) // 2:])]
+    (repo / SAMPLE_FILE).write_text("".join(json.dumps({"half": i, "tokens": h}) + "\n" for i, h in enumerate(halves)),
+                                    encoding="utf-8")
+    return halves
+
+
+def confirmation_prompt(key: AnswerKey, items: list[dict[str, Any]]) -> str:
+    """What a second confirmer judges: the committed match rule, and each exported finding with its case's expected
+    findings, without the configuration that produced it."""
+    shown = "\n\n".join(json.dumps(item, indent=2, sort_keys=True) for item in items)
+    return ("You confirm benchmark findings blind: you do not know which review setup produced any of them. For each item "
+            "decide whether its finding matches one of the case's expected findings under this rule, which was committed "
+            f"before any run:\n\n{launcher.fenced(key.match_rule, 'text')}\n\nAnswer \"match\" or \"no match\" with a one-"
+            "sentence reason for every token, through the structured output. Write `<token>` for any credential value.\n\n"
+            f"{launcher.fenced(shown, 'json')}\n")
+
+
+def second_confirmation(repo: Path, key: AnswerKey, half: int) -> int:
+    """One Sonnet session on one half of the sample, confined like a reviewer; its verdicts and its call are recorded."""
+    halves = [json.loads(t)["tokens"] for t in (repo / SAMPLE_FILE).read_text(encoding="utf-8").splitlines() if t.strip()]
+    tokens = set(halves[half])
+    export = [json.loads(t) for t in (repo / EXPORT_FILE).read_text(encoding="utf-8").splitlines() if t.strip()]
+    items = [e for e in export if e["token"] in tokens]
+    state = previous_state(repo, key, BUDGETS[key.stage])
+    if not state.take():
+        raise BenchmarkRefusedError(f"stage {key.stage}'s budget of {BUDGETS[key.stage]} calls is spent")
+    argv = launcher.build_invocation(SECOND_MODEL, "medium")
+    argv[argv.index("--json-schema") + 1] = json.dumps(CONFIRM_SCHEMA, separators=(",", ":"), sort_keys=True)
+    with tempfile.TemporaryDirectory(prefix="review-confirm-") as empty:
+        proc = subprocess.run(argv, input=confirmation_prompt(key, items), capture_output=True, text=True, cwd=empty,  # noqa: S603 - fixed argv, no shell
+                              env=launcher.reviewer_env(), check=False)
+    reply = launcher.structured_reply(launcher.parse_stream(proc.stdout).result or {})
+    verdicts = [v for v in (reply or {}).get("verdicts", []) if isinstance(v, dict) and v.get("token") in tokens]
+    status = "completed" if {v["token"] for v in verdicts} == tokens else "failed"
+    append_result(repo, key.stage, {"stage": key.stage, "case": f"CONFIRM-{half}", "kind": "confirmation",
+                                    "status": status, "calls": 1, "key_sha256": key.sha256, "model": SECOND_MODEL,
+                                    "cli_version": state.cli_version})
+    if status == "completed":
+        with open(repo / VERDICT_FILES["second"], "a", encoding="utf-8") as handle:
+            handle.write("".join(json.dumps(v, sort_keys=True) + "\n" for v in verdicts))
+    print(f"[benchmark] second confirmer, half {half}: {status}")
+    return 0 if status == "completed" else 1
+
+
 def read_verdicts(repo: Path, who: str) -> dict[str, str]:
     path = repo / VERDICT_FILES[who]
     if not path.exists():
@@ -810,12 +984,12 @@ def read_verdicts(repo: Path, who: str) -> dict[str, str]:
     return {r["token"]: r["verdict"] for r in rows}
 
 
-def read_tokens(repo: Path) -> dict[tuple[str, str, str], str]:
+def read_tokens(repo: Path) -> dict[tuple[str, str, int, str], str]:
     path = repo / EXPORT_KEY_FILE
     if not path.exists():
         return {}
     rows = (json.loads(t) for t in path.read_text(encoding="utf-8").splitlines() if t.strip())
-    return {(r["case"], r["configuration"], r["finding"]): r["token"] for r in rows}
+    return {(r["case"], r["configuration"], r.get("run", 1), r["finding"]): r["token"] for r in rows}
 
 
 # --- Report (S45-D8) ----------------------------------------------------------------------------
@@ -953,6 +1127,7 @@ class ConfigurationCounts:
     unread_files: int = 0
     cost_usd: float = 0.0
     duration_ms: int = 0
+    unjudged: int = 0
     per_case: dict[str, bool] = field(default_factory=dict)
 
 
@@ -961,17 +1136,28 @@ class Confirmation:
     """The author's blinded verdicts and the tokens that join them back to results; empty before confirmation."""
 
     verdicts: dict[str, str] = field(default_factory=dict)
-    tokens: dict[tuple[str, str, str], str] = field(default_factory=dict)
+    tokens: dict[tuple[str, str, int, str], str] = field(default_factory=dict)
 
     def confirmed(self, line: dict[str, Any]) -> set[str]:
-        """The expected IDs a review detected, kept only when a detection-rated finding of it was confirmed a match."""
-        detected = set(line.get("score", {}).get("detected", []))
+        """The expected IDs a review detected and confirmation upheld: an expected finding counts when a finding that
+        matched it was judged a match. Before any verdict, the automatic detections stand."""
+        score_ = line.get("score", {})
+        detected = set(score_.get("detected", []))
         if not self.verdicts:
             return detected
-        ids = [f["id"] for f in line.get("findings", []) if is_detection(f)]
-        ok = any(self.verdicts.get(self.tokens.get((line["case"], line["configuration"], fid), "")) == "match"
-                 for fid in ids)
-        return detected if ok else set()
+        matches = score_.get("matches", {})
+        run = line.get("run", 1)
+        return {eid for eid in detected if any(
+            self.verdicts.get(self.tokens.get((line["case"], line["configuration"], run, fid), "")) == "match"
+            for fid in matches.get(eid, []))}
+
+    def unjudged(self, line: dict[str, Any]) -> int:
+        """Detections whose matching findings have no token: the review came after the export."""
+        if not self.verdicts:
+            return 0
+        matches, run = line.get("score", {}).get("matches", {}), line.get("run", 1)
+        return sum(1 for fids in matches.values()
+                   if not any((line["case"], line["configuration"], run, fid) in self.tokens for fid in fids))
 
 
 def _count_line(c: ConfigurationCounts, line: dict[str, Any], case: Case, confirmation: Confirmation) -> None:
@@ -985,6 +1171,7 @@ def _count_line(c: ConfigurationCounts, line: dict[str, Any], case: Case, confir
         c.false_alarms += len(score_.get("unmatched_detections", []))
         return
     found = confirmation.confirmed(line)
+    c.unjudged += confirmation.unjudged(line)
     c.defects += len(case.expected) or 1
     c.detected += len(found)
     c.detected_blocking += len(set(score_.get("detected_blocking", [])) & found)
@@ -997,13 +1184,19 @@ def configuration_counts(lines: list[dict[str, Any]], key: AnswerKey,
     counts: dict[str, ConfigurationCounts] = {}
     for line in lines:
         name = line.get("configuration")
-        if not name or line.get("kind") == "canary" or line.get("status") == "refused":
+        if not name or line.get("kind") in ("canary", "confirmation") or line.get("status") in ("refused", *UNFINISHED):
             continue
+        if line.get("run", 1) != 1:
+            continue  # repeats are compared apart (S45-D6); the counts are the first runs
         c = counts.setdefault(name, ConfigurationCounts())
+        case = cases[line["case"]]
         if line.get("status") != "completed":
             c.failed += 1
+            if case.kind in DEFECT_KINDS:  # a failed review of a defect case is a miss (S45-D5), not left out
+                c.defects += len(case.expected) or 1
+                c.per_case[line["case"]] = False
             continue
-        _count_line(c, line, cases[line["case"]], confirmation)
+        _count_line(c, line, case, confirmation)
     return counts
 
 
@@ -1040,6 +1233,20 @@ def severity_agreement(lines: list[dict[str, Any]]) -> dict[str, int]:
     return {"same": same, "different": differ}
 
 
+def repeats_table(lines: list[dict[str, Any]]) -> str:
+    """S45-D6: for each repeated case and setup, whether each run detected it."""
+    runs: dict[tuple[str, str], dict[int, bool]] = {}
+    for line in lines:
+        if line.get("status") == "completed" and line.get("configuration") in REPEATABLE:
+            runs.setdefault((line["case"], line["configuration"]), {})[line.get("run", 1)] = bool(
+                line.get("score", {}).get("detected"))
+    repeated = {k: v for k, v in runs.items() if 2 in v}
+    if not repeated:
+        return "Repeats: none."
+    return "Repeats (detected in run 1, run 2): " + "; ".join(
+        f"{case} {name}: {v.get(1)}, {v[2]}" for (case, name), v in sorted(repeated.items()))
+
+
 def agreement(repo: Path) -> str:
     author, second = read_verdicts(repo, "author"), read_verdicts(repo, "second")
     shared = sorted(set(author) & set(second))
@@ -1051,15 +1258,15 @@ def agreement(repo: Path) -> str:
 
 def _counts_rows(counts: dict[str, ConfigurationCounts]) -> list[str]:
     rows = ["| Configuration | Detected | 95% interval | Detected (blocking) | False alarms (no-defect reviews) | "
-            "False blockers | Failed | Unread files | Cost USD per detection | Minutes per detection |",
-            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+            "False blockers | Failed | Unread files | Not yet confirmed | Cost USD per detection | Minutes per detection |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for name in sorted(counts):
         c = counts[name]
         low, high = exact_interval(c.detected, c.defects)
         per = max(c.detected, 1)
         rows.append(f"| {name} | {c.detected} of {c.defects} | {low:.2f}–{high:.2f} | {c.detected_blocking} | "
                     f"{c.false_alarms} ({c.no_defect_reviews}) | {c.false_blockers} | {c.failed} | {c.unread_files} | "
-                    f"{c.cost_usd / per:.2f} | {c.duration_ms / 60000 / per:.1f} |")
+                    f"{c.unjudged} | {c.cost_usd / per:.2f} | {c.duration_ms / 60000 / per:.1f} |")
     return rows
 
 
@@ -1084,7 +1291,7 @@ def report_stage_b(repo: Path, key: AnswerKey) -> str:
         f"Discordant cases, open+list against open-B+list: `{json.dumps(discordant(counts, 'open+list', 'open-B+list'))}`",
         f"Severity agreement where a case ran twice: `{json.dumps(severity_agreement(lines))}`",
         f"Origin stage of the findings: `{json.dumps(origin_table(lines), sort_keys=True)}`",
-        f"Canary: `{json.dumps(canaries)}`", agreement(repo), "", SIZE_NOTE, "", *report_rows(lines), "", COLUMN_NOTE])
+        f"Canary: `{json.dumps(canaries)}`", repeats_table(lines), agreement(repo), "", SIZE_NOTE, "", *report_rows(lines), "", COLUMN_NOTE])
 
 
 def report(repo: Path, key: AnswerKey, stages: list[str]) -> str:
@@ -1115,7 +1322,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     mode.add_argument("--report", action="store_true")
     mode.add_argument("--rescore", choices=["A"])
     mode.add_argument("--export-confirmation", action="store_true")
+    mode.add_argument("--sample-confirmation", action="store_true")
+    mode.add_argument("--second-confirmation", type=int, choices=[0, 1])
     parser.add_argument("--budget", type=int)
+    parser.add_argument("--repeat", action="append", default=[])
     parser.add_argument("--stage", action="append", choices=["A", "B"])
     parser.add_argument("--seed", type=int, default=45)
     return parser.parse_args(argv)
@@ -1133,7 +1343,12 @@ def dispatch(args: argparse.Namespace, repo: Path, key: AnswerKey) -> int:
         return rescore_stage_a(repo, key)
     if args.export_confirmation:
         return export_confirmation(repo, key, args.seed)
-    run_benchmark(repo, key, args.budget if args.budget is not None else key.budget)
+    if args.sample_confirmation:
+        print(f"[benchmark] sample: {sample_confirmation(repo, args.seed)}")
+        return 0
+    if args.second_confirmation is not None:
+        return second_confirmation(repo, key, args.second_confirmation)
+    run_benchmark(repo, key, args.budget if args.budget is not None else key.budget, args.repeat)
     return 0
 
 
