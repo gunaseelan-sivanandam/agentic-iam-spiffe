@@ -316,3 +316,144 @@ author's answers to its report, below, were committed in `1be4a84`, the reviewed
 The answers name the files each fix touched and the tests that cover it. One finding (R1-5) is a decision concern that
 the author put to the owner in the decision file, and one (R1-3) is deferred to slice 4.5a under issue #42.
 ```
+
+### Attempt implementation/c1/r2/A/2
+
+Commit `9413020`, effort medium. Files reviewed (SHA-256): `AGENTS.md` `9e7e2bd62bbe`, `docs/slices/agentic-sdlc-poc/slice_4_decisions.md` `d3e9576818eb`, `scripts/run_independent_review.py` `6e6d2050c834`, `scripts/run_review_benchmark.py` `60aabc083dee`, `tests/tools/test_run_independent_review.py` `ecf5aea2b9f9`, `tests/tools/test_run_review_benchmark.py` `e0812f2de8ab`.
+
+Status: completed; approvable within the threat model: yes.
+
+#### Prompt
+
+```markdown
+# Recheck of slice 4.1's implementation (issue #38), round 2
+
+The intent is unchanged from round 1: the approved plan and test plan of `docs/slices/poc-4-1-review-prompts/`
+(decisions S41-D1 to S41-D16), merged into `poc/agentic-sdlc` by plan PR #48. Round 1 reviewed commit `6476697`; the
+author's answers to its report, below, were committed in `1be4a84`. The reviewed commit, `9413020`, also states in the output section that only a Read opens a file, after the first attempt of this round listed grepped files under `opened`. The change from the base is in
+`_review_inputs/change.diff`; the round-1 fixes are the part of it that `1be4a84` and `9413020` add.
+
+The answers name the files each fix touched and the tests that cover it. One finding (R1-5) is a decision concern that
+the author put to the owner in the decision file, and one (R1-3) is deferred to slice 4.5a under issue #42.
+```
+
+#### Report
+
+```json
+{
+  "accounted": [
+    {
+      "item": "R1-1",
+      "note": "score() now records unmatched_detections (blocking or high, line 269); _add_score totals them as false_alarms on clean cases (line 582) and keeps false_blockers blocking-only. The new test puts a high finding on a clean case and asserts false_alarms 1 and false_blockers 0 (for blocking, 1 and 1). decide() still compares blocking-only false blockers. That is stage A's committed rule, and the answer says 4.5a replaces it, so I accept it.",
+      "opened": [
+        "scripts/run_review_benchmark.py",
+        "tests/tools/test_run_review_benchmark.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-2",
+      "note": "report_rows has new columns 'Detected (blocking)' and 'Unmatched (blocking or high)', and COLUMN_NOTE says what each column holds. TOTALS gain real_miss_blocking, planted_blocking and false_alarms. The test checks that a high match shows under Detected but not under Detected (blocking), that the note is in the report, and that real_miss_blocking is 0.",
+      "opened": [
+        "scripts/run_review_benchmark.py",
+        "tests/tools/test_run_review_benchmark.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-3",
+      "note": "The finding is medium, so deferred is allowed. It is tracked under #42 (4.5a builds short+list) and recorded as discovered issue 2 in the decision file. Keeping the stage-A prompt files as they were measured is a sound reason, since their hash is part of stage A's results.",
+      "opened": [
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-4",
+      "note": "answer_table_problems (lines 1079-1104) refuses five cases: a finding with no row, a finding with more than one row, a row for an unknown ID, a severity cell that differs from the finding's, and an answer the severity or kind does not allow (deferred on blocking or high; anything but owner on a decision concern). The launcher calls it before any reviewer call and exits 2 (line 1255). The six parametrised cases cover each rule and assert one call (the version probe) only.",
+      "opened": [
+        "scripts/run_independent_review.py",
+        "tests/tools/test_run_independent_review.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-5",
+      "note": "This is a decision concern. It was answered owner: with a link to the decision file, where it is recorded as decision concern 1 with the recommendation to extend the read check. Implementing S41-D8 as written until the owner decides is correct under the rules.",
+      "opened": [
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-6",
+      "note": "The decision file now has a current 'Last updated' line and a Progress table. It records the author's decisions, including the choice to review 4.1 with the branch's launcher and why that circularity is limited. It also lists decision concern 1 and the discovered issues with their dispositions: shellcheck, the stage-A prompt words, and the author-found defects (now 5 entries).",
+      "opened": [
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-7",
+      "note": "invocation_from_entry now raises a ValueError for an entry with no mode field; the message says the pre-4.1 layout is retired (lines 1450-1452). The test strips mode and mandate_sha256 from a real entry and expects that message. The retirement is recorded in the decision file (row at line 102).",
+      "opened": [
+        "scripts/run_independent_review.py",
+        "tests/tools/test_run_independent_review.py",
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-8",
+      "note": "answer_rows now skips the row above any separator row, whatever it says, and also skips the separator. The test uses a '| Finding | Severity | Answer |' header with an aligned separator.",
+      "opened": [
+        "scripts/run_independent_review.py",
+        "tests/tools/test_run_independent_review.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-9",
+      "note": "The case is renamed nothing-under-review-read. A comment points to the separate test that covers the fixed-file read check.",
+      "opened": [
+        "tests/tools/test_run_independent_review.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-10",
+      "note": "The answer_format_problem docstring now says that slice 4.3's record check is to share this rule, rather than claiming it already does.",
+      "opened": [
+        "scripts/run_independent_review.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-11",
+      "note": "The column name stays as S41-D13 decided. COLUMN_NOTE says that Not blocking holds matches rated medium or low, and that Detected includes high matches.",
+      "opened": [
+        "scripts/run_review_benchmark.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-12",
+      "note": "The Review loop paragraph in AGENTS.md (lines 78-101) is now reflowed to consistent line widths.",
+      "opened": [
+        "AGENTS.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-13",
+      "note": "The 4.1 index row now reads 'Plan merged (PR #48); implemented on the slice 4 branch, in review; final PR pending'.",
+      "opened": [
+        "docs/slices/README.md"
+      ],
+      "status": "accepted"
+    }
+  ],
+  "findings": [],
+  "verdict": "yes"
+}
+```

@@ -7,7 +7,7 @@ file current during the run and says in it what was decided on the owner's behal
 checklists, the benchmark counts, every decision concern, every parked unit, every process-growth proposal and
 every discovered issue with its disposition.
 
-Last updated: 2026-11-09, during 4.1's implementation review (round 1 answered, round 2 next).
+Last updated: 2026-11-09, 4.1 reviewed; 4.2 in progress.
 
 ## Goal (the owner's, 2026-11-09)
 
@@ -85,8 +85,9 @@ Parked units, decision concerns and growth proposals collect below as the run go
 
 | Part | State | Review |
 | --- | --- | --- |
-| 4.1 | Implemented (`59d0291` to `6476697`; round-1 fixes in the next commit) | Round 1: approvable; 0 blocking, 2 high, 6 medium, 5 low; all answered. Round 2: attempt 1 failed the read check (issue 5); attempt 2 next |
-| 4.2 to 4.6 | Not started | — |
+| 4.1 | Implemented (`59d0291` to `9413020`) | Ended after round 2. Round 1: approvable; 0 blocking, 2 high, 6 medium, 5 low. Round 2: attempt 1 failed the read check (issue 5); attempt 2 accepted all 13 answers and found nothing new |
+| 4.2 | In progress | — |
+| 4.3 to 4.6 | Not started | — |
 
 ## Decided by the author during the run
 
