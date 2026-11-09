@@ -1,8 +1,8 @@
 # Review — the launcher and secret-check fixes
 
-Record of the review of slice the launcher and secret-check fixes of the agentic-SDLC PoC: every task prompt and every released report verbatim, and the author's answers to each finding.
+Record of the review of the launcher and secret-check fixes found by slice 4's plan reviews in the agentic-SDLC PoC: every task prompt and every released report verbatim, and the author's answers to each finding.
 
-- Reviewer: a fresh headless Claude session, `claude-opus-5-5`, started by `scripts/run_independent_review.py` on a frozen copy of the reviewed commit without this record and the attempt log; effort high in round 1, medium in rechecks.
+- Reviewer: a fresh headless Claude session, `claude-opus-5-5`, started by `scripts/run_independent_review.py` on a frozen copy of the reviewed commit without this record and the attempt log; the effort of each attempt is given with it.
 - Attempt log: [`review_attempts.jsonl`](review_attempts.jsonl). A start entry holds the commit and the SHA-256 of the files reviewed and of the task prompt; an end entry holds the status and the report's SHA-256.
 - Every prompt and report block below was checked against the log before the push. A report lost to the report-path collision (DPL-011) or withheld by the publication check has no block.
 - Until slice 4.1 adds the `accounted` field, a recheck lists the answers it accepted, and the files it opened, in a finding with ID `ACCOUNTED`.

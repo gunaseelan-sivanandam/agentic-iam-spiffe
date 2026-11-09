@@ -1,11 +1,13 @@
 # Plan review — 4.1 (#38), review prompts and severity order
 
-Record of the plan review of slice 4.1 (#38), review prompts and severity order of the agentic-SDLC PoC: every task prompt and every released report verbatim, and the author's answers to each finding.
+Record of the plan review of slice 4.1 (#38), review prompts and severity order in the agentic-SDLC PoC: every task prompt and every released report verbatim, and the author's answers to each finding.
 
-- Reviewer: a fresh headless Claude session, `claude-opus-5-5`, started by `scripts/run_independent_review.py` on a frozen copy of the reviewed commit without this record and the attempt log; effort high in round 1, medium in rechecks.
+- Reviewer: a fresh headless Claude session, `claude-opus-5-5`, started by `scripts/run_independent_review.py` on a frozen copy of the reviewed commit without this record and the attempt log; the effort of each attempt is given with it.
 - Attempt log: [`review_attempts.jsonl`](review_attempts.jsonl). A start entry holds the commit and the SHA-256 of the files reviewed and of the task prompt; an end entry holds the status and the report's SHA-256.
 - Every prompt and report block below was checked against the log before the push. A report lost to the report-path collision (DPL-011) or withheld by the publication check has no block.
 - Until slice 4.1 adds the `accounted` field, a recheck lists the answers it accepted, and the files it opened, in a finding with ID `ACCOUNTED`.
+
+Round 4 was the last allowed round. The fixes of its advisory findings (answers below) were made afterwards and are not rechecked; the owner decides whether they need another round.
 
 ## Round 1
 
@@ -599,4 +601,311 @@ This is round 2 of the plan review of slice 4.1 (review prompts and severity, #3
 | N1 | high | fixed: docs/slices/poc-4-1-review-prompts/plan.md, docs/slices/poc-4-1-review-prompts/test_plan.md: S41-D7 gives the `fixed: <path>[, <path>…]: <what changed>` form with at least one path; S41-D8 and the "Answers section" row refuse a `fixed:` answer that names no path |
 | N2 | medium | fixed: docs/slices/poc-4-1-review-prompts/plan.md, docs/slices/poc-4-1-review-prompts/test_plan.md: a path the change deletes or renames is accepted (S41-D8 and the "Answers section" row) |
 | N3 | low | fixed: docs/slices/poc-4-1-review-prompts/test_plan.md: the "Rebuild" row includes the evidence text and a changed-evidence mismatch |
+| ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |
+
+## Round 3
+
+### Attempt plan/c1/r3/plan/1
+
+Commit `341fa47`, effort medium. Files reviewed (SHA-256): `docs/slices/poc-4-1-review-prompts/plan.md` `d71421a77362`, `docs/slices/poc-4-1-review-prompts/test_plan.md` `6b3d36485fcc`.
+
+Status: completed; approvable within the threat model: no.
+
+#### Prompt
+
+````markdown
+## Your mandate (recheck)
+
+This is round 3 of the plan review of slice 4.1 (review prompts and severity, #38), a recheck of your earlier report (round 2, attempt 1). For every answer of the author below, open the files the answer names and check the fix; accept it or re-raise the finding. Report anything wrong or missing in what the fixes touch. The author revised all six slice-4 plans together (`docs/slices/poc-4-*/`) so that decisions shared between plans agree; a fix may sit in another plan, the slice index (`docs/slices/README.md`) or `AGENTS.md`, so open those where an answer points to them. From round 2 a new finding counts only if it is blocking (`AGENTS.md`, Plan review), except simpler alternatives and decision concerns; slice 4 proposes that high findings count too, so report new high findings as well, marked `[high]`. Judge against the approved threat model (`AGENTS.md`, PoC scope and proportion) and the plan's own threat model.
+
+## How to report
+
+- A re-raised finding keeps its earlier ID, with the reason the fix does not hold.
+- Add one advisory finding with ID `ACCOUNTED`, problem text "[low] accounted answers", and in its evidence one line per answer: `<ID>: accepted` or `<ID>: re-raised`, followed by the files you opened for it. (Slice 4.1 replaces this with an `accounted` field; until then this finding carries it.)
+- For advisory findings, start the problem text with [high], [medium] or [low].
+- Write `<token>` for any credential value, even a made-up example: the publication check withholds a report that holds one.
+
+## The owner's change since your last round
+
+On 2026-11-08 the owner decided: "Everything that we will use in SDLC delivery process has to be analyzed in this slice or upcoming slices, if mandate prompts are going to be used, then it must be analyzed, as we have the seen prompts affects the results of the review", and raised the benchmark budget from 40 to 50 runs. The author changed three plans (commit `341fa47`):
+- 4.1 S41-D14: the three mandates are provisional constants, with the SHA-256 of the one used in the start entry; the owner chooses after 4.5's measurement; later changes follow the learning loop.
+- 4.4 S44-D13: the review prompt is a seventh research item; `research.md` drafts the initial, recheck and final mandates, each sentence with a source tag and the failure mode it counters; S44-D11's learning loop covers mandate wording.
+- 4.5: the budget is 50 (S45-D1); configurations `open-B`, `recheck-A` and `recheck-B` (S45-D3); a recheck case with a false `fixed:` answer (S45-D5); 47 runs planned (S45-D7); rule (c2) for choosing the wording (S45-D8). The final review's mandate is not measured on cases; its findings are tracked slice by slice.
+
+Check this change like a fix: is it consistent across the three plans and their test plans, is every new decision tested, and does it contradict anything approved?
+
+## Your earlier report (round 2, attempt 1)
+
+```json
+{
+  "findings": [
+    {
+      "evidence": "Base AGENTS.md, sections PoC scope and proportion (Review findings, Review loop, Few exceptions) and Independent review (Implementation review, Report sections). plan.md:54. test_plan.md:58-59: the review checks only 'each sentence S41-D12 names'.",
+      "failure_scenario": "The implementer edits exactly the sentences S41-D12 lists, and the review checks only those. AGENTS.md then still says the review ends once every blocking finding is handled, and that hardening ideas are 'advisory at most'. Meanwhile 4.3's check (S43-D4) fails a rejected high finding that the next round did not accept. The rulebook and the record check now disagree, and AGENTS.md's own rule says they must not.",
+      "file": "docs/slices/poc-4-1-review-prompts/plan.md",
+      "id": "A5",
+      "kind": "advisory",
+      "line": 54,
+      "problem": "[high] Re-raised, partly fixed. S41-D12 now names four sentences. But its closing claim, 'No other sentence of the rulebook mentions the old `advisory` handling', is false for the base AGENTS.md. Several sentences are still left unchanged: 'Reviewers should expect production-hardening ideas \u2026 and report them as advisory at most' (Review findings). 'Besides blocking and advisory findings, every round may report\u2026' (Report sections). 'findings on purpose comments and names are fix-or-defer' (Implementation review). 'The review ends when every blocking finding is fixed, accepted as rejected, or decided by the user' (Review loop): this one ignores high findings, which S41-D7 and S43-D4 require to be accepted or decided by the owner. 'one line in the review report is enough' (Few exceptions) does not say which severity that gets."
+    },
+    {
+      "evidence": "plan.md:49-50. test_plan.md:33-34: the refusals cover only a wrong first word and a `fixed:` path missing from the copy; nothing covers a `fixed:` answer with no path. The author's answer table in this round's prompt.",
+      "failure_scenario": "An implementation pulls out whatever path-shaped tokens it finds. The author writes 'fixed: S41-D5 now covers it'. No path is extracted, so the read check passes with nothing to check. The recheck accepts the answer without opening anything, and the B2/R5-A6 control is a false green for exactly the answers written in prose.",
+      "file": "docs/slices/poc-4-1-review-prompts/plan.md",
+      "id": "N1",
+      "kind": "advisory",
+      "line": 50,
+      "problem": "[high] The S41-D8 check, 'a file named in a `fixed:` answer was not read', depends on extracting file paths from answers. S41-D7 gives `fixed:` only as '(the files changed)' and defines no syntax for those paths. Neither the plan nor the test plan refuses a `fixed:` answer that names no file. The author's own round-1 answers show this case ('fixed: 4.1 S41-D2 (...)', 'fixed: the answers section's hash goes into\u2026'): they name decisions, not paths."
+    },
+    {
+      "evidence": "plan.md:50; test_plan.md:33. AGENTS.md: 'Retire documents with `git mv`'; step 3 removes dead code.",
+      "failure_scenario": "The author answers a finding with 'fixed: removed scripts/old_helper.py'. The recheck is refused before any call, and the author has to reword the answer to get around the check.",
+      "file": "docs/slices/poc-4-1-review-prompts/plan.md",
+      "id": "N2",
+      "kind": "advisory",
+      "line": 50,
+      "problem": "[medium] 'The launcher refuses an answers section whose `fixed:` paths do not exist in the copy' refuses a valid fix that deletes or retires a file with `git mv` into an archive: the named path no longer exists. The plan does not say whether the old path or the new one is named."
+    },
+    {
+      "evidence": "test_plan.md:36; plan.md:47; docs/slices/poc-4-2-review-inputs/plan.md:47.",
+      "failure_scenario": "The rebuild works only once evidence is empty or fixed in the test. A later change to the evidence breaks the `full_prompt_sha256` match, and no test catches it.",
+      "file": "docs/slices/poc-4-1-review-prompts/test_plan.md",
+      "id": "N3",
+      "kind": "advisory",
+      "line": 36,
+      "problem": "[low] The 'Rebuild' row rebuilds the recheck prompt from the entry, the earlier report and the answers section, but not from the evidence section, which is now part of every recheck prompt (S41-D5(c), 4.2 S42-D9)."
+    },
+    {
+      "evidence": "B1: accepted (poc-4-1 plan.md S41-D2, test_plan.md rows 'No way to drop the mandate' and 'Runner configurations', poc-4-5 plan.md S45-D3)\nB2: accepted (poc-4-1 plan.md S41-D8, test_plan.md rows 'Answers section' and 'Accounted'; see the new N1 on extracting paths)\nB3: accepted (poc-4-1 plan.md S41-D3 and S41-D4, poc-4-4 plan.md S44-D1 and S44-D7, poc-4-6 plan.md S46-D3 and S46-D5)\nA1: accepted (poc-4-1 plan.md S41-D5(c), test_plan.md 'Recheck inputs')\nA2: accepted (poc-4-1 plan.md S41-D6)\nA3: accepted (poc-4-1 plan.md S41-D3, test_plan.md 'Mode from the round')\nA4: accepted (poc-4-1 plan.md S41-D5(a), test_plan.md 'Recheck inputs')\nA5: re-raised (poc-4-1 plan.md S41-D12, S41-D7; poc-4-3 plan.md S43-D4; base AGENTS.md)\nA6: accepted (poc-4-1 plan.md S41-D5 and In scope, test_plan.md 'Rebuild', poc-4-2 plan.md S42-D9, poc-4-3 plan.md S43-D1; see N3)\nA7: accepted (poc-4-1 plan.md S41-D5(b), test_plan.md 'Recheck inputs', poc-4-3 plan.md S43-D1)\nA8: accepted (docs/slices/README.md; Order of work lines in poc-4-1 to poc-4-6 plan.md)\nA9: accepted (poc-4-1 plan.md S41-D4)\nA10: accepted (poc-4-1 plan.md S41-D13, test_plan.md 'Benchmark scoring')\nA11: accepted (poc-4-1 plan.md Assets and holders, poc-4-3 plan.md S43-D2)\nS1: accepted (poc-4-1 plan.md S41-D8, Environment facts)",
+      "failure_scenario": "None. This finding is the accounting record for the round.",
+      "file": "docs/slices/poc-4-1-review-prompts/plan.md",
+      "id": "ACCOUNTED",
+      "kind": "advisory",
+      "line": 0,
+      "problem": "[low] accounted answers"
+    }
+  ],
+  "verdict": "yes"
+}
+```
+
+## The author's answers
+
+| ID | Severity | Answer |
+| --- | --- | --- |
+| A5 | high | fixed: docs/slices/poc-4-1-review-prompts/plan.md, docs/slices/poc-4-1-review-prompts/test_plan.md: S41-D12 names the five further sentences and replaces the false claim with a search of every "advisory" and "blocking" hit; the review notes check it |
+| N1 | high | fixed: docs/slices/poc-4-1-review-prompts/plan.md, docs/slices/poc-4-1-review-prompts/test_plan.md: S41-D7 gives the `fixed: <path>[, <path>…]: <what changed>` form with at least one path; S41-D8 and the "Answers section" row refuse a `fixed:` answer that names no path |
+| N2 | medium | fixed: docs/slices/poc-4-1-review-prompts/plan.md, docs/slices/poc-4-1-review-prompts/test_plan.md: a path the change deletes or renames is accepted (S41-D8 and the "Answers section" row) |
+| N3 | low | fixed: docs/slices/poc-4-1-review-prompts/test_plan.md: the "Rebuild" row includes the evidence text and a changed-evidence mismatch |
+| ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |
+````
+
+#### Report
+
+```json
+{
+  "findings": [
+    {
+      "evidence": "poc-4-1 plan.md:55 (S41-D14: \"the owner chooses from 4.5's report. A later change to a mandate follows the learning loop ... approved by the owner\"). poc-4-5 plan.md:58 (S45-D8(c2): \"the drafts become the mandates; otherwise ... the owner chooses (S41-D14)\"). poc-4-4 plan.md:51 (S44-D11) and :52 (S44-D13 drafts all three mandates). poc-4-5 plan.md:57: the final mandate is not measured.",
+      "failure_scenario": "4.5's run meets the (c2) threshold. The implementer reads (c2) as the decision and replaces the launcher's initial and recheck constants, and perhaps the final one as well, which was never measured. The owner is not asked. That contradicts S41-D14 and the learning loop. Or the implementer follows S41-D14 and waits for the owner, and (c2) is a dead rule. The plans support both readings, and no test settles it.",
+      "file": "docs/slices/poc-4-5-benchmark/plan.md",
+      "id": "C1",
+      "kind": "blocking",
+      "line": 58,
+      "problem": "Contradiction on who adopts the mandate wording. 4.1 S41-D14 says the owner chooses from 4.5's report, and that any later mandate change is approved by the owner (S44-D11). 4.5 S45-D8(c2) says that if `open-B` and `recheck-B` together detect at least two more defects with no extra false blockers, \"the drafts become the mandates\". The owner chooses only in the other branch. Neither plan says which slice changes the launcher constants when (c2) adopts the drafts, or whether 4.4's final-mandate draft, which (c2) never measures, is adopted along with them."
+    },
+    {
+      "evidence": "test_plan.md:8 and :14; test_plan.md:29 (Mandate identity, S41-D14); plan.md:55-56 (D14 before D13); plan.md:63-72 and :105-109.",
+      "failure_scenario": "A reviewer or implementer who checks coverage against \"D1 to D13\" misses D14, or the start entry's mandate hash goes undocumented as recorded state.",
+      "file": "docs/slices/poc-4-1-review-prompts/test_plan.md",
+      "id": "N4",
+      "kind": "advisory",
+      "line": 8,
+      "problem": "[low] The test plan's Goal and Inputs still say decisions \"S41-D1 to S41-D13\", but the new S41-D14 is tested by the \"Mandate identity\" row. In plan.md, S41-D14 sits before S41-D13. The success criteria and the hidden-state table do not mention the mandate SHA-256 in the start entry."
+    },
+    {
+      "evidence": "poc-4-1 plan.md:50 (S41-D8 fails the attempt); poc-4-5 test_plan.md:31 (only re-raise means detected, accept means missed); poc-4-5 plan.md:51 (retries count against 50).",
+      "failure_scenario": "`recheck-B` produces a failed attempt because it skipped the file. The runner retries until one attempt completes, spending runs from the 3 spare, or it counts the failure as missed. The two wordings are then compared under different handling.",
+      "file": "docs/slices/poc-4-5-benchmark/test_plan.md",
+      "id": "N5",
+      "kind": "advisory",
+      "line": 31,
+      "problem": "[medium] The recheck case runs through 4.1's recheck machinery, where S41-D8 fails an attempt that did not read a file a `fixed:` answer names. The 4.5 plan and test plan do not say how such a failed attempt is scored for `recheck-A` and `recheck-B`: as missed, or as a retry against the budget."
+    },
+    {
+      "evidence": "A5: accepted (poc-4-1 plan.md S41-D12; test_plan.md Review notes)\nN1: accepted (poc-4-1 plan.md S41-D7, S41-D8; test_plan.md 'Answers section')\nN2: accepted (poc-4-1 plan.md S41-D8; test_plan.md 'Answers section')\nN3: accepted (poc-4-1 test_plan.md 'Rebuild')\nACCOUNTED: accepted (stand-in, as stated)\nOwner change 341fa47: checked poc-4-1 plan.md S41-D14 and test_plan.md 'Mandate identity'; poc-4-4 plan.md S44-D11, S44-D13 and test_plan.md 'Review-prompt research'; poc-4-5 plan.md S45-D1, D3, D5, D7, D8 and test_plan.md rows 'Budget', 'Mandate variants', 'Recheck case', 'Decision rules' (see C1, N4, N5)",
+      "failure_scenario": "None. This finding is the accounting record for the round.",
+      "file": "docs/slices/poc-4-1-review-prompts/plan.md",
+      "id": "ACCOUNTED",
+      "kind": "advisory",
+      "line": 0,
+      "problem": "[low] accounted answers"
+    }
+  ],
+  "verdict": "no"
+}
+```
+
+#### Answers to plan/c1/r3/plan/1
+
+| ID | Severity | Answer |
+| --- | --- | --- |
+| C1 | blocking | fixed: docs/slices/poc-4-5-benchmark/plan.md: S45-D8 now reports counts and the owner chooses each mandate wording, initial and recheck separately, as S41-D14 says; the launcher's constants change only after that choice, in 4.5b; the final draft is chosen by reason |
+| N4 | low | fixed: docs/slices/poc-4-1-review-prompts/plan.md, docs/slices/poc-4-1-review-prompts/test_plan.md: the ranges say S41-D1 to S41-D16, S41-D14 follows S41-D13, and the success criteria and the hidden-state table name the mandate's SHA-256 |
+| N5 | medium | fixed: docs/slices/poc-4-5-benchmark/plan.md, docs/slices/poc-4-5-benchmark/test_plan.md: S45-D5 and the "Recheck case" row: an attempt that fails the read check counts as a miss, not a retry |
+| ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |
+
+## Round 4
+
+### Attempt plan/c1/r4/plan/1
+
+Commit `a99d4f8`, effort medium. Files reviewed (SHA-256): `docs/slices/poc-4-1-review-prompts/plan.md` `1d319b1cb8d7`, `docs/slices/poc-4-1-review-prompts/test_plan.md` `320c04c0c122`.
+
+Status: completed; approvable within the threat model: yes.
+
+#### Prompt
+
+````markdown
+## Your mandate (recheck)
+
+This is round 4 of the plan review of slice 4.1 (review prompts and severity, #38), a recheck of your earlier report (round 3, attempt 1). For every answer of the author below, open the files the answer names and check the fix; accept it or re-raise the finding. Report anything wrong or missing in what the fixes touch. The author revised all six slice-4 plans together (`docs/slices/poc-4-*/`) so that decisions shared between plans agree; a fix may sit in another plan, the slice index (`docs/slices/README.md`) or `AGENTS.md`, so open those where an answer points to them. From round 2 a new finding counts only if it is blocking (`AGENTS.md`, Plan review), except simpler alternatives and decision concerns; slice 4 proposes that high findings count too, so report new high findings as well, marked `[high]`. Judge against the approved threat model (`AGENTS.md`, PoC scope and proportion) and the plan's own threat model.
+
+## How to report
+
+- A re-raised finding keeps its earlier ID, with the reason the fix does not hold.
+- Add one advisory finding with ID `ACCOUNTED`, problem text "[low] accounted answers", and in its evidence one line per answer: `<ID>: accepted` or `<ID>: re-raised`, followed by the files you opened for it. (Slice 4.1 replaces this with an `accounted` field; until then this finding carries it.)
+- For advisory findings, start the problem text with [high], [medium] or [low].
+- Write `<token>` for any credential value, even a made-up example: the publication check withholds a report that holds one.
+
+## The owner's change since your last round
+
+After a study of how the industry runs agent-first delivery and an independent critique of it (summary: `docs/slices/agentic-sdlc-poc/industry_research.md`), the owner decided on 2026-11-09: "I accept your recommendations for my decisions". The author changed the plans in commit `a99d4f8`:
+- 4.1: S41-D15 (a missing-thing finding states "X has no Y; searched A, B, C"; do not report what a passing gate already checks, but report defects in gates; the task text is given as claims to verify; a recheck may answer `cannot determine`), S41-D16 (an origin stage on every finding).
+- 4.4: S44-D8 (each list is also the author's guideline), S44-D9 (each DPL entry names the check that now catches it), S44-D10 (Opus and Sonnet critique; no Codex), S44-D13 (the research also covers severity schemes and the prompt around the mandate).
+- 4.5: rewritten as a blinded screening study (`short+list`, `open+list`, `open-B+list`, recheck A and B; the same severity rules for every setup; cases that did not shape the lists; a decoy; repeats only where setups disagree; counts with exact intervals; the owner decides; no model comparison and no Codex; budget 60 with retries).
+- 4.6: S46-D13 (a decision brief generated from the records opens every plan PR and final PR), S46-D14 (the grill-me skill moves into the repository).
+- `AGENTS.md`: Opus is the default reviewer by the owner's reasoned choice; the Codex exception is removed.
+- Every decision source quotes the owner's words next to its link.
+
+Check this change like a fix: is it consistent across the plans and their test plans, is every new decision tested, and does it contradict anything approved?
+
+## Your earlier report (round 3, attempt 1)
+
+```json
+{
+  "findings": [
+    {
+      "evidence": "poc-4-1 plan.md:55 (S41-D14: \"the owner chooses from 4.5's report. A later change to a mandate follows the learning loop ... approved by the owner\"). poc-4-5 plan.md:58 (S45-D8(c2): \"the drafts become the mandates; otherwise ... the owner chooses (S41-D14)\"). poc-4-4 plan.md:51 (S44-D11) and :52 (S44-D13 drafts all three mandates). poc-4-5 plan.md:57: the final mandate is not measured.",
+      "failure_scenario": "4.5's run meets the (c2) threshold. The implementer reads (c2) as the decision and replaces the launcher's initial and recheck constants, and perhaps the final one as well, which was never measured. The owner is not asked. That contradicts S41-D14 and the learning loop. Or the implementer follows S41-D14 and waits for the owner, and (c2) is a dead rule. The plans support both readings, and no test settles it.",
+      "file": "docs/slices/poc-4-5-benchmark/plan.md",
+      "id": "C1",
+      "kind": "blocking",
+      "line": 58,
+      "problem": "Contradiction on who adopts the mandate wording. 4.1 S41-D14 says the owner chooses from 4.5's report, and that any later mandate change is approved by the owner (S44-D11). 4.5 S45-D8(c2) says that if `open-B` and `recheck-B` together detect at least two more defects with no extra false blockers, \"the drafts become the mandates\". The owner chooses only in the other branch. Neither plan says which slice changes the launcher constants when (c2) adopts the drafts, or whether 4.4's final-mandate draft, which (c2) never measures, is adopted along with them."
+    },
+    {
+      "evidence": "test_plan.md:8 and :14; test_plan.md:29 (Mandate identity, S41-D14); plan.md:55-56 (D14 before D13); plan.md:63-72 and :105-109.",
+      "failure_scenario": "A reviewer or implementer who checks coverage against \"D1 to D13\" misses D14, or the start entry's mandate hash goes undocumented as recorded state.",
+      "file": "docs/slices/poc-4-1-review-prompts/test_plan.md",
+      "id": "N4",
+      "kind": "advisory",
+      "line": 8,
+      "problem": "[low] The test plan's Goal and Inputs still say decisions \"S41-D1 to S41-D13\", but the new S41-D14 is tested by the \"Mandate identity\" row. In plan.md, S41-D14 sits before S41-D13. The success criteria and the hidden-state table do not mention the mandate SHA-256 in the start entry."
+    },
+    {
+      "evidence": "poc-4-1 plan.md:50 (S41-D8 fails the attempt); poc-4-5 test_plan.md:31 (only re-raise means detected, accept means missed); poc-4-5 plan.md:51 (retries count against 50).",
+      "failure_scenario": "`recheck-B` produces a failed attempt because it skipped the file. The runner retries until one attempt completes, spending runs from the 3 spare, or it counts the failure as missed. The two wordings are then compared under different handling.",
+      "file": "docs/slices/poc-4-5-benchmark/test_plan.md",
+      "id": "N5",
+      "kind": "advisory",
+      "line": 31,
+      "problem": "[medium] The recheck case runs through 4.1's recheck machinery, where S41-D8 fails an attempt that did not read a file a `fixed:` answer names. The 4.5 plan and test plan do not say how such a failed attempt is scored for `recheck-A` and `recheck-B`: as missed, or as a retry against the budget."
+    },
+    {
+      "evidence": "A5: accepted (poc-4-1 plan.md S41-D12; test_plan.md Review notes)\nN1: accepted (poc-4-1 plan.md S41-D7, S41-D8; test_plan.md 'Answers section')\nN2: accepted (poc-4-1 plan.md S41-D8; test_plan.md 'Answers section')\nN3: accepted (poc-4-1 test_plan.md 'Rebuild')\nACCOUNTED: accepted (stand-in, as stated)\nOwner change 341fa47: checked poc-4-1 plan.md S41-D14 and test_plan.md 'Mandate identity'; poc-4-4 plan.md S44-D11, S44-D13 and test_plan.md 'Review-prompt research'; poc-4-5 plan.md S45-D1, D3, D5, D7, D8 and test_plan.md rows 'Budget', 'Mandate variants', 'Recheck case', 'Decision rules' (see C1, N4, N5)",
+      "failure_scenario": "None. This finding is the accounting record for the round.",
+      "file": "docs/slices/poc-4-1-review-prompts/plan.md",
+      "id": "ACCOUNTED",
+      "kind": "advisory",
+      "line": 0,
+      "problem": "[low] accounted answers"
+    }
+  ],
+  "verdict": "no"
+}
+```
+
+## The author's answers
+
+| ID | Severity | Answer |
+| --- | --- | --- |
+| C1 | blocking | fixed: docs/slices/poc-4-5-benchmark/plan.md: S45-D8 now reports counts and the owner chooses each mandate wording, initial and recheck separately, as S41-D14 says; the launcher's constants change only after that choice, in 4.5b; the final draft is chosen by reason |
+| N4 | low | fixed: docs/slices/poc-4-1-review-prompts/plan.md, docs/slices/poc-4-1-review-prompts/test_plan.md: the ranges say S41-D1 to S41-D16, S41-D14 follows S41-D13, and the success criteria and the hidden-state table name the mandate's SHA-256 |
+| N5 | medium | fixed: docs/slices/poc-4-5-benchmark/plan.md, docs/slices/poc-4-5-benchmark/test_plan.md: S45-D5 and the "Recheck case" row: an attempt that fails the read check counts as a miss, not a retry |
+| ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |
+````
+
+#### Report
+
+```json
+{
+  "findings": [
+    {
+      "evidence": "poc-4-5 plan.md:57 (\"The launcher's mandate constants change only after the owner's choice, in 4.5b\"); :77-80 (In scope lists only the runner, tests/review_benchmark/, tooling tests, the report); :84 (Out of scope: \"Changing the review setup itself (4.1 to 4.4)\"); poc-4-5 test_plan.md has no row for the constant change. 4.1's \"Mandate identity\" row (test_plan.md:32) does show that a changed constant changes the start entry's hash.",
+      "failure_scenario": "The owner picks the B recheck wording. The 4.5b implementer sees that the launcher is out of scope and leaves the constants unchanged, or changes them in a PR whose plan never listed the edit. Either way the owner's choice and the shipped mandate can drift apart until someone notices.",
+      "file": "docs/slices/poc-4-5-benchmark/plan.md",
+      "id": "R4-1",
+      "kind": "advisory",
+      "line": 57,
+      "problem": "[medium] S45-D8 (the C1 fix) says the launcher's mandate constants change \"in 4.5b\" after the owner chooses. But 4.5's In scope list (line 77) does not include `scripts/run_independent_review.py`, and its Out of scope list (line 84) says \"Changing the review setup itself (4.1 to 4.4)\". So no slice's scope owns the edit to the constants, and no test row covers it."
+    },
+    {
+      "evidence": "plan.md:50 (S41-D8: \"`status` is `accepted` or `re-raised`\"); plan.md:57 (S41-D15: \"`accounted` also takes the status `cannot determine`\"); plan.md:54 (S41-D12 names the sentences that change; the accept-or-re-raise sentence is not one of them); approved AGENTS.md, Review loop: \"either accepts it or re-raises it with new evidence; a finding still disputed after that goes to the user\".",
+      "failure_scenario": "An implementer builds the schema from S41-D8 and rejects `cannot determine`, so the test plan's \"Cannot determine\" row fails. Or the schema accepts it, but `AGENTS.md` still allows only accept or re-raise. An author then reads a `cannot determine` as neither status and the finding is not escalated, while 4.6's brief expects it to be.",
+      "file": "docs/slices/poc-4-1-review-prompts/plan.md",
+      "id": "R4-2",
+      "kind": "advisory",
+      "line": 57,
+      "problem": "[medium] S41-D15 adds a third recheck status, `cannot determine`, which goes to the owner. S41-D8 (line 50) still says `status` is `accepted` or `re-raised`. S41-D12's list of `AGENTS.md` sentences that change also leaves out the Review loop sentence \"either accepts it or re-raises it with new evidence\". So the plan and the rulebook it edits will disagree on what a recheck may answer."
+    },
+    {
+      "evidence": "plan.md:43 (\"... the paths under review; the task; ...\"); plan.md:57 (\"given as claims to verify, in a section of that name\"); test_plan.md:25 vs :27.",
+      "failure_scenario": "The implementer writes the order test against \"task\" and the name test against \"claims to verify\". One of the two tests fails, or the section ends up with both headings.",
+      "file": "docs/slices/poc-4-1-review-prompts/plan.md",
+      "id": "R4-3",
+      "kind": "advisory",
+      "line": 43,
+      "problem": "[low] S41-D1's fixed section order and the test plan's \"Section order\" row still call the section \"the task\". S41-D15 says the task text goes into a section named \"claims to verify\". The two decisions should use the same section name."
+    },
+    {
+      "evidence": "poc-4-1 plan.md:58; poc-4-6 plan.md:44 (S46-D1 stage names); poc-4-6 plan.md:56 and test_plan.md:23 (origin-against-found table); poc-4-5 plan.md:57.",
+      "failure_scenario": "The brief or the benchmark report puts the found stage under 4.6's names and the origin under 4.1's names. The table shows false mismatches such as \"tests\" against \"tests first\".",
+      "file": "docs/slices/poc-4-1-review-prompts/plan.md",
+      "id": "R4-4",
+      "kind": "advisory",
+      "line": 58,
+      "problem": "[low] S41-D16's `origin_stage` values (discovery, requirements, architecture, tests, implementation, unknown) do not match 4.6's seven stage names (\"architecture and interfaces\", \"tests first\", final review, handoff). The \"origin against found\" table in 4.5 and 4.6 then needs a mapping that no plan states."
+    },
+    {
+      "evidence": "C1: accepted (poc-4-5 plan.md S45-D8, In/Out of scope; poc-4-5 test_plan.md; poc-4-1 plan.md S41-D14; slice index grep for 4.5b). Residual scope gap reported as R4-1\nN4: accepted (poc-4-1 plan.md Goal, S41-D13/D14 order, success criteria, hidden-state table; poc-4-1 test_plan.md Goal and Inputs)\nN5: accepted (poc-4-5 plan.md S45-D5; poc-4-5 test_plan.md 'Recheck case')\nACCOUNTED: accepted (stand-in, as stated)\nOwner change a99d4f8: checked poc-4-1 plan.md S41-D15, D16 and test_plan.md rows 'Reporting bounds', 'Cannot determine', 'Origin stage'; poc-4-6 plan.md S46-D1, D13, D14 and test_plan.md rows 'Decision brief', 'Grill-me in the repository'; poc-4-5 plan.md S45-D1 to D10 and test_plan.md. Every new decision in the plans I opened has a test row. See R4-2 to R4-4",
+      "failure_scenario": "None. This finding is the accounting record for the round.",
+      "file": "docs/slices/poc-4-1-review-prompts/plan.md",
+      "id": "ACCOUNTED",
+      "kind": "advisory",
+      "line": 0,
+      "problem": "[low] accounted answers"
+    }
+  ],
+  "verdict": "yes"
+}
+```
+
+#### Answers to plan/c1/r4/plan/1
+
+| ID | Severity | Answer |
+| --- | --- | --- |
+| R4-1 | medium | fixed: docs/slices/poc-4-5-benchmark/plan.md, docs/slices/poc-4-5-benchmark/test_plan.md: 4.5's scope now includes setting the launcher's mandate constants after the owner's choice, and a "Mandate constants" row tests it |
+| R4-2 | medium | fixed: docs/slices/poc-4-1-review-prompts/plan.md: S41-D8 lists `cannot determine` among the statuses, and S41-D12 changes the Review loop sentence to allow it, going to the user |
+| R4-3 | low | fixed: docs/slices/poc-4-1-review-prompts/plan.md, docs/slices/poc-4-1-review-prompts/test_plan.md: S41-D1 and the "Section order" row name the section "claims to verify" |
+| R4-4 | low | fixed: docs/slices/poc-4-1-review-prompts/plan.md: S41-D16 uses 4.6's stage names, and the stage that found a finding is the reviewing unit's stage ("final review" for the final unit) |
 | ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |

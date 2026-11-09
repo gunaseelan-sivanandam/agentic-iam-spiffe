@@ -23,7 +23,8 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
      - slice 6 candidates: a check that each plan's retirement list was carried out, and a check that
        the implementer did not change approved tests; one stated reason per gate threshold;
      - slice 7: what the orchestrator may keep outside the repository; slice 8: whether agents follow
-       the rulebook;
+       the rulebook, and, if the owner wants it, whether the stage lists help (reviews with and
+       without them);
   4. before slice 7: untested launcher and benchmark paths ([#45](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/45)); slice 7 itself ([#36](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/36));
   5. slice 8 (evaluation); at the PoC merge into `main`: the reset list ([#46](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/46)).
 - **Implemented milestones:** M1, M2, M2.5, M3, M4 (reduced scope), M4a, M4b, M5.

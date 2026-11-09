@@ -1,11 +1,13 @@
 # Plan review — 4.4 (#41), stage checklists
 
-Record of the plan review of slice 4.4 (#41), stage checklists of the agentic-SDLC PoC: every task prompt and every released report verbatim, and the author's answers to each finding.
+Record of the plan review of slice 4.4 (#41), stage checklists in the agentic-SDLC PoC: every task prompt and every released report verbatim, and the author's answers to each finding.
 
-- Reviewer: a fresh headless Claude session, `claude-opus-5-5`, started by `scripts/run_independent_review.py` on a frozen copy of the reviewed commit without this record and the attempt log; effort high in round 1, medium in rechecks.
+- Reviewer: a fresh headless Claude session, `claude-opus-5-5`, started by `scripts/run_independent_review.py` on a frozen copy of the reviewed commit without this record and the attempt log; the effort of each attempt is given with it.
 - Attempt log: [`review_attempts.jsonl`](review_attempts.jsonl). A start entry holds the commit and the SHA-256 of the files reviewed and of the task prompt; an end entry holds the status and the report's SHA-256.
 - Every prompt and report block below was checked against the log before the push. A report lost to the report-path collision (DPL-011) or withheld by the publication check has no block.
 - Until slice 4.1 adds the `accounted` field, a recheck lists the answers it accepted, and the files it opened, in a finding with ID `ACCOUNTED`.
+
+Round 4 was the last allowed round, and it ended with two blocking findings (N5, N6). Both are fixed (answers below) but not rechecked: under `AGENTS.md` they go to the owner, who accepts the fixes or allows another round. S44-D3's wording on the lists also changed afterwards, after the research summary's review.
 
 ## Round 1
 
@@ -537,4 +539,251 @@ This is round 2 of the plan review of slice 4.4 (stage checklists, #41), a reche
 | --- | --- | --- |
 | N1 | low | fixed: docs/slices/poc-4-4-stage-checklists/test_plan.md: the "`--stage`" row says the review gets the base's text when the branch changes the list, as a passing case |
 | N2 | low | fixed: docs/slices/poc-4-4-stage-checklists/plan.md: S44-D10 says fixes to the critique's blocking findings are rechecked in 4.4's implementation-review unit |
+| ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |
+
+## Round 3
+
+### Attempt plan/c1/r3/plan/1
+
+Commit `341fa47`, effort medium. Files reviewed (SHA-256): `docs/slices/poc-4-4-stage-checklists/plan.md` `e488ebb644fb`, `docs/slices/poc-4-4-stage-checklists/test_plan.md` `3e6d1fe04b98`.
+
+Status: completed; approvable within the threat model: yes.
+
+#### Prompt
+
+````markdown
+## Your mandate (recheck)
+
+This is round 3 of the plan review of slice 4.4 (stage checklists, #41), a recheck of your earlier report (round 2, attempt 1). For every answer of the author below, open the files the answer names and check the fix; accept it or re-raise the finding. Report anything wrong or missing in what the fixes touch. The author revised all six slice-4 plans together (`docs/slices/poc-4-*/`) so that decisions shared between plans agree; a fix may sit in another plan, the slice index (`docs/slices/README.md`) or `AGENTS.md`, so open those where an answer points to them. From round 2 a new finding counts only if it is blocking (`AGENTS.md`, Plan review), except simpler alternatives and decision concerns; slice 4 proposes that high findings count too, so report new high findings as well, marked `[high]`. Judge against the approved threat model (`AGENTS.md`, PoC scope and proportion) and the plan's own threat model.
+
+## How to report
+
+- A re-raised finding keeps its earlier ID, with the reason the fix does not hold.
+- Add one advisory finding with ID `ACCOUNTED`, problem text "[low] accounted answers", and in its evidence one line per answer: `<ID>: accepted` or `<ID>: re-raised`, followed by the files you opened for it. (Slice 4.1 replaces this with an `accounted` field; until then this finding carries it.)
+- For advisory findings, start the problem text with [high], [medium] or [low].
+- Write `<token>` for any credential value, even a made-up example: the publication check withholds a report that holds one.
+
+## The owner's change since your last round
+
+On 2026-11-08 the owner decided: "Everything that we will use in SDLC delivery process has to be analyzed in this slice or upcoming slices, if mandate prompts are going to be used, then it must be analyzed, as we have the seen prompts affects the results of the review", and raised the benchmark budget from 40 to 50 runs. The author changed three plans (commit `341fa47`):
+- 4.1 S41-D14: the three mandates are provisional constants, with the SHA-256 of the one used in the start entry; the owner chooses after 4.5's measurement; later changes follow the learning loop.
+- 4.4 S44-D13: the review prompt is a seventh research item; `research.md` drafts the initial, recheck and final mandates, each sentence with a source tag and the failure mode it counters; S44-D11's learning loop covers mandate wording.
+- 4.5: the budget is 50 (S45-D1); configurations `open-B`, `recheck-A` and `recheck-B` (S45-D3); a recheck case with a false `fixed:` answer (S45-D5); 47 runs planned (S45-D7); rule (c2) for choosing the wording (S45-D8). The final review's mandate is not measured on cases; its findings are tracked slice by slice.
+
+Check this change like a fix: is it consistent across the three plans and their test plans, is every new decision tested, and does it contradict anything approved?
+
+## Your earlier report (round 2, attempt 1)
+
+```json
+{
+  "findings": [
+    {
+      "evidence": "B1: accepted \u2014 plan.md:41,45; test_plan.md:25; docs/slices/poc-4-6-stage-rules/plan.md:44,48 (S46-D1/D5: final review without a list)\nB2: accepted \u2014 AGENTS.md:206-210 (Codex exception for the slice-4 critique, conditional on 4.5's probe); plan.md:50,93; the plan PR merges before implementation, so the base rules allow it\nB3: accepted \u2014 plan.md:52 (S44-D12); docs/slices/poc-4-5-benchmark/plan.md:51-52 (S45-D2 identity hashes the checklist files, S45-D3 fixed commit); poc-4-5 test_plan.md:29; poc-4-4 test_plan.md:30\nB4: accepted \u2014 test_plan.md:26 (Sources researched), :34-36 (quotes for D4, D6, D11; D8 against make lint)\nA1: accepted \u2014 plan.md:47 (S44-D7); test_plan.md:28-29\nA2: accepted \u2014 plan.md:41, :91; test_plan.md:37-38\nA3: accepted \u2014 test_plan.md:39-41\nA4: accepted \u2014 plan.md:50; docs/slices/poc-4-5-benchmark/plan.md:50,55\nA5: accepted \u2014 plan.md:45; test_plan.md:27\nA6: accepted as rejected \u2014 plan.md:43 (specificity rule), :124 (owner confirms S44-D3); poc-4-5 plan.md:57 (S45-D8(b)); the reason can be checked and the finding is not blocking\nA7: accepted \u2014 plan.md:44; docs/slices/poc-4-1-review-prompts/plan.md:52 (S41-D10 secret rule; the ID is now D10, and the plan names it without an ID, so it stays consistent)\nA8: accepted \u2014 plan.md:49; test_plan.md:24 (a DPL tag fails)\nA9: accepted \u2014 scripts/evidence_secrets.py:34-45 (QUOTE before and after the scheme; PLACEHOLDER no longer accepts a leading backtick); docs/slices/agentic-sdlc-poc/plan_launcher_fixes.md exists",
+      "failure_scenario": "None; this finding only records which answers were accepted.",
+      "file": "docs/slices/poc-4-4-stage-checklists/plan.md",
+      "id": "ACCOUNTED",
+      "kind": "advisory",
+      "line": 0,
+      "problem": "[low] accounted answers"
+    },
+    {
+      "evidence": "test_plan.md:28; plan.md:47 (S44-D7 reads the list from the base commit and refuses only unknown names, a missing --stage when the base has lists, and --stage on a final review).",
+      "failure_scenario": "The implementer writes a test that expects a refusal whenever the branch changes a list. A slice that edits a checklist, as the S44-D11 learning loop does, then cannot get a review at all. Or the implementer drops the base-versus-branch check because no refusal applies to it. The row should say: passes when the review gets the base's list text even though the branch changed the list.",
+      "file": "docs/slices/poc-4-4-stage-checklists/test_plan.md",
+      "id": "N1",
+      "kind": "advisory",
+      "line": 28,
+      "problem": "[low] The `--stage` row lists \"a list changed on the branch under review reaches its own review (it must not)\" under \"Refused before any call\". That case is not a refusal. It is a property of the passing case: the review gets the base's version of the list, not the branch's."
+    },
+    {
+      "evidence": "plan.md:50 (\"one round with Opus and Sonnet ... At most three runs\"); AGENTS.md Review loop (\"Rounds continue until no blocking finding is open\").",
+      "failure_scenario": "A critique raises a blocking finding on a draft list. The author fixes it but cannot re-run the critique within the bound, and the fix is checked only by the implementation review. That review covers it anyway, so the risk is small. One sentence would remove the ambiguity: blockers from the critique are rechecked in the implementation-review unit.",
+      "file": "docs/slices/poc-4-4-stage-checklists/plan.md",
+      "id": "N2",
+      "kind": "advisory",
+      "line": 50,
+      "problem": "[low] The `critique` unit is fixed at one round. AGENTS.md's review loop runs a unit until no blocking finding is open. The plan does not say what happens if the critique raises a blocker: whether the critique unit is exempt from the loop, or whether its blockers move into the implementation-review unit."
+    }
+  ],
+  "verdict": "yes"
+}
+```
+
+## The author's answers
+
+| ID | Severity | Answer |
+| --- | --- | --- |
+| N1 | low | fixed: docs/slices/poc-4-4-stage-checklists/test_plan.md: the "`--stage`" row says the review gets the base's text when the branch changes the list, as a passing case |
+| N2 | low | fixed: docs/slices/poc-4-4-stage-checklists/plan.md: S44-D10 says fixes to the critique's blocking findings are rechecked in 4.4's implementation-review unit |
+| ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |
+````
+
+#### Report
+
+```json
+{
+  "findings": [
+    {
+      "evidence": "N1: accepted \u2014 docs/slices/poc-4-4-stage-checklists/test_plan.md:29 (the base's text is now a passing case, not a refusal)\nN2: accepted \u2014 docs/slices/poc-4-4-stage-checklists/plan.md:50 (S44-D10: fixes to the critique's blocking findings are rechecked in 4.4's implementation-review unit)\nACCOUNTED: accepted \u2014 the rejection holds; this entry is the stand-in until S41-D8's field exists\nOwner change (mandate research): checked docs/slices/poc-4-4-stage-checklists/plan.md:51-52,66-67,129; test_plan.md:27; docs/slices/poc-4-1-review-prompts/plan.md:46,55; poc-4-1 test_plan.md:29; docs/slices/poc-4-5-benchmark/plan.md:51,53,55,57-58,69-71; poc-4-5 test_plan.md:28,30,31. The run count in S45-D7 adds up: Opus 2+14+9+2+10+2=39, Sonnet 5, Codex or Sonnet 3, total 47 of 50. Each new decision has a test row: S44-D13 (Review-prompt research), S41-D14 (Mandate identity), S45-D3 (Mandate variants), S45-D5 (Recheck case), S45-D1 (Budget 50), and S45-D8(c2) under Decision rules.",
+      "failure_scenario": "None; this entry only records which answers were accepted.",
+      "file": "docs/slices/poc-4-4-stage-checklists/plan.md",
+      "id": "ACCOUNTED",
+      "kind": "advisory",
+      "line": 0,
+      "problem": "[low] accounted answers"
+    },
+    {
+      "evidence": "test_plan.md:9 \"Prove S44-D1 to S44-D12\"; test_plan.md:15; test_plan.md:27 \"Proves: S44-D13\"; plan.md:52-53 (D13 is listed before D12).",
+      "failure_scenario": "An implementation reviewer who goes by the stated range might skip S44-D13 when checking that every decision is proved. The row is there, so the risk is small.",
+      "file": "docs/slices/poc-4-4-stage-checklists/test_plan.md",
+      "id": "N3",
+      "kind": "advisory",
+      "line": 9,
+      "problem": "[low] The test plan's Goal (line 9) and Inputs (line 15) still say \"S44-D1 to S44-D12\", but S44-D13 now exists and has its own row (line 27). In plan.md, S44-D13 also comes before S44-D12 in the decision table."
+    },
+    {
+      "evidence": "poc-4-5 plan.md:58 \"(c2) ... the drafts become the mandates; otherwise the report says 'no measurable difference', and the owner chooses (S41-D14)\"; poc-4-1 plan.md:55 \"4.5 measures ... the owner chooses from 4.5's report\"; poc-4-4 plan.md:51 (owner approves, POC-D6).",
+      "failure_scenario": "After 4.5's run the drafts win by two. The implementer reads (c2) as an automatic switch and swaps the launcher constants without asking the owner. That goes against S41-D14 and the owner-approval rule. Changing (c2) to say \"the report recommends the drafts and the owner chooses\" would make the plans agree. This is advisory: no false green and no untested decision.",
+      "file": "docs/slices/poc-4-5-benchmark/plan.md",
+      "id": "N4",
+      "kind": "advisory",
+      "line": 58,
+      "problem": "[medium] S45-D8(c2) says that if the drafts win by two or more, \"the drafts become the mandates\", and that otherwise the owner chooses. S41-D14 (poc-4-1 plan.md:55) says \"the owner chooses from 4.5's report\" in either case, and S44-D11/POC-D6 say the owner approves wording changes. The two plans disagree on whether a winning draft is adopted automatically or still needs the owner's approval."
+    }
+  ],
+  "verdict": "yes"
+}
+```
+
+#### Answers to plan/c1/r3/plan/1
+
+| ID | Severity | Answer |
+| --- | --- | --- |
+| N3 | low | fixed: docs/slices/poc-4-4-stage-checklists/plan.md, docs/slices/poc-4-4-stage-checklists/test_plan.md: the ranges say S44-D1 to S44-D13, and S44-D13 follows S44-D12 |
+| N4 | medium | fixed: docs/slices/poc-4-5-benchmark/plan.md: S45-D8 leaves every mandate choice to the owner, in line with S41-D14 and S44-D11 |
+| ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |
+
+## Round 4
+
+### Attempt plan/c1/r4/plan/1
+
+Commit `a99d4f8`, effort medium. Files reviewed (SHA-256): `docs/slices/poc-4-4-stage-checklists/plan.md` `e246e148139c`, `docs/slices/poc-4-4-stage-checklists/test_plan.md` `9ca334ba9e6f`.
+
+Status: completed; approvable within the threat model: no.
+
+#### Prompt
+
+````markdown
+## Your mandate (recheck)
+
+This is round 4 of the plan review of slice 4.4 (stage checklists, #41), a recheck of your earlier report (round 3, attempt 1). For every answer of the author below, open the files the answer names and check the fix; accept it or re-raise the finding. Report anything wrong or missing in what the fixes touch. The author revised all six slice-4 plans together (`docs/slices/poc-4-*/`) so that decisions shared between plans agree; a fix may sit in another plan, the slice index (`docs/slices/README.md`) or `AGENTS.md`, so open those where an answer points to them. From round 2 a new finding counts only if it is blocking (`AGENTS.md`, Plan review), except simpler alternatives and decision concerns; slice 4 proposes that high findings count too, so report new high findings as well, marked `[high]`. Judge against the approved threat model (`AGENTS.md`, PoC scope and proportion) and the plan's own threat model.
+
+## How to report
+
+- A re-raised finding keeps its earlier ID, with the reason the fix does not hold.
+- Add one advisory finding with ID `ACCOUNTED`, problem text "[low] accounted answers", and in its evidence one line per answer: `<ID>: accepted` or `<ID>: re-raised`, followed by the files you opened for it. (Slice 4.1 replaces this with an `accounted` field; until then this finding carries it.)
+- For advisory findings, start the problem text with [high], [medium] or [low].
+- Write `<token>` for any credential value, even a made-up example: the publication check withholds a report that holds one.
+
+## The owner's change since your last round
+
+After a study of how the industry runs agent-first delivery and an independent critique of it (summary: `docs/slices/agentic-sdlc-poc/industry_research.md`), the owner decided on 2026-11-09: "I accept your recommendations for my decisions". The author changed the plans in commit `a99d4f8`:
+- 4.1: S41-D15 (a missing-thing finding states "X has no Y; searched A, B, C"; do not report what a passing gate already checks, but report defects in gates; the task text is given as claims to verify; a recheck may answer `cannot determine`), S41-D16 (an origin stage on every finding).
+- 4.4: S44-D8 (each list is also the author's guideline), S44-D9 (each DPL entry names the check that now catches it), S44-D10 (Opus and Sonnet critique; no Codex), S44-D13 (the research also covers severity schemes and the prompt around the mandate).
+- 4.5: rewritten as a blinded screening study (`short+list`, `open+list`, `open-B+list`, recheck A and B; the same severity rules for every setup; cases that did not shape the lists; a decoy; repeats only where setups disagree; counts with exact intervals; the owner decides; no model comparison and no Codex; budget 60 with retries).
+- 4.6: S46-D13 (a decision brief generated from the records opens every plan PR and final PR), S46-D14 (the grill-me skill moves into the repository).
+- `AGENTS.md`: Opus is the default reviewer by the owner's reasoned choice; the Codex exception is removed.
+- Every decision source quotes the owner's words next to its link.
+
+Check this change like a fix: is it consistent across the plans and their test plans, is every new decision tested, and does it contradict anything approved?
+
+## Your earlier report (round 3, attempt 1)
+
+```json
+{
+  "findings": [
+    {
+      "evidence": "N1: accepted \u2014 docs/slices/poc-4-4-stage-checklists/test_plan.md:29 (the base's text is now a passing case, not a refusal)\nN2: accepted \u2014 docs/slices/poc-4-4-stage-checklists/plan.md:50 (S44-D10: fixes to the critique's blocking findings are rechecked in 4.4's implementation-review unit)\nACCOUNTED: accepted \u2014 the rejection holds; this entry is the stand-in until S41-D8's field exists\nOwner change (mandate research): checked docs/slices/poc-4-4-stage-checklists/plan.md:51-52,66-67,129; test_plan.md:27; docs/slices/poc-4-1-review-prompts/plan.md:46,55; poc-4-1 test_plan.md:29; docs/slices/poc-4-5-benchmark/plan.md:51,53,55,57-58,69-71; poc-4-5 test_plan.md:28,30,31. The run count in S45-D7 adds up: Opus 2+14+9+2+10+2=39, Sonnet 5, Codex or Sonnet 3, total 47 of 50. Each new decision has a test row: S44-D13 (Review-prompt research), S41-D14 (Mandate identity), S45-D3 (Mandate variants), S45-D5 (Recheck case), S45-D1 (Budget 50), and S45-D8(c2) under Decision rules.",
+      "failure_scenario": "None; this entry only records which answers were accepted.",
+      "file": "docs/slices/poc-4-4-stage-checklists/plan.md",
+      "id": "ACCOUNTED",
+      "kind": "advisory",
+      "line": 0,
+      "problem": "[low] accounted answers"
+    },
+    {
+      "evidence": "test_plan.md:9 \"Prove S44-D1 to S44-D12\"; test_plan.md:15; test_plan.md:27 \"Proves: S44-D13\"; plan.md:52-53 (D13 is listed before D12).",
+      "failure_scenario": "An implementation reviewer who goes by the stated range might skip S44-D13 when checking that every decision is proved. The row is there, so the risk is small.",
+      "file": "docs/slices/poc-4-4-stage-checklists/test_plan.md",
+      "id": "N3",
+      "kind": "advisory",
+      "line": 9,
+      "problem": "[low] The test plan's Goal (line 9) and Inputs (line 15) still say \"S44-D1 to S44-D12\", but S44-D13 now exists and has its own row (line 27). In plan.md, S44-D13 also comes before S44-D12 in the decision table."
+    },
+    {
+      "evidence": "poc-4-5 plan.md:58 \"(c2) ... the drafts become the mandates; otherwise the report says 'no measurable difference', and the owner chooses (S41-D14)\"; poc-4-1 plan.md:55 \"4.5 measures ... the owner chooses from 4.5's report\"; poc-4-4 plan.md:51 (owner approves, POC-D6).",
+      "failure_scenario": "After 4.5's run the drafts win by two. The implementer reads (c2) as an automatic switch and swaps the launcher constants without asking the owner. That goes against S41-D14 and the owner-approval rule. Changing (c2) to say \"the report recommends the drafts and the owner chooses\" would make the plans agree. This is advisory: no false green and no untested decision.",
+      "file": "docs/slices/poc-4-5-benchmark/plan.md",
+      "id": "N4",
+      "kind": "advisory",
+      "line": 58,
+      "problem": "[medium] S45-D8(c2) says that if the drafts win by two or more, \"the drafts become the mandates\", and that otherwise the owner chooses. S41-D14 (poc-4-1 plan.md:55) says \"the owner chooses from 4.5's report\" in either case, and S44-D11/POC-D6 say the owner approves wording changes. The two plans disagree on whether a winning draft is adopted automatically or still needs the owner's approval."
+    }
+  ],
+  "verdict": "yes"
+}
+```
+
+## The author's answers
+
+| ID | Severity | Answer |
+| --- | --- | --- |
+| N3 | low | fixed: docs/slices/poc-4-4-stage-checklists/plan.md, docs/slices/poc-4-4-stage-checklists/test_plan.md: the ranges say S44-D1 to S44-D13, and S44-D13 follows S44-D12 |
+| N4 | medium | fixed: docs/slices/poc-4-5-benchmark/plan.md: S45-D8 leaves every mandate choice to the owner, in line with S41-D14 and S44-D11 |
+| ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |
+````
+
+#### Report
+
+```json
+{
+  "findings": [
+    {
+      "evidence": "N3: accepted \u2014 docs/slices/poc-4-4-stage-checklists/plan.md:52-53 (S44-D13 now follows S44-D12), docs/slices/poc-4-4-stage-checklists/test_plan.md:9,15 (both now say S44-D1 to S44-D13)\nN4: accepted \u2014 docs/slices/poc-4-5-benchmark/plan.md:57 (S45-D8: \"The owner decides the default setup, whether the lists stay, and each mandate wording ... The launcher's mandate constants change only after the owner's choice\"), :27, :134 (automatic rules dropped); poc-4-5 test_plan.md:37; agrees with poc-4-1 S41-D14 and poc-4-4 S44-D11\nACCOUNTED: accepted \u2014 the rejection holds; this entry stands in until S41-D8's field exists\nOwner change: checked poc-4-4 plan.md:48-53,70,114; test_plan.md:24-44; poc-4-5 plan.md:50-60,86,117-118,133-135; poc-4-5 test_plan.md; poc-4-6 plan.md:44; poc-4-6 test_plan.md:19; docs/delivery_problem_log.md (DPL-001 to DPL-011 still the full range). S44-D10 (Opus and Sonnet, no Codex) matches S45-D10 and poc-4-5 plan.md:86,117. S44-D13's new scope (severity schemes, the parts of the prompt around the mandate) is covered by the Review-prompt research row. The new findings are N5 and N6.",
+      "failure_scenario": "None; this entry only records which answers were accepted.",
+      "file": "docs/slices/poc-4-4-stage-checklists/plan.md",
+      "id": "ACCOUNTED",
+      "kind": "advisory",
+      "line": 0,
+      "problem": "[low] accounted answers"
+    },
+    {
+      "evidence": "plan.md:48 (S44-D8, the authoring guideline); plan.md:49 (S44-D9, \"For each entry it also names the gate or computed evidence that now catches the miss\"). test_plan.md:35-37: the rule-text proof quotes AGENTS.md for S44-D4, S44-D6 and S44-D11 only, and checks only the code list's content for S44-D8. test_plan.md:40-42: the DPL mapping checks \"a question at the stage where the miss happened, or a reason why not\". plan.md:78 and :106 (the AGENTS.md changes in scope) do not list an authoring rule. poc-4-6 plan.md:44 (S46-D1) names the lists only as each stage's review, not as the author's guideline.",
+      "failure_scenario": "The implementation adds the lists and --stage but writes the authoring-guideline rule nowhere, and research.md's DPL mapping leaves out the catching gate (for example 4.2's uncovered-lines evidence for DPL-010). Every tooling test and every review-based proof in the test plan still passes, so two approved decisions ship unimplemented with a green record. This is an approved decision without a test. Fix: add S44-D8's AGENTS.md (or 4.6 stage-table) text to the rule-text quotes, name where the rule is written, and have the DPL-mapping review check the gate field.",
+      "file": "docs/slices/poc-4-4-stage-checklists/test_plan.md",
+      "id": "N5",
+      "kind": "blocking",
+      "line": 35,
+      "problem": "The new parts of S44-D8 and S44-D9 have no proof. S44-D8 now says each list is also the author's guideline: \"An author reads the stage's list before writing the requirements, the architecture, the tests or the code\". No test or review-based proof checks that a rule saying this is written anywhere. S44-D9 now requires research.md to name, for each DPL entry, \"the gate or computed evidence that now catches the miss, if any\", so that a question covers only what no check covers. The DPL-mapping proof checks only for a question or a reason why not."
+    },
+    {
+      "evidence": "plan.md:50 S44-D10: \"one round with Opus and Sonnet. At most two runs, outside 4.5's budget\"; plan.md:114: \"| The critique unit | Lists shaped by one model's blind spots | At most three runs | ...\".",
+      "failure_scenario": "The owner approves the check additions from the POC-D6 table, which states the cost as three runs. The implementer reads either bound: a third, unbudgeted critique run (outside 4.5's budget) can be called compliant, or the owner approves a cost that the decision does not state. The impact is small, but it is a contradiction inside the plan. The fix is one word: change \"three\" to \"two\".",
+      "file": "docs/slices/poc-4-4-stage-checklists/plan.md",
+      "id": "N6",
+      "kind": "blocking",
+      "line": 114,
+      "problem": "The plan contradicts itself on the critique's run bound. S44-D10 now says \"At most two runs\" (Opus and Sonnet). The POC-D6 checks table still gives the critique unit's cost as \"At most three runs\", which is left over from the dropped Codex critique."
+    }
+  ],
+  "verdict": "no"
+}
+```
+
+#### Answers to plan/c1/r4/plan/1
+
+| ID | Severity | Answer |
+| --- | --- | --- |
+| N5 | blocking | fixed: docs/slices/poc-4-4-stage-checklists/test_plan.md: the review-based proof quotes the text that says an author reads the stage's list (S44-D8), and checks that each DPL entry names the check that now catches it, or "none" (S44-D9) |
+| N6 | blocking | fixed: docs/slices/poc-4-4-stage-checklists/plan.md: the checks table says "At most two runs", as S44-D10 does |
 | ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |
