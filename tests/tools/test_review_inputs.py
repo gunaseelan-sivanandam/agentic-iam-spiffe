@@ -400,7 +400,7 @@ def test_start_entry_holds_the_hash_of_the_evidence_text_in_the_prompt(fx: base.
     fx.evidence = ["no CI run for this commit"]
     fx.scenario(base._reply(accounted=[base._accounted("EV1", "explained")]))
     assert base._run(fx) == 0
-    section = _evidence_section(base._prompt(fx)).split("\n## Evidence\n\n", 1)[1].rstrip("\n")
+    section = _evidence_section(base._prompt(fx)).split("\n## Evidence\n\n", 1)[1].rstrip("\n") + "\n"
     assert fx.log()[0]["evidence_sha256"] == launcher.sha256_text(section)
 
 

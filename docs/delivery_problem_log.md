@@ -303,7 +303,10 @@ A gate without a negative control can be silently empty. Prove each gate fails o
 
 ## DPL-010: Slice 2's reviews accepted answers on the author's word, and closed questions let gaps through
 
-- Status: Open (preventive actions are inputs for slice 4, issue #33)
+- Status: Open; its preventive actions are implemented on the slice 4 branch and close it when slice 4's final PR
+  merges: the open mandate first in every prompt and rechecks that must open what each answer names (4.1),
+  computed evidence that every review accounts for (4.2), and review records written by the launcher and
+  checked by `make docs-check` against the attempt log (4.3)
 - Found: 2026-11-08, by the owner (untested refusal paths in the review launcher) and by slice 2's review
   round 5, an extra round the owner asked for before merging PR #35
 

@@ -310,7 +310,7 @@ START_FIELDS = {"event", "attempt", "unit", "count", "round", "round_reviewers",
                 "prompt_file", "prompt_sha256", "full_prompt_sha256", "paths_sha256", "withheld_sha256",
                 "diff_sha256", "path_hints", "upstream_sha256", "evidence_sha256", "evidence_status",
                 "earlier_attempt", "earlier_report_sha256", "answers_sha256", "schema_sha256",
-                "extension", "reset", "report_path", "started_at"}
+                "extension", "reset", "report_path", "record_blocks", "started_at"}
 END_FIELDS = {"event", "attempt", "status", "reason", "ended_at", "verdict", "report_sha256", "severity_counts",
               "accounted_counts", "duration_ms", "turns", "tokens", "cost_usd_estimate", "tool_calls", "paths_read",
               "denied", "outside_calls", "outside", "other_tools", "other_tools_not_offered", "utilization",
@@ -505,11 +505,10 @@ def test_round_five_with_an_extension_runs_and_the_log_keeps_the_reference(fx: F
     entries: list[dict] = []
     for round_no in (1, 2, 3, 4):
         entries += _done(round_no, "A", "no", ["A"])
-    report = json.dumps({"findings": [_finding("X1")], "accounted": [], "verdict": "no"})
-    _write(fx.work, "artifacts/reviews/demo/unit1/r4.json", report)
-    entries[-2]["report_path"] = "artifacts/reviews/demo/unit1/r4.json"
+    report = json.dumps({"findings": [_finding("X1")], "accounted": [], "verdict": "no"}) + "\n"
     entries[-1]["report_sha256"] = launcher.sha256_text(report)
     _write(fx.work, LOG, "".join(json.dumps(e) + "\n" for e in entries))
+    _write(fx.work, RECORD, f"# record\n\n### Attempt unit1/c1/r4/A/1\n\n#### Report\n\n```json\n{report}```\n")
     commit = _answers(fx, "unit1/c1/r4/A/1", "| X1 | high | fixed: scripts/review_me.py: guarded |")
     fx.scenario(_reply(accounted=[_accounted("X1")]))
     assert _run(fx, round_no=5, commit=commit) == 2
@@ -957,17 +956,28 @@ def test_recheck_without_its_inputs_is_refused_before_any_call(fx: Fixture) -> N
     other = _answers(fx, "unit1/c1/r1/A/9", "| X1 | high | rejected: answers to another attempt |")
     assert _run(fx, round_no=2, commit=other) == 2
     commit = _answers(fx, "unit1/c1/r1/A/1", "| X1 | high | rejected: the scenario does not happen |")
-    report = _report(fx, fx.log()[0])
-    text = report.read_text()
-    report.write_text(text.replace('"no"', '"yes"'))  # the hash no longer matches the end entry
-    assert _run(fx, round_no=2, commit=commit) == 2
-    report.unlink()  # the released file is missing
-    assert _run(fx, round_no=2, commit=commit) == 2
+    record = fx.work / RECORD
+    text = record.read_text()
+    record.write_text(text.replace('"verdict": "no"', '"verdict": "yes"'))  # the Report block no longer matches the log
+    changed = _commit_all(fx.work, "a changed report block")
+    assert _run(fx, round_no=2, commit=changed) == 2
+    record.write_text(text.replace("#### Report", "#### Not a report"))  # no Report block
+    missing = _commit_all(fx.work, "no report block")
+    assert _run(fx, round_no=2, commit=missing) == 2
     assert len(fx.calls()) == 1
     assert [e["event"] for e in fx.log()] == ["start", "end"]
-    report.write_text(text)
+    record.write_text(text)
+    _commit_all(fx.work, "the record as the launcher wrote it")
     fx.scenario(_reply(accounted=[_accounted("X1")]))
     assert _run(fx, round_no=2, commit=commit) == 0  # the positive twin: the same round with its inputs runs
+
+
+def test_recheck_reads_the_earlier_report_from_the_record_with_the_released_file_deleted(fx: Fixture) -> None:
+    commit = _recheck(fx, "| X1 | high | rejected: the scenario does not happen |")
+    _report(fx, fx.log()[0]).unlink()
+    fx.scenario(_reply(accounted=[_accounted("X1")]))
+    assert _run(fx, round_no=2, commit=commit) == 0
+    assert '"id": "X1"' in _section(_prompt(fx), "Your earlier report")
 
 
 def test_empty_answers_section_is_refused(fx: Fixture) -> None:

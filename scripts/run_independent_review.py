@@ -172,6 +172,7 @@ def _load_script(name: str) -> Any:
 
 _SECRETS = _load_script("evidence_secrets")
 _INPUTS = _load_script("review_inputs")  # slice 4.2: files from the diff, upstream items, computed evidence
+_RECORDS = _load_script("review_records")  # slice 4.3: the record blocks the launcher writes
 
 
 def sha256_text(text: str) -> str:
@@ -427,10 +428,7 @@ class PromptParts:
     records: tuple[str, ...] = ()
 
 
-def fenced(text: str, info: str = "") -> str:
-    """A fenced block one backtick longer than the longest backtick run inside the text."""
-    fence = "`" * max([3, *(len(run) + 1 for run in re.findall(r"`+", text))])
-    return f"{fence}{info}\n{text.rstrip(chr(10))}\n{fence}"
+fenced = _RECORDS.fenced
 
 
 def _role_section(inputs: ReviewInputs, parts: PromptParts, diff_base: str) -> str:
@@ -858,10 +856,12 @@ def call_reviewer(copy_root: Path, prompt: str, reviewer: Reviewer, review_paths
 
 
 class AttemptLog:
-    """The append-only attempt log, held under an exclusive OS lock for a whole round."""
+    """The append-only attempt log, held under an exclusive OS lock for a whole round, and the review record, which
+    is written under the same lock (S43-D1)."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, record: Path | None = None) -> None:
         self.path = path
+        self.record = record
         self._handle: Any = None
         self._mutex = threading.Lock()
 
@@ -891,26 +891,76 @@ class AttemptLog:
         line = json.dumps(entry, sort_keys=True)
         check_publishable(line, str(self.path))
         with self._mutex:
-            self._handle.seek(0, os.SEEK_END)
-            self._handle.write(line + "\n")
-            self._handle.flush()
-            os.fsync(self._handle.fileno())
+            self._write_line(line)
+
+    def _write_line(self, line: str) -> None:
+        self._handle.seek(0, os.SEEK_END)
+        self._handle.write(line + "\n")
+        self._handle.flush()
+        os.fsync(self._handle.fileno())
+
+    def _record_text(self, unit: str) -> str:
+        if self.record is None:
+            raise RuntimeError("this attempt log has no review record")
+        return self.record.read_text(encoding="utf-8") if self.record.is_file() else _RECORDS.new_record(
+            str(self.record), unit)
+
+    def start_attempt(self, entry: dict[str, Any], task: str, evidence: str) -> None:
+        """The attempt's record section (heading, status, Prompt and Evidence blocks), then its start entry, in one
+        step under the lock: a launcher killed between the two leaves a trailing section that `recover` removes."""
+        line = json.dumps(entry, sort_keys=True)
+        check_publishable(line, str(self.path))
+        with self._mutex:
+            text = self._record_text(entry["unit"])
+            _RECORDS.write_atomically(self.record, text + "\n" + _RECORDS.start_text(entry, task, evidence, text))
+            self._write_line(line)
+
+    def finish_record(self, attempt: str, status: str, report: str | None) -> None:
+        """The attempt's final status line and, for a released report, its Report block, in its own section."""
+        with self._mutex:
+            text = self._record_text("")
+            _RECORDS.write_atomically(self.record, _RECORDS.finish(text, attempt, status, report))
+
+    def truncate_record(self, logged: set[str]) -> None:
+        with self._mutex:
+            if self.record is not None and self.record.is_file():
+                text = self.record.read_text(encoding="utf-8")
+                kept = _RECORDS.truncate_unlogged_tail(text, logged)
+                if kept != text:
+                    _RECORDS.write_atomically(self.record, kept)
 
 
 def recover(log: AttemptLog, repo: Path) -> None:
-    """Close what a killed launcher left: interrupted attempts, and reports not yet moved into place."""
+    """Close what a killed launcher left: interrupted attempts, reports not yet moved into place, and record sections
+    without a logged start, or without their final status and Report block (S43-D1)."""
     entries = log.entries()
+    log.truncate_record({e["attempt"] for e in entries if e.get("event") == "start"})
     ends = {e["attempt"]: e for e in entries if e.get("event") == "end"}
     for start in (e for e in entries if e.get("event") == "start"):
         partial = repo / (start["report_path"] + ".partial")
         end = ends.get(start["attempt"])
         if end is None:
-            log.append({"event": "end", "attempt": start["attempt"], "status": "interrupted", "ended_at": utc_now(),
-                        "reason": "no end entry: the launcher stopped, or the publication check withheld the report"})
+            end = {"event": "end", "attempt": start["attempt"], "status": "interrupted", "ended_at": utc_now(),
+                   "reason": "no end entry: the launcher stopped, or the publication check withheld the report"}
+            log.append(end)
         elif end["status"] == "completed" and partial.is_file() and sha256_bytes(partial.read_bytes()) == end["report_sha256"]:
             partial.replace(repo / start["report_path"])
-            continue
         partial.unlink(missing_ok=True)
+        if start.get("record_blocks") == 1 and log.record == repo / _entry_record(start):
+            _complete_record(log, repo, start, end)
+
+
+def _complete_record(log: AttemptLog, repo: Path, start: dict[str, Any], end: dict[str, Any]) -> None:
+    """Give a logged attempt's section its final status, and its Report block when the released file matches. A
+    section that is missing is left to the record check, which reports it."""
+    released = repo / start["report_path"]
+    report = None
+    if end.get("report_sha256") and released.is_file() and sha256_bytes(released.read_bytes()) == end["report_sha256"]:
+        report = released.read_text(encoding="utf-8")
+    try:
+        log.finish_record(start["attempt"], _RECORDS.status_text(end), report)
+    except ValueError:
+        return
 
 
 @dataclass(frozen=True)
@@ -1186,13 +1236,14 @@ def earlier_attempt(entries: list[dict[str, Any]], unit: str, count: int, round_
 
 
 def load_recheck(repo: Path, record_text: str | None, start: dict[str, Any], end: dict[str, Any]) -> Recheck:
-    """The released earlier report, checked against its end entry, and its answers section in the record."""
-    report_file = repo / start["report_path"]
-    if not report_file.is_file():
-        raise ReviewRefusedError(f"the earlier report of {start['attempt']} is missing: {start['report_path']}")
-    report = report_file.read_text(encoding="utf-8")
+    """The earlier report from the record's Report block at the reviewed commit (S43-D6), checked against its end
+    entry, and its answers section in the same record. `repo` is kept for the callers' signature."""
+    del repo
+    report = _RECORDS.report_block(record_text, start["attempt"])
+    if report is None:
+        raise ReviewRefusedError(f"the record at the reviewed commit has no Report block for {start['attempt']}")
     if sha256_text(report) != end.get("report_sha256"):
-        raise ReviewRefusedError(f"the earlier report of {start['attempt']} does not match its end entry")
+        raise ReviewRefusedError(f"the Report block of {start['attempt']} does not match its end entry")
     section = answers_section(record_text or "", start["attempt"])
     if section is None or not "".join(section.splitlines()[1:]).strip():
         raise ReviewRefusedError(f"the record has no answers to {start['attempt']}")
@@ -1242,6 +1293,7 @@ class ReviewPlan:
     parts: PromptParts
     accounting: Accounting = field(default_factory=Accounting)
     recheck: Recheck | None = None
+    prompt: str = ""  # the full prompt, built and scanned before any call (S43-D2)
 
 
 @dataclass(frozen=True)
@@ -1341,8 +1393,41 @@ def plan_reviews(spec: RoundSpec, inputs: ReviewInputs, entries: list[dict[str, 
                                          + "; ".join(table[:5]))
             accounting = Accounting({**{row.finding: ANSWER_STATUSES for row in recheck.rows}, **evidence_items},
                                     must_read)
-        plans.append(ReviewPlan(reviewer, make_parts(mode, task, spec.unit, recheck, shared), accounting, recheck))
+        parts = make_parts(mode, task, spec.unit, recheck, shared)
+        prompt = build_prompt(inputs, parts, FULL_CONFIGURATION, diff_base=inputs.base_commit)
+        check_prompt(prompt, parts, reviewer.prompt_file.name)
+        plans.append(ReviewPlan(reviewer, parts, accounting, recheck, prompt))
     return plans
+
+
+def check_prompt(prompt: str, parts: PromptParts, task_name: str) -> None:
+    """S43-D2: before any start entry, record write or call, the full prompt passes the evidence secret check and
+    holds no local path (the author's HOME, a review scratch directory). A finding names the part and the kind,
+    never the value. A task text without a final newline is refused too: its record block must hash as logged."""
+    if not parts.task.endswith("\n"):
+        raise ReviewRefusedError(f"the task prompt {task_name} must end with a newline (its record block is compared "
+                                 "byte for byte with the logged hash)")
+    named = {"the task prompt": parts.task, "the answers section": parts.answers or "",
+             "the evidence": parts.evidence or "", "the earlier report": parts.earlier_report or "",
+             "the upstream items": parts.upstream or "", "the whole prompt": prompt}
+    for where, text in named.items():
+        try:
+            check_publishable(text, where)
+        except PublicationBlockedError as found:
+            raise ReviewRefusedError(f"the secret check found something in {where}; nothing was sent or written: "
+                                     f"{found}") from None
+        leaks = [name for name, needle in local_paths().items() if needle in text]
+        if leaks:
+            raise ReviewRefusedError(f"{where} holds {' and '.join(leaks)}; nothing was sent or written")
+
+
+def local_paths() -> dict[str, str]:
+    """Operational details that must not reach a reviewer or a record (S42-D8, S43-D2)."""
+    home = os.path.expanduser("~")
+    paths = {"a review scratch directory": os.path.join(tempfile.gettempdir(), "review-")}
+    if home and home != os.sep:
+        paths["the author's HOME path"] = home
+    return paths
 
 
 def start_entry(spec: RoundSpec, inputs: ReviewInputs, plan: ReviewPlan, attempt: str, extra: dict[str, Any]) -> dict[str, Any]:
@@ -1362,7 +1447,7 @@ def start_entry(spec: RoundSpec, inputs: ReviewInputs, plan: ReviewPlan, attempt
         "earlier_report_sha256": sha256_text(recheck.earlier_report) if recheck else None,
         "answers_sha256": recheck.answers_sha256 if recheck else None,
         "schema_sha256": sha256_text(SCHEMA_JSON), "extension": spec.refs[0], "reset": spec.refs[1],
-        "report_path": report_path(spec.record, spec.unit, attempt),
+        "report_path": report_path(spec.record, spec.unit, attempt), "record_blocks": 1,
         "started_at": utc_now(),
     }
 
@@ -1386,16 +1471,20 @@ class RoundContext:
 def run_attempts(ctx: RoundContext, plan: ReviewPlan) -> str:
     """Run one reviewer with at most two retries after provider errors; return the final status."""
     config = FULL_CONFIGURATION  # S41-D1: the launcher has no other configuration
-    prompt = build_prompt(ctx.inputs, plan.parts, config, diff_base=ctx.inputs.base_commit)
+    prompt = plan.prompt
     extra = {**ctx.extra, "prompt_sha": sha256_text(prompt), "mandate_sha": sha256_text(config.mandates[plan.parts.mode])}
     for tries in range(1, MAX_TRIES + 1):
         start = start_entry(ctx.spec, ctx.inputs, plan, attempt_id(ctx.log.entries(), ctx.spec, plan.reviewer.label),
                             extra)
-        ctx.log.append(start)
+        ctx.log.start_attempt(start, plan.parts.task, plan.parts.evidence or "")  # S43-D1: record first, then the log
         outcome = call_reviewer(ctx.copy_root, prompt, plan.reviewer, ctx.inputs.must_open_one_of, plan.accounting)
         read = set(outcome.stats.get("paths_read", []))
         outcome.stats["paths_not_read"] = [path for path in ctx.inputs.review_paths if path not in read]  # S42-D2
-        status = finish_attempt(ctx.spec.repo, ctx.log, start, outcome, tries)
+        try:
+            status = finish_attempt(ctx.spec.repo, ctx.log, start, outcome, tries)
+        except PublicationBlockedError:
+            ctx.log.finish_record(start["attempt"], _RECORDS.status_text(None, withheld=True), None)
+            raise
         if outcome.status != "provider_error":
             return status
     return "pending"
@@ -1422,6 +1511,7 @@ def finish_attempt(repo: Path, log: AttemptLog, start: dict[str, Any], outcome: 
         end["paused_until"] = outcome.paused_until
     if status != "completed" or outcome.report is None:
         log.append(end)
+        log.finish_record(start["attempt"], _RECORDS.status_text(end), None)
         return status
     report_text = json.dumps(outcome.report, indent=2, sort_keys=True) + "\n"
     check_publishable(report_text, start["report_path"])
@@ -1431,6 +1521,7 @@ def finish_attempt(repo: Path, log: AttemptLog, start: dict[str, Any], outcome: 
     end.update(verdict=outcome.report["verdict"], report_sha256=sha256_text(report_text), **report_counts(outcome.report))
     log.append(end)
     partial.replace(repo / start["report_path"])
+    log.finish_record(start["attempt"], _RECORDS.status_text(end), report_text)
     return status
 
 
@@ -1596,7 +1687,7 @@ def main(argv: list[str], repo: Path | None = None) -> int:
         spec, reviewers = plan_round(args, repo)
         inputs = resolve_inputs(repo, args.commit, args.base, args.paths,
                                 [spec.record, str(spec.log_path.relative_to(repo))])
-        with AttemptLog(spec.log_path) as log:
+        with AttemptLog(spec.log_path, repo / spec.record) as log:
             recover(log, repo)
             admission = admit_round(log.entries(), spec.unit, spec.round_no, [r.label for r in reviewers], spec.refs)
             spec = RoundSpec(**{**spec.__dict__, "count": admission.count})

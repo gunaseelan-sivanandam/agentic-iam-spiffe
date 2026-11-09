@@ -215,8 +215,14 @@ template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>
   `scripts/run_independent_review.py`, which builds the reviewer's call and prompt and records every
   attempt, and the round it belongs to, in the slice's `review_attempts.jsonl`. The slice's review
   record (`plan_review.md` for a plan, `review_<unit>.md` for an implementation) keeps each task
-  prompt and report verbatim with the author's answers (earlier records hold the exact command, for
-  example [`review_1b.md`](docs/slices/agentic-delivery-process/review_1b.md#reviewer-prompts-verbatim)).
+  prompt, evidence and report verbatim with the author's answers. The launcher writes the record:
+  under `### Attempt <attempt id>` a status line and the Prompt and Evidence blocks before the call,
+  and the Report block after release, under the attempt log's lock; it scans the whole prompt with
+  the evidence secret check, and for local paths, before anything is written or sent. The author
+  writes only `#### Answers to <attempt id>`. `make docs-check` proves every record the launcher
+  wrote against its attempt log, which replaces the author's hand check of earlier slices (earlier
+  records hold the exact command, for example
+  [`review_1b.md`](docs/slices/agentic-delivery-process/review_1b.md#reviewer-prompts-verbatim)).
 - **Modes and prompts.** The launcher writes every prompt in a fixed order of sections, opening with
   the mandate of the review's mode, which follows the round: round 1 is the initial review (the
   final review for the unit named `final`), and every later round is a recheck. No launcher option
@@ -285,7 +291,7 @@ never replaces it.
 | Gate | Command | Enforced by | Threshold |
 | --- | --- | --- | --- |
 | Trace model | `make qa-trace` | CI, every push/PR | zero structural failures; on a PR (`--mode pr --base <base>`), no coverage gap the PR adds compared with its merge-base unless `accepted_gaps` in `trace/tests.yaml` lists it with a reason and an unexpired date (an expired or stale entry fails); a merge-base that cannot be resolved or read fails. On `main` (`--mode push`) gaps are reported |
-| Documentation | `make docs-check` | CI | every harness test and every static test in `trace/tests.yaml` has a `docs/test_spec.md` heading and vice versa; relative links and `#anchors` in live docs resolve; every tracked image in `docs/` is referenced and every `.puml` has its `.svg`; every slice bundle is in the slice index; `TEST_ONLY=` examples name real tests |
+| Documentation | `make docs-check` | CI | every harness test and every static test in `trace/tests.yaml` has a `docs/test_spec.md` heading and vice versa; relative links and `#anchors` in live docs resolve; every tracked image in `docs/` is referenced and every `.puml` has its `.svg`; every slice bundle is in the slice index; `TEST_ONLY=` examples name real tests; every review record the launcher writes holds exactly the Prompt, Evidence and Report blocks its attempt log names, a recheck's answers are unchanged since it read them, and every finding of a released report has an answer its severity and kind allow (`scripts/check_review_records.py`) |
 | QA tooling tests | `make tooling-test` | CI | `tests/tools/` (pytest) and `tests/shell/` pass; one of them runs `ruff check services scripts` (ruff's default rules, without `ruff_changed_files.toml`), so the whole tree stays clean |
 | E2E outcome lint | `make test-lint` | CI | no outcome guard in `scripts/rogue_node_tests.sh` accepts several outcomes (`assert_file_any`, broad error regexes, `!= 200`), swallows failure (`\|\| true`), checks only a non-zero exit, or is a test of negative greps only; a multi-outcome guard needs `# test-lint: alternate: <reason>` |
 | Changed-files lint | `make lint` | CI, PRs only (own job) | in every file the PR adds, modifies or renames, no ruff or shellcheck finding that is new or worse than at the merge-base (a finding is keyed by file, rule and enclosing function, or line text, and compared by count and value, so existing violations stay and a pure rename is not new): ruff's default rules, complexity C901 ≤ 10, at most 12 branches, 5 arguments and 50 statements per function (PLR0912, PLR0913, PLR0915), naming (N) without exceptions, security (S, except `assert` in `tests/`); the limit, naming, F401 and F841 rules ignore `noqa`; the configuration `ruff_changed_files.toml` is read from the merge-base, so a change cannot loosen it; every added `.py` file, shell script (by extension or shebang), YAML, TOML, Dockerfile or Rego file starts with a purpose comment (tool directives do not count), and every added Markdown file with a `#` title and a paragraph (coding rule 8; other formats are left to the review); a missing base or tool fails |

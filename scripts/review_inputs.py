@@ -250,7 +250,8 @@ class Evidence:
 
     def text(self) -> str:
         body = self.entries or ["No entries: nothing to account for."]
-        return "\n".join(["Each numbered entry must be listed under `accounted`.", "", *body, "", *self.notes]).rstrip()
+        text = "\n".join(["Each numbered entry must be listed under `accounted`.", "", *body, "", *self.notes])
+        return text.rstrip() + "\n"  # one final newline: the record's Evidence block hashes as logged (S43-D1)
 
 
 @dataclass(frozen=True)
