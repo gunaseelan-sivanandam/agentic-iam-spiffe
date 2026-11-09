@@ -1000,9 +1000,10 @@ def test_answers_table_with_every_answer_word_is_accepted(fx: Fixture) -> None:
     (_reply(accounted=[_accounted("X1", opened=("AGENTS.md",))]), "names an opened file the attempt did not read"),
     (_reply(accounted=[_accounted("X1", opened=())], reads=["AGENTS.md", "scripts/review_me.py"]), None),
     (_reply(accounted=[_accounted("X1", opened=("AGENTS.md",))], reads=["AGENTS.md", "tests/unit/AGENTS.md"]),
-     "the review read none of the paths under review"),
+     "the review read none of the paths under review"),  # the fixed-file check itself: the test below
     (_reply(accounted=[_accounted("X1", "explained")]), "X1 has status explained"),
-], ids=["answer-missing", "opened-not-read", "control-complete", "fixed-file-not-read", "evidence-status-for-answer"])
+], ids=["answer-missing", "opened-not-read", "control-complete", "nothing-under-review-read",
+     "evidence-status-for-answer"])
 def test_recheck_that_does_not_account_for_every_answer_fails(fx: Fixture, scenario: dict, reason: str | None) -> None:
     commit = _recheck(fx, "| X1 | high | fixed: scripts/review_me.py: guarded |")
     fx.scenario(scenario)
@@ -1156,9 +1157,41 @@ def test_answers_section_ends_at_the_next_heading_but_not_at_one_inside_a_fence(
     assert launcher.answers_section(record, "u/c1/r1/B/1") is None
 
 
-def test_invocation_from_an_entry_logged_before_slice_4_1_reports_a_mismatch_not_a_crash(fx: Fixture) -> None:
+def test_invocation_from_an_entry_logged_before_slice_4_1_says_its_layout_is_retired(fx: Fixture) -> None:
     assert _run(fx) == 0
     old = {k: v for k, v in fx.log()[0].items() if k not in ("mode", "mandate_sha256")}
-    old["full_prompt_sha256"] = "0" * 64
-    _argv, mismatches = launcher.invocation_from_entry(old, fx.work, fx.prompt)
-    assert "full_prompt_sha256" in mismatches
+    with pytest.raises(ValueError, match="before slice 4.1: its prompt layout is retired"):
+        launcher.invocation_from_entry(old, fx.work, fx.prompt)
+
+
+@pytest.mark.parametrize(("findings", "rows", "message"), [
+    ((_finding("X1"), _finding("X2", severity="blocking")), ("| X1 | high | rejected: r |",), "X2 has no answer row"),
+    ((_finding("X1"),), ("| X1 | high | rejected: r |", "| X9 | low | rejected: r |"), "which the report does not hold"),
+    ((_finding("X1"),), ("| X1 | high | rejected: r |", "| X1 | high | rejected: again |"), "X1 has 2 answer rows"),
+    ((_finding("X1", severity="blocking"),), ("| X1 | low | deferred: #12 |",), "the finding is 'blocking'"),
+    ((_finding("X1", severity="high"),), ("| X1 | high | deferred: #12 |",), "cannot be answered deferred"),
+    ((_finding("X1", kind="decision_concern", severity="low"),), ("| X1 | low | rejected: no |",),
+     "must be answered owner"),
+], ids=["finding-without-row", "row-for-unknown-id", "two-rows", "severity-relabelled", "high-deferred",
+        "decision-concern-rejected"])
+def test_answers_that_do_not_answer_the_earlier_report_are_refused_before_any_call(
+        fx: Fixture, findings: tuple[dict, ...], rows: tuple[str, ...], message: str,
+        capsys: pytest.CaptureFixture[str]) -> None:
+    commit = _recheck(fx, *rows, findings=findings)
+    assert _run(fx, round_no=2, commit=commit) == 2
+    assert message in capsys.readouterr().err
+    assert len(fx.calls()) == 1
+
+
+def test_any_header_row_above_the_separator_is_skipped() -> None:
+    section = "| Finding | Severity | Answer |\n|:--|:-:|--:|\n| X1 | high | rejected: r |\n"
+    assert launcher.answer_rows(section) == [launcher.AnswerRow("X1", "high", "rejected: r")]
+
+
+@pytest.mark.parametrize(("answer", "ok"), [
+    ("owner: https://github.com/o/r/pull/7#issuecomment-1", True),
+    ("owner: docs/slices/agentic-sdlc-poc/slice_4_decisions.md#decision-concerns", True),
+    ("owner: asked in chat", False),
+])
+def test_owner_answer_links_to_a_url_or_a_tracked_document(answer: str, ok: bool) -> None:
+    assert (launcher.answer_format_problem(launcher.AnswerRow("X1", "medium", answer)) is None) == ok

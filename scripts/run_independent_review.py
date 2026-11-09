@@ -1011,14 +1011,24 @@ class AnswerRow:
     answer: str
 
 
+def _table_cells(line: str) -> list[str] | None:
+    if not line.strip().startswith("|"):
+        return None
+    return [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", line.strip())[1:-1]]
+
+
+def _is_separator(cells: list[str] | None) -> bool:
+    return bool(cells) and all(c and set(c) <= set("-: ") for c in cells)  # type: ignore[union-attr]
+
+
 def answer_rows(section: str) -> list[AnswerRow]:
-    """The table rows `| <finding id> | <severity> | <answer> |`, without the header and separator rows."""
+    """The table rows `| <finding id> | <severity> | <answer> |`. The row above a separator row is the header,
+    whatever it says, and is skipped with the separator."""
+    lines = [_table_cells(line) for line in section.splitlines()]
+    headers = {i - 1 for i, cells in enumerate(lines) if _is_separator(cells)}
     rows = []
-    for line in section.splitlines():
-        if not line.strip().startswith("|"):
-            continue
-        cells = [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", line.strip())[1:-1]]
-        if len(cells) != 3 or set(cells[0]) <= set("-: ") or cells[0].lower() == "id":
+    for index, cells in enumerate(lines):
+        if cells is None or index in headers or _is_separator(cells) or len(cells) != 3:
             continue
         rows.append(AnswerRow(cells[0].strip("`"), cells[1].strip("`").lower(), cells[2]))
     return rows
@@ -1041,7 +1051,7 @@ def answer_word(answer: str) -> str | None:
 
 
 def answer_format_problem(row: AnswerRow) -> str | None:
-    """Why an answer does not have its word's form (S41-D7); the launcher and the record check share this rule."""
+    """Why an answer does not have its word's form (S41-D7); slice 4.3's record check is to share this rule."""
     word = answer_word(row.answer)
     rest = row.answer.split(":", 1)[1].strip() if word else ""
     if word is None:
@@ -1052,9 +1062,42 @@ def answer_format_problem(row: AnswerRow) -> str | None:
         return f"deferred answer to {row.finding} names no issue (deferred: #N)"
     if word == "rejected" and not rest:
         return f"rejected answer to {row.finding} gives no reason"
-    if word == "owner" and not re.search(r"https://\S+", rest):
-        return f"owner answer to {row.finding} gives no link"
+    if word == "owner" and not re.search(r"https://\S+|(?<![\w/])(?:docs|AGENTS)[\w./-]*\.md\b", rest):
+        return f"owner answer to {row.finding} gives no link (an https URL or a tracked document such as docs/…md)"
     return None
+
+
+# S41-D7: the answers each severity allows; a decision concern is always answered owner:.
+ALLOWED_ANSWERS = {"blocking": ("fixed", "rejected", "owner"), "high": ("fixed", "rejected", "owner"),
+                   "medium": ANSWER_WORDS, "low": ANSWER_WORDS}
+
+
+def answer_table_problems(report: dict[str, Any], rows: list[AnswerRow]) -> list[str]:
+    """Why an answers table does not answer this report (S41-D7): a finding without exactly one row, a row for an
+    ID the report does not hold, a severity cell that differs from the finding's, or an answer its severity or kind
+    does not allow. The launcher refuses a recheck on any of these, and slice 4.3's record check applies them too."""
+    findings = {f["id"]: f for f in report.get("findings", [])}
+    by_id: dict[str, list[AnswerRow]] = {}
+    for row in rows:
+        by_id.setdefault(row.finding, []).append(row)
+    problems = [f"finding {fid} has no answer row" for fid in findings if fid not in by_id]
+    problems += [f"finding {fid} has {len(rs)} answer rows" for fid, rs in by_id.items() if len(rs) > 1]
+    problems += [f"answer row for {fid}, which the report does not hold" for fid in by_id if fid not in findings]
+    for fid, finding in findings.items():
+        for row in by_id.get(fid, [])[:1]:
+            problems += _row_against_finding(row, finding)
+    return problems
+
+
+def _row_against_finding(row: AnswerRow, finding: dict[str, Any]) -> list[str]:
+    word = answer_word(row.answer)
+    if row.severity != finding.get("severity"):
+        return [f"answer row for {row.finding} says {row.severity!r}; the finding is {finding.get('severity')!r}"]
+    if finding.get("kind") == "decision_concern" and word != "owner":
+        return [f"{row.finding} is a decision concern and must be answered owner:"]
+    if word not in ALLOWED_ANSWERS.get(row.severity, ()):
+        return [f"a {row.severity} finding ({row.finding}) cannot be answered {word}:"]
+    return []
 
 
 def changed_away(repo: Path, diff_base: str, commit: str) -> set[str]:
@@ -1205,6 +1248,10 @@ def plan_reviews(spec: RoundSpec, inputs: ReviewInputs, entries: list[dict[str, 
             recheck = load_recheck(spec.repo, record_text, *earlier_attempt(entries, spec.unit, spec.count,
                                                                             spec.round_no, reviewer.label))
             must_read = check_answers(list(recheck.rows), exists, away)
+            table = answer_table_problems(json.loads(recheck.earlier_report), list(recheck.rows))
+            if table:
+                raise ReviewRefusedError(f"the answers to {recheck.earlier_attempt} do not answer its report: "
+                                         + "; ".join(table[:5]))
             accounting = Accounting({row.finding: ANSWER_STATUSES for row in recheck.rows}, must_read)
         plans.append(ReviewPlan(reviewer, make_parts(mode, task, spec.unit, recheck, records), accounting, recheck))
     return plans
@@ -1396,7 +1443,10 @@ def invocation_from_entry(entry: dict[str, Any], repo: Path, prompt_file: Path,
     """Rebuild a start entry's CLI call and prompt, and list every input hash that no longer matches the entry.
 
     A recheck's inputs are loaded as the launcher loads them unless `recheck` gives them."""
-    record, mode = _entry_record(entry), entry.get("mode", "initial")  # entries before slice 4.1 have no mode
+    if "mode" not in entry:
+        raise ValueError("this entry was logged before slice 4.1: its prompt layout is retired, so its prompt cannot be "
+                         "rebuilt; its input hashes still identify what it reviewed")
+    record, mode = _entry_record(entry), entry["mode"]
     withheld = list(entry["withheld_sha256"])
     if mode == "recheck" and recheck is None:
         recheck = _entry_recheck(entry, repo, record)

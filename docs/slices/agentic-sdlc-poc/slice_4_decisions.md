@@ -7,7 +7,7 @@ file current during the run and says in it what was decided on the owner's behal
 checklists, the benchmark counts, every decision concern, every parked unit, every process-growth proposal and
 every discovered issue with its disposition.
 
-Last updated: 2026-11-09, before the implementation starts.
+Last updated: 2026-11-09, during 4.1's implementation review (round 1 answered, round 2 next).
 
 ## Goal (the owner's, 2026-11-09)
 
@@ -81,6 +81,28 @@ changes, no reading of frozen records except to check a claim, and OPL-005 to OP
 
 Parked units, decision concerns and growth proposals collect below as the run goes.
 
+### Progress
+
+| Part | State | Review |
+| --- | --- | --- |
+| 4.1 | Implemented (`59d0291` to `6476697`; round-1 fixes in the next commit) | Round 1: approvable; 0 blocking, 2 high, 6 medium, 5 low; all answered; round 2 (recheck) next |
+| 4.2 to 4.6 | Not started | — |
+
+## Decided by the author during the run
+
+What the author decided on the owner's behalf. Each stays within the plans; a change to a plan's decision would be
+a decision concern below instead.
+
+| Part | Decision | Why |
+| --- | --- | --- |
+| 4.1 | 4.1's own implementation review runs with the branch's launcher, the one under review, not with the base's | This is how the next user runs it, and it was the launcher's first live run with the new schema. The circularity is limited: the rules come from the base branch, the mandate texts were compared with the plan by a script, and the reviewer reads the launcher's code |
+| 4.1 | Text quoted from a file or the author (the rules, the task text, the answers) is a fenced block in the prompt | A dry run on this repository's own prose showed that its `## ` headings read like the prompt's sections, so a task text could imitate a Mandate or Output section. This is how S41-D1's fixed sections are kept, not a new mechanism |
+| 4.1 | A recheck is refused before any call when its answers table does not answer the earlier report: a finding without a row, a row for an unknown ID, a changed severity, an answer the severity does not allow | Review round 1 (R1-4): the plan put this check only in 4.3's record check, so rechecks run before 4.3 exists could drop a finding. One function holds the rule, and 4.3's check will use it too |
+| 4.1 | An `owner:` answer may link to a tracked document, such as this file, as well as to a URL | While GitHub writes go through the owner, this file is where the owner decides |
+| 4.1 | `invocation_from_entry` refuses an attempt logged before 4.1 with a clear message instead of rebuilding it | The old prompt layout is retired with S41-D1; its hashes still identify what was reviewed (R1-7). The plan's retirement list did not name this; it is recorded here |
+| 4.1 | The benchmark report shows blocking-only detections beside all detections, and counts an unmatched high finding on a clean case as a false alarm | S41-D13 counts high findings as detections, so the penalty must count them too (R1-1, R1-2). Stage A's values stay as they were |
+| 4.1 | Local runs of `make tooling-test` use a shellcheck 0.10.0 binary taken from the `shellcheck-py` wheel into a scratch directory | shellcheck is not installed on this machine; without it 9 lint tests fail (on the base too). CI's runner has it |
+
 ## Decisions made
 
 | When | Decision | The owner's words |
@@ -108,11 +130,20 @@ Parked units, decision concerns and growth proposals collect below as the run go
 
 ## Parked units, decision concerns and growth proposals
 
-None yet.
+| # | Kind | Part | Item | The author's recommendation |
+| --- | --- | --- | --- | --- |
+| 1 | Decision concern | 4.1 | S41-D8 makes a recheck read only the files a `fixed:` answer names. A `rejected:` answer that rests on a file ("already covered by `tests/…::test_x`") can be accepted without opening it, though the recheck mandate says to open "the tests that cover them" (4.1 review round 1, R1-5) | Extend the read check to every repository path any answer names; it is a few lines on data the launcher already has. Implemented as written until the owner decides |
+
+No unit is parked, and no process growth is proposed yet.
 
 ## Discovered issues
 
-None yet.
+| # | Issue | Found | Disposition |
+| --- | --- | --- | --- |
+| 1 | shellcheck is not installed locally, so 9 tests of `tests/tools/test_lint_changed_files.py` fail in a local `make tooling-test`, also on the base | 4.1, by the author | Outside the threat model (local environment); worked around with a scratch binary; CI has shellcheck |
+| 2 | Stage A's benchmark prompts (`tests/review_benchmark/prompts/short.md`, `checklist.md`) still tell the reviewer to use the kinds "blocking" and "advisory", which the new schema rejects | 4.1 review round 1, R1-3 | Deferred to 4.5a (#42), which builds stage B's `short+list` from the short prompt; stage A's files stay as measured |
+| 3 | The launcher computed the start entry's mandate hash apart from the prompt; the two could differ | 4.1, by the author's tests | Fixed in 4.1 before its first commit (`59d0291`): both come from one configuration object |
+| 4 | Headings in quoted text could pass for the prompt's own sections | 4.1, by a dry run on this repository's prose | Fixed in 4.1 (`6476697`) |
 
 ## How the owner can check the work
 

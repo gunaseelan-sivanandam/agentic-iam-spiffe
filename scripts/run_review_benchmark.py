@@ -265,6 +265,8 @@ def score(case: Case, report: dict[str, Any]) -> dict[str, list[str]]:
             result["detected_blocking"].append(expected["id"])
         matched.update(f["id"] for f in at_location if is_detection(f))
     result["unmatched_blocking"] = [f["id"] for f in findings if is_blocking(f) and f["id"] not in matched]
+    # A high rating counts as a detection, so an unmatched high finding counts as a false alarm too (S41-D13).
+    result["unmatched_detections"] = [f["id"] for f in findings if is_detection(f) and f["id"] not in matched]
     return result
 
 
@@ -545,7 +547,7 @@ def compare_prompts(lines: list[dict[str, Any]], key: AnswerKey) -> dict[str, An
     kinds = {c.case_id: c.kind for c in key.cases}
     completed = _completed_reviews(lines)
     paired = sorted({case for case, _p in completed if all((case, p) in completed for p in PROMPT_NAMES)})
-    totals: dict[str, dict[str, int]] = {p: {"real_miss": 0, "planted": 0, "false_blockers": 0} for p in PROMPT_NAMES}
+    totals: dict[str, dict[str, int]] = {p: dict.fromkeys(TOTALS, 0) for p in PROMPT_NAMES}
     for case in paired:
         for prompt in PROMPT_NAMES:
             _add_score(totals[prompt], kinds.get(case, ""), completed[(case, prompt)]["score"])
@@ -563,11 +565,21 @@ def _completed_reviews(lines: list[dict[str, Any]]) -> dict[tuple[str, str], dic
     return completed
 
 
+TOTALS = ("real_miss", "planted", "real_miss_blocking", "planted_blocking", "false_blockers", "false_alarms")
+
+
+def _blocking_detections(result: dict[str, list[str]]) -> list[str]:
+    """Detections by a blocking finding; in stage A's results every detection was by a blocking finding."""
+    return result.get("detected_blocking", result["detected"])
+
+
 def _add_score(total: dict[str, int], kind: str, result: dict[str, list[str]]) -> None:
     if kind in ("real_miss", "planted"):
         total[kind] += len(result["detected"])
+        total[f"{kind}_blocking"] += len(_blocking_detections(result))
     elif kind == "clean":
         total["false_blockers"] += len(result["unmatched_blocking"])
+        total["false_alarms"] += len(result.get("unmatched_detections", result["unmatched_blocking"]))
 
 
 def decide(short: dict[str, int], checklist: dict[str, int]) -> str:
@@ -582,25 +594,33 @@ def report(repo: Path, key: AnswerKey) -> str:
     comparison = compare_prompts(lines, key)
     rows = report_rows(lines)
     return "\n".join([f"Answer key SHA-256: `{key.sha256}`; prompts SHA-256: `{key.prompts_sha256}`.", "",
-                      *rows, "", "Comparison of the automatic detections, before hand confirmation (the report applies "
+                      *rows, "", COLUMN_NOTE, "", "Comparison of the automatic detections, before hand confirmation (the report applies "
                       "the decision rule again to the confirmed ones):", f"`{json.dumps(comparison, sort_keys=True)}`"])
+
+
+COLUMN_NOTE = ("Detected: a blocking or high finding at the expected place with one of its terms; Detected (blocking): "
+               "the same, by a blocking finding; Not blocking: a match rated medium or low (stage A: advisory); "
+               "Unmatched blocking, and Unmatched (blocking or high): findings at no expected place, the false blockers "
+               "and false alarms on a clean case.")
 
 
 def report_rows(lines: list[dict[str, Any]]) -> list[str]:
     """One table row per result line; a canary line has no scores."""
-    rows = ["| Case | Kind | Prompt | Status | Verdict | Detected | Location only | Not blocking | Unmatched blocking | Tries |",
-            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+    rows = ["| Case | Kind | Prompt | Status | Verdict | Detected | Detected (blocking) | Location only | Not blocking "
+            "| Unmatched blocking | Unmatched (blocking or high) | Tries |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for line in lines:
         if "prompt" in line:
             score_ = line.get("score", {})
             # Stage A's results name the column by its retired word; they are read as before (S41-D13).
             seen = score_.get("not_blocking", score_.get("advisory_only", []))
+            cells = [score_.get("detected", []), _blocking_detections(score_) if score_ else [],
+                     score_.get("location_only", []), seen, score_.get("unmatched_blocking", []),
+                     score_.get("unmatched_detections", score_.get("unmatched_blocking", []))]
             rows.append(f"| {line['case']} | {line['kind']} | {line['prompt']} | {line['status']} | {line.get('verdict', '')} | "
-                        f"{', '.join(score_.get('detected', []))} | {', '.join(score_.get('location_only', []))} | "
-                        f"{', '.join(seen)} | {', '.join(score_.get('unmatched_blocking', []))} | "
-                        f"{line.get('tries', '')} |")
+                        + " | ".join(", ".join(cell) for cell in cells) + f" | {line.get('tries', '')} |")
         else:
-            rows.append(f"| {line['case']} | {line['kind']} | — | {line.get('status', 'canary')} | | | | | | |")
+            rows.append(f"| {line['case']} | {line['kind']} | — | {line.get('status', 'canary')} | | | | | | | | |")
     return rows
 
 

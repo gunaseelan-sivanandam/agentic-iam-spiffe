@@ -428,7 +428,7 @@ def test_stage_a_results_are_read_as_before() -> None:
                     "score": {"detected": [], "location_only": [], "advisory_only": ["E1"], "unmatched_blocking": []}}
     key = bench.AnswerKey([_key_case(case_id="C1")], 26, "m", "high", "k", {}, "p")
     rows = [line for line in bench.report_rows([stage_a_line]) if line.startswith("| C1")]
-    assert rows == ["| C1 | real_miss | short | completed | no |  |  | E1 |  |  |"]
+    assert rows == ["| C1 | real_miss | short | completed | no |  |  |  | E1 |  |  |  |"]
     assert bench.compare_prompts([stage_a_line, {**stage_a_line, "prompt": "checklist"}], key)["paired"] == ["C1"]
 
 
@@ -451,3 +451,30 @@ def test_runner_configurations_replace_the_mandate_and_carry_a_list(repo: tuple[
     inputs = bench.launcher.ReviewInputs("c" * 40, "", "b", "d" * 40, "rules", {REVIEWED: ""}, {})
     drafted = bench.launcher.build_prompt(inputs, bench.launcher.PromptParts(mode="initial", task="t"), draft)
     assert "DRAFT MANDATE SENTENCE" in drafted and bench.launcher.MANDATES["initial"] not in drafted
+
+
+def test_unmatched_high_finding_on_a_clean_case_is_a_false_alarm_not_a_false_blocker() -> None:
+    clean = _key_case(case_id="CL", kind="clean", expected=[])
+    key = bench.AnswerKey([clean], 26, "m", "high", "k", {}, "p")
+    scores = {"short": [_new_finding("X1", "high")], "checklist": [_new_finding("X1", "blocking")]}
+    lines = [{"case": "CL", "prompt": p, "status": "completed",
+              "score": bench.score(clean, {"findings": f, "accounted": [], "verdict": "no"})} for p, f in scores.items()]
+    totals = bench.compare_prompts(lines, key)["totals"]
+    assert totals["short"]["false_alarms"] == 1 and totals["short"]["false_blockers"] == 0
+    assert totals["checklist"]["false_alarms"] == 1 and totals["checklist"]["false_blockers"] == 1
+
+
+def test_report_shows_blocking_only_detections_beside_all_detections(repo: tuple[Repo, str, str]) -> None:
+    r, base, commit = repo
+    r.key([_case("C1", base, commit)])
+    r.scenario({"reads": [REVIEWED], "result": {"structured_output": {
+        "findings": [_new_finding("X1", "high")], "accounted": [], "verdict": "no"}}})
+    assert bench.main(["--run"], repo=r.root) == 0
+    text = bench.report(r.root, bench.load_key(r.root))
+    table = text.splitlines()
+    header = [cell.strip() for cell in next(line for line in table if line.startswith("| Case")).split("|")]
+    row = [cell.strip() for cell in next(line for line in table if line.startswith("| C1 | real_miss | short")).split("|")]
+    assert row[header.index("Detected")] == "E1" and row[header.index("Detected (blocking)")] == ""
+    assert bench.COLUMN_NOTE in text
+    totals = bench.compare_prompts(r.results(), bench.load_key(r.root))["totals"]["short"]
+    assert totals["real_miss"] == 1 and totals["real_miss_blocking"] == 0

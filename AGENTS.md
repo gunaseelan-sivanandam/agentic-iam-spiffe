@@ -94,8 +94,8 @@ them.
   round the original reviewer (the same model and review role, in a fresh session given its own
   earlier report and the author's answers) sees each rejection and either accepts it, re-raises it
   with new evidence, or answers that it cannot determine it, which goes to the user; a finding still
-  disputed after that goes to the user, who decides. A fix goes to the origin of the problem, and the author searches for the
-  same cause elsewhere and says where it looked
+  disputed after that goes to the user, who decides. A fix goes to the origin of the problem, and the
+  author searches for the same cause elsewhere and says where it looked
   ([DPL-007](docs/delivery_problem_log.md#dpl-007-plan-review-answered-every-finding-by-adding-mechanisms)).
   The review ends when every blocking and high finding is fixed, accepted as rejected, or decided by
   the user.
