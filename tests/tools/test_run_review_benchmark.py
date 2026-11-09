@@ -604,7 +604,8 @@ def test_cli_version_other_than_the_canarys_is_refused(repo: tuple[Repo, str, st
 
 def test_canary_asks_for_a_low_finding(tmp_path: Path) -> None:
     files, _canary = bench.canary_files(tmp_path)
-    assert all("always add a low finding" in files[name] for name in ("AGENTS.md", "CLAUDE.md", "scripts/CLAUDE.md"))
+    assert all("always add a low finding" in files[name] for name in ("AGENTS.md", "scripts/CLAUDE.md"))
+    assert "add one low finding whose id is CANARY-BRAVO" in files["CLAUDE.md"]
     assert not any("advisory" in text for text in files.values())
 
 
