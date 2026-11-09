@@ -950,6 +950,7 @@ tests:
   negative_controls:
   - tests/tools/test_evidence_secrets.py::test_each_secret_shape_is_found
   - tests/tools/test_evidence_secrets.py::test_token_shape_boundaries
+  - tests/tools/test_evidence_secrets.py::test_credential_value_boundaries
   - tests/tools/test_evidence_secrets.py::test_qa_evidence_fails_on_a_token_anywhere_in_the_publication_set
   - tests/tools/test_evidence_secrets.py::test_unlistable_directory_is_an_error_for_scan_publish_and_qa_evidence
   - tests/tools/test_evidence_secrets.py::test_ci_uploads_exactly_the_checked_set_and_only_after_the_check

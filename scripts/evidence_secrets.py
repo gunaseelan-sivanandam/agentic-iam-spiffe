@@ -31,12 +31,22 @@ PEM_CERTIFICATE_BLOCK = re.compile(r"-----BEGIN CERTIFICATE-----.*?-----END CERT
 BASE64_RUN = re.compile(r"[A-Za-z0-9+/_-]{40,}={0,2}")
 # base64 of "-----BEGIN " when the PEM text starts the encoded data.
 BASE64_PEM_START = "LS0tLS1CRUdJTi"
+# The value may sit in a Markdown code span of any fence length, or in quotes escaped any number of
+# times (\" in a JSON review report), opened before or after the scheme:
+# Authorization: `Bearer <token>`, Authorization: Bearer ``<token>``, Authorization: "<token>".
+# A value ends at a backslash: no credential holds one, and JSON writes "…" after a header name as \u2026.
+QUOTE = r"(?:`+|\\*['\"])?"
 CREDENTIAL_LINE = re.compile(
-    r"(?:JIRA_API_TOKEN\s*=|Authorization\s*:[ \t]*(?:(?:Bearer|Basic|Token)[ \t]+)?)[ \t]*['\"]?(?P<value>[^\s'\"]+)",
+    r"(?:JIRA_API_TOKEN\s*=|Authorization\s*:[ \t]*" + QUOTE + r"(?:(?:Bearer|Basic|Token)[ \t]+)?)[ \t]*"
+    + QUOTE + r"(?P<value>[^\s'\"`\\]+)",
     re.IGNORECASE,
 )
 # A value that names a variable or a redaction marker is not a credential.
 PLACEHOLDER = re.compile(r"^(?:\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|<[^>]*>|\[?REDACTED\]?|\*+|Bearer|Basic)$", re.IGNORECASE)
+# A credential value is token-like: the ones this system handles (capiss and Jira tokens, SVIDs, Basic
+# credentials) are long or carry digits. A short value without a digit is a word of prose or code that
+# names the header ("%s\r\n", "str", "line"), as review reports quoting the repository do.
+MIN_CREDENTIAL_LENGTH = 20
 ATLASSIAN_TOKEN = re.compile(r"ATATT3[A-Za-z0-9_=-]{20,}")
 
 
@@ -111,7 +121,7 @@ def scan_text(text: str, path: str) -> list[Finding]:
         line = _line_of(text, match.start())
         findings += [Finding(path, line, kind) for kind in _run_kinds(match.group(0))]
     for match in CREDENTIAL_LINE.finditer(text):
-        if not PLACEHOLDER.match(match.group("value")):
+        if _is_credential_value(match.group("value")):
             findings.append(Finding(path, _line_of(text, match.start()), "credential line"))
     findings += [Finding(path, _line_of(text, m.start()), "Atlassian API token") for m in ATLASSIAN_TOKEN.finditer(text)]
     return sorted(set(findings), key=lambda f: (f.line, f.kind))
@@ -158,6 +168,12 @@ def scan(paths: list[Path]) -> tuple[list[Finding], list[str]]:
 
 def fingerprint(value: str) -> str:
     return "sha256:" + hashlib.sha256(value.encode("ascii")).hexdigest()
+
+
+def _is_credential_value(value: str) -> bool:
+    if PLACEHOLDER.match(value):
+        return False
+    return len(value) >= MIN_CREDENTIAL_LENGTH or any(c.isdigit() for c in value)
 
 
 def _is_token_shaped(run: str) -> bool:

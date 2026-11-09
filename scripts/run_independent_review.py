@@ -352,6 +352,7 @@ class StreamSummary:
     denials: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
     denied_ids: set[str] = field(default_factory=set)
     failed_ids: set[str] = field(default_factory=set)  # calls whose result was an error: a failed Read read nothing
+    offered: set[str] | None = None  # the tools the session's init event offers; None when it names none
     rate_limit: dict[str, Any] | None = None
     result: dict[str, Any] | None = None
 
@@ -370,7 +371,10 @@ def parse_stream(text: str) -> StreamSummary:
 
 def _add_event(summary: StreamSummary, event: dict[str, Any]) -> None:
     kind = event.get("type")
-    if kind == "assistant":
+    if kind == "system" and event.get("subtype") == "init":
+        tools = event.get("tools")
+        summary.offered = {str(t) for t in tools} if isinstance(tools, list) and tools else None
+    elif kind == "assistant":
         summary.tool_uses += _tool_uses(event)
     elif kind == "user":
         summary.failed_ids |= _failed_results(event)
@@ -450,6 +454,16 @@ def summarise_paths(summary: StreamSummary, copy_root: Path) -> tuple[list[str],
     return sorted(read), denied, outside
 
 
+def _other_tools(summary: StreamSummary) -> dict[str, list[str]]:
+    """Calls to tools other than Read, Grep and Glob fail the review. Only a call that cannot have run is
+    logged instead: one to a tool the session's init event did not offer, answered with an error."""
+    other = [c for c in summary.tool_uses if c.name not in REVIEW_TOOLS]
+    not_offered = {c.call_id for c in other
+                   if summary.offered is not None and c.name not in summary.offered and c.call_id in summary.failed_ids}
+    return {"other_tools": sorted({c.name for c in other if c.call_id not in not_offered}),
+            "other_tools_not_offered": sorted({c.name for c in other if c.call_id in not_offered})}
+
+
 def call_stats(summary: StreamSummary, copy_root: Path) -> dict[str, Any]:
     result = summary.result or {}
     usage = result.get("usage") or {}
@@ -466,7 +480,7 @@ def call_stats(summary: StreamSummary, copy_root: Path) -> dict[str, Any]:
         "denied": denied,
         "outside_calls": len(outside),
         "outside": outside,
-        "other_tools": sorted({c.name for c in summary.tool_uses} - set(REVIEW_TOOLS)),
+        **_other_tools(summary),
         "utilization": {
             "status": (summary.rate_limit or {}).get("status"),
             "five_hour": (windows.get("five_hour") or {}).get("utilization"),
@@ -730,7 +744,9 @@ def start_entry(spec: RoundSpec, inputs: ReviewInputs, reviewer: Reviewer, attem
         "prompt_sha256": sha256_bytes(reviewer.prompt_file.read_bytes()), "full_prompt_sha256": extra["prompt_sha"],
         "paths_sha256": inputs.review_paths, "withheld_sha256": inputs.withheld, "diff_sha256": extra["diff_sha"],
         "schema_sha256": sha256_text(SCHEMA_JSON), "extension": spec.refs[0], "reset": spec.refs[1],
-        "report_path": str(REPORT_DIR / spec.unit / f"{attempt.replace('/', '_')}.json"), "started_at": utc_now(),
+        # Unit names repeat across slices (every plan review is "plan"); the slice directory keeps paths apart.
+        "report_path": str(REPORT_DIR / Path(spec.record).parent.name / spec.unit / f"{attempt.replace('/', '_')}.json"),
+        "started_at": utc_now(),
     }
 
 

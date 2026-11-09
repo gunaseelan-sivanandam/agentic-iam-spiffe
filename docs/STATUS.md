@@ -5,13 +5,32 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 
 ## Where the project stands
 - **Agent-run delivery PoC** on the branch `poc/agentic-sdlc`, kept off `main`: the plan
-  [agentic-sdlc-poc](slices/agentic-sdlc-poc/plan.md) (PR #31) approves slices 1–3 (rules, review
-  launcher and benchmark, changed-files lint) and outlines slices 4–8. Slice 1 (rules: review limits,
-  reviewer, integration branch, code owner, purpose headers) merged in PR #34, slice 2 (review
-  launcher and benchmark) in PR #35; slice 3 (changed-files lint) is in a PR. Slice
-  2's [benchmark report](slices/agentic-sdlc-poc/benchmark_report.md) is the other input for slice 4. Slice 4's
-  grill-me inputs are in [#33](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/33); agents taking backlog items the owner did not write is
-  [#32](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/32).
+  [agentic-sdlc-poc](slices/agentic-sdlc-poc/plan.md) (PR #31) approved slices 1–3, which are merged:
+  rules (PR #34), the review launcher and benchmark (PR #35, [benchmark report](slices/agentic-sdlc-poc/benchmark_report.md)),
+  and the changed-files lint (PR #37). Slice 4 ([#33](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/33)) is split into six sub-issues, planned
+  together in one plan PR: review prompts (#38), review inputs (#39), review records (#40), stage
+  checklists (#41), benchmark (#42), stage rules (#43). Agents taking backlog items the owner did not
+  write is [#32](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/32).
+- **Open PoC work, in "needed before" order:**
+  1. now: slice 4 ([#33](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/33), sub-issues #38–#43);
+     Next, before slice 5: a slice of author prompts and their benchmark (owner, 2026-11-09: "let's
+     continue this slice for just review, after this let's run a new slice of author prompts and
+     benchmark them, since the review prompts are finalized that would give us bit of data for
+     selecting good author prompts");
+  2. before slice 5: QA-tooling gaps ([#44](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/44)) and publication scanning ([#21](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/21));
+  3. slice 5 (one real backlog item through the whole cycle) and slice 6 (gates that run shows);
+     inputs recorded on 2026-11-09 from the research of agent-first delivery (owner's decision; they
+     become issues when they can be opened again):
+     - slice 5: count rounds, re-raises and retries from the attempt logs and check the review limits
+       against them (the authoring prompts move to the author-prompts slice); record misses found
+       after a final review against the mandate used;
+     - slice 6 candidates: a check that each plan's retirement list was carried out, and a check that
+       the implementer did not change approved tests; one stated reason per gate threshold;
+     - slice 7: what the orchestrator may keep outside the repository; slice 8: whether agents follow
+       the rulebook, and, if the owner wants it, whether the stage lists help (reviews with and
+       without them);
+  4. before slice 7: untested launcher and benchmark paths ([#45](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/45)); slice 7 itself ([#36](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/36));
+  5. slice 8 (evaluation); at the PoC merge into `main`: the reset list ([#46](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/46)).
 - **Implemented milestones:** M1, M2, M2.5, M3, M4 (reduced scope), M4a, M4b, M5.
   M5 covers the Codex → Jira MCP path, the `varambu` demo CLI with capiss audit, and the
   full-chain audit trace (`varambu trace`). See the milestone table in [`README.md`](../README.md#milestones).
@@ -58,7 +77,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `poc/slice-3-changed-files-lint` | agentic-sdlc-poc slice 3: the changed-files lint gate (`make lint`, CI job `lint`) | PR into `poc/agentic-sdlc`; after `lint` has run there once, the owner adds it to the PoC ruleset's required checks |
+| `poc/slice-4-plans` | agentic-sdlc-poc slice 4: the plans of its six sub-issues (#38–#43) | Plan reviews running; then one plan PR for the owner |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
