@@ -17,7 +17,10 @@ Usage (from the repository root):
     python3 scripts/run_independent_review.py --commit <sha> --base <branch> \\
         --record docs/slices/<id>/<record>.md --unit <name> --round <n> \\
         --reviewer <label>:<prompt-file>:<model>:<effort> [--reviewer ...] \\
-        --path <file under review> [--path ...] [--extension <PR comment URL>] [--reset <PR comment URL>]
+        [--path <file to list first> ...] [--extension <PR comment URL>] [--reset <PR comment URL>]
+
+The files under review come from the diff between the merge-base with the base branch and the commit; a
+`--path` only lists a file first and carries the empty-review rule (slice 4.2, S42-D1, S42-D2).
 
 Exit codes: 0 every attempt completed; 1 an attempt failed, paused or is pending; 2 refused before any
 reviewer call; 3 the publication check withheld a report.
@@ -168,7 +171,7 @@ def _load_script(name: str) -> Any:
 
 
 _SECRETS = _load_script("evidence_secrets")
-_INPUTS = _load_script("review_evidence")  # slice 4.2: files from the diff, upstream items, computed evidence
+_INPUTS = _load_script("review_inputs")  # slice 4.2: files from the diff, upstream items, computed evidence
 
 
 def sha256_text(text: str) -> str:
@@ -1136,17 +1139,6 @@ def _row_against_finding(row: AnswerRow, finding: dict[str, Any]) -> list[str]:
     return []
 
 
-def changed_away(repo: Path, diff_base: str, commit: str) -> set[str]:
-    """Paths the change deletes or renames away (the old name of a rename)."""
-    merge_base = git(repo, "merge-base", diff_base, commit).strip()
-    away = set()
-    for line in git(repo, "diff", "--name-status", "-M", merge_base, commit).splitlines():
-        fields = line.split("\t")
-        if fields[0] == "D" or fields[0].startswith("R"):
-            away.add(fields[1])
-    return away
-
-
 def check_answers(rows: list[AnswerRow], exists: Any, away: set[str]) -> tuple[str, ...]:
     """Refuse an answers section the recheck cannot verify (S41-D7, S41-D8); return the files it must read."""
     if not rows:
@@ -1275,8 +1267,9 @@ def make_parts(mode: str, task: str, unit: str, recheck: Recheck | None, shared:
                        answer_items=tuple(row.finding for row in recheck.rows))
 
 
-def _sanitised_upstream(repo: Path, inputs: ReviewInputs, record: str, scratch: Any) -> tuple[str, Any, tuple[Any, str]]:
-    """The upstream section from the trace model at the reviewed commit, and that trace report with its failure."""
+def _upstream_and_trace(repo: Path, inputs: ReviewInputs, record: str, scratch: Any) -> tuple[str, Any, tuple[Any, str]]:
+    """The sanitised upstream section, the upstream items, and the trace report it came from with its failure
+    reason (the evidence's trace gaps need the same report)."""
     trace = _INPUTS.trace_report(scratch, inputs.merge_base)
     upstream = _INPUTS.upstream_items(repo, (inputs.merge_base, inputs.commit), record,
                                       [*inputs.review_paths, *inputs.deleted], trace[0])
@@ -1291,7 +1284,7 @@ def compute_evidence(spec: RoundSpec, inputs: ReviewInputs) -> tuple[str, Any]:
     except (ValueError, OSError) as failed:
         raise ReviewRefusedError(f"cannot prepare the evidence: {failed}") from None
     try:
-        upstream_text, upstream, (report, reason) = _sanitised_upstream(spec.repo, inputs, spec.record, scratch)
+        upstream_text, upstream, (report, reason) = _upstream_and_trace(spec.repo, inputs, spec.record, scratch)
         evidence = _INPUTS.Evidence()
         _INPUTS.coverage_evidence(evidence, spec.repo, (inputs.merge_base, inputs.commit), list(inputs.review_paths),
                                   scratch)
@@ -1329,7 +1322,7 @@ def plan_reviews(spec: RoundSpec, inputs: ReviewInputs, entries: list[dict[str, 
     if mode == "recheck":
         record_bytes = file_at(spec.repo, inputs.commit, spec.record)
         record_text = record_bytes.decode("utf-8") if record_bytes is not None else None
-        away = changed_away(spec.repo, inputs.base_commit, inputs.commit)
+        away = set(inputs.deleted)  # the change's deleted files, the old names of renames included
 
     def exists(path: str) -> bool:
         return path not in withheld and file_at(spec.repo, inputs.commit, path) is not None
@@ -1555,9 +1548,10 @@ def invocation_from_entry(entry: dict[str, Any], repo: Path, prompt_file: Path, 
     The files under review and the upstream items are recomputed at the entry's commit. `diff_base` is the base of
     the change (S42-D10), normally the entry's `base_commit`."""
     evidence, recheck = given.evidence, given.recheck
-    if "mode" not in entry:
-        raise ValueError("this entry was logged before slice 4.1: its prompt layout is retired, so its prompt cannot be "
-                         "rebuilt; its input hashes still identify what it reviewed")
+    for field_name, slice_id in (("mode", "4.1"), ("path_hints", "4.2")):
+        if field_name not in entry:
+            raise ValueError(f"this entry was logged before slice {slice_id}: its prompt layout is retired, so its "
+                             "prompt cannot be rebuilt; its input hashes still identify what it reviewed")
     record, mode = _entry_record(entry), entry["mode"]
     withheld = list(entry["withheld_sha256"])
     if mode == "recheck" and recheck is None:
@@ -1570,7 +1564,7 @@ def invocation_from_entry(entry: dict[str, Any], repo: Path, prompt_file: Path, 
                           tuple(entry["path_hints"]), deleted)
     scratch = _INPUTS.make_scratch(repo, entry["commit"])
     try:
-        upstream = _sanitised_upstream(repo, inputs, record, scratch)[0]
+        upstream = _upstream_and_trace(repo, inputs, record, scratch)[0]
     finally:
         shutil.rmtree(scratch.root, ignore_errors=True)
     recomputed = {

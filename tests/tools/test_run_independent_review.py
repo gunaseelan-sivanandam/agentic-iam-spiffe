@@ -120,7 +120,7 @@ def fx(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Fixture:
         return upstream, evidence
 
     monkeypatch.setattr(launcher, "compute_evidence", stub_evidence)
-    monkeypatch.setattr(launcher, "_sanitised_upstream", lambda *_args: (upstream, None, (None, "")))
+    monkeypatch.setattr(launcher, "_upstream_and_trace", lambda *_args: (upstream, None, (None, "")))
     return fixture
 
 

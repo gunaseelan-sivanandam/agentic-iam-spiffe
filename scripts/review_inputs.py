@@ -80,10 +80,8 @@ def changed_files(repo: Path, merge_base: str, commit: str, withheld: list[str])
         fields = line.split("\t")
         status, paths = fields[0], fields[1:]
         if status.startswith("R"):
-            deleted_path, new_path = paths
-            if deleted_path not in withheld:
-                deleted.append(deleted_path)
-            to_open.append(new_path)
+            deleted.append(paths[0])  # the old name of a rename
+            to_open.append(paths[1])
         elif status == "D":
             deleted.append(paths[0])
         else:
@@ -155,13 +153,22 @@ def changed_sections(repo: Path, merge_base: str, commit: str, path: str, headin
     return sorted(key for key in set(before) | set(after) if before.get(key) != after.get(key))
 
 
-def changed_tests(repo: Path, merge_base: str, commit: str) -> dict[str, list[str]]:
-    """(d) the test IDs whose `trace/tests.yaml` entry the change adds, removes or edits, with their requirements."""
-    def entries(text: str | None) -> dict[str, dict[str, Any]]:
+def _test_entries(text: str | None) -> dict[str, dict[str, Any]]:
+    """The entries of a `trace/tests.yaml` text by ID; raises ValueError when it is not a YAML mapping."""
+    try:
         data = yaml.safe_load(text or "") or {}
-        return {str(t.get("id")): t for t in data.get("tests") or [] if isinstance(t, dict)}
-    before = entries(_show(repo, merge_base, "trace/tests.yaml"))
-    after = entries(_show(repo, commit, "trace/tests.yaml"))
+    except yaml.YAMLError as exc:
+        raise ValueError(f"not valid YAML ({type(exc).__name__})") from None
+    if not isinstance(data, dict):
+        raise ValueError("not a YAML mapping")
+    return {str(t.get("id")): t for t in data.get("tests") or [] if isinstance(t, dict)}
+
+
+def changed_tests(repo: Path, merge_base: str, commit: str) -> dict[str, list[str]]:
+    """(d) the test IDs whose `trace/tests.yaml` entry the change adds, removes or edits, with their requirements;
+    raises ValueError when the file cannot be read at either commit."""
+    before = _test_entries(_show(repo, merge_base, "trace/tests.yaml"))
+    after = _test_entries(_show(repo, commit, "trace/tests.yaml"))
     return {key: sorted((after.get(key) or before.get(key) or {}).get("source_requirements") or [])
             for key in sorted(set(before) | set(after)) if before.get(key) != after.get(key)}
 
@@ -209,13 +216,16 @@ def upstream_items(repo: Path, commits: tuple[str, str], record: str, changed: l
         lines += ["Trace links of changed files:", *(links or ["- none"]), ""]
     reqs = changed_sections(repo, merge_base, commit, "docs/requirements.md", REQ_HEADING)
     archs = changed_sections(repo, merge_base, commit, "docs/architecture.md", ARCH_HEADING)
-    tests = changed_tests(repo, merge_base, commit)
+    try:
+        tests = changed_tests(repo, merge_base, commit)
+        test_lines = [f"- {t}; proves {', '.join(rs) or 'no requirement'}" for t, rs in tests.items()] or ["- none"]
+    except ValueError as unreadable:
+        tests, test_lines = {}, [f"- not available: trace/tests.yaml is {unreadable} at one of the commits"]
     ids |= set(reqs) | set(archs) | set(tests) | {r for rs in tests.values() for r in rs}
     lines += ["Requirement and architecture sections the change edits:",
               *([f"- {i} (found: the change edits its section in docs/requirements.md)" for i in reqs]
                 + [f"- {i} (found: the change edits its section in docs/architecture.md)" for i in archs] or ["- none"]),
-              "", "Test entries the change edits in trace/tests.yaml:",
-              *([f"- {t}; proves {', '.join(rs) or 'no requirement'}" for t, rs in tests.items()] or ["- none"]),
+              "", "Test entries the change edits in trace/tests.yaml:", *test_lines,
               "", UPSTREAM_QUESTION]
     return Upstream("\n".join(lines), frozenset(ids))
 
@@ -260,13 +270,22 @@ def make_scratch(repo: Path, commit: str) -> Scratch:
         home.mkdir()
         _git(repo, "clone", "-q", "--shared", "--no-checkout", str(repo), str(clone))
         _git(clone, "checkout", "-q", "--detach", commit)
-        user_base = Path(site.getuserbase())
-        if user_base.is_dir():  # the same interpreter sees the same `pip --user` packages under the scratch HOME
-            (home / ".local").symlink_to(user_base)
+        _link_user_site(home)
     except (ValueError, OSError):
         shutil.rmtree(root, ignore_errors=True)
         raise
     return Scratch(root, clone, home)
+
+
+def _link_user_site(home: Path) -> None:
+    """Let the interpreter see its `pip --user` packages under the scratch HOME: only the user site-packages
+    directory is linked, at the place the interpreter computes from HOME, not the rest of the author's ~/.local."""
+    user_site = Path(site.getusersitepackages())
+    if not user_site.is_dir():
+        return
+    target = home / ".local" / user_site.relative_to(Path(site.getuserbase()))
+    target.parent.mkdir(parents=True)
+    target.symlink_to(user_site)
 
 
 def evidence_env(scratch: Scratch) -> dict[str, str]:

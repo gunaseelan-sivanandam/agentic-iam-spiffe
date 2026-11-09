@@ -216,7 +216,7 @@ def case_inputs(prepared: PreparedCase) -> PreparedCase:
                                    prepared.merge_base, tuple(prepared.case.paths), prepared.deleted)
     scratch = launcher._INPUTS.make_scratch(repo, commit)
     try:
-        prepared.upstream = launcher._sanitised_upstream(repo, inputs, "", scratch)[0]
+        prepared.upstream = launcher._upstream_and_trace(repo, inputs, "", scratch)[0]
     finally:
         shutil.rmtree(scratch.root, ignore_errors=True)
     return prepared

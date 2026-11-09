@@ -18,9 +18,9 @@ import pytest
 from tests.tools import test_run_independent_review as base
 
 launcher = base.launcher
-evidence_module = launcher._INPUTS
+inputs_module = launcher._INPUTS
 REAL_COMPUTE = launcher.compute_evidence
-REAL_UPSTREAM = launcher._sanitised_upstream
+REAL_UPSTREAM = launcher._upstream_and_trace
 ROOT = Path(__file__).resolve().parents[2]
 RECORD = base.RECORD
 
@@ -87,9 +87,9 @@ def ev(base_fx: base.Fixture) -> base.Fixture:
 @pytest.fixture
 def base_fx(fx: base.Fixture, monkeypatch: pytest.MonkeyPatch) -> base.Fixture:
     monkeypatch.setattr(launcher, "compute_evidence", REAL_COMPUTE)
-    monkeypatch.setattr(launcher, "_sanitised_upstream", REAL_UPSTREAM)
-    monkeypatch.setattr(evidence_module, "github_repo", lambda _repo: ("owner", "repo"))
-    monkeypatch.setattr(evidence_module, "fetch_json", lambda _url: {"workflow_runs": []})
+    monkeypatch.setattr(launcher, "_upstream_and_trace", REAL_UPSTREAM)
+    monkeypatch.setattr(inputs_module, "github_repo", lambda _repo: ("owner", "repo"))
+    monkeypatch.setattr(inputs_module, "fetch_json", lambda _url: {"workflow_runs": []})
     return fx
 
 
@@ -208,7 +208,7 @@ def test_upstream_names_the_governing_plan_links_edited_sections_and_other_bundl
     assert "ARCH-001 (found: its `Implemented by:` line names scripts/tool.py); satisfies REQ-T-R1, REQ-T-R2" in upstream
     assert "REQ-T-R1 (found: the change edits its section in docs/requirements.md)" in upstream
     assert "TOOL-K1; proves REQ-T-R1" in upstream
-    assert evidence_module.UPSTREAM_QUESTION in upstream
+    assert inputs_module.UPSTREAM_QUESTION in upstream
 
 
 def test_upstream_names_a_dd_tag_with_its_architecture_and_requirements(ev: base.Fixture) -> None:
@@ -225,8 +225,8 @@ def test_upstream_names_a_dd_tag_with_its_architecture_and_requirements(ev: base
 
 def test_every_prompt_holds_the_upstream_question(fx: base.Fixture) -> None:
     assert base._run(fx) == 0
-    assert evidence_module.UPSTREAM_QUESTION in base._prompt(fx)
-    assert evidence_module.UPSTREAM_QUESTION == ("Does any problem you find originate upstream (a requirement, the "
+    assert inputs_module.UPSTREAM_QUESTION in base._prompt(fx)
+    assert inputs_module.UPSTREAM_QUESTION == ("Does any problem you find originate upstream (a requirement, the "
                                                  "architecture, the plan)? If so, name the document and section.")
 
 
@@ -244,7 +244,7 @@ def test_uncovered_changed_branch_is_listed_with_the_subprocess_note_and_a_servi
     evidence = _evidence_section(base._prompt(ev))
     tool_line = next(line for line in evidence.splitlines() if "scripts/tool.py:" in line)
     assert "changed lines not run: 7-9" in tool_line and "branches not taken: 7->8, 7->9" in tool_line
-    assert evidence_module.SUBPROCESS_NOTE in evidence
+    assert inputs_module.SUBPROCESS_NOTE in evidence
     assert "services/tool-b/server.py: covered by the gate make unit-trust and make unit-diff-cov" in evidence
     assert "services/other/app.py: no coverage gate" in evidence
     assert ev.log()[-2]["evidence_status"] == {"coverage": "ok", "trace": "ok", "ci": "ok"}
@@ -279,9 +279,9 @@ def test_ci_results_show_the_reviewed_commits_jobs_and_never_a_pass_for_a_runnin
             return {"jobs": [{"name": "lint", "status": "in_progress", "conclusion": None}]}
         return {"workflow_runs": [{**r, "head_sha": commit} for r in runs] + [other]}
 
-    monkeypatch.setattr(evidence_module, "github_repo", lambda _repo: ("owner", "repo"))
-    evidence = evidence_module.Evidence()
-    evidence_module.ci_evidence(evidence, tmp_path, commit, fake)
+    monkeypatch.setattr(inputs_module, "github_repo", lambda _repo: ("owner", "repo"))
+    evidence = inputs_module.Evidence()
+    inputs_module.ci_evidence(evidence, tmp_path, commit, fake)
     text = evidence.text()
     assert all(e in text for e in expected) and not any(a in text for a in absent)
     assert "CI run CI 2" not in text and calls[0].endswith(f"head_sha={commit}&per_page=50")
@@ -292,10 +292,10 @@ def test_unreadable_ci_api_is_shown_as_failed(monkeypatch: pytest.MonkeyPatch) -
     def broken(_url: str) -> dict:
         raise OSError("network down")
 
-    monkeypatch.setattr(evidence_module, "github_repo", lambda _repo: ("owner", "repo"))  # any clone's origin
-    evidence = evidence_module.Evidence()
-    evidence_module.ci_evidence(evidence, ROOT, "c" * 40, broken)
-    assert evidence.entries == [f"EV1: failed: {evidence_module.CI_COMMAND}: OSError"]
+    monkeypatch.setattr(inputs_module, "github_repo", lambda _repo: ("owner", "repo"))  # any clone's origin
+    evidence = inputs_module.Evidence()
+    inputs_module.ci_evidence(evidence, ROOT, "c" * 40, broken)
+    assert evidence.entries == [f"EV1: failed: {inputs_module.CI_COMMAND}: OSError"]
     assert evidence.status["ci"] == "failed"
 
 
@@ -342,7 +342,7 @@ def test_coverage_that_cannot_run_is_shown_as_failed(ev: base.Fixture) -> None:
     ev.commit = base._commit_all(ev.work, "no tooling tests")
     _run_accounting_everything(ev)
     evidence = _evidence_section(base._prompt(ev))
-    assert f"failed: {evidence_module.COVERAGE_COMMAND}: exit " in evidence
+    assert f"failed: {inputs_module.COVERAGE_COMMAND}: exit " in evidence
     assert "No entries" not in evidence and ev.log()[-2]["evidence_status"]["coverage"] == "failed"
 
 
@@ -350,7 +350,7 @@ def test_trace_model_that_cannot_run_is_shown_as_failed(ev: base.Fixture) -> Non
     _change(ev, **{"scripts/tool.py": TOOL_CHANGED, "docs/requirements.md": "# no requirements\n"})
     _run_accounting_everything(ev)
     prompt = base._prompt(ev)
-    assert f"failed: {evidence_module.TRACE_COMMAND}: exit 2" in _evidence_section(prompt)
+    assert f"failed: {inputs_module.TRACE_COMMAND}: exit 2" in _evidence_section(prompt)
     assert "Trace links: not available" in base._section(prompt, "Upstream items")
     assert ev.log()[-2]["evidence_status"]["trace"] == "failed"
 
@@ -368,13 +368,13 @@ def test_evidence_commands_see_only_path_lang_and_a_scratch_home(ev: base.Fixtur
 
 def test_sanitise_makes_paths_relative_and_hides_the_homes_and_the_interpreter(tmp_path: Path) -> None:
     import sys
-    scratch = evidence_module.Scratch(tmp_path, tmp_path / "clone", tmp_path / "home")
+    scratch = inputs_module.Scratch(tmp_path, tmp_path / "clone", tmp_path / "home")
     text = (f"{scratch.clone}/scripts/x.py:3 {scratch.home}/.local/lib/x {os.path.expanduser('~')}/y "
             f"{os.path.join(sys.prefix, 'lib', 'python')}3.10/site.py")
-    clean = evidence_module.sanitise(text, scratch)
+    clean = inputs_module.sanitise(text, scratch)
     assert clean == "scripts/x.py:3 <home>/.local/lib/x <home>/y <python>/lib/python3.10/site.py"
-    assert evidence_module.leaked_paths(clean, scratch) == []
-    assert evidence_module.leaked_paths(f"{tmp_path}/coverage.json", scratch) == ["the scratch root"]
+    assert inputs_module.leaked_paths(clean, scratch) == []
+    assert inputs_module.leaked_paths(f"{tmp_path}/coverage.json", scratch) == ["the scratch root"]
 
 
 def test_evidence_still_holding_a_local_path_is_refused_before_any_call(fx: base.Fixture,
@@ -389,7 +389,7 @@ def test_evidence_still_holding_a_local_path_is_refused_before_any_call(fx: base
 
 def test_leak_check_in_compute_evidence_refuses(ev: base.Fixture, monkeypatch: pytest.MonkeyPatch) -> None:
     home = os.path.expanduser("~")
-    monkeypatch.setattr(evidence_module, "sanitise", lambda text, _scratch: text + f" {home}/x")
+    monkeypatch.setattr(inputs_module, "sanitise", lambda text, _scratch: text + f" {home}/x")
     _change(ev, **{"scripts/tool.py": TOOL_CHANGED})
     ev.scenario(base._reply())
     assert base._run(ev) == 2
@@ -461,18 +461,18 @@ def test_change_without_a_file_to_open_is_refused(fx: base.Fixture) -> None:
 def test_a_touched_bundle_without_a_plan_says_so(ev: base.Fixture) -> None:
     base._write(ev.work, "docs/slices/noplan/notes.md", "# Notes\n\nText.\n")
     _change(ev)
-    lines = evidence_module.plan_lines(ev.work, ev.commit, RECORD, ["docs/slices/noplan/notes.md"])
+    lines = inputs_module.plan_lines(ev.work, ev.commit, RECORD, ["docs/slices/noplan/notes.md"])
     assert "- docs/slices/noplan/plan.md: not at this commit (the change touches docs/slices/noplan/notes.md)" in lines
 
 
 def test_template_and_archive_folders_are_not_bundles(ev: base.Fixture) -> None:
-    lines = evidence_module.plan_lines(ev.work, ev.commit, RECORD, ["docs/slices/_template/plan.md",
+    lines = inputs_module.plan_lines(ev.work, ev.commit, RECORD, ["docs/slices/_template/plan.md",
                                                                    "docs/slices/archive/old/plan.md"])
     assert lines == [lines[0]] and "the governing plan" in lines[0]
 
 
 def test_ranges_join_consecutive_lines() -> None:
-    assert evidence_module._ranges([5, 1, 2, 3, 9, 10]) == "1-3, 5, 9-10"
+    assert inputs_module._ranges([5, 1, 2, 3, 9, 10]) == "1-3, 5, 9-10"
 
 
 @pytest.mark.parametrize("error", [OSError("no python"), subprocess.TimeoutExpired("pytest", 600)], ids=["oserror", "timeout"])
@@ -482,15 +482,15 @@ def test_coverage_and_trace_commands_that_raise_are_shown_as_failed(ev: base.Fix
         raise error
 
     _change(ev)  # a commit with the trace model
-    monkeypatch.setattr(evidence_module, "_run", raising)
-    scratch = evidence_module.make_scratch(ev.work, ev.commit)
+    monkeypatch.setattr(inputs_module, "_run", raising)
+    scratch = inputs_module.make_scratch(ev.work, ev.commit)
     try:
-        evidence = evidence_module.Evidence()
-        evidence_module.coverage_evidence(evidence, ev.work, (ev.commit, ev.commit), ["scripts/tool.py"], scratch)
-        report, reason = evidence_module.trace_report(scratch, ev.commit)
+        evidence = inputs_module.Evidence()
+        inputs_module.coverage_evidence(evidence, ev.work, (ev.commit, ev.commit), ["scripts/tool.py"], scratch)
+        report, reason = inputs_module.trace_report(scratch, ev.commit)
     finally:
         shutil.rmtree(scratch.root)
-    assert evidence.entries == [f"EV1: failed: {evidence_module.COVERAGE_COMMAND}: {type(error).__name__}"]
+    assert evidence.entries == [f"EV1: failed: {inputs_module.COVERAGE_COMMAND}: {type(error).__name__}"]
     assert evidence.status["coverage"] == "failed" and report is None and reason == type(error).__name__
 
 
@@ -498,14 +498,14 @@ def test_fully_covered_script_and_services_only_change_give_notes_not_entries(ev
     covered = TOOL.replace('"positive"', '"plus"')
     tool_test = TOOL_TEST.replace('"positive"', '"plus"')
     _change(ev, **{"scripts/tool.py": covered, "tests/tools/test_tool.py": tool_test})
-    scratch = evidence_module.make_scratch(ev.work, ev.commit)
+    scratch = inputs_module.make_scratch(ev.work, ev.commit)
     try:
         merge_base = base._git(ev.work, "merge-base", "refs/remotes/origin/poc/base", ev.commit)
-        evidence = evidence_module.Evidence()
-        evidence_module.coverage_evidence(evidence, ev.work, (merge_base, ev.commit), ["scripts/tool.py"], scratch)
-        services_only = evidence_module.Evidence()
-        evidence_module.coverage_evidence(services_only, ev.work, (merge_base, ev.commit), ["docs/x.md"], scratch)
-        evidence_module.trace_evidence(services_only, {"coverage_gaps": {}, "gap_gate": {}}, "", frozenset())
+        evidence = inputs_module.Evidence()
+        inputs_module.coverage_evidence(evidence, ev.work, (merge_base, ev.commit), ["scripts/tool.py"], scratch)
+        services_only = inputs_module.Evidence()
+        inputs_module.coverage_evidence(services_only, ev.work, (merge_base, ev.commit), ["docs/x.md"], scratch)
+        inputs_module.trace_evidence(services_only, {"coverage_gaps": {}, "gap_gate": {}}, "", frozenset())
     finally:
         shutil.rmtree(scratch.root)
     assert evidence.entries == [] and "Every changed line and branch run by the tooling tests: scripts/tool.py." in evidence.notes
@@ -515,9 +515,9 @@ def test_fully_covered_script_and_services_only_change_give_notes_not_entries(ev
 
 def test_trace_script_missing_at_the_commit_is_named(ev: base.Fixture) -> None:
     _change(ev, **{"scripts/validate_traceability.py": None})
-    scratch = evidence_module.make_scratch(ev.work, ev.commit)
+    scratch = inputs_module.make_scratch(ev.work, ev.commit)
     try:
-        assert evidence_module.trace_report(scratch, ev.commit) == (
+        assert inputs_module.trace_report(scratch, ev.commit) == (
             None, "scripts/validate_traceability.py does not exist at this commit")
     finally:
         shutil.rmtree(scratch.root)
@@ -546,7 +546,7 @@ def test_fetch_json_reads_json_without_a_token(monkeypatch: pytest.MonkeyPatch) 
     thread.start()
     monkeypatch.setenv("GITHUB_TOKEN", "planted-token-value-not-for-the-api")
     try:
-        assert evidence_module.fetch_json(f"http://127.0.0.1:{server.server_port}/runs") == {"workflow_runs": []}
+        assert inputs_module.fetch_json(f"http://127.0.0.1:{server.server_port}/runs") == {"workflow_runs": []}
     finally:
         server.shutdown()
     assert seen["auth"] is None
@@ -554,9 +554,9 @@ def test_fetch_json_reads_json_without_a_token(monkeypatch: pytest.MonkeyPatch) 
 
 def test_github_repo_of_a_clone_without_a_github_origin_is_none(tmp_path: Path) -> None:
     base._git(tmp_path, "init", "-q")
-    assert evidence_module.github_repo(tmp_path) is None
+    assert inputs_module.github_repo(tmp_path) is None
     base._git(tmp_path, "remote", "add", "origin", "https://github.com/owner/name.git")
-    assert evidence_module.github_repo(tmp_path) == ("owner", "name")
+    assert inputs_module.github_repo(tmp_path) == ("owner", "name")
 
 
 @pytest.mark.parametrize("failure", ["scratch", "compute"])
@@ -565,27 +565,105 @@ def test_evidence_that_cannot_be_prepared_refuses_before_any_call(ev: base.Fixtu
     def raising(*_args: object) -> None:
         raise ValueError("git clone failed")
 
-    monkeypatch.setattr(evidence_module, "make_scratch" if failure == "scratch" else "upstream_items", raising)
+    monkeypatch.setattr(inputs_module, "make_scratch" if failure == "scratch" else "upstream_items", raising)
     _change(ev, **{"scripts/tool.py": TOOL_CHANGED})
     assert base._run(ev) == 2
     assert ev.calls() == [] and ev.log() == []
 
 
 def test_ci_of_a_repository_without_a_github_origin_is_shown_as_failed(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(evidence_module, "github_repo", lambda _repo: None)
-    evidence = evidence_module.Evidence()
-    evidence_module.ci_evidence(evidence, ROOT, "c" * 40, lambda _url: pytest.fail("no API call without a repository"))
-    assert evidence.entries == [f"EV1: failed: {evidence_module.CI_COMMAND}: the origin remote is not a GitHub repository"]
+    monkeypatch.setattr(inputs_module, "github_repo", lambda _repo: None)
+    evidence = inputs_module.Evidence()
+    inputs_module.ci_evidence(evidence, ROOT, "c" * 40, lambda _url: pytest.fail("no API call without a repository"))
+    assert evidence.entries == [f"EV1: failed: {inputs_module.CI_COMMAND}: the origin remote is not a GitHub repository"]
     assert evidence.status["ci"] == "failed"
 
 
 def test_ranges_of_no_lines_is_empty() -> None:
-    assert evidence_module._ranges([]) == ""
+    assert inputs_module._ranges([]) == ""
 
 
 def test_scratch_of_an_unknown_commit_is_removed_again(fx: base.Fixture) -> None:
     import tempfile
     before = set(Path(tempfile.gettempdir()).glob("review-evidence-*"))
     with pytest.raises(ValueError, match="git checkout failed"):
-        evidence_module.make_scratch(fx.work, "0" * 40)
+        inputs_module.make_scratch(fx.work, "0" * 40)
     assert set(Path(tempfile.gettempdir()).glob("review-evidence-*")) == before
+
+
+# --- Answers to review round 1 of the 4.2 implementation ----------------------------------------------------------
+
+
+def test_accepted_trace_gap_is_marked_accepted(ev: base.Fixture) -> None:
+    _change(ev, **{"scripts/tool.py": TOOL_CHANGED,
+                   "trace/tests.yaml": TESTS.replace("accepted_gaps: []", "accepted_gaps:\n  - gap: "
+                                                     "requirements_without_proof:REQ-T-R2\n    reason: planned\n"
+                                                     "    expires: 2099-01-01\n")})
+    _run_accounting_everything(ev)
+    evidence = _evidence_section(base._prompt(ev))
+    assert "trace gap requirements_without_proof:REQ-T-R2 (accepted, against the merge-base" in evidence
+
+
+def test_completed_ci_job_shows_its_own_conclusion(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    commit = "c" * 40
+    run = {"id": 7, "name": "CI", "event": "pull_request", "status": "completed", "conclusion": "success",
+           "head_sha": commit}
+    jobs = [{"name": "lint", "status": "completed", "conclusion": "success"},
+            {"name": "e2e", "status": "completed", "conclusion": "failure"},
+            {"name": "docs-check", "status": "queued", "conclusion": None}]
+
+    def fake(url: str) -> dict:
+        return {"jobs": jobs} if url.endswith("/jobs?per_page=100") else {"workflow_runs": [run]}
+
+    monkeypatch.setattr(inputs_module, "github_repo", lambda _repo: ("owner", "repo"))
+    evidence = inputs_module.Evidence()
+    inputs_module.ci_evidence(evidence, tmp_path, commit, fake)
+    assert evidence.entries == ["EV1: CI run CI 7 (pull_request): completed/success; jobs: lint: completed/success; "
+                                "e2e: completed/failure; docs-check: queued"]
+
+
+def test_items_unrelated_to_the_change_stay_out_of_upstream_and_evidence(ev: base.Fixture) -> None:
+    unrelated_arch = ARCHITECTURE + ("\n## ARCH-002 Another tool\n\nType: Component\nSatisfies: REQ-T-R4\n"
+                                     "Implemented by: scripts/other.py\n")
+    other = TOOL.replace("def classify", "# DD: DD-002\n# Implements: ARCH-002\n# Title: Other\ndef classify")
+    base._write(ev.work, "docs/requirements.md", REQUIREMENTS + "\n## REQ-T-R4 — An unrelated unproved thing\n\nText.\n")
+    base._write(ev.work, "docs/architecture.md", unrelated_arch)
+    base._write(ev.work, "scripts/other.py", other)
+    base._commit_all(ev.work, "an unrelated item with a gap")
+    base._git(ev.work, "push", "-q", "-f", "origin", "HEAD:poc/base")
+    _change(ev, **{"scripts/tool.py": TOOL_CHANGED})
+    _run_accounting_everything(ev)
+    prompt = base._prompt(ev)
+    upstream, evidence = base._section(prompt, "Upstream items"), _evidence_section(prompt)
+    assert "ARCH-001" in upstream and "ARCH-002" not in upstream and "DD-002" not in upstream
+    assert "REQ-T-R2" in evidence and "REQ-T-R4" not in evidence and "DD-002" not in evidence
+
+
+def test_rebuild_of_an_entry_logged_by_4_1s_launcher_says_its_layout_is_retired(fx: base.Fixture) -> None:
+    assert base._run(fx) == 0
+    entry = {k: v for k, v in fx.log()[0].items() if k not in ("path_hints", "upstream_sha256", "evidence_sha256")}
+    with pytest.raises(ValueError, match="before slice 4.2: its prompt layout is retired"):
+        launcher.invocation_from_entry(entry, fx.work, fx.prompt, diff_base=entry["base_commit"], given=base._given(fx))
+
+
+@pytest.mark.parametrize("broken", ["tests: [unclosed\n", "- a list, not a mapping\n"], ids=["invalid-yaml", "not-a-mapping"])
+def test_unreadable_trace_tests_yaml_is_shown_not_a_crash(ev: base.Fixture, broken: str) -> None:
+    _change(ev, **{"scripts/tool.py": TOOL_CHANGED, "trace/tests.yaml": broken})
+    _run_accounting_everything(ev)
+    prompt = base._prompt(ev)
+    assert "- not available: trace/tests.yaml is not " in base._section(prompt, "Upstream items")
+    assert f"failed: {inputs_module.TRACE_COMMAND}" in _evidence_section(prompt)
+
+
+def test_scratch_home_links_only_the_user_site_packages(ev: base.Fixture) -> None:
+    import site
+    scratch = inputs_module.make_scratch(ev.work, ev.commit)
+    try:
+        links = [p for p in scratch.home.rglob("*") if p.is_symlink()]
+        if Path(site.getusersitepackages()).is_dir():
+            assert [p.resolve() for p in links] == [Path(site.getusersitepackages()).resolve()]
+            assert links[0].relative_to(scratch.home) == Path(".local") / Path(site.getusersitepackages()).relative_to(
+                Path(site.getuserbase()))
+        assert not (scratch.home / ".local" / "bin").exists() and not (scratch.home / ".local" / "share").exists()
+    finally:
+        shutil.rmtree(scratch.root)
