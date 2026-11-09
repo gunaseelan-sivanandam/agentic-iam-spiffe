@@ -126,7 +126,9 @@ def plan_lines(repo: Path, commit: str, record: str, changed: list[str]) -> list
     touched: dict[str, str] = {}
     for path in changed:
         parts = Path(path).parts
-        if len(parts) >= 4 and parts[:2] == ("docs", "slices") and str(Path(*parts[:3])) != own:
+        bundle_name = parts[2] if len(parts) >= 4 else ""
+        if (parts[:2] == ("docs", "slices") and bundle_name and not bundle_name.startswith("_")
+                and bundle_name != "archive" and str(Path(*parts[:3])) != own):
             touched.setdefault(str(Path(*parts[:3])), path)
     lines += [_plan_line(repo, commit, bundle, f"the change touches {first}") for bundle, first in sorted(touched.items())]
     return lines

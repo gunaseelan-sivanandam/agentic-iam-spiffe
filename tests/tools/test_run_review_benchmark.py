@@ -505,3 +505,9 @@ def test_case_path_outside_the_diff_refuses_the_case(repo: tuple[Repo, str, str]
     _r, base, commit = repo
     prepared, _key = _prepared(repo, tmp_path, _case("C1", base, commit, paths=["AGENTS.md"]))
     assert prepared.refused.startswith("files under review:")
+
+
+def test_report_rows_show_a_canary_line_without_scores() -> None:
+    rows = bench.report_rows([{"case": "CANARY", "kind": "canary", "status": "completed"}])
+    assert rows[-1] == "| CANARY | canary | — | completed | | | | | | | | |"
+    assert rows[-1].count("|") == rows[0].count("|")

@@ -1228,3 +1228,25 @@ def test_any_header_row_above_the_separator_is_skipped() -> None:
 ])
 def test_owner_answer_links_to_a_url_or_a_tracked_document(answer: str, ok: bool) -> None:
     assert (launcher.answer_format_problem(launcher.AnswerRow("X1", "medium", answer)) is None) == ok
+
+
+@pytest.mark.parametrize(("report", "problem"), [
+    ({"findings": {}, "accounted": [], "verdict": "yes"}, "findings or accounted is not a list"),
+    ({"findings": [], "accounted": [{"item": 1, "status": "accepted", "note": "n", "opened": []}], "verdict": "yes"},
+     "item is not str"),
+    ({"findings": [], "accounted": [{"item": "X", "status": "accepted", "note": "n", "opened": [3]}], "verdict": "yes"},
+     "opened holds a value that is not a path"),
+    ({"findings": [], "accounted": [{"item": "X", "status": "maybe", "note": "n", "opened": []}], "verdict": "yes"},
+     "unknown status"),
+], ids=["findings-not-a-list", "item-not-a-string", "opened-not-paths", "unknown-status"])
+def test_validate_report_names_each_shape_problem(report: dict, problem: str) -> None:
+    assert any(problem in p for p in launcher.validate_report(report))
+
+
+def test_answers_section_with_prose_but_no_table_row_is_refused(fx: Fixture) -> None:
+    _first_round(fx)
+    record = fx.work / RECORD
+    record.write_text(record.read_text() + "\n#### Answers to unit1/c1/r1/A/1\n\nAll fixed, see the commit.\n")
+    commit = _commit_all(fx.work, "prose answers")
+    assert _run(fx, round_no=2, commit=commit) == 2
+    assert len(fx.calls()) == 1

@@ -7,6 +7,7 @@ throwaway repository with its own trace model, tooling tests and a fake CI API, 
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -287,10 +288,11 @@ def test_ci_results_show_the_reviewed_commits_jobs_and_never_a_pass_for_a_runnin
     assert evidence.status["ci"] == "ok"
 
 
-def test_unreadable_ci_api_is_shown_as_failed() -> None:
+def test_unreadable_ci_api_is_shown_as_failed(monkeypatch: pytest.MonkeyPatch) -> None:
     def broken(_url: str) -> dict:
         raise OSError("network down")
 
+    monkeypatch.setattr(evidence_module, "github_repo", lambda _repo: ("owner", "repo"))  # any clone's origin
     evidence = evidence_module.Evidence()
     evidence_module.ci_evidence(evidence, ROOT, "c" * 40, broken)
     assert evidence.entries == [f"EV1: failed: {evidence_module.CI_COMMAND}: OSError"]
@@ -433,3 +435,137 @@ def test_rebuild_with_changed_evidence_mismatches(fx: base.Fixture) -> None:
 
 def test_git_is_found_for_the_evidence_clone() -> None:
     assert shutil.which("git") and subprocess.run(["git", "--version"], capture_output=True, check=False).returncode == 0  # noqa: S603, S607 - test probe
+
+
+
+# --- Failure paths of the computed inputs (found untested by the launcher's own evidence on this repository) ------
+
+
+def test_path_hint_naming_a_deleted_file_is_refused(fx: base.Fixture) -> None:
+    base._write(fx.work, "scripts/old.py", "print('old')\n")
+    base._commit_all(fx.work, "a file to delete")
+    base._git(fx.work, "push", "-q", "-f", "origin", "HEAD:poc/base")
+    (fx.work / "scripts/old.py").unlink()
+    base._write(fx.work, base.REVIEWED, "print('again')\n")
+    fx.commit = base._commit_all(fx.work, "delete it")
+    args = base._args(fx, "--path", "scripts/old.py")
+    assert launcher.main(args, repo=fx.work) == 2 and fx.calls() == []
+
+
+def test_change_without_a_file_to_open_is_refused(fx: base.Fixture) -> None:
+    base._git(fx.work, "push", "-q", "-f", "origin", "HEAD:poc/base")  # the base is the reviewed commit itself
+    args = [a for a in base._args(fx) if a not in ("--path", base.REVIEWED)]
+    assert launcher.main(args, repo=fx.work) == 2 and fx.calls() == []
+
+
+def test_a_touched_bundle_without_a_plan_says_so(ev: base.Fixture) -> None:
+    base._write(ev.work, "docs/slices/noplan/notes.md", "# Notes\n\nText.\n")
+    _change(ev)
+    lines = evidence_module.plan_lines(ev.work, ev.commit, RECORD, ["docs/slices/noplan/notes.md"])
+    assert "- docs/slices/noplan/plan.md: not at this commit (the change touches docs/slices/noplan/notes.md)" in lines
+
+
+def test_template_and_archive_folders_are_not_bundles(ev: base.Fixture) -> None:
+    lines = evidence_module.plan_lines(ev.work, ev.commit, RECORD, ["docs/slices/_template/plan.md",
+                                                                   "docs/slices/archive/old/plan.md"])
+    assert lines == [lines[0]] and "the governing plan" in lines[0]
+
+
+def test_ranges_join_consecutive_lines() -> None:
+    assert evidence_module._ranges([5, 1, 2, 3, 9, 10]) == "1-3, 5, 9-10"
+
+
+@pytest.mark.parametrize("error", [OSError("no python"), subprocess.TimeoutExpired("pytest", 600)], ids=["oserror", "timeout"])
+def test_coverage_and_trace_commands_that_raise_are_shown_as_failed(ev: base.Fixture, monkeypatch: pytest.MonkeyPatch,
+                                                                    error: Exception) -> None:
+    def raising(*_args: object) -> None:
+        raise error
+
+    _change(ev)  # a commit with the trace model
+    monkeypatch.setattr(evidence_module, "_run", raising)
+    scratch = evidence_module.make_scratch(ev.work, ev.commit)
+    try:
+        evidence = evidence_module.Evidence()
+        evidence_module.coverage_evidence(evidence, ev.work, (ev.commit, ev.commit), ["scripts/tool.py"], scratch)
+        report, reason = evidence_module.trace_report(scratch, ev.commit)
+    finally:
+        shutil.rmtree(scratch.root)
+    assert evidence.entries == [f"EV1: failed: {evidence_module.COVERAGE_COMMAND}: {type(error).__name__}"]
+    assert evidence.status["coverage"] == "failed" and report is None and reason == type(error).__name__
+
+
+def test_fully_covered_script_and_services_only_change_give_notes_not_entries(ev: base.Fixture) -> None:
+    covered = TOOL.replace('"positive"', '"plus"')
+    tool_test = TOOL_TEST.replace('"positive"', '"plus"')
+    _change(ev, **{"scripts/tool.py": covered, "tests/tools/test_tool.py": tool_test})
+    scratch = evidence_module.make_scratch(ev.work, ev.commit)
+    try:
+        merge_base = base._git(ev.work, "merge-base", "refs/remotes/origin/poc/base", ev.commit)
+        evidence = evidence_module.Evidence()
+        evidence_module.coverage_evidence(evidence, ev.work, (merge_base, ev.commit), ["scripts/tool.py"], scratch)
+        services_only = evidence_module.Evidence()
+        evidence_module.coverage_evidence(services_only, ev.work, (merge_base, ev.commit), ["docs/x.md"], scratch)
+        evidence_module.trace_evidence(services_only, {"coverage_gaps": {}, "gap_gate": {}}, "", frozenset())
+    finally:
+        shutil.rmtree(scratch.root)
+    assert evidence.entries == [] and "Every changed line and branch run by the tooling tests: scripts/tool.py." in evidence.notes
+    assert services_only.entries == [] and services_only.status == {"coverage": "ok", "trace": "ok"}
+    assert any(note.startswith("No trace gap among the upstream items") for note in services_only.notes)
+
+
+def test_trace_script_missing_at_the_commit_is_named(ev: base.Fixture) -> None:
+    _change(ev, **{"scripts/validate_traceability.py": None})
+    scratch = evidence_module.make_scratch(ev.work, ev.commit)
+    try:
+        assert evidence_module.trace_report(scratch, ev.commit) == (
+            None, "scripts/validate_traceability.py does not exist at this commit")
+    finally:
+        shutil.rmtree(scratch.root)
+
+
+def test_fetch_json_reads_json_without_a_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    import http.server
+    import threading
+
+    seen: dict[str, str | None] = {}
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802 - the http.server hook name
+            seen["auth"] = self.headers.get("Authorization")
+            body = json.dumps({"workflow_runs": []}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *_args: object) -> None:
+            return
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    monkeypatch.setenv("GITHUB_TOKEN", "planted-token-value-not-for-the-api")
+    try:
+        assert evidence_module.fetch_json(f"http://127.0.0.1:{server.server_port}/runs") == {"workflow_runs": []}
+    finally:
+        server.shutdown()
+    assert seen["auth"] is None
+
+
+def test_github_repo_of_a_clone_without_a_github_origin_is_none(tmp_path: Path) -> None:
+    base._git(tmp_path, "init", "-q")
+    assert evidence_module.github_repo(tmp_path) is None
+    base._git(tmp_path, "remote", "add", "origin", "https://github.com/owner/name.git")
+    assert evidence_module.github_repo(tmp_path) == ("owner", "name")
+
+
+@pytest.mark.parametrize("failure", ["scratch", "compute"])
+def test_evidence_that_cannot_be_prepared_refuses_before_any_call(ev: base.Fixture, monkeypatch: pytest.MonkeyPatch,
+                                                                   failure: str) -> None:
+    def raising(*_args: object) -> None:
+        raise ValueError("git clone failed")
+
+    monkeypatch.setattr(evidence_module, "make_scratch" if failure == "scratch" else "upstream_items", raising)
+    _change(ev, **{"scripts/tool.py": TOOL_CHANGED})
+    assert base._run(ev) == 2
+    assert ev.calls() == [] and ev.log() == []
