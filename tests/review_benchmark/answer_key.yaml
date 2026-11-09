@@ -6,7 +6,7 @@ stage: B
 model: claude-opus-5-5
 effort: high
 budget: 60
-lists_commit: ''
+lists_commit: 04f8df4
 match_rule: 'A defect is detected by a finding rated blocking or high (stage A: kind blocking) that names one of
   the defect''s files, a line inside one of that file''s ranges, and at least one of its terms (case-insensitive,
   in the problem, evidence or failure scenario). A defect of absence is also detected by a blocking or high finding
