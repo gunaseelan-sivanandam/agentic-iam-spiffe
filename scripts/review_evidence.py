@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import site
 import subprocess
 import sys
@@ -252,14 +253,19 @@ class Scratch:
 
 
 def make_scratch(repo: Path, commit: str) -> Scratch:
+    """A clone of the commit and a HOME of its own in a new temporary directory, removed again if either fails."""
     root = Path(tempfile.mkdtemp(prefix="review-evidence-"))
     clone, home = root / "clone", root / "home"
-    home.mkdir()
-    _git(repo, "clone", "-q", "--shared", "--no-checkout", str(repo), str(clone))
-    _git(clone, "checkout", "-q", "--detach", commit)
-    user_base = Path(site.getuserbase())
-    if user_base.is_dir():  # the same interpreter sees the same `pip --user` packages under the scratch HOME
-        (home / ".local").symlink_to(user_base)
+    try:
+        home.mkdir()
+        _git(repo, "clone", "-q", "--shared", "--no-checkout", str(repo), str(clone))
+        _git(clone, "checkout", "-q", "--detach", commit)
+        user_base = Path(site.getuserbase())
+        if user_base.is_dir():  # the same interpreter sees the same `pip --user` packages under the scratch HOME
+            (home / ".local").symlink_to(user_base)
+    except (ValueError, OSError):
+        shutil.rmtree(root, ignore_errors=True)
+        raise
     return Scratch(root, clone, home)
 
 

@@ -581,3 +581,11 @@ def test_ci_of_a_repository_without_a_github_origin_is_shown_as_failed(monkeypat
 
 def test_ranges_of_no_lines_is_empty() -> None:
     assert evidence_module._ranges([]) == ""
+
+
+def test_scratch_of_an_unknown_commit_is_removed_again(fx: base.Fixture) -> None:
+    import tempfile
+    before = set(Path(tempfile.gettempdir()).glob("review-evidence-*"))
+    with pytest.raises(ValueError, match="git checkout failed"):
+        evidence_module.make_scratch(fx.work, "0" * 40)
+    assert set(Path(tempfile.gettempdir()).glob("review-evidence-*")) == before
