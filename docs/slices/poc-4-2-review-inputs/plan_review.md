@@ -7,8 +7,6 @@ Record of the plan review of slice 4.2 (#39), review inputs and evidence in the 
 - Every prompt and report block below was checked against the log before the push. A report lost to the report-path collision (DPL-011) or withheld by the publication check has no block.
 - Until slice 4.1 adds the `accounted` field, a recheck lists the answers it accepted, and the files it opened, in a finding with ID `ACCOUNTED`.
 
-After the last round, the plan changed only by quoting the owner's words in its Source column (commit `a99d4f8`); it was not rechecked.
-
 ## Round 1
 
 ### Attempt plan/c1/r1/plan/1
@@ -773,4 +771,121 @@ This is round 3 of the plan review of slice 4.2 (review inputs and evidence, #39
 | S42-R3-A1 | medium | fixed: docs/slices/poc-4-2-review-inputs/plan.md, docs/slices/poc-4-2-review-inputs/test_plan.md: S42-D8 replaces the HOME path and the interpreter prefix with `<home>` and `<python>` before the check, and refuses only what remains; the "Clean environment" row has a traceback through site-packages |
 | S42-R3-A2 | medium | fixed: docs/slices/poc-4-2-review-inputs/plan.md, docs/slices/poc-4-2-review-inputs/test_plan.md: S42-D5(c) shows each job's status and conclusion; the "CI results" row has a running job |
 | S42-R3-A3 | low | fixed: docs/slices/poc-4-1-review-prompts/plan.md: S41-D8 says `accounted` is required whenever the prompt lists items, with the evidence statuses `explained` and `flagged` in every mode |
+| ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |
+
+## Round 4
+
+### Attempt plan/c1/r4/plan/1
+
+Commit `a4082dd`, effort medium. Files reviewed (SHA-256): `docs/slices/poc-4-2-review-inputs/plan.md` `974ac35adb30`, `docs/slices/poc-4-2-review-inputs/test_plan.md` `10e25433c932`.
+
+Status: completed; approvable within the threat model: yes.
+
+#### Prompt
+
+````markdown
+## Your mandate (recheck)
+
+This is round 4 of the plan review of slice 4.2 (review inputs and evidence, #39), a recheck of your earlier report (round 3, attempt 1). For every answer of the author below, open the files the answer names and check the fix; accept it or re-raise the finding. Report anything wrong or missing in what the fixes touch. The author revised all six slice-4 plans together (`docs/slices/poc-4-*/`) so that decisions shared between plans agree; a fix may sit in another plan, the slice index (`docs/slices/README.md`) or `AGENTS.md`, so open those where an answer points to them. From round 2 a new finding counts only if it is blocking (`AGENTS.md`, Plan review), except simpler alternatives and decision concerns; slice 4 proposes that high findings count too, so report new high findings as well, marked `[high]`. Judge against the approved threat model (`AGENTS.md`, PoC scope and proportion) and the plan's own threat model.
+
+## How to report
+
+- A re-raised finding keeps its earlier ID, with the reason the fix does not hold.
+- Add one advisory finding with ID `ACCOUNTED`, problem text "[low] accounted answers", and in its evidence one line per answer: `<ID>: accepted` or `<ID>: re-raised`, followed by the files you opened for it. (Slice 4.1 replaces this with an `accounted` field; until then this finding carries it.)
+- For advisory findings, start the problem text with [high], [medium] or [low].
+- Write `<token>` for any credential value, even a made-up example: the publication check withholds a report that holds one.
+
+## The owner's request for this round
+
+The owner, in a review comment on PR #48 (2026-11-09): "Run one additional review round to check your latest fixes". Since your last round the plan changed only by quoting the owner's words next to each owner-sourced decision (commit `a99d4f8`). Check those changes like fixes: does any quote change a decision's meaning or attribute words to the owner that are not the owner's?
+
+## Your earlier report (round 3, attempt 1)
+
+```json
+{
+  "findings": [
+    {
+      "evidence": "S42-R2-B1: accepted (poc-4-2 plan.md:39, test_plan.md:26)\nS42-R2-B2: accepted (plan.md:41, test_plan.md:28)\nS42-R2-B3: accepted (plan.md:44, test_plan.md:35, poc-4-1 plan.md:50 S41-D8 '4.2 adds the evidence entries to the same list')\nS42-R2-B4: accepted (plan.md:43 (c), test_plan.md:33, plan.md:89 probe)\nS42-R2-A1: accepted (plan.md:43 (a), plan.md:73-74, test_plan.md:31)\nS42-R2-A2: accepted (plan.md:43 #44 note, test_plan.md:49)\nS42-R2-A3: accepted (plan.md:47, poc-4-3 plan.md:37 S43-D1 Evidence block, :39 S43-D3 evidence_sha256 check, test_plan.md:38)\nS42-R2-A4: accepted (plan.md:49 S42-D11, poc-4-5 plan.md:18, 29-30, 87, test_plan.md:40)\nS42-R2-A5: accepted (plan.md:41 (c),(d), test_plan.md:29)\nS42-R2-A6: accepted (plan.md:48, test_plan.md:39)\nS42-R2-A7: accepted (plan.md:40, test_plan.md:27)\nS42-R2-A8: accepted (plan.md:46, test_plan.md:37, poc-4-3 plan.md:38)\nS42-R2-A9: accepted (plan.md:43 (b), test_plan.md:32)\nS42-R2-A10: accepted (poc-4-1 plan.md:43 S41-D1 order, plan.md:10-12, docs/slices/README.md:16)\nS42-R2-A11: accepted (plan.md:40, test_plan.md:27)\nS42-R2-A12: accepted (plan.md:45, test_plan.md:36)\nS42-R2-S1: accepted (plan.md:116-117)\nS42-R2-A13: accepted (plan.md:16-18, 87-89)",
+      "failure_scenario": "None; bookkeeping entry.",
+      "file": "docs/slices/poc-4-2-review-inputs/plan.md",
+      "id": "ACCOUNTED",
+      "kind": "advisory",
+      "line": 0,
+      "problem": "[low] accounted answers"
+    },
+    {
+      "evidence": "plan.md:46 'only PATH, LANG and a scratch HOME. Paths in their output are made relative to the checkout... on a match the launcher refuses before any call'; plan.md:45 S42-D7 shows failing tests with their names; test_plan.md:37 tests only the refusal and relative checkout paths.",
+      "failure_scenario": "The author's interpreter lives in /home/<user>/.venv; a changed tooling test fails, pytest prints a frame from site-packages, and the launcher refuses. The author then either cannot review the failing state or is pushed to weaken the check. Fix: replace the author's HOME and the interpreter prefix with fixed placeholders before the check (refuse only what remains), and test a traceback through site-packages.",
+      "file": "docs/slices/poc-4-2-review-inputs/plan.md",
+      "id": "S42-R3-A1",
+      "kind": "advisory",
+      "line": 46,
+      "problem": "[medium] S42-D8 refuses the whole review when the evidence holds the author's HOME path, but the evidence commands' own output will often hold it: the interpreter and site-packages paths in a pytest traceback or a coverage warning (a venv under the author's home, kept on PATH) are not under the scratch checkout, so 'made relative to the checkout' does not remove them. A review of a change with any failing tooling test (exactly where evidence matters, S42-D7) would then be refused, not sanitised."
+    },
+    {
+      "evidence": "plan.md:43 'the job conclusions of the workflow runs whose head is the reviewed commit ... or \"no CI run for this commit\"'; test_plan.md:33 covers only a matching run and no run.",
+      "failure_scenario": "The implementation shows an in-progress run's null conclusions as an empty list or omits unfinished jobs; the reviewer reads the visible green jobs as the commit's CI result. Fix: show each job's status as well as conclusion ('in_progress', 'queued'), and add a test row for an unfinished run.",
+      "file": "docs/slices/poc-4-2-review-inputs/plan.md",
+      "id": "S42-R3-A2",
+      "kind": "advisory",
+      "line": 43,
+      "problem": "[medium] S42-D5(c) does not say what is shown when the reviewed commit's CI run exists but is still running or queued (jobs without a conclusion), nor when the commit is not yet pushed. Reviews commonly run right after the push, before CI finishes."
+    },
+    {
+      "evidence": "poc-4-1 plan.md:50 S41-D8; poc-4-2 plan.md:44; test_plan.md:35.",
+      "failure_scenario": "The 4.1 implementer writes a strict enum and recheck-only requirement; 4.2's tests then need 4.1's schema edited after the fact. Fix: one sentence in S41-D8 or S42-D6 naming the extra statuses and that the field applies in every mode.",
+      "file": "docs/slices/poc-4-2-review-inputs/plan.md",
+      "id": "S42-R3-A3",
+      "kind": "advisory",
+      "line": 44,
+      "problem": "[low] S42-D6 puts evidence entries into 4.1's `accounted` list with statuses `explained`/`flagged`, but S41-D8 defines `accounted` as `{item, status, note, opened}` with status `accepted` or `re-raised` and describes it for rechecks. Neither plan states that the schema's status enum widens and that `accounted` is required in initial and final reviews too when evidence exists."
+    }
+  ],
+  "verdict": "yes"
+}
+```
+
+## The author's answers
+
+| ID | Severity | Answer |
+| --- | --- | --- |
+| S42-R3-A1 | medium | fixed: docs/slices/poc-4-2-review-inputs/plan.md, docs/slices/poc-4-2-review-inputs/test_plan.md: S42-D8 replaces the HOME path and the interpreter prefix with `<home>` and `<python>` before the check, and refuses only what remains; the "Clean environment" row has a traceback through site-packages |
+| S42-R3-A2 | medium | fixed: docs/slices/poc-4-2-review-inputs/plan.md, docs/slices/poc-4-2-review-inputs/test_plan.md: S42-D5(c) shows each job's status and conclusion; the "CI results" row has a running job |
+| S42-R3-A3 | low | fixed: docs/slices/poc-4-1-review-prompts/plan.md: S41-D8 says `accounted` is required whenever the prompt lists items, with the evidence statuses `explained` and `flagged` in every mode |
+| ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |
+````
+
+#### Report
+
+```json
+{
+  "findings": [
+    {
+      "evidence": "S42-R3-A1: accepted (poc-4-2 plan.md:46 S42-D8 replaces HOME and interpreter prefix with <home>/<python>, refuses only what remains; test_plan.md:37 traceback through site-packages)\nS42-R3-A2: accepted (poc-4-2 plan.md:43 S42-D5(c) status and conclusion per job, queued/running said; test_plan.md:33 running job shows in_progress)\nS42-R3-A3: accepted (poc-4-1-review-prompts plan.md:50 S41-D8 'accounted is required whenever the prompt lists items: answers in a recheck, and 4.2's evidence entries in every mode, with the statuses explained or flagged')\nACCOUNTED: accepted (bookkeeping stand-in; no fix expected)",
+      "failure_scenario": "None; bookkeeping entry.",
+      "file": "docs/slices/poc-4-2-review-inputs/plan.md",
+      "id": "ACCOUNTED",
+      "kind": "advisory",
+      "line": 0,
+      "problem": "[low] accounted answers"
+    },
+    {
+      "evidence": "plan.md:39 S42-D1 Source: 'the owner's words: \"how does the reviewer knows if the orgin of the issue is from upstream docs that was maybe not part of the changed files\", then \"yes, add it to issue #33\"'. plan.md:42 S42-D4 quotes the same comment for the upstream question. plan.md:16 names DPL-005 as the reason for the file list. poc-4-6 plan_review.md:45 summarises the 'reviewer inputs' comment as about upstream reviews.",
+      "failure_scenario": "A later reviewer or the final review checks whether each decision follows from the owner's words (S46-D2). It finds that the D1 quote asks about upstream origin, not the file list, and cannot tell whether the owner decided D1 or the author did. Fix: in D1, quote the owner's words that ask for the diff as the file list, if they exist. Otherwise, mark D1's file-list part as following from DPL-005 and round-2 B1, and keep the quote on D3/D4.",
+      "file": "docs/slices/poc-4-2-review-inputs/plan.md",
+      "id": "S42-R4-A1",
+      "kind": "advisory",
+      "line": 39,
+      "problem": "[low] The owner quote added to S42-D1 does not say what S42-D1 decides. S42-D1 decides that the files under review come from the diff (deleted files included, --path only orders). The quote, \"how does the reviewer knows if the orgin of the issue is from upstream docs that was maybe not part of the changed files\", is about upstream documents outside the changed files. That is the basis of S42-D3/S42-D4, where the same comment is quoted again. The quote does not change the decision's meaning. But it presents the diff-derived file list as following from the owner's words when it seems to rest on DPL-005 and round-2 B1."
+    }
+  ],
+  "verdict": "yes"
+}
+```
+
+#### Answers to plan/c1/r4/plan/1
+
+| ID | Severity | Answer |
+| --- | --- | --- |
+| S42-R4-A1 | low | fixed: docs/slices/poc-4-2-review-inputs/plan.md: S42-D1 quotes the owner's question that it answers ("does the launcher gives set of files to review?") and the owner's agreement to the answer |
 | ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |

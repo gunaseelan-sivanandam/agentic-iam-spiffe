@@ -7,7 +7,7 @@ Record of the plan review of slice 4.6 (#43), stage rules in the agentic-SDLC Po
 - Every prompt and report block below was checked against the log before the push. A report lost to the report-path collision (DPL-011) or withheld by the publication check has no block.
 - Until slice 4.1 adds the `accounted` field, a recheck lists the answers it accepted, and the files it opened, in a finding with ID `ACCOUNTED`.
 
-Round 4 was the last allowed round. The fixes of its advisory findings (answers below) were made afterwards and are not rechecked; the owner decides whether they need another round.
+Round 5 was granted by the owner's PR review comment (https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/pull/48#pullrequestreview-5830859514: "Run one additional review round to check your latest fixes"). Its low finding was fixed afterwards (answers below).
 
 ## Round 1
 
@@ -922,4 +922,121 @@ Check this change like a fix: is it consistent across the plans and their test p
 | S46-N3 | medium | fixed: docs/slices/poc-4-6-stage-rules/plan.md, docs/slices/poc-4-6-stage-rules/test_plan.md: S46-D13 reads the CI result from the public API and says so when it cannot be read or a job is running, never showing a pass; the "CI line of the brief" row tests both |
 | S46-N4 | medium | fixed: docs/slices/poc-4-6-stage-rules/plan.md, docs/slices/poc-4-6-stage-rules/test_plan.md: S46-D14 keeps the skill's front matter, the lint gate's Markdown check skips a leading front-matter block and then requires the title and paragraph, and an environment fact records the skill's current form |
 | S46-N5 | low | fixed: docs/slices/poc-4-1-review-prompts/plan.md: S41-D16 uses 4.6's stage names and counts the final unit as "final review" |
+| ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |
+
+## Round 5
+
+### Attempt plan/c1/r5/plan/1
+
+Commit `a4082dd`, effort medium. Files reviewed (SHA-256): `docs/slices/poc-4-6-stage-rules/plan.md` `e48ab877832e`, `docs/slices/poc-4-6-stage-rules/test_plan.md` `f54ee914e98b`.
+
+Status: completed; approvable within the threat model: yes.
+
+#### Prompt
+
+````markdown
+## Your mandate (recheck)
+
+This is round 5 of the plan review of slice 4.6 (stage rules, #43), a recheck of your earlier report (round 4, attempt 1). For every answer of the author below, open the files the answer names and check the fix; accept it or re-raise the finding. Report anything wrong or missing in what the fixes touch. The author revised all six slice-4 plans together (`docs/slices/poc-4-*/`) so that decisions shared between plans agree; a fix may sit in another plan, the slice index (`docs/slices/README.md`) or `AGENTS.md`, so open those where an answer points to them. From round 2 a new finding counts only if it is blocking (`AGENTS.md`, Plan review), except simpler alternatives and decision concerns; slice 4 proposes that high findings count too, so report new high findings as well, marked `[high]`. Judge against the approved threat model (`AGENTS.md`, PoC scope and proportion) and the plan's own threat model.
+
+## How to report
+
+- A re-raised finding keeps its earlier ID, with the reason the fix does not hold.
+- Add one advisory finding with ID `ACCOUNTED`, problem text "[low] accounted answers", and in its evidence one line per answer: `<ID>: accepted` or `<ID>: re-raised`, followed by the files you opened for it. (Slice 4.1 replaces this with an `accounted` field; until then this finding carries it.)
+- For advisory findings, start the problem text with [high], [medium] or [low].
+- Write `<token>` for any credential value, even a made-up example: the publication check withholds a report that holds one.
+
+## The owner's request for this round
+
+The owner, in a review comment on PR #48 (2026-11-09): "Run one additional review round to check your latest fixes". Round 4 was the last allowed round; the author fixed its findings afterwards (answers below).
+
+## Your earlier report (round 4, attempt 1)
+
+```json
+{
+  "findings": [
+    {
+      "evidence": "S46-N1: accepted \u2014 docs/slices/poc-4-6-stage-rules/plan.md (S46-D4, line 47: \"The reopened unit's review record notes the reopening and the corrected document.\")\nS46-N2: accepted \u2014 docs/slices/poc-4-1-review-prompts/plan.md (S41-D8, line 50: \"A re-raised finding keeps its ID\"), docs/slices/poc-4-6-stage-rules/plan.md (S46-D7, line 50, cites S41-D8)\nACCOUNTED: accepted (rejection) \u2014 no file; this is the stand-in until S41-D8's field exists",
+      "failure_scenario": "None. This entry only records which answers were checked.",
+      "file": "docs/slices/poc-4-6-stage-rules/plan.md",
+      "id": "ACCOUNTED",
+      "kind": "advisory",
+      "line": 0,
+      "problem": "[low] accounted answers"
+    },
+    {
+      "evidence": "plan.md:56: \"...the origin stage against the stage that found each finding (S41-D16); and the latest CI result of the PR's head commit.\" test_plan.md:23 lists verdicts, severity counts, owner answers, decision concerns, cannot-determine answers, disputed findings, rejected blocking/high findings and the origin table. It says nothing about CI. The Environment facts table has no probe of the CI API.",
+      "failure_scenario": "The script prints a stale result, or 'unknown', when the API call fails, and no test catches it. The owner reads a brief that shows CI as green, or shows no CI line, while the head commit's checks failed or never ran. That is a false green in the document the owner reads to decide.",
+      "file": "docs/slices/poc-4-6-stage-rules/test_plan.md",
+      "id": "S46-N3",
+      "kind": "advisory",
+      "line": 23,
+      "problem": "[medium] S46-D13 says the brief includes \"the latest CI result of the PR's head commit\". The \"Decision brief\" test row checks every other part of the brief but not this one. It also has no failure case for a CI result that cannot be read. Reading the result needs the GitHub API, which is outside the repository, and the plan names no probe or fallback for it."
+    },
+    {
+      "evidence": "plan.md:57 (S46-D14); plan.md:76 (\"`.claude/skills/grill-me/` (moved in)\"); test_plan.md:24 (\"exists, starts with a purpose header\"); AGENTS.md Quality gates, `make lint` row (\"every added Markdown file with a `#` title and a paragraph\"); the Environment facts table (plan.md:92-96) has no row for the skill. The copy has no `.claude/` directory.",
+      "failure_scenario": "The implementer puts a `#` title first so `make lint` passes, and the skill then stops loading, so discovery silently runs without grill-me. Or the implementer keeps the front matter, `make lint` fails, and the implementer invents an exception during implementation, outside the approved plan.",
+      "file": "docs/slices/poc-4-6-stage-rules/test_plan.md",
+      "id": "S46-N4",
+      "kind": "advisory",
+      "line": 24,
+      "problem": "[medium] S46-D14 moves the grill-me skill to `.claude/skills/grill-me/SKILL.md`. The test row requires the file to start with a purpose header, and the lint gate requires every added Markdown file to start with a `#` title and a paragraph (coding rule 8). But a Claude Code SKILL.md has to start with YAML front matter (`---`, name, description), or the skill does not load. The plan does not say which rule gives way. It also has no environment-fact probe of where the skill lives today and in what format, although it is a fact outside the repository (the plan says \"moved in\")."
+    },
+    {
+      "evidence": "poc-4-1 plan.md:58; poc-4-6 plan.md:44 (S46-D1), plan.md:56 (S46-D13).",
+      "failure_scenario": "The brief's origin-against-found table either leaves out findings of the final unit or puts them under an invented label, so the measure of 'caught where they arise' is skewed. The impact is low.",
+      "file": "docs/slices/poc-4-1-review-prompts/plan.md",
+      "id": "S46-N5",
+      "kind": "advisory",
+      "line": 58,
+      "problem": "[low] S41-D16's `origin_stage` values (discovery, requirements, architecture, tests, implementation, unknown) do not match S46-D1's stage names ('architecture and interfaces', 'tests first'). S46-D13's brief sets `origin_stage` against 'the stage that found each finding', but no plan defines how the reviewing unit maps to one of those values. This matters most for the final review, which has no `origin_stage` value."
+    }
+  ],
+  "verdict": "yes"
+}
+```
+
+## The author's answers
+
+| ID | Severity | Answer |
+| --- | --- | --- |
+| S46-N3 | medium | fixed: docs/slices/poc-4-6-stage-rules/plan.md, docs/slices/poc-4-6-stage-rules/test_plan.md: S46-D13 reads the CI result from the public API and says so when it cannot be read or a job is running, never showing a pass; the "CI line of the brief" row tests both |
+| S46-N4 | medium | fixed: docs/slices/poc-4-6-stage-rules/plan.md, docs/slices/poc-4-6-stage-rules/test_plan.md: S46-D14 keeps the skill's front matter, the lint gate's Markdown check skips a leading front-matter block and then requires the title and paragraph, and an environment fact records the skill's current form |
+| S46-N5 | low | fixed: docs/slices/poc-4-1-review-prompts/plan.md: S41-D16 uses 4.6's stage names and counts the final unit as "final review" |
+| ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |
+````
+
+#### Report
+
+```json
+{
+  "findings": [
+    {
+      "evidence": "S46-N3: accepted \u2014 docs/slices/poc-4-6-stage-rules/plan.md (S46-D13, line 56: \"the CI result of the PR's head commit, read from the public API; when it cannot be read, or a job is still running, the brief says so and never shows a pass\"), docs/slices/poc-4-6-stage-rules/test_plan.md (line 24, \"CI line of the brief\": pass, running, unreadable response and no run for the head commit are all tested)\nS46-N4: accepted \u2014 docs/slices/poc-4-6-stage-rules/plan.md (S46-D14, line 57: front matter kept, the lint header check skips a leading front-matter block and then requires a title and paragraph; line 77: lint_changed_files.py in scope; line 97: environment fact for the skill's current form), docs/slices/poc-4-6-stage-rules/test_plan.md (line 25: has a pass case and a fail case)\nS46-N5: accepted \u2014 docs/slices/poc-4-1-review-prompts/plan.md (S41-D16, line 58: uses 4.6's stage names, and the final review counts as \"final review\")\nACCOUNTED: accepted (rejection) \u2014 no file; this is the stand-in until S41-D8's field exists",
+      "failure_scenario": "None. This entry only records which answers were checked.",
+      "file": "docs/slices/poc-4-6-stage-rules/plan.md",
+      "id": "ACCOUNTED",
+      "kind": "advisory",
+      "line": 0,
+      "problem": "[low] accounted answers"
+    },
+    {
+      "evidence": "plan.md:8: \"Status: draft, 2026-11-08, revised after plan review rounds 2 and 3.\" S46-D13 and S46-D14 cite the owner on 2026-11-09, and the round-4 fixes are in the plan text.",
+      "failure_scenario": "The owner or a later reader thinks the plan was last changed after round 3 and misses that rounds 4 and 5 changed it. Cosmetic only.",
+      "file": "docs/slices/poc-4-6-stage-rules/plan.md",
+      "id": "S46-N6",
+      "kind": "advisory",
+      "line": 8,
+      "problem": "[low] The Status line still says \"revised after plan review rounds 2 and 3\", but the plan has since been revised after rounds 4 and 5's input (S46-D13's CI wording, S46-D14's front-matter rule)."
+    }
+  ],
+  "verdict": "yes"
+}
+```
+
+#### Answers to plan/c1/r5/plan/1
+
+| ID | Severity | Answer |
+| --- | --- | --- |
+| S46-N6 | low | fixed: docs/slices/poc-4-6-stage-rules/plan.md: the status line points to the review record for every round |
 | ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |

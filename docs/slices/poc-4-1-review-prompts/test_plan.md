@@ -28,7 +28,7 @@ No unit tests under `tests/unit/`: no service code changes. All tests are toolin
 | Cannot determine | A recheck that lists an answer as `cannot determine` completes, and the end entry counts it | A `cannot determine` without a note fails the schema | S41-D15 | plan |
 | Origin stage | Findings with each `origin_stage` value are accepted | A finding without `origin_stage`, or with another value, fails the schema | S41-D16 | plan |
 | Token note | The output section holds the `<token>` instruction verbatim | — | S41-D1 | plan |
-| Runner configurations | The runner's baseline configurations (stage A short, stage A checklist, narrow question) build prompts without the mandate, and their configuration name and hash differ from the full one | — | S41-D2 | plan |
+| Runner configurations | The runner's configurations build prompts with stage A's short prompt in place of the mandate, with a stage list, or with a draft mandate text, and each configuration's name and hash differ from the full one | — | S41-D2 | plan |
 | Mandate identity | The start entry holds the SHA-256 of the mandate used; changing a mandate constant changes it | — | S41-D14 | plan |
 | Mode from the round | Round 1 is `initial`, round 2 `recheck`, round 1 of unit `final` is `final`, round 2 of unit `final` is `recheck`; the start entry records it | — | S41-D3 | plan |
 | Mandates verbatim | Each mode's prompt holds its mandate text verbatim; the final prompt has no checklist section and names the other units' records present in the copy | A final prompt given a stage list still has no checklist section | S41-D4 | plan |
@@ -38,7 +38,7 @@ No unit tests under `tests/unit/`: no service code changes. All tests are toolin
 | Accounted | A recheck that lists every answer in `accounted`, with `opened` paths it read, completes | The attempt fails when: an answer is missing from `accounted`; an `opened` path is not among the read paths; a file named in a `fixed:` answer was not read | S41-D8 | plan |
 | Severity counts | The end entry's `severity_counts` equals the count of each severity in the released report, with zero for those that do not occur | — | S41-D9 | plan |
 | Rebuild | `invocation_from_entry` rebuilds a recheck's full prompt from its entry, the earlier report, the answers section and the evidence text, and its `full_prompt_sha256` matches | A changed answers section, or changed evidence, gives a mismatch | S41-D5 | plan |
-| Benchmark scoring | A new report with a `blocking` severity scores as detected; stage A's results are read as before; the report column reads "Not blocking"; the canary asks for a low finding | — | S41-D13 | plan; `existing@c325e7d` (stage A results) |
+| Benchmark scoring | A new report's blocking or high finding scores as detected, and the blocking-only count is reported too; stage A's results are read as before; the report column reads "Not blocking"; the canary asks for a low finding | — | S41-D13 | plan; `existing@c325e7d` (stage A results) |
 
 ## E2E test plan
 

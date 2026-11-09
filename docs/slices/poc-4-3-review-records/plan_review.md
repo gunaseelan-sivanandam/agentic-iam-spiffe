@@ -7,7 +7,7 @@ Record of the plan review of slice 4.3 (#40), review records and their check in 
 - Every prompt and report block below was checked against the log before the push. A report lost to the report-path collision (DPL-011) or withheld by the publication check has no block.
 - Until slice 4.1 adds the `accounted` field, a recheck lists the answers it accepted, and the files it opened, in a finding with ID `ACCOUNTED`.
 
-After round 4, the last allowed, the plan changed only by quoting the owner's words in its Source column and re-sourcing S43-D7 to the owner's words on #21 (commit `a99d4f8`); it was not rechecked.
+Round 5 was granted by the owner's PR review comment (https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/pull/48#pullrequestreview-5830859514: "Run one additional review round to check your latest fixes"). Its low finding was fixed afterwards (answers below).
 
 ## Round 1
 
@@ -754,4 +754,111 @@ This is round 4 of the plan review of slice 4.3 (review records and their check,
 | --- | --- | --- |
 | R4-A1 | low | fixed: docs/slices/poc-4-3-review-records/plan.md: S43-D1 writes the start entry, the heading and the status line in one locked step, and the blocks after them |
 | R4-A2 | low | fixed: docs/slices/poc-4-3-review-records/plan.md: the status line names rounds 2, 3 and 4 |
+| ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |
+
+## Round 5
+
+### Attempt plan/c1/r5/plan/1
+
+Commit `a4082dd`, effort medium. Files reviewed (SHA-256): `docs/slices/poc-4-3-review-records/plan.md` `c9437dd83080`, `docs/slices/poc-4-3-review-records/test_plan.md` `1a6b41bf8240`.
+
+Status: completed; approvable within the threat model: yes.
+
+#### Prompt
+
+````markdown
+## Your mandate (recheck)
+
+This is round 5 of the plan review of slice 4.3 (review records and their check, #40), a recheck of your earlier report (round 4, attempt 1). For every answer of the author below, open the files the answer names and check the fix; accept it or re-raise the finding. Report anything wrong or missing in what the fixes touch. The author revised all six slice-4 plans together (`docs/slices/poc-4-*/`) so that decisions shared between plans agree; a fix may sit in another plan, the slice index (`docs/slices/README.md`) or `AGENTS.md`, so open those where an answer points to them. From round 2 a new finding counts only if it is blocking (`AGENTS.md`, Plan review), except simpler alternatives and decision concerns; slice 4 proposes that high findings count too, so report new high findings as well, marked `[high]`. Judge against the approved threat model (`AGENTS.md`, PoC scope and proportion) and the plan's own threat model.
+
+## How to report
+
+- A re-raised finding keeps its earlier ID, with the reason the fix does not hold.
+- Add one advisory finding with ID `ACCOUNTED`, problem text "[low] accounted answers", and in its evidence one line per answer: `<ID>: accepted` or `<ID>: re-raised`, followed by the files you opened for it. (Slice 4.1 replaces this with an `accounted` field; until then this finding carries it.)
+- For advisory findings, start the problem text with [high], [medium] or [low].
+- Write `<token>` for any credential value, even a made-up example: the publication check withholds a report that holds one.
+
+## The owner's request for this round
+
+The owner, in a review comment on PR #48 (2026-11-09): "Run one additional review round to check your latest fixes". After round 4, the last allowed, the plan changed only by quoting the owner's words next to each owner-sourced decision and re-sourcing S43-D7 to the owner's words on #21 (commit `a99d4f8`). Check those changes like fixes.
+
+## Your earlier report (round 4, attempt 1)
+
+```json
+{
+  "findings": [
+    {
+      "evidence": "plan.md:37 (S43-D1: 'The start entry is appended first and the blocks after it, both under the attempt log's lock'); plan.md:39 (S43-D3: 'its `### Attempt` heading is in the record'); test_plan.md:27.",
+      "failure_scenario": "SIGKILL lands between the log append and the record write. The lock is released when the process dies. docs-check then fails on a logged attempt that has no heading. The window is tiny and the failure is loud, so this is not a false green. Note for the implementation: write the heading and the status line in the same locked step as the start entry, or let the check accept a logged attempt with no end entry and no heading as interrupted.",
+      "file": "docs/slices/poc-4-3-review-records/plan.md",
+      "id": "R4-A1",
+      "kind": "advisory",
+      "line": 37,
+      "problem": "[low] Fixing R3-A1 reversed the order but left a small window open. With the start entry appended first, a launcher killed after the start entry and before the blocks leaves a logged attempt (`record_blocks: 1`) with no `### Attempt` heading. S43-D3 fails that, because the heading must be in the record. The record then stays red until the author edits it by hand. The test row 'Blocks of attempts without a report' covers a kill after the blocks exist, not this window."
+    },
+    {
+      "evidence": "plan.md:7.",
+      "failure_scenario": "A reader may take the plan for the round-2 revision. This is only a documentation mismatch.",
+      "file": "docs/slices/poc-4-3-review-records/plan.md",
+      "id": "R4-A2",
+      "kind": "advisory",
+      "line": 7,
+      "problem": "[low] The status line still says 'revised after plan review round 2', although the plan was revised again for round 3's findings R3-B1 and R3-A1."
+    },
+    {
+      "evidence": "R3-B1: accepted (poc-4-1 plan.md S41-D6 and S41-D7 at lines 48-49: `owner` is now allowed at every severity and required for decision_concern; poc-4-3 plan.md S43-D4 at line 40; test_plan.md:33 has a medium decision_concern answered `owner:` that passes and a decision_concern answered `rejected` that fails)\nR3-A1: accepted (poc-4-3 plan.md S43-D1 at line 37: start entry first, then the blocks, under the log's lock; the remaining window is reported as R4-A1)\nACCOUNTED: accepted (stand-in only, until S41-D8's field exists; poc-4-1 plan.md:50)",
+      "failure_scenario": "None. This finding only records how each answer was accounted for.",
+      "file": "docs/slices/poc-4-3-review-records/plan.md",
+      "id": "ACCOUNTED",
+      "kind": "advisory",
+      "line": 0,
+      "problem": "[low] accounted answers"
+    }
+  ],
+  "verdict": "yes"
+}
+```
+
+## The author's answers
+
+| ID | Severity | Answer |
+| --- | --- | --- |
+| R4-A1 | low | fixed: docs/slices/poc-4-3-review-records/plan.md: S43-D1 writes the start entry, the heading and the status line in one locked step, and the blocks after them |
+| R4-A2 | low | fixed: docs/slices/poc-4-3-review-records/plan.md: the status line names rounds 2, 3 and 4 |
+| ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |
+````
+
+#### Report
+
+```json
+{
+  "findings": [
+    {
+      "evidence": "plan.md:37 (S43-D1: 'The start entry, the attempt's heading and its status line are written in one step under the attempt log's lock, and the blocks follow under the same lock'); plan.md:39 (S43-D3 compares Prompt and Evidence block hashes for every attempt with `record_blocks: 1`); test_plan.md:27 tests a kill only after the blocks exist.",
+      "failure_scenario": "A SIGKILL lands after the first write and before the blocks are written. docs-check fails on a missing Prompt block. The failure is loud, so this is not a false green. For the implementation: write the start entry, the heading, the status line and the Prompt and Evidence blocks in one step, or let the check accept an interrupted attempt that has no end entry and no blocks.",
+      "file": "docs/slices/poc-4-3-review-records/plan.md",
+      "id": "R5-A1",
+      "kind": "advisory",
+      "line": 37,
+      "problem": "[low] The R4-A1 fix moves the kill window but does not close it. The start entry, the heading and the status line are now written in one locked step, but the Prompt and Evidence blocks still come in a later write. A launcher killed between the two writes leaves a logged attempt that has a heading and a `prompt_sha256` but no Prompt block. S43-D3 then fails it ('its Prompt block's SHA-256 equals its prompt_sha256'), and the record stays red until someone edits it by hand. Prompt and evidence are both known before the call, so the launcher could write them in the same step as the start entry and the heading."
+    },
+    {
+      "evidence": "R4-A1: accepted (the heading and status line now come in the first locked step; the remaining narrower window is reported as R5-A1), opened docs/slices/poc-4-3-review-records/plan.md:37 and test_plan.md:27\nR4-A2: accepted, opened docs/slices/poc-4-3-review-records/plan.md:7\nACCOUNTED: accepted (stand-in until S41-D8's field exists)\nOwner-words changes (a99d4f8): checked. plan.md:37, 38, 40 and 43 now quote the owner next to the owner-sourced decisions. S43-D7 is re-sourced to the owner's words on #21 and agrees with Out of scope (plan.md:71). The quotes themselves cannot be checked against the issues from the frozen copy.",
+      "failure_scenario": "None. This finding only records how each answer was accounted for.",
+      "file": "docs/slices/poc-4-3-review-records/plan.md",
+      "id": "ACCOUNTED",
+      "kind": "advisory",
+      "line": 0,
+      "problem": "[low] accounted answers"
+    }
+  ],
+  "verdict": "yes"
+}
+```
+
+#### Answers to plan/c1/r5/plan/1
+
+| ID | Severity | Answer |
+| --- | --- | --- |
+| R5-A1 | low | fixed: docs/slices/poc-4-3-review-records/plan.md: S43-D1 writes the start entry, the heading, the status line and the Prompt and Evidence blocks in one locked step; only the Report block follows |
 | ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |

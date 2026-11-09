@@ -7,7 +7,7 @@ Record of the plan review of slice 4.4 (#41), stage checklists in the agentic-SD
 - Every prompt and report block below was checked against the log before the push. A report lost to the report-path collision (DPL-011) or withheld by the publication check has no block.
 - Until slice 4.1 adds the `accounted` field, a recheck lists the answers it accepted, and the files it opened, in a finding with ID `ACCOUNTED`.
 
-Round 4 was the last allowed round, and it ended with two blocking findings (N5, N6). Both are fixed (answers below) but not rechecked: under `AGENTS.md` they go to the owner, who accepts the fixes or allows another round. S44-D3's wording on the lists also changed afterwards, after the research summary's review.
+Round 5 was granted by the owner's PR review comment (https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/pull/48#pullrequestreview-5830859514: "Run one additional review round to check your latest fixes"). It accepted the fixes of round 4's two blocking findings.
 
 ## Round 1
 
@@ -786,4 +786,101 @@ Check this change like a fix: is it consistent across the plans and their test p
 | --- | --- | --- |
 | N5 | blocking | fixed: docs/slices/poc-4-4-stage-checklists/test_plan.md: the review-based proof quotes the text that says an author reads the stage's list (S44-D8), and checks that each DPL entry names the check that now catches it, or "none" (S44-D9) |
 | N6 | blocking | fixed: docs/slices/poc-4-4-stage-checklists/plan.md: the checks table says "At most two runs", as S44-D10 does |
+| ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |
+
+## Round 5
+
+### Attempt plan/c1/r5/plan/1
+
+Commit `a4082dd`, effort medium. Files reviewed (SHA-256): `docs/slices/poc-4-4-stage-checklists/plan.md` `ec40204c66bf`, `docs/slices/poc-4-4-stage-checklists/test_plan.md` `82139aceb634`.
+
+Status: completed; approvable within the threat model: yes.
+
+#### Prompt
+
+````markdown
+## Your mandate (recheck)
+
+This is round 5 of the plan review of slice 4.4 (stage checklists, #41), a recheck of your earlier report (round 4, attempt 1). For every answer of the author below, open the files the answer names and check the fix; accept it or re-raise the finding. Report anything wrong or missing in what the fixes touch. The author revised all six slice-4 plans together (`docs/slices/poc-4-*/`) so that decisions shared between plans agree; a fix may sit in another plan, the slice index (`docs/slices/README.md`) or `AGENTS.md`, so open those where an answer points to them. From round 2 a new finding counts only if it is blocking (`AGENTS.md`, Plan review), except simpler alternatives and decision concerns; slice 4 proposes that high findings count too, so report new high findings as well, marked `[high]`. Judge against the approved threat model (`AGENTS.md`, PoC scope and proportion) and the plan's own threat model.
+
+## How to report
+
+- A re-raised finding keeps its earlier ID, with the reason the fix does not hold.
+- Add one advisory finding with ID `ACCOUNTED`, problem text "[low] accounted answers", and in its evidence one line per answer: `<ID>: accepted` or `<ID>: re-raised`, followed by the files you opened for it. (Slice 4.1 replaces this with an `accounted` field; until then this finding carries it.)
+- For advisory findings, start the problem text with [high], [medium] or [low].
+- Write `<token>` for any credential value, even a made-up example: the publication check withholds a report that holds one.
+
+## The owner's request for this round
+
+The owner, in a review comment on PR #48 (2026-11-09): "Run one additional review round to check your latest fixes". Round 4 was the last allowed round and ended with two blocking findings; the author fixed them afterwards (answers below). S44-D3's wording on the lists also changed after the research summary's review (both benchmark setups carry the lists, so 4.5 does not measure the lists' own effect).
+
+## Your earlier report (round 4, attempt 1)
+
+```json
+{
+  "findings": [
+    {
+      "evidence": "N3: accepted \u2014 docs/slices/poc-4-4-stage-checklists/plan.md:52-53 (S44-D13 now follows S44-D12), docs/slices/poc-4-4-stage-checklists/test_plan.md:9,15 (both now say S44-D1 to S44-D13)\nN4: accepted \u2014 docs/slices/poc-4-5-benchmark/plan.md:57 (S45-D8: \"The owner decides the default setup, whether the lists stay, and each mandate wording ... The launcher's mandate constants change only after the owner's choice\"), :27, :134 (automatic rules dropped); poc-4-5 test_plan.md:37; agrees with poc-4-1 S41-D14 and poc-4-4 S44-D11\nACCOUNTED: accepted \u2014 the rejection holds; this entry stands in until S41-D8's field exists\nOwner change: checked poc-4-4 plan.md:48-53,70,114; test_plan.md:24-44; poc-4-5 plan.md:50-60,86,117-118,133-135; poc-4-5 test_plan.md; poc-4-6 plan.md:44; poc-4-6 test_plan.md:19; docs/delivery_problem_log.md (DPL-001 to DPL-011 still the full range). S44-D10 (Opus and Sonnet, no Codex) matches S45-D10 and poc-4-5 plan.md:86,117. S44-D13's new scope (severity schemes, the parts of the prompt around the mandate) is covered by the Review-prompt research row. The new findings are N5 and N6.",
+      "failure_scenario": "None; this entry only records which answers were accepted.",
+      "file": "docs/slices/poc-4-4-stage-checklists/plan.md",
+      "id": "ACCOUNTED",
+      "kind": "advisory",
+      "line": 0,
+      "problem": "[low] accounted answers"
+    },
+    {
+      "evidence": "plan.md:48 (S44-D8, the authoring guideline); plan.md:49 (S44-D9, \"For each entry it also names the gate or computed evidence that now catches the miss\"). test_plan.md:35-37: the rule-text proof quotes AGENTS.md for S44-D4, S44-D6 and S44-D11 only, and checks only the code list's content for S44-D8. test_plan.md:40-42: the DPL mapping checks \"a question at the stage where the miss happened, or a reason why not\". plan.md:78 and :106 (the AGENTS.md changes in scope) do not list an authoring rule. poc-4-6 plan.md:44 (S46-D1) names the lists only as each stage's review, not as the author's guideline.",
+      "failure_scenario": "The implementation adds the lists and --stage but writes the authoring-guideline rule nowhere, and research.md's DPL mapping leaves out the catching gate (for example 4.2's uncovered-lines evidence for DPL-010). Every tooling test and every review-based proof in the test plan still passes, so two approved decisions ship unimplemented with a green record. This is an approved decision without a test. Fix: add S44-D8's AGENTS.md (or 4.6 stage-table) text to the rule-text quotes, name where the rule is written, and have the DPL-mapping review check the gate field.",
+      "file": "docs/slices/poc-4-4-stage-checklists/test_plan.md",
+      "id": "N5",
+      "kind": "blocking",
+      "line": 35,
+      "problem": "The new parts of S44-D8 and S44-D9 have no proof. S44-D8 now says each list is also the author's guideline: \"An author reads the stage's list before writing the requirements, the architecture, the tests or the code\". No test or review-based proof checks that a rule saying this is written anywhere. S44-D9 now requires research.md to name, for each DPL entry, \"the gate or computed evidence that now catches the miss, if any\", so that a question covers only what no check covers. The DPL-mapping proof checks only for a question or a reason why not."
+    },
+    {
+      "evidence": "plan.md:50 S44-D10: \"one round with Opus and Sonnet. At most two runs, outside 4.5's budget\"; plan.md:114: \"| The critique unit | Lists shaped by one model's blind spots | At most three runs | ...\".",
+      "failure_scenario": "The owner approves the check additions from the POC-D6 table, which states the cost as three runs. The implementer reads either bound: a third, unbudgeted critique run (outside 4.5's budget) can be called compliant, or the owner approves a cost that the decision does not state. The impact is small, but it is a contradiction inside the plan. The fix is one word: change \"three\" to \"two\".",
+      "file": "docs/slices/poc-4-4-stage-checklists/plan.md",
+      "id": "N6",
+      "kind": "blocking",
+      "line": 114,
+      "problem": "The plan contradicts itself on the critique's run bound. S44-D10 now says \"At most two runs\" (Opus and Sonnet). The POC-D6 checks table still gives the critique unit's cost as \"At most three runs\", which is left over from the dropped Codex critique."
+    }
+  ],
+  "verdict": "no"
+}
+```
+
+## The author's answers
+
+| ID | Severity | Answer |
+| --- | --- | --- |
+| N5 | blocking | fixed: docs/slices/poc-4-4-stage-checklists/test_plan.md: the review-based proof quotes the text that says an author reads the stage's list (S44-D8), and checks that each DPL entry names the check that now catches it, or "none" (S44-D9) |
+| N6 | blocking | fixed: docs/slices/poc-4-4-stage-checklists/plan.md: the checks table says "At most two runs", as S44-D10 does |
+| ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |
+````
+
+#### Report
+
+```json
+{
+  "findings": [
+    {
+      "evidence": "N5: accepted. Opened docs/slices/poc-4-4-stage-checklists/test_plan.md:38-39 (the review-based proof now quotes the AGENTS.md or stage-table text saying an author reads the stage's list, per S44-D8) and :42-44 (the DPL-mapping check now also requires each entry to name the gate or computed evidence that catches it, or \"none\", per S44-D9), checked against plan.md:48-49.\nN6: accepted. Opened plan.md:114 (\"At most two runs\"), which now matches S44-D10 at plan.md:50.\nACCOUNTED: accepted. The rejection holds; this entry stands in until S41-D8's field exists.\nOwner change: checked plan.md:43. The new S44-D3 wording (both 4.5 setups carry the lists, so 4.5 does not measure the lists' own effect) agrees with S44-D11 and S44-D12 and contradicts nothing in test_plan.md.",
+      "failure_scenario": "None; this entry only records which answers were accepted.",
+      "file": "docs/slices/poc-4-4-stage-checklists/test_plan.md",
+      "id": "ACCOUNTED",
+      "kind": "advisory",
+      "line": 0,
+      "problem": "[low] accounted answers"
+    }
+  ],
+  "verdict": "yes"
+}
+```
+
+#### Answers to plan/c1/r5/plan/1
+
+| ID | Severity | Answer |
+| --- | --- | --- |
 | ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |

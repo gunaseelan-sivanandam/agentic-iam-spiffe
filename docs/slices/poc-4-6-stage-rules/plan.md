@@ -5,7 +5,7 @@ workflow names the seven stages of the delivery cycle. For each it says what the
 it is reviewed and checked, and when it ends, and how discovered issues are handed over so they are
 not lost.
 
-Status: draft, 2026-11-08, revised after plan review rounds 2 and 3. Approved when the owner merges slice
+Status: draft, 2026-11-08, revised after every plan review round up to the last (its record lists them) and the owner's decisions of 2026-11-09. Approved when the owner merges slice
 4's single plan PR.
 
 **Order of work:** last of slice 4, because its rules name 4.1's modes, 4.3's records and 4.4's list

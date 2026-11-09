@@ -326,3 +326,90 @@ This is round 2 of the review of the research summary `docs/slices/agentic-sdlc-
 | --- | --- | --- |
 | N1 | low | fixed: docs/slices/poc-4-4-stage-checklists/plan.md, docs/slices/agentic-sdlc-poc/industry_research.md, docs/STATUS.md: S44-D3 and row 4 say nothing measures the lists' effect unless slice 8 compares reviews with and without them, and STATUS lists that as a slice-8 option; the typo is fixed |
 | ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |
+
+## Round 3
+
+### Attempt industry_research/c1/r3/research/1
+
+Commit `a4082dd`, effort medium. Files reviewed (SHA-256): `docs/slices/agentic-sdlc-poc/industry_research.md` `c70811a176c5`.
+
+Status: completed; approvable within the threat model: yes.
+
+#### Prompt
+
+````markdown
+## Your mandate (recheck)
+
+This is round 3 of the review of the research summary `docs/slices/agentic-sdlc-poc/industry_research.md`, a recheck of your earlier report (round 2, attempt 1). For every answer of the author below, open the files the answer names and check the fix; accept it or re-raise the finding. Report anything wrong or missing in what the fixes touch, including the changed decisions in `docs/slices/poc-4-4-stage-checklists/plan.md` (S44-D3) and `docs/slices/poc-4-5-benchmark/plan.md` (S45-D8). From round 2 a new finding counts only if it is blocking (`AGENTS.md`, Plan review), except simpler alternatives and decision concerns; report new high findings as well, marked `[high]`.
+
+## How to report
+
+- A re-raised finding keeps its earlier ID, with the reason the fix does not hold.
+- Add one advisory finding with ID `ACCOUNTED`, problem text "[low] accounted answers", and in its evidence one line per answer: `<ID>: accepted` or `<ID>: re-raised`, followed by the files you opened for it.
+- For advisory findings, start the problem text with [high], [medium] or [low].
+- Write `<token>` for any credential value, even a made-up example: the publication check withholds a report that holds one.
+
+## The owner's request for this round
+
+The owner, in a review comment on PR #48 (2026-11-09): "Run one additional review round to check your latest fixes". Your round 2 found one low finding; the author fixed it (answer below).
+
+## Your earlier report (round 2, attempt 1)
+
+```json
+{
+  "findings": [
+    {
+      "evidence": "R1: accepted \u2014 industry_research.md (row 4, line 27), poc-4-4-stage-checklists/plan.md:43 (S44-D3), poc-4-5-benchmark/plan.md:52 (S45-D3), :57 (S45-D8)\nR2: accepted \u2014 industry_research.md (row 4, source 6)\nR3: accepted \u2014 industry_research.md (row 6), poc-4-5-benchmark/plan.md:57\nR4: accepted \u2014 industry_research.md (lines 9-10, table column 'Study's ID', row 9 D5 to S41-D16)\nR5: accepted \u2014 industry_research.md (rows 2, 3, 8 with [2], [1], [10] and kinds)\nR6: accepted \u2014 industry_research.md (row 5)\nR7: accepted \u2014 industry_research.md (row 1)\nR8: accepted \u2014 industry_research.md (lines 42-45)\nR9: accepted \u2014 industry_research.md (lines 12-14)\nR10: accepted \u2014 industry_research.md (table, lines 22-33)",
+      "failure_scenario": "None; this is the accounting of the answers.",
+      "file": "docs/slices/agentic-sdlc-poc/industry_research.md",
+      "id": "ACCOUNTED",
+      "kind": "advisory",
+      "line": 0,
+      "problem": "[low] accounted answers"
+    },
+    {
+      "evidence": "poc-4-4 plan.md:51 (S44-D11 proposes items and wordings; it measures nothing); plan.md:43; industry_research.md:27.",
+      "failure_scenario": "The owner reads \"track\" as \"measure\" and expects slice 8 to have data on the lists' effect. Unless slice 8 plans a no-list comparison, that data will not exist. This is not a contradiction: both plans now say plainly that 4.5 does not measure the lists' effect.",
+      "file": "docs/slices/poc-4-4-stage-checklists/plan.md",
+      "id": "N1",
+      "kind": "advisory",
+      "line": 43,
+      "problem": "[low] S44-D3 says the lists' own effect is tracked by \"the learning loop (S44-D11) and slice 8's evaluation\". S44-D11 only adds items when an open review finds a missing class of defect. It does not measure whether the lists help. Row 4 of industry_research.md says the same thing (\"the learning loop and slice 8 track the lists\"). There is also a typo: \"length; The lists\"."
+    }
+  ],
+  "verdict": "yes"
+}
+```
+
+## The author's answers
+
+| ID | Severity | Answer |
+| --- | --- | --- |
+| N1 | low | fixed: docs/slices/poc-4-4-stage-checklists/plan.md, docs/slices/agentic-sdlc-poc/industry_research.md, docs/STATUS.md: S44-D3 and row 4 say nothing measures the lists' effect unless slice 8 compares reviews with and without them, and STATUS lists that as a slice-8 option; the typo is fixed |
+| ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |
+````
+
+#### Report
+
+```json
+{
+  "findings": [
+    {
+      "evidence": "N1: accepted. Opened docs/slices/poc-4-4-stage-checklists/plan.md:43 (S44-D3 now says \"Nothing measures that unless slice 8 compares reviews with and without the lists; the learning loop (S44-D11) only adds what reviews show missing\", and the typo is gone), docs/slices/agentic-sdlc-poc/industry_research.md:27 (row 4 says \"only a comparison without lists, a slice-8 option, could measure it\"), docs/STATUS.md:29-30 (slice 8 option: whether the stage lists help, reviews with and without them), docs/slices/poc-4-5-benchmark/plan.md:57 (S45-D8: \"Both setups carry the lists, so the report does not measure the lists' own effect\"). The four files agree.\nACCOUNTED: accepted. It is the accounting stand-in, not a finding.",
+      "failure_scenario": "None; this is the accounting of the answers.",
+      "file": "docs/slices/agentic-sdlc-poc/industry_research.md",
+      "id": "ACCOUNTED",
+      "kind": "advisory",
+      "line": 0,
+      "problem": "[low] accounted answers"
+    }
+  ],
+  "verdict": "yes"
+}
+```
+
+#### Answers to industry_research/c1/r3/research/1
+
+| ID | Severity | Answer |
+| --- | --- | --- |
+| ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |

@@ -7,7 +7,7 @@ Record of the plan review of slice 4.5 (#42), benchmark in the agentic-SDLC PoC:
 - Every prompt and report block below was checked against the log before the push. A report lost to the report-path collision (DPL-011) or withheld by the publication check has no block.
 - Until slice 4.1 adds the `accounted` field, a recheck lists the answers it accepted, and the files it opened, in a finding with ID `ACCOUNTED`.
 
-The owner granted one more round on 2026-11-09 ("I accept your recommendations for my decisions", decision 5 of the proposal). The launcher needs that extension as a link to the owner's PR comment, so round 5 runs once that comment exists.
+Round 5 was granted by the owner, first in this conversation on 2026-11-09 ("I accept your recommendations for my decisions") and then by a PR review comment (https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/pull/48#pullrequestreview-5830859514: "Run one additional review round to check your latest fixes"). Its findings were fixed afterwards (answers below).
 
 ## Round 1
 
@@ -1014,4 +1014,151 @@ Check this change like a fix: is it consistent across the three plans and their 
 | A21 | medium | fixed: docs/slices/poc-4-5-benchmark/plan.md: S45-D8: the report recommends nothing automatically; the owner chooses each mandate, the launcher's constants change only after the choice, in 4.5b, and the final draft is chosen by reason |
 | A22 | medium | fixed: docs/slices/poc-4-5-benchmark/plan.md, docs/slices/poc-4-5-benchmark/test_plan.md: the recheck case sits on `e842e97` with leak terms from its description, and the "Cases" row covers it |
 | A23 | low | owner: decided on 2026-11-09 ("I accept your recommendations for my decisions"): the two mandates are chosen separately (S45-D8) |
+| ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |
+
+## Round 5
+
+### Attempt plan/c1/r5/plan/1
+
+Commit `a4082dd`, effort medium. Files reviewed (SHA-256): `docs/slices/poc-4-5-benchmark/plan.md` `bc06bee45dc7`, `docs/slices/poc-4-5-benchmark/test_plan.md` `01cccacd706d`.
+
+Status: completed; approvable within the threat model: yes.
+
+#### Prompt
+
+````markdown
+## Your mandate (recheck)
+
+This is round 5 of the plan review of slice 4.5 (benchmark, #42), a recheck of your earlier report (round 4, attempt 1). For every answer of the author below, open the files the answer names and check the fix; accept it or re-raise the finding. Report anything wrong or missing in what the fixes touch. The author revised all six slice-4 plans together (`docs/slices/poc-4-*/`) so that decisions shared between plans agree; a fix may sit in another plan, the slice index (`docs/slices/README.md`) or `AGENTS.md`, so open those where an answer points to them. From round 2 a new finding counts only if it is blocking (`AGENTS.md`, Plan review), except simpler alternatives and decision concerns; slice 4 proposes that high findings count too, so report new high findings as well, marked `[high]`. Judge against the approved threat model (`AGENTS.md`, PoC scope and proportion) and the plan's own threat model.
+
+## How to report
+
+- A re-raised finding keeps its earlier ID, with the reason the fix does not hold.
+- Add one advisory finding with ID `ACCOUNTED`, problem text "[low] accounted answers", and in its evidence one line per answer: `<ID>: accepted` or `<ID>: re-raised`, followed by the files you opened for it. (Slice 4.1 replaces this with an `accounted` field; until then this finding carries it.)
+- For advisory findings, start the problem text with [high], [medium] or [low].
+- Write `<token>` for any credential value, even a made-up example: the publication check withholds a report that holds one.
+
+## The owner's request for this round
+
+The owner, in a review comment on PR #48 (2026-11-09): "Run one additional review round to check your latest fixes". The owner's decisions of 2026-11-09 ("I accept your recommendations for my decisions", after a study of agent-first delivery and its critique, summarised in `docs/slices/agentic-sdlc-poc/industry_research.md`) changed this plan after your last round: it is now a blinded screening study (`short+list`, `open+list`, `open-B+list`, recheck A and B; the same severity rules for every setup; cases that did not shape the lists; a decoy; repeats only where setups disagree; counts with exact intervals; the owner decides each mandate; no model comparison and no Codex; budget 60 with retries). Check the rewrite as a whole against your earlier findings and the other slice-4 plans.
+
+## Your earlier report (round 4, attempt 1)
+
+```json
+{
+  "findings": [
+    {
+      "evidence": "plan.md:58 (c2) 'the drafts become the mandates; otherwise ... the owner chooses (S41-D14)'; poc-4-1-review-prompts/plan.md:55 S41-D14 'the owner chooses from 4.5's report'; poc-4-4-stage-checklists/plan.md:51 S44-D11 'the owner approves it'; plan.md:81-85 In scope.",
+      "failure_scenario": "(c2) fires and the report says the drafts are now the mandates. The launcher keeps 4.1's constants because no slice owns the swap, or someone swaps them without the owner's approval and so bypasses S44-D11. Either way the record contradicts itself about which mandate is in force. Fix: in (c2) say 'the report recommends the drafts and the owner decides', and name who swaps the constants (or say they change only through the learning loop). One sentence on the final draft would also help.",
+      "file": "docs/slices/poc-4-5-benchmark/plan.md",
+      "id": "A21",
+      "kind": "advisory",
+      "line": 58,
+      "problem": "[medium] S45-D8(c2) says that if the drafts win, 'the drafts become the mandates', and that otherwise the owner chooses. S41-D14 (poc-4-1 plan.md:55) says the owner chooses from 4.5's report in every case, and S44-D11 says the owner approves any change to mandate wording. No plan says who replaces the launcher's mandate constants in `scripts/run_independent_review.py` when (c2) fires, or in which slice. 4.5's In scope (plan.md:81-85) names the launcher only for its Codex mode. The final mandate's draft (S44-D13) also has no stated fate: S45-D7 does not measure it, and S41-D14 only covers the initial and recheck mandates."
+    },
+    {
+      "evidence": "plan.md:55 S45-D5 'a recheck case ... built like slice 2's round 4' (no commit); test_plan.md:35 New cases row names the three stage-document cases and DPL-010 only; test_plan.md:31 the Recheck case row tests the prompt and scoring, not preparation or leaks; test_plan.md:33 'every case's copy' is free of its leak terms only if the answer key gives the recheck case leak terms.",
+      "failure_scenario": "The recheck case is built on a commit whose copy holds slice 2's review record or a DPL entry describing the false `fixed:` answer. `recheck-A` and `recheck-B` both re-raise it by reading the answer, so (c2) is decided on a leaked case. Fix: name the base commit and add the recheck case to the 'New cases' row with its leak terms.",
+      "file": "docs/slices/poc-4-5-benchmark/test_plan.md",
+      "id": "A22",
+      "kind": "advisory",
+      "line": 35,
+      "problem": "[medium] The new recheck case (S45-D5) names no base commit, unlike the other new cases (`e842e97`, `c4f9ca2`). The 'New cases' row lists only the three stage-document cases and the DPL-010 case, so nothing tests that the recheck case prepares, passes the leak search and reviews the right paths. The case is modelled on slice 2's round 4. Slice 2's review record and later DPL entries describe the exact miss: an accepted answer naming an 'Advisory only' column that did not exist. A copy at a commit that holds them would hold the case's answer."
+    },
+    {
+      "evidence": "plan.md:57 S45-D7 'recheck-A and recheck-B on the recheck case (2)'; plan.md:58 (c2) 'if open-B and recheck-B together detect at least two more defects than 4.1's wordings ... the drafts become the mandates'.",
+      "failure_scenario": "`open-B` finds 2 more defects, and `recheck-B` accepts the false `fixed:` answer that `recheck-A` re-raised. The net gain is +1, so (c2) does not fire and neither draft is adopted. Had `recheck-B` tied, both would have been adopted, though the recheck draft has no evidence either way. The owner may prefer to decide the two mandates separately, or to treat the recheck draft as unmeasured.",
+      "file": "docs/slices/poc-4-5-benchmark/plan.md",
+      "id": "A23",
+      "kind": "decision_concern",
+      "line": 58,
+      "problem": "[low] (c2) makes one decision for two mandates. `open-B` and `recheck-B` together must detect 'at least two more' than 4.1's wordings. The recheck mandate is measured on a single case, so it adds at most one detection. A recheck draft that does worse can therefore be adopted because the initial draft did well, and the reverse."
+    },
+    {
+      "evidence": "A19: accepted (plan.md:84 In scope names 'the Codex probe script and the record it writes'; test_plan.md:37 Probe record row)\nA20: accepted (plan.md:72 'stage A's short and checklist, re-scored with the new key'; plan.md:8 'revised after plan review rounds 1, 2 and 3')\nACCOUNTED: accepted (stand-in until S41-D8's field exists)\nOwner's change: checked poc-4-5 plan.md and test_plan.md, poc-4-1-review-prompts/plan.md (S41-D4, S41-D14) and test_plan.md:29, poc-4-4-stage-checklists/plan.md (S44-D10, S44-D11, S44-D13) and test_plan.md:27, docs/slices/README.md. The budget of 50 agrees across plans (S45-D1, S44-D10). The run count is 2+14+9+2+10+2+5+3 = 47. Each new decision has a test-plan row. See A21-A23.",
+      "failure_scenario": "None. This finding records which answers were accepted.",
+      "file": "docs/slices/poc-4-5-benchmark/plan.md",
+      "id": "ACCOUNTED",
+      "kind": "advisory",
+      "line": 0,
+      "problem": "[low] accounted answers"
+    }
+  ],
+  "verdict": "yes"
+}
+```
+
+## The author's answers
+
+| ID | Severity | Answer |
+| --- | --- | --- |
+| A21 | medium | fixed: docs/slices/poc-4-5-benchmark/plan.md: S45-D8: the report recommends nothing automatically; the owner chooses each mandate, the launcher's constants change only after the choice, in 4.5b, and the final draft is chosen by reason |
+| A22 | medium | fixed: docs/slices/poc-4-5-benchmark/plan.md, docs/slices/poc-4-5-benchmark/test_plan.md: the recheck case sits on `e842e97` with leak terms from its description, and the "Cases" row covers it |
+| A23 | low | owner: decided on 2026-11-09 ("I accept your recommendations for my decisions"): the two mandates are chosen separately (S45-D8) |
+| ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |
+````
+
+#### Report
+
+```json
+{
+  "findings": [
+    {
+      "evidence": "poc-4-1 plan.md:44 S41-D2 lists short, checklist and narrow; poc-4-5 plan.md:52 S45-D3 says 'Only the runner builds `short+list` and the B variants (4.1, S41-D2)'; poc-4-5 plan.md:134 drops `narrow`.",
+      "failure_scenario": "4.1 is built to S41-D2. Its `build_prompt` can take stage A's prompts and the narrow question, but it cannot add 4.4's list to a prompt without a mandate, and it cannot take a draft mandate text. 4.5a then has to change 4.1's interface, or build the prompts itself outside `build_prompt`. In the second case the prompt identity no longer comes from one builder. Fix: update S41-D2's list to `short+list`, the B mandate variants and no `narrow`.",
+      "file": "docs/slices/poc-4-1-review-prompts/plan.md",
+      "id": "A24",
+      "kind": "advisory",
+      "line": 44,
+      "problem": "[medium] S41-D2 does not match 4.5's rewrite. It says the runner's API passes only \"stage A's short and checklist prompts, and the narrow question of the DPL-010 case, all without the mandate\". S45-D3 cites S41-D2 for configurations S41-D2 does not list. `short+list` is the short prompt with 4.4's list, not stage A's checklist prompt. `open-B+list` and `recheck-B` swap in a different mandate text. The `narrow` setup was dropped (plan.md:134)."
+    },
+    {
+      "evidence": "poc-4-1 plan.md:55 S41-D13; poc-4-5 plan.md:53 S45-D4 'Blocking and high findings count as detections ... blocking-only counts are reported too'.",
+      "failure_scenario": "The implementer of 4.1's schema reader scores detections by `severity == blocking` only. High-severity detections are then left out of the headline counts the owner decides from, against S45-D4. Fix: say in S41-D13 that 4.5 scores blocking or high (S45-D4).",
+      "file": "docs/slices/poc-4-1-review-prompts/plan.md",
+      "id": "A25",
+      "kind": "advisory",
+      "line": 55,
+      "problem": "[medium] S41-D13 says \"New reports are scored on `severity == \"blocking\"`\". S45-D4 says blocking and high findings both count as detections, and blocking-only counts are reported too. The two plans give different rules for scoring the benchmark."
+    },
+    {
+      "evidence": "plan.md:52 S45-D3 '`open+list`: 4.1's initial mandate with the same list, 4.2's file list and upstream items' and '`short+list`: ... without the mandate'; plan.md:57 S45-D8 says only 'Both setups carry the lists, so the report does not measure the lists' own effect'.",
+      "failure_scenario": "The owner reads a gain for `open+list` as the open mandate's effect and adopts the mandate wording on that basis. Part or all of the gain may come from 4.2's file list. Fix: one sentence in S45-D8 saying the comparison covers mandate plus 4.2 inputs together, or give `short+list` 4.2's inputs too.",
+      "file": "docs/slices/poc-4-5-benchmark/plan.md",
+      "id": "A26",
+      "kind": "advisory",
+      "line": 52,
+      "problem": "[medium] `open+list` gets 4.2's file list and upstream items as well as the mandate; `short+list` does not. A difference between the two therefore mixes the mandate's effect with 4.2's inputs. S45-D8 notes the lists are shared, but it does not say this other difference is not measured separately."
+    },
+    {
+      "evidence": "plan.md:50, 55, 56, 126.",
+      "failure_scenario": "The budget constant or the confirmation step is built to the wrong count. The 7 spare runs make an overrun unlikely.",
+      "file": "docs/slices/poc-4-5-benchmark/plan.md",
+      "id": "A27",
+      "kind": "advisory",
+      "line": 56,
+      "problem": "[low] The plan does not agree with itself on the run counts. S45-D7 says \"A Sonnet session confirms a random sample of ten\"; S45-D6 counts two runs for the second confirmer; the checks table says \"two Sonnet sessions\". The source column of S45-D1 says \"about 55 runs\", but S45-D1 and S45-D6 plan about 53."
+    },
+    {
+      "evidence": "A21: accepted (poc-4-5 plan.md:57 S45-D8: the owner decides each mandate, constants change only after the choice in 4.5b, the final draft is chosen by reason; plan.md:80-85 In scope and Out of scope; test_plan.md:41 Mandate constants row; poc-4-1 plan.md:56 S41-D14; poc-4-4 plan.md:51 S44-D11)\nA22: accepted (poc-4-5 plan.md:54 S45-D5: the recheck case is on `e842e97` with a newly planted defect; plan.md:53 S45-D4 leak terms; test_plan.md:32, 34, 35)\nA23: accepted (owner decision of 2026-11-09; plan.md:57 'initial and recheck separately')\nACCOUNTED: accepted (stand-in until S41-D8's field exists)\nRewrite checked as a whole: poc-4-5 plan.md and test_plan.md, poc-4-1 plan.md (S41-D2, D4, D6, D8, D13, D14), poc-4-4 plan.md (S44-D3, D10 to D13), docs/slices/README.md, AGENTS.md:206-210. The budget is consistent across plans: 60 runs, with 4.4's critique outside it. Run count: 2+30+13+2+4+2 = 53. Every decision has a test-plan row. See A24-A27.",
+      "failure_scenario": "None. This finding records which answers were accepted.",
+      "file": "docs/slices/poc-4-5-benchmark/plan.md",
+      "id": "ACCOUNTED",
+      "kind": "advisory",
+      "line": 0,
+      "problem": "[low] accounted answers"
+    }
+  ],
+  "verdict": "yes"
+}
+```
+
+#### Answers to plan/c1/r5/plan/1
+
+| ID | Severity | Answer |
+| --- | --- | --- |
+| A24 | medium | fixed: docs/slices/poc-4-1-review-prompts/plan.md, docs/slices/poc-4-1-review-prompts/test_plan.md: S41-D2 names what the runner may pass (the short prompt in place of the mandate, a stage list, a draft mandate), as S45-D3 uses them; the "Runner configurations" row tests them |
+| A25 | medium | fixed: docs/slices/poc-4-1-review-prompts/plan.md, docs/slices/poc-4-1-review-prompts/test_plan.md: S41-D13 scores blocking and high findings as detections, with blocking-only counts too, as S45-D4 says |
+| A26 | medium | fixed: docs/slices/poc-4-5-benchmark/plan.md: S45-D3 gives `short+list` the same 4.2 file list and upstream items, so `short+list` and `open+list` differ only in the mandate |
+| A27 | low | fixed: docs/slices/poc-4-5-benchmark/plan.md: S45-D7 says two Sonnet sessions confirm ten findings, five each; S45-D1's source gives the owner's "about 55" and the 53 planned |
 | ACCOUNTED | low | rejected: the stand-in that carries the accounted answers until S41-D8's field exists, not a finding |
