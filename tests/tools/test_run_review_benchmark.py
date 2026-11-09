@@ -622,6 +622,26 @@ def test_a_changed_canary_runs_again_and_an_unchanged_one_does_not(repo: tuple[R
     assert len(run_once("changed")) == 1 and r.calls() == 4
 
 
+@pytest.mark.parametrize(("canary", "runs"), [
+    ({"valid": True, "passed": True}, True),
+    ({"valid": False, "passed": True, "runs": {"twin": {"hook_ran": True}}}, True),
+    ({"valid": False, "passed": True, "runs": {"twin": {"hook_ran": False}}}, False),
+    ({"valid": True, "passed": False}, False),
+], ids=["valid-and-passed", "passed-twin-ran-only-the-hook", "passed-twin-ran-nothing", "not-passed"])
+def test_cases_run_only_after_a_passed_canary_whose_twin_ran_the_hook(repo: tuple[Repo, str, str], canary: dict,
+                                                                       runs: bool) -> None:
+    """S45-D9 refuses stage-B runs under another CLI than the canary's; a passed canary whose twin showed only that
+    settings reach an unflagged session is enough to run, and the report says what it showed (4.5b's canaries)."""
+    r, base, commit = repo
+    r.key([_case("C1", base, commit)])
+    bench.append_result(r.root, "B", {"stage": "B", "case": "CANARY", "kind": "canary", "cli_version": "9.9.9 (Claude Code)",
+                                      "calls": 2, "key_sha256": bench.load_key(r.root).sha256, **canary})
+    assert _run(r) == (0 if runs else 2)
+    assert r.calls() == (2 if runs else 0)
+    if runs:
+        assert '"twin_ran_hook"' in bench.report_stage_b(r.root, bench.load_key(r.root))
+
+
 def test_cli_version_other_than_the_canarys_is_refused(repo: tuple[Repo, str, str]) -> None:
     r, base, commit = repo
     r.key([_case("C1", base, commit)])

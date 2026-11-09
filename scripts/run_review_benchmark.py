@@ -819,11 +819,19 @@ def _canary_call(prepared: PreparedCase, argv: list[str], prompt: str, state: Ru
 
 
 def check_cli_version(repo: Path, key: AnswerKey, cli: str) -> None:
-    """S45-D9: stage-B reviews run only under the CLI version of a valid, passed canary."""
+    """S45-D9: stage-B reviews run only under the CLI version of a passed canary whose twin showed at least that
+    settings reach a session without the launcher's flags (its hook ran). A canary that is also valid shows the same
+    for instruction files; the report says which a canary showed."""
     canaries = [line for line in read_results(repo, key.stage) if line.get("kind") == "canary"
-                and line.get("valid") and line.get("passed")]
+                and line.get("passed") and (line.get("valid") or settings_shown(line))]
     if not any(line.get("cli_version") == cli for line in canaries):
-        raise BenchmarkRefusedError(f"no valid, passed canary for the installed CLI {cli}; run the canary first")
+        raise BenchmarkRefusedError(f"no passed canary whose twin ran the planted hook, for the installed CLI {cli}; "
+                                    "run the canary first")
+
+
+def settings_shown(line: dict[str, Any]) -> bool:
+    """Whether a canary's twin ran the planted hook: settings reach a session without the launcher's flags."""
+    return bool(((line.get("runs") or {}).get("twin") or {}).get("hook_ran"))
 
 
 def append_result(repo: Path, stage: str, line: dict[str, Any]) -> None:
@@ -1320,7 +1328,8 @@ def report_stage_b(repo: Path, key: AnswerKey) -> str:
     lines = load_results(repo, key)
     confirmation = Confirmation(read_verdicts(repo, "author"), read_tokens(repo))
     counts = configuration_counts(lines, key, confirmation)
-    canaries = [{k: c.get(k) for k in ("cli_version", "valid", "passed")} for c in lines if c.get("kind") == "canary"]
+    canaries = [{**{k: c.get(k) for k in ("cli_version", "valid", "passed")}, "twin_ran_hook": settings_shown(c)}
+                for c in lines if c.get("kind") == "canary"]
     return "\n".join([
         f"Stage B. Answer key SHA-256: `{key.sha256}`; match rule SHA-256: `{key.match_rule_sha256}`; lists at "
         f"`{key.lists_commit or 'none'}`.", "",
@@ -1330,7 +1339,9 @@ def report_stage_b(repo: Path, key: AnswerKey) -> str:
         f"Discordant cases, open+list against open-B+list: `{json.dumps(discordant(counts, 'open+list', 'open-B+list'))}`",
         f"Severity agreement where a case ran twice: `{json.dumps(severity_agreement(lines))}`",
         f"Origin stage of the findings: `{json.dumps(origin_table(lines), sort_keys=True)}`",
-        f"Canary: `{json.dumps(canaries)}`", repeats_table(lines), agreement(repo), "", SIZE_NOTE, "", *report_rows(lines), "", COLUMN_NOTE])
+        f"Canary: `{json.dumps(canaries)}`. A canary is valid when its twin, without the launcher's flags, followed the "
+        "planted CLAUDE.md and ran the planted hook (S45-D9); one whose twin ran only the hook shows that the flags "
+        "keep settings out, not that they keep instruction files out.", repeats_table(lines), agreement(repo), "", SIZE_NOTE, "", *report_rows(lines), "", COLUMN_NOTE])
 
 
 def report(repo: Path, key: AnswerKey, stages: list[str]) -> str:
