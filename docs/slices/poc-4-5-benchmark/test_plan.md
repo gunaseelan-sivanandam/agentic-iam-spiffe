@@ -38,6 +38,7 @@ Tooling tests in `tests/tools/` with the fake `claude` CLI.
 | Canary validity | A twin that followed both the planted file and the hook makes the canary valid | A twin that followed only one makes it invalid, and the report says so | S45-D9 | plan |
 | CLI-version gate | — | A stage-B run with a CLI version other than the canary's is refused | S45-D9 | plan |
 | Runner paths (R5-A8) | `--dry-run` prepares every case and calls no reviewer; the planted-patch path applies a patch and the copy holds the planted line; the launcher's three report-shape branches and a non-JSON stream line are handled | — | S45-D11 | plan |
+| Mandate constants | After the owner's choice, the launcher's initial and recheck constants equal the chosen texts, and a review's start entry records their SHA-256 | — | S45-D8 | plan |
 | Stage-A compatibility | `--report --stage A` gives stage A's tables unchanged | — | S45-D2 | `existing@c325e7d` |
 
 ## Live checks (not in CI)

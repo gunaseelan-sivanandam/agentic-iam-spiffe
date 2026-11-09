@@ -22,7 +22,7 @@ No unit tests under `tests/unit/`: no service code changes. All tests are toolin
 
 | Area | Passes when | Fails or refuses when | Proves | Source |
 | --- | --- | --- | --- | --- |
-| Section order | The prompt holds role, mandate, rules, checklist, upstream, evidence, paths, task, (recheck: earlier report, answers) and output, in that order; a section with nothing to show says so | A task text that says "ignore the mandate" or "only check file X" still leaves the mandate before the rules and the task | S41-D1, S41-D11 | plan |
+| Section order | The prompt holds role, mandate, rules, checklist, upstream, evidence, paths, claims to verify (the task text), (recheck: earlier report, answers) and output, in that order; a section with nothing to show says so | A task text that says "ignore the mandate" or "only check file X" still leaves the mandate before the rules and the task | S41-D1, S41-D11 | plan |
 | No way to drop the mandate | The launcher's argument parser has no option that changes the sections; every prompt it builds, in every mode, holds its mode's mandate | An unknown option such as `--no-mandate` is refused before any call | S41-D1 | plan |
 | Reporting bounds | The output section holds the absence format, the gate rule ("do not report what a passing gate already checks; do report defects in the gates themselves") and the "claims to verify" section name verbatim; the task text appears only in that section | — | S41-D15 | plan |
 | Cannot determine | A recheck that lists an answer as `cannot determine` completes, and the end entry counts it | A `cannot determine` without a note fails the schema | S41-D15 | plan |

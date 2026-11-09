@@ -35,10 +35,13 @@ Tooling tests in `tests/tools/`.
 - **Rule texts:** the implementation review quotes the `AGENTS.md` text for S44-D4, S44-D6 and
   S44-D11, and checks that the code list (S44-D8) repeats none of `make lint`'s rules or the coding
   rules.
+- **Author's guideline (S44-D8):** the implementation review quotes the `AGENTS.md` or stage-table
+  text that says an author reads the stage's list before writing that stage's artifact.
 - **Citations:** the critiques check a sample of the quotes in `research.md` against what a public
   source could say, and flag any clause that is not marked "title only" for a paid standard.
 - **DPL mapping:** the critiques and the implementation review check that every DPL entry has a
-  question at the stage where the miss happened, or a reason why not (S44-D9). The plan review cannot,
+  question at the stage where the miss happened, or a reason why not, and names the gate or computed
+  evidence that now catches it, or "none" (S44-D9). The plan review cannot,
   because the lists do not exist yet.
 - **Critiques:** Opus and Sonnet each review the drafts with the open mandate (S44-D10). Every
   finding gets an answer under 4.1's severity rules.
