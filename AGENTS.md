@@ -226,6 +226,18 @@ template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>
   files it opened for it, and the launcher fails it when it leaves an answer out, names a file it did
   not read, or did not read a file that a `fixed:` answer names. Whoever writes a task text never
   makes a file list the scope, never says "only check X", and never asks a closed recheck question.
+- **What the reviewer receives.** The launcher computes the review's inputs; the author does not
+  choose or summarise them. The files under review come from the diff between the merge-base and
+  the reviewed commit, deleted files apart; `--path` only puts files first and carries the
+  empty-review rule. The upstream items are the governing plan (the bundle of the review record)
+  with its decision IDs, the plans of other bundles the change touches, and the requirement,
+  architecture and test items the trace model links to it, each with where it was found, followed
+  by the question whether a problem originates upstream. The evidence is computed in a scratch
+  clone of the reviewed commit with only `PATH`, `LANG` and a scratch `HOME`: the changed script
+  lines and branches the tooling tests do not run, the trace gaps among the upstream items, and the
+  CI results of the reviewed commit from the public API. A command that cannot run is shown as
+  failed, and the reviewer accounts for every numbered evidence entry under `accounted`, as
+  `explained` or `flagged` with the finding it raised.
 - **Models and usage limits.** Agents use Claude models. Codex is used only for scoped
   implementation, and only while Claude's 5-hour or weekly usage is above 70%. Reviews run on
   Claude; when a usage limit is reached, work pauses until it resets. The default reviewer model is

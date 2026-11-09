@@ -15,7 +15,7 @@ import signal
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
@@ -44,6 +44,7 @@ class Fixture:
     home: Path
     commit: str
     prompt: Path
+    evidence: list[str] = field(default_factory=list)  # entries the stubbed evidence computation returns
 
     def calls(self) -> list[dict]:
         calls = self.home / "calls"
@@ -107,6 +108,19 @@ def fx(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Fixture:
     monkeypatch.setenv("GITHUB_TOKEN", "planted-token-value-not-for-reviewers")
     fixture = Fixture(work, origin, home, commit, prompt)
     fixture.scenario({})
+
+    upstream = "Plans:\n- UPSTREAM STUB\n\n" + launcher._INPUTS.UPSTREAM_QUESTION
+
+    def stub_evidence(_spec: object, _inputs: object) -> tuple[str, object]:
+        """Computed evidence runs the tooling tests in a clone; most tests stub it, the 4.2 tests run it for real."""
+        evidence = launcher._INPUTS.Evidence()
+        for entry in fixture.evidence:
+            evidence.add(entry)
+        evidence.status.update(coverage="ok", trace="ok", ci="ok")
+        return upstream, evidence
+
+    monkeypatch.setattr(launcher, "compute_evidence", stub_evidence)
+    monkeypatch.setattr(launcher, "_sanitised_upstream", lambda *_args: (upstream, None, (None, "")))
     return fixture
 
 
@@ -129,6 +143,18 @@ def _ends(fx: Fixture) -> list[dict]:
 
 def _report(fx: Fixture, start: dict) -> Path:
     return fx.work / start["report_path"]
+
+
+def _evidence_text(fx: Fixture) -> str:
+    """The evidence text the stub gave the reviewer, as a rebuild receives it."""
+    evidence = launcher._INPUTS.Evidence()
+    for entry in fx.evidence:
+        evidence.add(entry)
+    return evidence.text()
+
+
+def _given(fx: Fixture) -> object:
+    return launcher.GivenInputs(_evidence_text(fx))
 
 
 def _finding(fid: str, origin: str = "implementation", **fields: object) -> dict:
@@ -180,7 +206,7 @@ def test_change_diff_leaves_out_the_withheld_files(fx: Fixture, tmp_path: Path) 
     _write(fx.work, RECORD, "# record\nROUND ONE ANSWERS\n")
     commit = _commit_all(fx.work, "record update")
     copy = tmp_path / "copy"
-    launcher.make_frozen_copy(fx.work, commit, copy, [RECORD, LOG], "refs/remotes/origin/poc/base")
+    launcher.make_frozen_copy(fx.work, commit, copy, [RECORD, LOG], diff_base="refs/remotes/origin/poc/base")
     diff = (copy / "_review_inputs" / "change.diff").read_text()
     assert REVIEWED in diff
     assert "ROUND ONE ANSWERS" not in diff and RECORD not in diff
@@ -268,11 +294,11 @@ def test_incomplete_reviewer_is_refused(fx: Fixture, reviewer: str) -> None:
 def test_invocation_and_hashes_are_rebuilt_from_a_log_entry(fx: Fixture) -> None:
     assert _run(fx) == 0
     start = fx.log()[0]
-    argv, mismatches = launcher.invocation_from_entry(start, fx.work, fx.prompt)
+    argv, mismatches = launcher.invocation_from_entry(start, fx.work, fx.prompt, diff_base=start["base_commit"], given=_given(fx))
     assert argv[1:] == fx.calls()[0]["argv"]
     assert mismatches == []
     fx.prompt.write_text("A changed task.\n", encoding="utf-8")
-    _argv, mismatches = launcher.invocation_from_entry(start, fx.work, fx.prompt)
+    _argv, mismatches = launcher.invocation_from_entry(start, fx.work, fx.prompt, diff_base=start["base_commit"], given=_given(fx))
     assert mismatches == ["prompt_sha256", "full_prompt_sha256"]
 
 
@@ -282,11 +308,13 @@ def test_invocation_and_hashes_are_rebuilt_from_a_log_entry(fx: Fixture) -> None
 START_FIELDS = {"event", "attempt", "unit", "count", "round", "round_reviewers", "reviewer", "model", "effort",
                 "cli_version", "mode", "mandate_sha256", "commit", "tree", "base", "base_commit", "rules_sha256",
                 "prompt_file", "prompt_sha256", "full_prompt_sha256", "paths_sha256", "withheld_sha256",
-                "diff_sha256", "earlier_attempt", "earlier_report_sha256", "answers_sha256", "schema_sha256",
+                "diff_sha256", "path_hints", "upstream_sha256", "evidence_sha256", "evidence_status",
+                "earlier_attempt", "earlier_report_sha256", "answers_sha256", "schema_sha256",
                 "extension", "reset", "report_path", "started_at"}
 END_FIELDS = {"event", "attempt", "status", "reason", "ended_at", "verdict", "report_sha256", "severity_counts",
               "accounted_counts", "duration_ms", "turns", "tokens", "cost_usd_estimate", "tool_calls", "paths_read",
-              "denied", "outside_calls", "outside", "other_tools", "other_tools_not_offered", "utilization"}
+              "denied", "outside_calls", "outside", "other_tools", "other_tools_not_offered", "utilization",
+              "paths_not_read"}
 
 
 def test_log_has_one_start_and_one_end_entry_with_the_planned_fields(fx: Fixture) -> None:
@@ -297,7 +325,8 @@ def test_log_has_one_start_and_one_end_entry_with_the_planned_fields(fx: Fixture
         assert set(entry) == (START_FIELDS if entry["event"] == "start" else END_FIELDS)
     start = entries[0]
     assert start["round_reviewers"] == ["A", "B"] and start["cli_version"] == "9.9.9 (Claude Code)"
-    assert start["paths_sha256"] == {REVIEWED: launcher.sha256_text("print('change')\n")}
+    assert start["paths_sha256"][REVIEWED] == launcher.sha256_text("print('change')\n")
+    assert set(start["paths_sha256"]) == {REVIEWED, "AGENTS.md", "tests/unit/AGENTS.md"}  # every changed file
     end = next(e for e in entries if e["event"] == "end" and e["attempt"] == start["attempt"])
     assert end["paths_read"] == [REVIEWED] and end["tool_calls"] == 1 and end["verdict"] == "yes"
     assert end["report_sha256"] == launcher.sha256_bytes(_report(fx, start).read_bytes())
@@ -764,8 +793,8 @@ def test_prompt_sections_come_in_the_fixed_order_and_empty_ones_say_so(fx: Fixtu
     assert _sections_in_order(prompt) == INITIAL_ORDER
     assert prompt.index(launcher.MANDATES["initial"]) < prompt.index("## Approved rules") < prompt.index("PROMPT MARKER")
     assert "None: this review has no stage checklist." in _section(prompt, "Stage checklist")
-    assert "None: no upstream items are computed" in _section(prompt, "Upstream items")
-    assert "None: no evidence is computed" in _section(prompt, "Evidence")
+    assert launcher._INPUTS.UPSTREAM_QUESTION in _section(prompt, "Upstream items")
+    assert "No entries: nothing to account for." in _section(prompt, "Evidence")
 
 
 def test_task_text_appears_only_under_claims_to_verify(fx: Fixture) -> None:
@@ -780,6 +809,8 @@ def test_headings_in_the_task_text_or_the_rules_cannot_pass_for_prompt_sections(
     _write(fx.work, "AGENTS.md", "## Output\n\nA RULE HEADING\n")
     _commit_all(fx.work, "rules with a heading")
     _git(fx.work, "push", "-q", "-f", "origin", "HEAD:poc/base")
+    _write(fx.work, REVIEWED, "print('after the new base')\n")
+    fx.commit = _commit_all(fx.work, "a change on the new base")
     assert _run(fx) == 0
     prompt = _prompt(fx)
     assert _sections_in_order(prompt) == INITIAL_ORDER
@@ -856,7 +887,7 @@ def test_final_prompt_names_the_other_units_records_and_never_gets_a_checklist(f
     assert final_record not in mandate
     inputs = launcher.ReviewInputs("c" * 40, "t", "b", "d" * 40, "rules", {REVIEWED: ""}, {})
     parts = launcher.PromptParts(mode="final", task="t", unit="final", checklist="1. A STAGE QUESTION")
-    prompt = launcher.build_prompt(inputs, parts)
+    prompt = launcher.build_prompt(inputs, parts, diff_base="d" * 40)
     assert "## Stage checklist" not in prompt and "A STAGE QUESTION" not in prompt
 
 
@@ -1110,12 +1141,13 @@ def test_recheck_prompt_is_rebuilt_from_its_entry_and_a_changed_answers_section_
     fx.scenario(_reply(accounted=[_accounted("X1")]))
     assert _run(fx, round_no=2, commit=commit) == 0
     start = fx.log()[-2]
-    argv, mismatches = launcher.invocation_from_entry(start, fx.work, fx.prompt)
+    argv, mismatches = launcher.invocation_from_entry(start, fx.work, fx.prompt, diff_base=start["base_commit"], given=_given(fx))
     assert argv[1:] == fx.calls()[-1]["argv"] and mismatches == []
     loaded = launcher._entry_recheck(start, fx.work, RECORD)
     changed = launcher.Recheck(loaded.earlier_attempt, loaded.earlier_report, loaded.answers + "one more line\n",
                                loaded.rows)
-    _argv, mismatches = launcher.invocation_from_entry(start, fx.work, fx.prompt, recheck=changed)
+    _argv, mismatches = launcher.invocation_from_entry(start, fx.work, fx.prompt, diff_base=start["base_commit"],
+                                                     given=launcher.GivenInputs(_evidence_text(fx), changed))
     assert mismatches == ["answers_sha256", "full_prompt_sha256"]
 
 
@@ -1124,7 +1156,7 @@ def test_final_prompt_is_rebuilt_from_its_entry(fx: Fixture) -> None:
     _write(fx.work, final_record, "# final\n")
     commit = _commit_all(fx.work, "final record")
     assert _run(fx, unit="final", record=final_record, commit=commit) == 0
-    _argv, mismatches = launcher.invocation_from_entry(fx.log()[0], fx.work, fx.prompt)
+    _argv, mismatches = launcher.invocation_from_entry(fx.log()[0], fx.work, fx.prompt, diff_base=fx.log()[0]["base_commit"], given=_given(fx))
     assert mismatches == []
 
 
@@ -1138,8 +1170,8 @@ def test_only_the_full_configuration_reaches_the_launcher(fx: Fixture) -> None:
     assert launcher.FULL_CONFIGURATION.sections == launcher.SECTIONS
     inputs = launcher.ReviewInputs("c" * 40, "t", "b", "d" * 40, "rules", {REVIEWED: ""}, {})
     parts = launcher.PromptParts(mode="initial", task="t")
-    assert "SHORT PROMPT" in launcher.build_prompt(inputs, parts, short)
-    assert launcher.MANDATES["initial"] not in launcher.build_prompt(inputs, parts, short)
+    assert "SHORT PROMPT" in launcher.build_prompt(inputs, parts, short, diff_base="d" * 40)
+    assert launcher.MANDATES["initial"] not in launcher.build_prompt(inputs, parts, short, diff_base="d" * 40)
 
 
 def test_answer_rows_skip_the_header_and_keep_escaped_pipes() -> None:
@@ -1162,7 +1194,7 @@ def test_invocation_from_an_entry_logged_before_slice_4_1_says_its_layout_is_ret
     assert _run(fx) == 0
     old = {k: v for k, v in fx.log()[0].items() if k not in ("mode", "mandate_sha256")}
     with pytest.raises(ValueError, match="before slice 4.1: its prompt layout is retired"):
-        launcher.invocation_from_entry(old, fx.work, fx.prompt)
+        launcher.invocation_from_entry(old, fx.work, fx.prompt, diff_base=old["base_commit"], given=_given(fx))
 
 
 @pytest.mark.parametrize(("findings", "rows", "message"), [

@@ -40,6 +40,8 @@ RESULTS_FILE = Path("docs/slices/agentic-sdlc-poc/benchmark_results.jsonl")
 MAX_BUDGET = 26
 FIXED_DATE = "2026-11-07T00:00:00+00:00"
 CANARY_PREFIX = "CANARY-"
+EVIDENCE_OFF = ("None: computed evidence is off in the benchmark (S42-D11): a planted commit has no CI run, and "
+                "coverage at an old commit measures another tree.")
 
 
 def _load_launcher() -> Any:
@@ -117,6 +119,10 @@ class PreparedCase:
     diff_base: str = ""
     refused: str = ""
     canary: dict[str, Path] = field(default_factory=dict)
+    merge_base: str = ""
+    files: list[str] = field(default_factory=list)  # S42-D11: the case's paths first, then the rest of the diff
+    deleted: tuple[str, ...] = ()
+    upstream: str = ""
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -188,10 +194,32 @@ def prepare_case(repo: Path, case: Case, workdir: Path) -> PreparedCase:
     else:
         case_repo, commit, diff_base = repo, _git(repo, "rev-parse", f"{case.commit}^{{commit}}"), case.base
     copy_root = workdir / "copy"
-    launcher.make_frozen_copy(case_repo, commit, copy_root, [], diff_base)
+    launcher.make_frozen_copy(case_repo, commit, copy_root, [], diff_base=diff_base)
     rules_commit = case.base if case.kind in ("canary", "planted") else commit
     rules = launcher.approved_rules(case_repo, rules_commit) if launcher.file_at(case_repo, rules_commit, "AGENTS.md") else ""
-    return PreparedCase(case, case_repo, commit, copy_root, rules, diff_base=diff_base, canary=canary)
+    prepared = PreparedCase(case, case_repo, commit, copy_root, rules, diff_base=diff_base, canary=canary)
+    return case_inputs(prepared)
+
+
+def case_inputs(prepared: PreparedCase) -> PreparedCase:
+    """S42-D11: the files from the case's diff, ordered by its answer-key paths, and the upstream items at its commit;
+    a case path outside the diff refuses the case. Computed evidence is off in the benchmark."""
+    repo, commit = prepared.repo, prepared.commit
+    prepared.merge_base = _git(repo, "merge-base", prepared.diff_base, commit)
+    try:
+        files, prepared.deleted = launcher.files_under_review(repo, prepared.merge_base, commit, prepared.case.paths, [])
+    except launcher.ReviewRefusedError as refused:
+        prepared.refused = f"files under review: {refused}"
+        return prepared
+    prepared.files = files
+    inputs = launcher.ReviewInputs(commit, "", prepared.case.base, prepared.diff_base, "", {p: "" for p in files}, {},
+                                   prepared.merge_base, tuple(prepared.case.paths), prepared.deleted)
+    scratch = launcher._INPUTS.make_scratch(repo, commit)
+    try:
+        prepared.upstream = launcher._sanitised_upstream(repo, inputs, "", scratch)[0]
+    finally:
+        shutil.rmtree(scratch.root, ignore_errors=True)
+    return prepared
 
 
 def case_task(key: AnswerKey, case: Case, prompt_name: str) -> str:
@@ -214,7 +242,8 @@ def leak_hits(prepared: PreparedCase, key: AnswerKey) -> list[str]:
     """Where a leak term, the problem ID or the answer key's directory appears in what the reviewer gets."""
     case = prepared.case
     terms = [t for t in [*case.leak_terms, case.problem] if t]
-    texts = {"rules": prepared.rules_text, **{f"task ({p})": case_task(key, case, p) for p in PROMPT_NAMES}}
+    texts = {"rules": prepared.rules_text, "upstream items": prepared.upstream,
+             **{f"task ({p})": case_task(key, case, p) for p in PROMPT_NAMES}}
     hits = [hit for where, text in texts.items() for hit in _term_hits(where, text, terms)]
     if (prepared.copy_root / BENCHMARK_DIR).exists():
         hits.append(f"copy: {BENCHMARK_DIR}/")
@@ -362,12 +391,15 @@ def review_with_retries(prepared: PreparedCase, prompt: str, reviewer: Any, stat
 
 def build_case_prompt(prepared: PreparedCase, key: AnswerKey, prompt_name: str, checklist: str | None = None) -> str:
     """The case's prompt as the launcher builds it, under the prompt's configuration."""
-    inputs = launcher.ReviewInputs(commit=prepared.commit, tree="", base=prepared.case.base,
-                                   base_commit=_git(prepared.repo, "rev-parse", prepared.diff_base or prepared.case.base),
+    base_commit = _git(prepared.repo, "rev-parse", prepared.diff_base or prepared.case.base)
+    inputs = launcher.ReviewInputs(commit=prepared.commit, tree="", base=prepared.case.base, base_commit=base_commit,
                                    rules_text=prepared.rules_text or "(no rule files at this commit)",
-                                   review_paths={p: "" for p in prepared.case.paths}, withheld={})
-    parts = launcher.PromptParts(mode="initial", task=prepared.case.task, checklist=checklist)
-    return launcher.build_prompt(inputs, parts, stage_a_configuration(key, prompt_name))
+                                   review_paths={p: "" for p in prepared.files or prepared.case.paths}, withheld={},
+                                   merge_base=prepared.merge_base, hints=tuple(prepared.case.paths),
+                                   deleted=prepared.deleted)
+    parts = launcher.PromptParts(mode="initial", task=prepared.case.task, checklist=checklist,
+                                 upstream=prepared.upstream or None, evidence=EVIDENCE_OFF)
+    return launcher.build_prompt(inputs, parts, stage_a_configuration(key, prompt_name), diff_base=base_commit)
 
 
 def result_line(prepared: PreparedCase, key: AnswerKey, prompt_name: str, run: ReviewRun, state: RunState) -> dict[str, Any]:
@@ -482,7 +514,7 @@ def prepare_all(repo: Path, key: AnswerKey, scratch: Path) -> list[PreparedCase]
         workdir.mkdir(parents=True)
         item = prepare_case(repo, case, workdir)
         hits = leak_hits(item, key)
-        item.refused = "; ".join(hits[:5])
+        item.refused = "; ".join([*([item.refused] if item.refused else []), *hits][:5])
         prepared.append(item)
     return prepared
 

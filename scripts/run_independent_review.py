@@ -156,17 +156,19 @@ class PublicationBlockedError(Exception):
     """The evidence secret check found a secret in text about to be written; nothing was written."""
 
 
-def _load_secret_scanner() -> Any:
-    spec = importlib.util.spec_from_file_location("evidence_secrets", ROOT / "scripts" / "evidence_secrets.py")
+def _load_script(name: str) -> Any:
+    """A module of `scripts/` by its file name (the scripts are not a package)."""
+    spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / f"{name}.py")
     if spec is None or spec.loader is None:
-        raise RuntimeError("cannot load scripts/evidence_secrets.py")
+        raise RuntimeError(f"cannot load scripts/{name}.py")
     module = importlib.util.module_from_spec(spec)
-    sys.modules.setdefault("evidence_secrets", module)  # dataclasses resolve their module by name
+    sys.modules.setdefault(name, module)  # dataclasses resolve their module by name
     spec.loader.exec_module(module)
     return module
 
 
-_SECRETS = _load_secret_scanner()
+_SECRETS = _load_script("evidence_secrets")
+_INPUTS = _load_script("review_evidence")  # slice 4.2: files from the diff, upstream items, computed evidence
 
 
 def sha256_text(text: str) -> str:
@@ -274,12 +276,20 @@ class ReviewInputs:
     base: str
     base_commit: str
     rules_text: str
-    review_paths: dict[str, str]
+    review_paths: dict[str, str]  # S42-D1: every file the change adds, modifies or renames, in review order
     withheld: dict[str, str | None]
+    merge_base: str = ""
+    hints: tuple[str, ...] = ()  # the --path files, listed first; they carry the empty-review rule (S42-D2)
+    deleted: tuple[str, ...] = ()
 
     @property
     def rules_sha256(self) -> str:
         return sha256_text(self.rules_text)
+
+    @property
+    def must_open_one_of(self) -> list[str]:
+        """S42-D2: a review fails when it opened none of the --path files or, without them, none of the listed files."""
+        return list(self.hints) or list(self.review_paths)
 
 
 def approved_rules(repo: Path, rules_commit: str) -> str:
@@ -312,27 +322,42 @@ def withheld_hashes(repo: Path, commit: str, withheld: list[str]) -> dict[str, s
     return result
 
 
-def resolve_inputs(repo: Path, commit: str, base: str, review_paths: list[str], withheld: list[str]) -> ReviewInputs:
+def files_under_review(repo: Path, merge_base: str, commit: str, hints: list[str],
+                       withheld: list[str]) -> tuple[list[str], tuple[str, ...]]:
+    """S42-D1: the files to open, `--path` hints first, and the files the change deletes; refuses a bad hint."""
+    try:
+        changed = _INPUTS.changed_files(repo, merge_base, commit, withheld)
+        ordered = _INPUTS.order_files(changed, hints)
+    except ValueError as refused:
+        raise ReviewRefusedError(str(refused)) from None
+    if not ordered:
+        raise ReviewRefusedError("the change adds, modifies or renames no file to review")
+    return ordered, changed.deleted
+
+
+def resolve_inputs(repo: Path, commit: str, base: str, hints: list[str], withheld: list[str]) -> ReviewInputs:
     commit_sha = resolve_commit(repo, commit)
     base_commit = fetch_base(repo, base)
     check_archivable(repo, commit_sha)
+    merge_base = git(repo, "merge-base", base_commit, commit_sha).strip()
+    ordered, deleted = files_under_review(repo, merge_base, commit_sha, hints, withheld)
     return ReviewInputs(
         commit=commit_sha,
         tree=git(repo, "rev-parse", f"{commit_sha}^{{tree}}").strip(),
         base=base,
         base_commit=base_commit,
         rules_text=approved_rules(repo, base_commit),
-        review_paths=path_hashes(repo, commit_sha, review_paths),
+        review_paths=path_hashes(repo, commit_sha, ordered),
         withheld=withheld_hashes(repo, commit_sha, withheld),
+        merge_base=merge_base,
+        hints=tuple(dict.fromkeys(hints)),
+        deleted=deleted,
     )
 
 
-def make_frozen_copy(repo: Path, commit: str, dest: Path, withheld: list[str], diff_base: str | None) -> str | None:
-    """Copy the tracked tree at `commit` into `dest` without the withheld paths.
-
-    With `diff_base`, also writes the change (merge-base diff, withheld paths excluded) to
-    `_review_inputs/change.diff` and returns its SHA-256.
-    """
+def make_frozen_copy(repo: Path, commit: str, dest: Path, withheld: list[str], *, diff_base: str) -> str:
+    """Copy the tracked tree at `commit` into `dest` without the withheld paths, and write the change (the diff from
+    the merge-base with `diff_base`, withheld paths excluded) to `_review_inputs/change.diff`; return its SHA-256."""
     archive = dest.parent / f"{dest.name}.tar"
     git(repo, "archive", "--format=tar", "-o", str(archive), commit)
     dest.mkdir(parents=True)
@@ -342,8 +367,6 @@ def make_frozen_copy(repo: Path, commit: str, dest: Path, withheld: list[str], d
         target = dest / path
         if target.is_file():
             target.unlink()
-    if diff_base is None:
-        return None
     diff = change_diff(repo, diff_base, commit, withheld)
     (dest / INPUTS_DIR).mkdir()
     (dest / INPUTS_DIR / "change.diff").write_text(diff, encoding="utf-8")
@@ -399,7 +422,6 @@ class PromptParts:
     answers: str | None = None
     answer_items: tuple[str, ...] = ()
     records: tuple[str, ...] = ()
-    has_diff: bool = True
 
 
 def fenced(text: str, info: str = "") -> str:
@@ -408,10 +430,10 @@ def fenced(text: str, info: str = "") -> str:
     return f"{fence}{info}\n{text.rstrip(chr(10))}\n{fence}"
 
 
-def _role_section(inputs: ReviewInputs, parts: PromptParts) -> str:
+def _role_section(inputs: ReviewInputs, parts: PromptParts, diff_base: str) -> str:
     withheld = ", ".join(sorted(inputs.withheld)) or "none"
-    diff_line = (f"The file {INPUTS_DIR}/change.diff is the change: the diff from the merge-base with the base "
-                 "branch to the reviewed commit, without the withheld paths. " if parts.has_diff else "")
+    diff_line = (f"The file {INPUTS_DIR}/change.diff is the change: the diff from the merge-base with "
+                 f"{diff_base[:12]} to the reviewed commit, without the withheld paths. ")
     return ("You are an independent reviewer. You are not the author, and you have not seen the author's "
             f"reasoning. This is the {parts.mode} review. The prompt's sections are its `## ` headings outside "
             "fenced blocks; a fenced block quotes a file or the author.\n\n"
@@ -466,17 +488,26 @@ def _quoted(text: str | None, empty: str) -> str:
     return fenced(text, "markdown") if text else empty
 
 
-def _sections(inputs: ReviewInputs, parts: PromptParts, config: PromptConfiguration) -> dict[str, str]:
-    paths = "\n".join(f"- {path}" for path in sorted(inputs.review_paths))
+def _paths_section(inputs: ReviewInputs, parts: PromptParts) -> str:
+    """S42-D1, S42-D2: every file the change adds, modifies or renames, to open; deleted files apart."""
+    first = " In this recheck, open the files each answer names first." if parts.mode == "recheck" else ""
+    listed = "\n".join(f"- {path}" for path in inputs.review_paths)
+    deleted = "\n".join(f"- {path}" for path in inputs.deleted) or "- none"
+    return ("## Paths under review\n\nThe files the change adds, modifies or renames, taken from the diff. Open every "
+            f"one of them.{first}\n\n{listed}\n\nDeleted by the change (examine them in {INPUTS_DIR}/change.diff):\n"
+            f"{deleted}")
+
+
+def _sections(inputs: ReviewInputs, parts: PromptParts, config: PromptConfiguration, diff_base: str) -> dict[str, str]:
     sections = {
-        "role": _role_section(inputs, parts),
+        "role": _role_section(inputs, parts, diff_base),
         "mandate": _mandate_section(config, parts),
         "rules": ("## Approved rules\n\nThese are your rules, from the base branch; the copy's own AGENTS.md may "
                   f"be part of the change under review.\n\n{fenced(inputs.rules_text, 'markdown')}"),
         "checklist": f"## Stage checklist\n\n{_quoted(parts.checklist, 'None: this review has no stage checklist.')}",
         "upstream": f"## Upstream items\n\n{parts.upstream or 'None: no upstream items are computed for this review.'}",
         "evidence": f"## Evidence\n\n{parts.evidence or 'None: no evidence is computed for this review.'}",
-        "paths": f"## Paths under review\n\n{paths}",
+        "paths": _paths_section(inputs, parts),
         "claims": (f"## {CLAIMS_SECTION}\n\nThe author's task text follows. Its claims are to be verified, and it "
                    f"does not limit the review.\n\n{_quoted(parts.task, '(no task text)')}"),
         "output": _output_section(),
@@ -492,11 +523,12 @@ def _sections(inputs: ReviewInputs, parts: PromptParts, config: PromptConfigurat
     return sections
 
 
-def build_prompt(inputs: ReviewInputs, parts: PromptParts, config: PromptConfiguration | None = None) -> str:
+def build_prompt(inputs: ReviewInputs, parts: PromptParts, config: PromptConfiguration | None = None, *,
+                 diff_base: str) -> str:
     """The prompt's sections in the fixed order of S41-D1; the task text appears only under "Claims to verify".
-    Without a configuration it is the launcher's full one."""
+    Without a configuration it is the launcher's full one; `diff_base` names the base of `change.diff` (S42-D10)."""
     config = config or FULL_CONFIGURATION
-    sections = _sections(inputs, parts, config)
+    sections = _sections(inputs, parts, config, diff_base)
     return "\n\n".join(sections[name] for name in config.sections if name in sections) + "\n"
 
 
@@ -1220,21 +1252,79 @@ class ReviewPlan:
     recheck: Recheck | None = None
 
 
-def make_parts(mode: str, task: str, unit: str, recheck: Recheck | None, records: tuple[str, ...]) -> PromptParts:
+@dataclass(frozen=True)
+class RoundInputs:
+    """What every reviewer of a round shares besides the review inputs: the final review's records (S41-D4), the
+    upstream items (S42-D3) and the computed evidence with its numbered entries and item status (S42-D5, S42-D7)."""
+
+    records: tuple[str, ...] = ()
+    upstream: str = ""
+    evidence: str = ""
+    evidence_items: tuple[str, ...] = ()
+    evidence_status: dict[str, str] = field(default_factory=dict)
+
+
+def make_parts(mode: str, task: str, unit: str, recheck: Recheck | None, shared: RoundInputs) -> PromptParts:
     """The prompt parts of a review; the launcher and `invocation_from_entry` build them the same way."""
+    common = {"mode": mode, "task": task, "unit": unit, "records": shared.records, "upstream": shared.upstream,
+              "evidence": shared.evidence}
     if recheck is None:
-        return PromptParts(mode=mode, task=task, unit=unit, records=records)
-    return PromptParts(mode=mode, task=task, unit=unit, records=records, earlier_attempt=recheck.earlier_attempt,
+        return PromptParts(**common)  # type: ignore[arg-type]
+    return PromptParts(**common, earlier_attempt=recheck.earlier_attempt,  # type: ignore[arg-type]
                        earlier_report=recheck.earlier_report, answers=recheck.answers,
                        answer_items=tuple(row.finding for row in recheck.rows))
 
 
+def _sanitised_upstream(repo: Path, inputs: ReviewInputs, record: str, scratch: Any) -> tuple[str, Any, tuple[Any, str]]:
+    """The upstream section from the trace model at the reviewed commit, and that trace report with its failure."""
+    trace = _INPUTS.trace_report(scratch, inputs.merge_base)
+    upstream = _INPUTS.upstream_items(repo, (inputs.merge_base, inputs.commit), record,
+                                      [*inputs.review_paths, *inputs.deleted], trace[0])
+    return _INPUTS.sanitise(upstream.text, scratch), upstream, trace
+
+
+def compute_evidence(spec: RoundSpec, inputs: ReviewInputs) -> tuple[str, Any]:
+    """S42-D3, S42-D5 to S42-D8: the upstream text and the evidence, computed in a scratch clone of the reviewed
+    commit with a minimal environment; refused when a local path survives the sanitising."""
+    try:
+        scratch = _INPUTS.make_scratch(spec.repo, inputs.commit)
+    except (ValueError, OSError) as failed:
+        raise ReviewRefusedError(f"cannot prepare the evidence: {failed}") from None
+    try:
+        upstream_text, upstream, (report, reason) = _sanitised_upstream(spec.repo, inputs, spec.record, scratch)
+        evidence = _INPUTS.Evidence()
+        _INPUTS.coverage_evidence(evidence, spec.repo, (inputs.merge_base, inputs.commit), list(inputs.review_paths),
+                                  scratch)
+        _INPUTS.trace_evidence(evidence, report, reason, upstream.ids)
+        _INPUTS.ci_evidence(evidence, spec.repo, inputs.commit, _INPUTS.fetch_json)
+        evidence.entries = [_INPUTS.sanitise(entry, scratch) for entry in evidence.entries]
+        evidence.notes = [_INPUTS.sanitise(note, scratch) for note in evidence.notes]
+        leaks = _INPUTS.leaked_paths(upstream_text + "\n" + evidence.text(), scratch)
+    except ValueError as failed:
+        raise ReviewRefusedError(f"cannot compute the evidence: {failed}") from None
+    finally:
+        shutil.rmtree(scratch.root, ignore_errors=True)
+    if leaks:
+        raise ReviewRefusedError(f"the computed evidence still holds {' and '.join(leaks)}; nothing was sent or written")
+    return upstream_text, evidence
+
+
+def round_inputs(spec: RoundSpec, inputs: ReviewInputs) -> RoundInputs:
+    """The round's shared inputs, computed once before any call."""
+    withheld = list(inputs.withheld)
+    final = review_mode(spec.unit, spec.round_no) == "final"
+    records = final_records(spec.repo, inputs.commit, spec.record, inputs.base_commit, withheld) if final else ()
+    upstream, evidence = compute_evidence(spec, inputs)
+    return RoundInputs(records, upstream, evidence.text(), tuple(evidence.items), dict(evidence.status))
+
+
 def plan_reviews(spec: RoundSpec, inputs: ReviewInputs, entries: list[dict[str, Any]],
-                 reviewers: list[Reviewer]) -> list[ReviewPlan]:
-    """Build every reviewer's parts before any call; a recheck without its inputs is refused here (S41-D5)."""
+                 reviewers: list[Reviewer], shared: RoundInputs) -> list[ReviewPlan]:
+    """Build every reviewer's parts before any call; a recheck without its inputs is refused here (S41-D5). Every
+    evidence entry is an item to account for, in every mode (S42-D6)."""
     mode = review_mode(spec.unit, spec.round_no)
     withheld = list(inputs.withheld)
-    records = final_records(spec.repo, inputs.commit, spec.record, inputs.base_commit, withheld) if mode == "final" else ()
+    evidence_items = {item: EVIDENCE_STATUSES for item in shared.evidence_items}
     record_text, away = None, set()
     if mode == "recheck":
         record_bytes = file_at(spec.repo, inputs.commit, spec.record)
@@ -1247,7 +1337,7 @@ def plan_reviews(spec: RoundSpec, inputs: ReviewInputs, entries: list[dict[str, 
     plans = []
     for reviewer in reviewers:
         task = reviewer.prompt_file.read_text(encoding="utf-8")
-        recheck, accounting = None, Accounting()
+        recheck, accounting = None, Accounting(dict(evidence_items))
         if mode == "recheck":
             recheck = load_recheck(spec.repo, record_text, *earlier_attempt(entries, spec.unit, spec.count,
                                                                             spec.round_no, reviewer.label))
@@ -1256,8 +1346,9 @@ def plan_reviews(spec: RoundSpec, inputs: ReviewInputs, entries: list[dict[str, 
             if table:
                 raise ReviewRefusedError(f"the answers to {recheck.earlier_attempt} do not answer its report: "
                                          + "; ".join(table[:5]))
-            accounting = Accounting({row.finding: ANSWER_STATUSES for row in recheck.rows}, must_read)
-        plans.append(ReviewPlan(reviewer, make_parts(mode, task, spec.unit, recheck, records), accounting, recheck))
+            accounting = Accounting({**{row.finding: ANSWER_STATUSES for row in recheck.rows}, **evidence_items},
+                                    must_read)
+        plans.append(ReviewPlan(reviewer, make_parts(mode, task, spec.unit, recheck, shared), accounting, recheck))
     return plans
 
 
@@ -1272,6 +1363,8 @@ def start_entry(spec: RoundSpec, inputs: ReviewInputs, plan: ReviewPlan, attempt
         "rules_sha256": inputs.rules_sha256, "prompt_file": reviewer.prompt_file.name,
         "prompt_sha256": sha256_bytes(reviewer.prompt_file.read_bytes()), "full_prompt_sha256": extra["prompt_sha"],
         "paths_sha256": inputs.review_paths, "withheld_sha256": inputs.withheld, "diff_sha256": extra["diff_sha"],
+        "path_hints": list(inputs.hints), "upstream_sha256": sha256_text(plan.parts.upstream or ""),
+        "evidence_sha256": sha256_text(plan.parts.evidence or ""), "evidence_status": extra["evidence_status"],
         "earlier_attempt": recheck.earlier_attempt if recheck else None,
         "earlier_report_sha256": sha256_text(recheck.earlier_report) if recheck else None,
         "answers_sha256": recheck.answers_sha256 if recheck else None,
@@ -1300,13 +1393,15 @@ class RoundContext:
 def run_attempts(ctx: RoundContext, plan: ReviewPlan) -> str:
     """Run one reviewer with at most two retries after provider errors; return the final status."""
     config = FULL_CONFIGURATION  # S41-D1: the launcher has no other configuration
-    prompt = build_prompt(ctx.inputs, plan.parts, config)
+    prompt = build_prompt(ctx.inputs, plan.parts, config, diff_base=ctx.inputs.base_commit)
     extra = {**ctx.extra, "prompt_sha": sha256_text(prompt), "mandate_sha": sha256_text(config.mandates[plan.parts.mode])}
     for tries in range(1, MAX_TRIES + 1):
         start = start_entry(ctx.spec, ctx.inputs, plan, attempt_id(ctx.log.entries(), ctx.spec, plan.reviewer.label),
                             extra)
         ctx.log.append(start)
-        outcome = call_reviewer(ctx.copy_root, prompt, plan.reviewer, list(ctx.inputs.review_paths), plan.accounting)
+        outcome = call_reviewer(ctx.copy_root, prompt, plan.reviewer, ctx.inputs.must_open_one_of, plan.accounting)
+        read = set(outcome.stats.get("paths_read", []))
+        outcome.stats["paths_not_read"] = [path for path in ctx.inputs.review_paths if path not in read]  # S42-D2
         status = finish_attempt(ctx.spec.repo, ctx.log, start, outcome, tries)
         if outcome.status != "provider_error":
             return status
@@ -1346,13 +1441,15 @@ def finish_attempt(repo: Path, log: AttemptLog, start: dict[str, Any], outcome: 
     return status
 
 
-def run_round(spec: RoundSpec, inputs: ReviewInputs, log: AttemptLog, plans: list[ReviewPlan]) -> dict[str, str]:
+def run_round(spec: RoundSpec, inputs: ReviewInputs, log: AttemptLog, plans: list[ReviewPlan],
+              shared: RoundInputs) -> dict[str, str]:
     workdir = Path(tempfile.mkdtemp(prefix="review-copy-"))
     try:
         copy_root = workdir / "copy"
         withheld = list(inputs.withheld)
-        diff_sha = make_frozen_copy(spec.repo, inputs.commit, copy_root, withheld, inputs.base_commit)
-        ctx = RoundContext(spec, inputs, copy_root, log, {"cli_version": cli_version(), "diff_sha": diff_sha})
+        diff_sha = make_frozen_copy(spec.repo, inputs.commit, copy_root, withheld, diff_base=inputs.base_commit)
+        ctx = RoundContext(spec, inputs, copy_root, log, {"cli_version": cli_version(), "diff_sha": diff_sha,
+                                                         "evidence_status": shared.evidence_status})
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(plans)) as pool:
             futures = {p.reviewer.label: pool.submit(_guarded_attempts, ctx, p) for p in plans}
             return {label: future.result() for label, future in futures.items()}
@@ -1394,7 +1491,7 @@ def build_parser() -> argparse.ArgumentParser:
         parser.add_argument(name, required=True)
     parser.add_argument("--round", type=int, required=True, dest="round_no")
     parser.add_argument("--reviewer", action="append", required=True, dest="reviewers")
-    parser.add_argument("--path", action="append", required=True, dest="paths")
+    parser.add_argument("--path", action="append", default=[], dest="paths")  # S42-D1: only orders the files
     parser.add_argument("--extension")
     parser.add_argument("--reset")
     return parser
@@ -1442,11 +1539,22 @@ def _entry_recheck(entry: dict[str, Any], repo: Path, record: str) -> Recheck:
     return load_recheck(repo, record_bytes.decode("utf-8") if record_bytes is not None else None, start, end)
 
 
-def invocation_from_entry(entry: dict[str, Any], repo: Path, prompt_file: Path,
-                          recheck: Recheck | None = None) -> tuple[list[str], list[str]]:
+@dataclass(frozen=True)
+class GivenInputs:
+    """What a rebuild cannot recompute: the evidence as the reviewer got it (CI states change over time), and
+    optionally a recheck's inputs, which are otherwise loaded as the launcher loads them."""
+
+    evidence: str
+    recheck: Recheck | None = None
+
+
+def invocation_from_entry(entry: dict[str, Any], repo: Path, prompt_file: Path, *, diff_base: str,
+                          given: GivenInputs) -> tuple[list[str], list[str]]:
     """Rebuild a start entry's CLI call and prompt, and list every input hash that no longer matches the entry.
 
-    A recheck's inputs are loaded as the launcher loads them unless `recheck` gives them."""
+    The files under review and the upstream items are recomputed at the entry's commit. `diff_base` is the base of
+    the change (S42-D10), normally the entry's `base_commit`."""
+    evidence, recheck = given.evidence, given.recheck
     if "mode" not in entry:
         raise ValueError("this entry was logged before slice 4.1: its prompt layout is retired, so its prompt cannot be "
                          "rebuilt; its input hashes still identify what it reviewed")
@@ -1454,24 +1562,35 @@ def invocation_from_entry(entry: dict[str, Any], repo: Path, prompt_file: Path,
     withheld = list(entry["withheld_sha256"])
     if mode == "recheck" and recheck is None:
         recheck = _entry_recheck(entry, repo, record)
+    merge_base = git(repo, "merge-base", diff_base, entry["commit"]).strip()
+    ordered, deleted = files_under_review(repo, merge_base, entry["commit"], list(entry["path_hints"]), withheld)
+    inputs = ReviewInputs(entry["commit"], entry["tree"], entry["base"], entry["base_commit"],
+                          approved_rules(repo, entry["base_commit"]), path_hashes(repo, entry["commit"], ordered),
+                          withheld_hashes(repo, entry["commit"], withheld), merge_base,
+                          tuple(entry["path_hints"]), deleted)
+    scratch = _INPUTS.make_scratch(repo, entry["commit"])
+    try:
+        upstream = _sanitised_upstream(repo, inputs, record, scratch)[0]
+    finally:
+        shutil.rmtree(scratch.root, ignore_errors=True)
     recomputed = {
-        "rules_sha256": sha256_text(approved_rules(repo, entry["base_commit"])),
+        "rules_sha256": inputs.rules_sha256,
         "prompt_sha256": sha256_bytes(prompt_file.read_bytes()),
-        "paths_sha256": path_hashes(repo, entry["commit"], list(entry["paths_sha256"])),
-        "withheld_sha256": withheld_hashes(repo, entry["commit"], withheld),
+        "paths_sha256": inputs.review_paths,
+        "withheld_sha256": inputs.withheld,
         "schema_sha256": sha256_text(SCHEMA_JSON),
         "tree": git(repo, "rev-parse", f"{entry['commit']}^{{tree}}").strip(),
         "mandate_sha256": sha256_text(FULL_CONFIGURATION.mandates[mode]),
         "earlier_report_sha256": sha256_text(recheck.earlier_report) if recheck else None,
         "answers_sha256": recheck.answers_sha256 if recheck else None,
-        "diff_sha256": sha256_text(change_diff(repo, entry["base_commit"], entry["commit"], withheld)),
+        "diff_sha256": sha256_text(change_diff(repo, diff_base, entry["commit"], withheld)),
+        "upstream_sha256": sha256_text(upstream),
+        "evidence_sha256": sha256_text(evidence),
     }
-    inputs = ReviewInputs(entry["commit"], entry["tree"], entry["base"], entry["base_commit"],
-                          approved_rules(repo, entry["base_commit"]), recomputed["paths_sha256"],
-                          recomputed["withheld_sha256"])
-    records = final_records(repo, entry["commit"], record, entry["base_commit"], withheld) if mode == "final" else ()
-    parts = make_parts(mode, prompt_file.read_text(encoding="utf-8"), entry["unit"], recheck, records)
-    recomputed["full_prompt_sha256"] = sha256_text(build_prompt(inputs, parts))
+    records = final_records(repo, entry["commit"], record, diff_base, withheld) if mode == "final" else ()
+    shared = RoundInputs(records, upstream, evidence)
+    parts = make_parts(mode, prompt_file.read_text(encoding="utf-8"), entry["unit"], recheck, shared)
+    recomputed["full_prompt_sha256"] = sha256_text(build_prompt(inputs, parts, diff_base=diff_base))
     mismatches = [name for name, value in recomputed.items() if entry.get(name) != value]
     return build_invocation(entry["model"], entry["effort"]), mismatches
 
@@ -1487,8 +1606,10 @@ def main(argv: list[str], repo: Path | None = None) -> int:
             recover(log, repo)
             admission = admit_round(log.entries(), spec.unit, spec.round_no, [r.label for r in reviewers], spec.refs)
             spec = RoundSpec(**{**spec.__dict__, "count": admission.count})
-            plans = plan_reviews(spec, inputs, log.entries(), [r for r in reviewers if r.label in admission.to_run])
-            statuses = run_round(spec, inputs, log, plans)
+            shared = round_inputs(spec, inputs)
+            plans = plan_reviews(spec, inputs, log.entries(), [r for r in reviewers if r.label in admission.to_run],
+                                 shared)
+            statuses = run_round(spec, inputs, log, plans, shared)
     except ReviewRefusedError as refused:
         print(f"[review] REFUSED: {refused}", file=sys.stderr)
         return 2

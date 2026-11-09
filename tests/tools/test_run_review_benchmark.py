@@ -449,7 +449,8 @@ def test_runner_configurations_replace_the_mandate_and_carry_a_list(repo: tuple[
     assert "Short prompt." in prompt and bench.launcher.MANDATES["initial"] not in prompt
     assert "A STAGE LIST QUESTION" in prompt
     inputs = bench.launcher.ReviewInputs("c" * 40, "", "b", "d" * 40, "rules", {REVIEWED: ""}, {})
-    drafted = bench.launcher.build_prompt(inputs, bench.launcher.PromptParts(mode="initial", task="t"), draft)
+    drafted = bench.launcher.build_prompt(inputs, bench.launcher.PromptParts(mode="initial", task="t"), draft,
+                                          diff_base="d" * 40)
     assert "DRAFT MANDATE SENTENCE" in drafted and bench.launcher.MANDATES["initial"] not in drafted
 
 
@@ -478,3 +479,29 @@ def test_report_shows_blocking_only_detections_beside_all_detections(repo: tuple
     assert bench.COLUMN_NOTE in text
     totals = bench.compare_prompts(r.results(), bench.load_key(r.root))["totals"]["short"]
     assert totals["real_miss"] == 1 and totals["real_miss_blocking"] == 0
+
+
+# --- Slice 4.2: the benchmark's inputs (test plan of poc-4-2-review-inputs, S42-D11) ------------------------------
+
+
+def test_case_paths_come_first_the_diff_decides_the_rest_and_evidence_is_off(repo: tuple[Repo, str, str],
+                                                                             tmp_path: Path) -> None:
+    r, base, _commit = repo
+    _write(r.root, "scripts/also_changed.py", "print('also')\n")
+    _write(r.root, REVIEWED, "print('change again')\n")
+    commit = _commit_all(r.root, "two changed files")
+    prepared, key = _prepared(repo, tmp_path, _case("C1", base, commit))
+    assert prepared.files[0] == REVIEWED and "scripts/also_changed.py" in prepared.files
+    prompt = bench.build_case_prompt(prepared, key, "short")
+    paths = prompt.split("## Paths under review", 1)[1].split("## ", 1)[0]
+    assert paths.index(REVIEWED) < paths.index("scripts/also_changed.py")
+    upstream = prompt.split("## Upstream items", 1)[1].split("\n## ", 1)[0]
+    assert "Governing plan: none" in upstream and bench.launcher._INPUTS.UPSTREAM_QUESTION in upstream
+    evidence = prompt.split("## Evidence", 1)[1].split("\n## ", 1)[0]
+    assert bench.EVIDENCE_OFF in evidence and "EV1" not in evidence
+
+
+def test_case_path_outside_the_diff_refuses_the_case(repo: tuple[Repo, str, str], tmp_path: Path) -> None:
+    _r, base, commit = repo
+    prepared, _key = _prepared(repo, tmp_path, _case("C1", base, commit, paths=["AGENTS.md"]))
+    assert prepared.refused.startswith("files under review:")
