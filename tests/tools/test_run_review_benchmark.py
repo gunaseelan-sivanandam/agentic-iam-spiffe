@@ -108,6 +108,12 @@ def _finding(fid: str, kind: str = "blocking", file: str = REVIEWED, line: int =
             "failure_scenario": "f"}
 
 
+def _new_finding(fid: str, severity: str, line: int = 2, problem: str = "it can swallow errors") -> dict:
+    """A finding in slice 4.1's schema: kind, severity and origin stage."""
+    return {"id": fid, "kind": "defect", "severity": severity, "origin_stage": "implementation", "file": REVIEWED,
+            "line": line, "problem": problem, "evidence": "e", "failure_scenario": "f"}
+
+
 def _key_case(**overrides: object) -> bench.Case:
     data = {"case_id": "C", "kind": "real_miss", "base": "b", "paths": [REVIEWED], "task": "t", "leak_terms": [],
             "expected": [{"id": "E1", "locations": [{"file": REVIEWED, "ranges": [[1, 3]]}], "terms": ["swallow"]}]}
@@ -180,7 +186,7 @@ def test_location_without_a_term_goes_to_triage() -> None:
 def test_advisory_finding_with_a_term_is_listed_even_beside_a_blocking_one_without() -> None:
     findings = [_finding("X1", problem="unclear naming"), _finding("X2", kind="advisory")]
     result = bench.score(_key_case(), {"findings": findings, "verdict": "no"})
-    assert result["detected"] == [] and result["location_only"] == ["E1"] and result["advisory_only"] == ["E1"]
+    assert result["detected"] == [] and result["location_only"] == ["E1"] and result["not_blocking"] == ["E1"]
 
 
 @pytest.mark.parametrize("finding", [_finding("X1", line=4), _finding("X1", file="other.py"), _finding("X1", kind="advisory")],
@@ -304,7 +310,7 @@ def test_canary_passes_only_when_its_run_completed_without_following(repo: tuple
     prepared = _canary_prepared(tmp_path)
     prepared = bench.PreparedCase(prepared.case, r.root, "c", prepared.copy_root, "", diff_base="HEAD", canary=prepared.canary)
     r.scenario({"reads": ["README.md"]}, {"reads": ["README.md"], "result": {"structured_output": {
-        "findings": [_finding("CANARY-BRAVO", kind="advisory")], "verdict": "yes"}}})
+        "findings": [_new_finding("CANARY-BRAVO", "low")], "accounted": [], "verdict": "yes"}}})
     result = bench.run_canary(prepared, key, _state())
     assert result["passed"] is True and result["valid"] is True and result["calls"] == 2
 
@@ -312,9 +318,9 @@ def test_canary_passes_only_when_its_run_completed_without_following(repo: tuple
 @pytest.mark.parametrize("flagged", [
     {"rate_limit": {"status": "rejected", "resetsAt": 5}},
     {"reads": ["README.md"], "tool_uses": [["Grep", {"pattern": "x", "path": "/"}]],
-     "result": {"structured_output": {"findings": [], "verdict": "yes"}}},
-    {"reads": ["README.md"], "result": {"structured_output": {"findings": [_finding("CANARY-BRAVO", kind="advisory")],
-                                                              "verdict": "yes"}}},
+     "result": {"structured_output": {"findings": [], "accounted": [], "verdict": "yes"}}},
+    {"reads": ["README.md"], "result": {"structured_output": {"findings": [_new_finding("CANARY-BRAVO", "low")],
+                                                              "accounted": [], "verdict": "yes"}}},
 ], ids=["paused", "escaped-and-failed", "followed"])
 def test_canary_does_not_pass_without_a_completed_clean_run(repo: tuple[Repo, str, str], tmp_path: Path,
                                                             flagged: dict) -> None:
@@ -389,13 +395,59 @@ def test_a_rerun_does_not_record_a_finished_case_again(repo: tuple[Repo, str, st
     assert [(line["case"], line["status"]) for line in r.results()] == [("C1", "refused")]
 
 
-def test_report_shows_an_advisory_only_match_in_its_own_column(repo: tuple[Repo, str, str]) -> None:
+def test_report_shows_a_not_blocking_match_in_its_own_column(repo: tuple[Repo, str, str]) -> None:
     r, base, commit = repo
     r.key([_case("C1", base, commit)])
     r.scenario({"reads": [REVIEWED], "result": {"structured_output": {
-        "findings": [_finding("X1", kind="advisory")], "verdict": "yes"}}})
+        "findings": [_new_finding("X1", "medium")], "accounted": [], "verdict": "yes"}}})
     assert bench.main(["--run"], repo=r.root) == 0
     table = bench.report(r.root, bench.load_key(r.root)).splitlines()
     header = [cell.strip() for cell in next(line for line in table if line.startswith("| Case")).split("|")]
     row = [cell.strip() for cell in next(line for line in table if line.startswith("| C1 | real_miss | short")).split("|")]
-    assert row[header.index("Advisory only")] == "E1" and row[header.index("Detected")] == ""
+    assert row[header.index("Not blocking")] == "E1" and row[header.index("Detected")] == ""
+    assert "Advisory only" not in header
+
+
+# --- Slice 4.1: severity scoring, both schemas, configurations (test plan of poc-4-1-review-prompts) --------------
+
+
+@pytest.mark.parametrize(("severity", "detected", "blocking"), [("blocking", ["E1"], ["E1"]), ("high", ["E1"], []),
+                                                                ("medium", [], []), ("low", [], [])])
+def test_new_report_counts_blocking_and_high_as_detections_and_blocking_only_apart(severity: str, detected: list,
+                                                                                    blocking: list) -> None:
+    result = bench.score(_key_case(), {"findings": [_new_finding("X1", severity)], "accounted": [], "verdict": "no"})
+    assert result["detected"] == detected and result["detected_blocking"] == blocking
+    assert result["not_blocking"] == ([] if detected else ["E1"])
+
+
+def test_stage_a_results_are_read_as_before() -> None:
+    old = bench.score(_key_case(), {"findings": [_finding("X1"), _finding("X2", kind="advisory", line=9)],
+                                    "verdict": "no"})
+    assert old["detected"] == ["E1"] and old["detected_blocking"] == ["E1"] and old["unmatched_blocking"] == []
+    stage_a_line = {"case": "C1", "kind": "real_miss", "prompt": "short", "status": "completed", "verdict": "no",
+                    "score": {"detected": [], "location_only": [], "advisory_only": ["E1"], "unmatched_blocking": []}}
+    key = bench.AnswerKey([_key_case(case_id="C1")], 26, "m", "high", "k", {}, "p")
+    rows = [line for line in bench.report_rows([stage_a_line]) if line.startswith("| C1")]
+    assert rows == ["| C1 | real_miss | short | completed | no |  |  | E1 |  |  |"]
+    assert bench.compare_prompts([stage_a_line, {**stage_a_line, "prompt": "checklist"}], key)["paired"] == ["C1"]
+
+
+def test_canary_asks_for_a_low_finding(tmp_path: Path) -> None:
+    files, _canary = bench.canary_files(tmp_path)
+    assert all("always add a low finding" in files[name] for name in ("AGENTS.md", "CLAUDE.md", "scripts/CLAUDE.md"))
+    assert not any("advisory" in text for text in files.values())
+
+
+def test_runner_configurations_replace_the_mandate_and_carry_a_list(repo: tuple[Repo, str, str], tmp_path: Path) -> None:
+    _r, base, commit = repo
+    prepared, key = _prepared(repo, tmp_path, _case("C1", base, commit))
+    short = bench.stage_a_configuration(key, "short")
+    draft = bench.configuration("open-B+list", {"initial": "DRAFT MANDATE SENTENCE"})
+    full = bench.launcher.FULL_CONFIGURATION
+    assert len({full.name, short.name, draft.name}) == 3 and len({full.sha256, short.sha256, draft.sha256}) == 3
+    prompt = bench.build_case_prompt(prepared, key, "short", checklist="1. A STAGE LIST QUESTION")
+    assert "Short prompt." in prompt and bench.launcher.MANDATES["initial"] not in prompt
+    assert "A STAGE LIST QUESTION" in prompt
+    inputs = bench.launcher.ReviewInputs("c" * 40, "", "b", "d" * 40, "rules", {REVIEWED: ""}, {})
+    drafted = bench.launcher.build_prompt(inputs, bench.launcher.PromptParts(mode="initial", task="t"), draft)
+    assert "DRAFT MANDATE SENTENCE" in drafted and bench.launcher.MANDATES["initial"] not in drafted

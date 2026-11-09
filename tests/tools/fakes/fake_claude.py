@@ -25,7 +25,7 @@ import sys
 import time
 from pathlib import Path
 
-DEFAULT_REPLY = {"findings": [], "verdict": "yes"}
+DEFAULT_REPLY = {"findings": [], "accounted": [], "verdict": "yes"}
 
 
 def next_scenario(home: Path) -> dict:

@@ -63,5 +63,6 @@ answers in the PR body:
    ([AGENTS.md, coding rule 8](../../../AGENTS.md#coding-rules)), and do its names say what each part
    does?
 
-A "yes" to question 1 or 2 blocks, under [AGENTS.md — PoC scope and proportion](../../../AGENTS.md#poc-scope-and-proportion).
-Findings on question 3 are fix-or-defer: the author fixes them or the user defers them.
+A "yes" to question 1 or 2 is blocking, under [AGENTS.md — PoC scope and proportion](../../../AGENTS.md#poc-scope-and-proportion).
+Every other finding takes the severity scale of the same section (blocking, high, medium, low);
+findings on question 3 are medium: the author fixes them, or defers them with a tracking issue.

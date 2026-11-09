@@ -53,38 +53,52 @@ them.
   section's, or a plan's), in any stage or review round, without the user's approval. A proposed
   change is a decision concern for the user; reviewers judge against the approved model meanwhile.
 - **Few exceptions.** Fix rather than except. Do not open an OPL, exception entry or plan note for a
-  finding outside the threat model; one line in the review report is enough. Every exception must
-  fit on one line and have an expiry.
+  finding outside the threat model; such a finding is low, and one line in the review report is
+  enough. Every exception must fit on one line and have an expiry.
 - **Discovered issues.** Every issue found during the work is preserved and reported in the final
   handoff (the PR body) with its disposition and any tracking reference, whether it is
   pre-existing, introduced by the change, unrelated, or outside the threat model. Reporting an issue
   neither makes it blocking nor authorizes fixing it; an issue outside the threat model needs no
   OPL.
-- **Review findings.** Give reviewers this section as context. Only these block:
+- **Review findings.** Give reviewers this section as context. Every finding carries a severity:
+  blocking, high, medium or low. Only these are blocking:
   - a concrete false green or an OPL-005-class miss inside the threat model, with a failure scenario;
   - a contradiction;
-  - an approved decision without a test.
+  - an approved decision without a test;
+  - a secret written into logs, evidence or any published record.
 
-  Everything else is advisory. It is listed once and is not fixed by default. Implementation details
-  become notes for the implementation PR. Reviewers should expect production-hardening ideas (see
-  the simplifications above) and report them as advisory at most.
+  A blocking finding is fixed before merge, or the user decides. **High** is a real defect or false
+  claim below that bar, for example a misleading document, new behaviour without a test or an
+  untested fail-closed path; it is fixed in the same PR unless the user defers it. **Medium** has
+  clear value (robustness, diagnosability, naming) and is fixed, or deferred with a tracking issue.
+  **Low** (style, preference) is the author's choice. A simpler alternative is always low; a decision
+  concern goes to the user, whatever its severity. Implementation details become notes for the
+  implementation PR. Reviewers should expect production-hardening ideas (see the simplifications
+  above) and report them as low at most.
 - **Review loop.** A review unit (one change under review; a plan and its test plan are one unit)
   gets an initial review, round 1, and at most three fix rounds, rounds 2 to 4. Several reviewers in
-  one round count as one round. Rounds continue until no blocking finding is open; after round 4,
-  open blockers go to the user, and only the user can allow more rounds. A new revision keeps the
-  count; only the user resets it, by an explicit act recorded with the user's words. The author
-  (the fixer) answers every finding in writing, either fixed (where) or rejected (why). A rejection
-  needs a reason the reviewer can check, for example: the failure scenario does not happen (with
-  the evidence), it is outside the threat model, it is already covered by a named test or gate, or
-  it does not meet the blocking criteria above. A finding labelled blocking that does not meet them
-  is not fixed by default. In the next round the original reviewer (the same model and review role,
-  in a fresh session given its own earlier report and the author's answers) sees each rejection and
-  either accepts it or re-raises it with new evidence; a finding still disputed after that goes to
-  the user, who decides. A fix goes to the origin of the problem, and the author searches for the
+  one round count as one round. Rounds continue until no blocking or high finding is open; after
+  round 4, open blocking and high findings go to the user, and only the user can allow more rounds.
+  A new revision keeps the count; only the user resets it, by an explicit act recorded with the
+  user's words. The author (the fixer) answers every finding in writing, one table row per finding
+  (`| <finding id> | <severity> | <answer> |`) in the review record's section
+  `#### Answers to <attempt id>`, and the answer starts with one of four words:
+  `fixed: <path>[, <path>…]: <what changed>`, naming at least one repository path; `deferred: #N`;
+  `rejected:` with a reason the reviewer can check; or `owner:` with a link to where the user decides
+  or was asked. Blocking and high findings take `fixed`, `rejected` (it stands only when the next
+  round accepts it) or `owner`; medium and low findings take any of the four; a decision concern is
+  always answered `owner:`. A rejection needs a reason the reviewer can check, for example: the
+  failure scenario does not happen (with the evidence), it is outside the threat model, it is already
+  covered by a named test or gate, or it does not meet the blocking criteria above. A finding
+  labelled blocking that does not meet them is answered at the severity it does meet. In the next
+  round the original reviewer (the same model and review role, in a fresh session given its own
+  earlier report and the author's answers) sees each rejection and either accepts it, re-raises it
+  with new evidence, or answers that it cannot determine it, which goes to the user; a finding still
+  disputed after that goes to the user, who decides. A fix goes to the origin of the problem, and the author searches for the
   same cause elsewhere and says where it looked
   ([DPL-007](docs/delivery_problem_log.md#dpl-007-plan-review-answered-every-finding-by-adding-mechanisms)).
-  The review ends when every blocking finding is fixed, accepted as rejected, or decided by the
-  user.
+  The review ends when every blocking and high finding is fixed, accepted as rejected, or decided by
+  the user.
 
 ## Operating model (black-box first)
 - Treat the system as a black box first:
@@ -203,6 +217,15 @@ template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>
   record (`plan_review.md` for a plan, `review_<unit>.md` for an implementation) keeps each task
   prompt and report verbatim with the author's answers (earlier records hold the exact command, for
   example [`review_1b.md`](docs/slices/agentic-delivery-process/review_1b.md#reviewer-prompts-verbatim)).
+- **Modes and prompts.** The launcher writes every prompt in a fixed order of sections, opening with
+  the mandate of the review's mode, which follows the round: round 1 is the initial review (the
+  final review for the unit named `final`), and every later round is a recheck. No launcher option
+  and no task text removes or reorders a section, and the task text reaches the reviewer as claims to
+  verify. A recheck gets the reviewer's own earlier report and the author's answers to it (only that
+  section of the record, never the whole record); it lists every answer under `accounted` with the
+  files it opened for it, and the launcher fails it when it leaves an answer out, names a file it did
+  not read, or did not read a file that a `fixed:` answer names. Whoever writes a task text never
+  makes a file list the scope, never says "only check X", and never asks a closed recheck question.
 - **Models and usage limits.** Agents use Claude models. Codex is used only for scoped
   implementation, and only while Claude's 5-hour or weekly usage is above 70%. Reviews run on
   Claude; when a usage limit is reached, work pauses until it resets. The default reviewer model is
@@ -211,9 +234,10 @@ template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>
 - **Plan review** (step 1). The reviewer reviews `plan.md` and `test_plan.md` for security, test
   adequacy and consistency, under [PoC scope and proportion](#poc-scope-and-proportion).
   `docs/slices/<id>/plan_review.md` keeps each round's report verbatim, the SHA-256 of the files
-  reviewed, and the author's answers (fixed or rejected, with the reason) separately. Each round ends
-  with "approvable within the threat model: yes or no"; from round 2 a new finding counts only if it
-  blocks, except simpler alternatives and decision concerns (below), which every round may report.
+  reviewed, and the author's answers (in the review loop's table) separately. Each round ends with
+  "approvable within the threat model: yes or no"; from round 2 a new finding counts only if it is
+  blocking or high, except simpler alternatives and decision concerns (below), which every round may
+  report.
   The plan states the threat model the reviewer judges against: the
   [delivery threat model](#poc-scope-and-proportion) applied to the slice's own change, and the
   system-under-test threat the slice touches.
@@ -221,15 +245,15 @@ template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>
   (`docs/slices/_template/test_plan.md`: which wrong failure would still pass each new or changed
   test, whether a key, socket or secret now reaches a service outside its holders, and whether each
   new file's purpose comment and names say what it does) in the PR body. A "yes" to the first two
-  blocks, under the same review loop; findings on purpose comments and names are fix-or-defer.
+  blocks, under the same review loop; findings on purpose comments and names are medium.
 - **Fixes stay within the agreed decisions** (the plan's decisions, or the request, and this file).
   Before answering a finding with a new mechanism, the author names the upstream choice that causes
   it and weighs changing that choice; removing or changing a mechanism is preferred over adding one.
   A fix that would change an agreed decision goes to the user as a question before it is applied.
-- **Report sections.** Besides blocking and advisory findings, every round may report *simpler
-  alternatives* (a mechanism that could be removed or simplified within the agreed decisions;
-  non-blocking) and *decision concerns* (an agreed decision that itself seems to cause a problem;
-  for the user, never applied by the author). The reviewer may check metadata of secret files
+- **Report sections.** Besides findings of each severity, every round may report *simpler
+  alternatives* (a mechanism that could be removed or simplified within the agreed decisions; always
+  low) and *decision concerns* (an agreed decision that itself seems to cause a problem; for the
+  user, never applied by the author). The reviewer may check metadata of secret files
   (existence, owner, mode, readability), never their content.
 
 Hidden-state rule: if a decision depends on hidden state, `plan.md` lists the state/key name, store,
