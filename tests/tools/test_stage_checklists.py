@@ -193,6 +193,11 @@ def test_a_stage_the_base_cannot_give_is_refused_before_any_call(fx: base.Fixtur
     assert fx.calls() == []
 
 
+def test_a_stage_on_a_base_without_lists_is_refused_before_any_call(fx: base.Fixture) -> None:
+    assert base._run(fx, "--stage", "code") == 2
+    assert fx.calls() == []
+
+
 def test_a_final_review_without_a_stage_runs_with_no_list(fx: base.Fixture) -> None:
     _lists_at_base(fx, code="# Code\n\nBASE CODE QUESTION\n")
     assert base._run(fx, unit="final", record="docs/slices/demo/review_final.md") == 0
