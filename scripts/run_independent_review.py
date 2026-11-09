@@ -756,7 +756,7 @@ def _accounted_problems(entry: Any, finding_ids: set[Any]) -> list[str]:
         problems.append("cannot determine without a note")
     if status == "re-raised" and entry["item"] not in finding_ids:
         problems.append("a re-raised finding is not in findings under its ID")
-    if status == "flagged" and not set(re.findall(r"[\w.-]+", note)) & finding_ids:
+    if status == "flagged" and not set(re.findall(r"[\w-]+(?:\.[\w-]+)*", note)) & finding_ids:  # "R1-2." names R1-2
         problems.append("a flagged entry names no finding of the report")
     return problems
 
@@ -835,8 +835,10 @@ def classify(summary: StreamSummary, returncode: int, copy_root: Path, review_pa
     if failure:
         return CallOutcome("failed", failure, stats=stats)
     reply = structured_reply(summary.result or {})
-    if validate_report(reply):
-        return CallOutcome("failed", "the reply does not match the report schema", stats=stats)
+    problems = validate_report(reply)
+    if problems:  # the problems name fields and rules, never a value of the reply
+        return CallOutcome("failed", "the reply does not match the report schema: " + "; ".join(problems[:5]),
+                           stats=stats)
     unaccounted = accounting_problems(reply, accounting or Accounting(), stats["paths_read"], copy_root)
     if unaccounted:
         return CallOutcome("failed", "the report does not account for what it was given: " + "; ".join(unaccounted[:5]),

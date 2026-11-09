@@ -323,7 +323,7 @@ def test_flagged_evidence_entry_naming_no_finding_of_the_report_fails(fx: base.F
     fx.evidence = ["no CI run for this commit"]
     fx.scenario(base._reply(accounted=[base._accounted("EV1", "flagged", note="raised X1")]))
     assert base._run(fx) == 1
-    assert base._ends(fx)[0]["reason"] == "the reply does not match the report schema"
+    assert base._ends(fx)[0]["reason"].startswith("the reply does not match the report schema: accounted 0: a flagged")
 
 
 def test_failing_tests_are_named_and_a_failed_coverage_run_never_shows_no_entries(ev: base.Fixture) -> None:

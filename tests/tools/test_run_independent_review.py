@@ -1071,7 +1071,8 @@ def test_re_raised_finding_keeps_its_id(fx: Fixture) -> None:
     commit = _recheck(fx, "| X1 | high | rejected: the scenario does not happen |")
     fx.scenario(_reply(accounted=[_accounted("X1", "re-raised")]))
     assert _run(fx, round_no=2, commit=commit) == 1
-    assert _ends(fx)[-1]["reason"] == "the reply does not match the report schema"
+    assert _ends(fx)[-1]["reason"] == ("the reply does not match the report schema: accounted 0: a re-raised finding "
+                                       "is not in findings under its ID")
     fx.scenario(_reply([_finding("X1")], accounted=[_accounted("X1", "re-raised")], verdict="no"))
     assert _run(fx, round_no=2, commit=commit) == 0
     assert _ends(fx)[-1]["accounted_counts"]["re-raised"] == 1
@@ -1112,7 +1113,7 @@ def test_report_outside_the_schema_fails_and_is_not_released(fx: Fixture, report
     fx.scenario({"result": {"structured_output": report}})
     assert _run(fx) == 1
     end = _ends(fx)[0]
-    assert end["status"] == "failed" and end["reason"] == "the reply does not match the report schema"
+    assert end["status"] == "failed" and end["reason"].startswith("the reply does not match the report schema: ")
     assert end["severity_counts"] is None
     assert not _report(fx, fx.log()[0]).exists()
 
@@ -1260,3 +1261,9 @@ def test_answers_section_with_prose_but_no_table_row_is_refused(fx: Fixture) -> 
     commit = _commit_all(fx.work, "prose answers")
     assert _run(fx, round_no=2, commit=commit) == 2
     assert len(fx.calls()) == 1
+
+
+def test_flagged_note_naming_a_finding_before_punctuation_is_accepted() -> None:
+    for note in ("raised R1-2.", "see (R1-2)", "R1-2; and more"):
+        report = {"findings": [_finding("R1-2")], "accounted": [_accounted("EV1", "flagged", note=note)], "verdict": "no"}
+        assert launcher.validate_report(report) == [], note
