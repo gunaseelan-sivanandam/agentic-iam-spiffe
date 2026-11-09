@@ -7,7 +7,7 @@ file current during the run and says in it what was decided on the owner's behal
 checklists, the benchmark counts, every decision concern, every parked unit, every process-growth proposal and
 every discovered issue with its disposition.
 
-Last updated: 2026-11-09, 4.1 reviewed; 4.2 in review (round 1 answered).
+Last updated: 2026-11-09, 4.1 and 4.2 reviewed; 4.3 in progress.
 
 ## Goal (the owner's, 2026-11-09)
 
@@ -86,8 +86,9 @@ Parked units, decision concerns and growth proposals collect below as the run go
 | Part | State | Review |
 | --- | --- | --- |
 | 4.1 | Implemented (`59d0291` to `9413020`) | Ended after round 2. Round 1: approvable; 0 blocking, 2 high, 6 medium, 5 low. Round 2: attempt 1 failed the read check (issue 5); attempt 2 accepted all 13 answers and found nothing new |
-| 4.2 | Implemented (`381dc2b` to the round-1 fixes) | Round 1: approvable; 0 blocking, 3 high, 4 medium, 3 low; all answered; round 2 (recheck) next |
-| 4.3 to 4.6 | Not started | — |
+| 4.2 | Implemented (`381dc2b` to the round-2 fix) | Ended after round 2. Round 1: approvable; 0 blocking, 3 high, 4 medium, 3 low. Round 2: all 10 answers accepted, the 3 evidence entries explained; 1 new low finding, fixed |
+| 4.3 | In progress | — |
+| 4.4 to 4.6 | Not started | — |
 
 ## Decided by the author during the run
 
@@ -105,7 +106,7 @@ a decision concern below instead.
 | 4.1 | Local runs of `make tooling-test` use a shellcheck 0.10.0 binary taken from the `shellcheck-py` wheel into a scratch directory | shellcheck is not installed on this machine; without it 9 lint tests fail (on the base too). CI's runner has it |
 | 4.2 | The computed inputs live in their own module, `scripts/review_inputs.py`, which the launcher loads | The launcher had grown past 1,400 lines; the file list, upstream items and evidence are one concern. The plan named only the launcher; this is code organisation, not a new mechanism |
 | 4.2 | The evidence runs in a `git clone --shared` of the reviewed commit with the author's `PATH` | The tooling tests need Git history and the tools on the author's `PATH` (ruff, shellcheck); in a `git archive` export 38 of them failed. The environment is still only `PATH`, `LANG` and a scratch `HOME` (S42-D8) |
-| 4.2 | The scratch `HOME` holds one link: the interpreter's user site-packages, at the place the interpreter computes from `HOME` | pytest and its plugins are installed with `pip --user` under the author's `HOME`; without the link no evidence command runs. Only that directory is linked, not the rest of `~/.local` (review round 1, R1-6) |
+| 4.2 | The scratch `HOME` holds one link: the interpreter's user site-packages, at the place the interpreter computes from `HOME` (`.local` on Linux, `Library/Python/X.Y` for a macOS framework build) | pytest and its plugins are installed with `pip --user` under the author's `HOME`; without the link no evidence command runs. Only that directory is linked, not the rest of `~/.local` (review round 1, R1-6) |
 | 4.2 | A `--path` that names a file the change deletes is refused, with a message that it is listed under deleted files | S42-D1 requires a `--path` to be in the diff; a deleted file cannot be opened, so the empty-review rule could never be met with it |
 | 4.2 | The template and archive folders under `docs/slices/` are not treated as bundles when naming other plans the change touches | They are not slice bundles; listing them added noise to every prompt (found by the author's dry run) |
 | 4.2 | Evidence entries are numbered EV1, EV2, … | So that no finding ID such as E1 can collide with an evidence entry in `accounted` |

@@ -275,3 +275,169 @@ decision asked for?
 | R1-8 | low | fixed: scripts/run_independent_review.py: the usage line shows `--path` as optional and says what it does |
 | R1-9 | low | fixed: scripts/review_inputs.py, scripts/run_independent_review.py: the redundant withheld check is gone, and the recheck's check of `fixed:` paths uses the change's deleted files from the review inputs; `changed_away` and its second `git diff` are removed |
 | R1-10 | medium | fixed: scripts/review_inputs.py, tests/tools/test_review_inputs.py, scripts/run_independent_review.py: the module is renamed `review_inputs` (with its tests), and the helper `_upstream_and_trace` says that it returns the trace report too |
+
+## Round 2
+
+### Attempt implementation/c1/r2/A/1
+
+Commit `780f6c8`, effort medium. Files reviewed (SHA-256): `AGENTS.md` `bdbd30d263cd`, `docs/STATUS.md` `2edc6846e09a`, `docs/slices/README.md` `7dc9e02f05d9`, `docs/slices/_template/test_plan.md` `b1b8a55b4802`, `docs/slices/agentic-sdlc-poc/slice_4_decisions.md` `3d57c533f668`, `docs/slices/poc-4-1-review-prompts/review_attempts.jsonl` `d8142117691a`, `docs/slices/poc-4-1-review-prompts/review_implementation.md` `c6f56911004a`, `scripts/review_inputs.py` `29fea74d72f2`, `scripts/run_independent_review.py` `5cdcf199cf1c`, `scripts/run_review_benchmark.py` `069e999aaad6`, `tests/tools/fakes/fake_claude.py` `fca2c0f7f258`, `tests/tools/test_review_inputs.py` `9359911de248`, `tests/tools/test_run_independent_review.py` `cfd56ddcd6de`, `tests/tools/test_run_review_benchmark.py` `579a5e6bc4bf`.
+
+Status: completed; approvable within the threat model: yes.
+
+#### Prompt
+
+```markdown
+# Recheck of slice 4.2's implementation (issue #39), round 2
+
+The intent is unchanged from round 1: the approved plan and test plan of `docs/slices/poc-4-2-review-inputs/`
+(decisions S42-D1 to S42-D11), merged into `poc/agentic-sdlc` by plan PR #48. Round 1 reviewed commit `d2d8616`; the
+author's answers to its report, below, were committed in `780f6c8`, the reviewed commit. The fixes are the part of
+`_review_inputs/change.diff` that `780f6c8` adds. Among them, the module `scripts/review_evidence.py` is renamed
+`scripts/review_inputs.py`, and its tests `tests/tools/test_review_inputs.py`.
+```
+
+#### Report
+
+```json
+{
+  "accounted": [
+    {
+      "item": "R1-1",
+      "note": "test_accepted_trace_gap_is_marked_accepted (test_review_inputs.py:597) adds a real accepted_gaps entry and runs the real validate_traceability. Its gap_gate.accepted holds 'category:item' strings (validate_traceability.py:815-816), which matches the lookup at review_inputs.py:397-401.",
+      "opened": [
+        "tests/tools/test_review_inputs.py",
+        "scripts/review_inputs.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-2",
+      "note": "test_completed_ci_job_shows_its_own_conclusion (test_review_inputs.py:607) asserts the exact entry text: the run conclusion plus each job's own conclusion (success, failure) and a queued job without one. Dropping the job conclusion, or showing the run's conclusion in its place, fails the test.",
+      "opened": [
+        "tests/tools/test_review_inputs.py",
+        "scripts/review_inputs.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-3",
+      "note": "test_items_unrelated_to_the_change_stay_out_of_upstream_and_evidence (test_review_inputs.py:625) adds ARCH-002, DD-002 in the unchanged scripts/other.py and the unproved REQ-T-R4. It asserts that none of them appears in the upstream or evidence sections. This exercises both the `if where:` filter (line 188) and the `item in ids` filter (line 399).",
+      "opened": [
+        "tests/tools/test_review_inputs.py",
+        "scripts/review_inputs.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-4",
+      "note": "run_independent_review.py:1551-1554 refuses an entry without `path_hints` with the message 'logged before slice 4.2 ... retired'. Tested at test_review_inputs.py:642, and recorded at slice_4_decisions.md:112.",
+      "opened": [
+        "scripts/run_independent_review.py",
+        "tests/tools/test_review_inputs.py",
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-5",
+      "note": "_test_entries (review_inputs.py:156-164) turns a YAMLError or a non-mapping document into a ValueError. upstream_items catches it at lines 219-223 and shows 'not available'. Both cases are tested at test_review_inputs.py:649, together with the trace tool's own failed entry.",
+      "opened": [
+        "scripts/review_inputs.py",
+        "tests/tools/test_review_inputs.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-6",
+      "note": "Only the user site-packages directory is linked now (review_inputs.py:280-288). AGENTS.md:236-237 says so, and slice_4_decisions.md:106-112 records the 4.2 choices made on the owner's behalf. Test at test_review_inputs.py:658. One residual, the hard-coded `.local` on macOS, is raised as R2-1 (low).",
+      "opened": [
+        "scripts/review_inputs.py",
+        "AGENTS.md",
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+        "tests/tools/test_review_inputs.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-7",
+      "note": "docs/slices/README.md:18 now says 'Plan merged (PR #48); implemented on the slice 4 branch, in review'.",
+      "opened": [
+        "docs/slices/README.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-8",
+      "note": "The usage line (run_independent_review.py:20) shows `--path` as optional, and line 23 says it only lists a file first.",
+      "opened": [
+        "scripts/run_independent_review.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-9",
+      "note": "changed_files (review_inputs.py:77-90) filters withheld paths once, in the returned tuple. plan_reviews uses `set(inputs.deleted)` (run_independent_review.py:1325). A grep for changed_away in the launcher finds nothing.",
+      "opened": [
+        "scripts/review_inputs.py",
+        "scripts/run_independent_review.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-10",
+      "note": "The module is renamed scripts/review_inputs.py, and the helper _upstream_and_trace (run_independent_review.py:1270) has a docstring that names the trace report and its reason as part of what it returns. The tests are renamed to test_review_inputs.py.",
+      "opened": [
+        "scripts/review_inputs.py",
+        "scripts/run_independent_review.py",
+        "tests/tools/test_review_inputs.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "EV1",
+      "note": "Line 285 is the early return when the user site-packages directory does not exist. In this environment it does exist, so the return is never taken. The skip is benign: nothing is linked. The test at test_review_inputs.py:658 covers the linking path. The macOS placement problem is raised separately as R2-1.",
+      "opened": [
+        "scripts/review_inputs.py",
+        "tests/tools/test_review_inputs.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV2",
+      "note": "Line 166 is the same RuntimeError in _load_script as before; only the line number moved. For a .py file under scripts/, spec_from_file_location always returns a spec with a loader, so the line is unreachable in practice, and it fails closed if ever hit.",
+      "opened": [
+        "scripts/run_independent_review.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV3",
+      "note": "As in round 1: slice 4 runs locally, and CI runs on pull requests and pushes to main, so the reviewed commit has no CI run. The entry reports that honestly instead of showing another commit's run. No CI verdict backs this review.",
+      "opened": [
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+      ],
+      "status": "explained"
+    }
+  ],
+  "findings": [
+    {
+      "evidence": "review_inputs.py:283-288: `target = home / \".local\" / user_site.relative_to(Path(site.getuserbase()))`. The only test, test_scratch_home_links_only_the_user_site_packages, checks the link against `.local` and would pass on macOS while the interpreter misses the link.",
+      "failure_scenario": "An author on macOS with pytest-cov installed by `pip --user` runs a review. The coverage command in the scratch clone cannot find pytest-cov, so every review shows 'failed: <coverage command>'. That is fail-closed and visible, but every review on that machine loses its coverage evidence, and the decision record says the setup works.",
+      "file": "scripts/review_inputs.py",
+      "id": "R2-1",
+      "kind": "defect",
+      "line": 286,
+      "origin_stage": "implementation",
+      "problem": "_link_user_site always puts the link under `<scratch home>/.local/...`. Its docstring and the decision-file row (slice_4_decisions.md:108) say the link sits 'at the place the interpreter computes from HOME'. On a macOS framework Python (AGENTS.md supports macOS with Rancher Desktop), the interpreter computes the user base as ~/Library/Python/X.Y, not ~/.local. So the interpreter never looks where the link is. The round-1 version had the same hard-coded `.local`, so this is not new, but the fix restates the claim.",
+      "severity": "low"
+    }
+  ],
+  "verdict": "yes"
+}
+```
+
+#### Answers to implementation/c1/r2/A/1
+
+| ID | Severity | Answer |
+| --- | --- | --- |
+| R2-1 | low | fixed: scripts/review_inputs.py, tests/tools/test_review_inputs.py: the link keeps the user base's place under HOME (`Library/Python/X.Y` for a macOS framework build, `.local` on Linux), falling back to `.local` only when the base does not lie under HOME. Test: `test_user_base_keeps_its_place_under_home`. No later round: a low finding does not keep the review open |

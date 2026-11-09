@@ -667,3 +667,10 @@ def test_scratch_home_links_only_the_user_site_packages(ev: base.Fixture) -> Non
         assert not (scratch.home / ".local" / "bin").exists() and not (scratch.home / ".local" / "share").exists()
     finally:
         shutil.rmtree(scratch.root)
+
+
+def test_user_base_keeps_its_place_under_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert inputs_module.user_base_under_home(tmp_path / "Library" / "Python" / "3.12") == Path("Library/Python/3.12")
+    assert inputs_module.user_base_under_home(tmp_path / ".local") == Path(".local")
+    assert inputs_module.user_base_under_home(Path("/elsewhere/.local")) == Path(".local")

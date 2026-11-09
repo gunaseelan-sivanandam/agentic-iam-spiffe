@@ -280,12 +280,21 @@ def make_scratch(repo: Path, commit: str) -> Scratch:
 def _link_user_site(home: Path) -> None:
     """Let the interpreter see its `pip --user` packages under the scratch HOME: only the user site-packages
     directory is linked, at the place the interpreter computes from HOME, not the rest of the author's ~/.local."""
-    user_site = Path(site.getusersitepackages())
+    user_site, user_base = Path(site.getusersitepackages()), Path(site.getuserbase())
     if not user_site.is_dir():
         return
-    target = home / ".local" / user_site.relative_to(Path(site.getuserbase()))
+    target = home / user_base_under_home(user_base) / user_site.relative_to(user_base)
     target.parent.mkdir(parents=True)
     target.symlink_to(user_site)
+
+
+def user_base_under_home(user_base: Path) -> Path:
+    """Where the interpreter puts its user base relative to HOME: `.local` on Linux, `Library/Python/X.Y` for a macOS
+    framework build; `.local` when the base does not lie under the current HOME."""
+    try:
+        return user_base.relative_to(Path(os.path.expanduser("~")))
+    except ValueError:
+        return Path(".local")
 
 
 def evidence_env(scratch: Scratch) -> dict[str, str]:
