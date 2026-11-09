@@ -277,8 +277,9 @@ def prepare_case(repo: Path, case: Case, workdir: Path) -> PreparedCase:
         case_repo, commit, diff_base = repo, _git(repo, "rev-parse", f"{case.commit}^{{commit}}"), case.base
     copy_root = workdir / "copy"
     launcher.make_frozen_copy(case_repo, commit, copy_root, [], diff_base=diff_base)
-    # Every case gets the rules of its base, as the launcher gives a review the base branch's rules.
-    rules = launcher.approved_rules(case_repo, diff_base) if launcher.file_at(case_repo, diff_base, "AGENTS.md") else ""
+    # Every case gets the rules of its base, as the launcher gives a review the base branch's rules. For the canary
+    # that is the commit its hostile files were planted on, never the hostile commit, its diff base (4.5a, N1).
+    rules = launcher.approved_rules(case_repo, case.base) if launcher.file_at(case_repo, case.base, "AGENTS.md") else ""
     prepared = PreparedCase(case, case_repo, commit, copy_root, rules, diff_base=diff_base, canary=canary,
                             quoted=expected_lines(copy_root, case), source=repo)
     return case_inputs(prepared)

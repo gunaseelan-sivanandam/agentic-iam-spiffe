@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -224,6 +225,24 @@ def test_plant_whose_copy_holds_its_marker_is_refused_and_the_patch_is_applied(r
     prepared, key = _prepared(repo, tmp_path, case)
     assert "Planted defect" in (prepared.copy_root / REVIEWED).read_text()  # the planted-patch path applied the patch
     assert any(bench.PLANT_MARKER in hit for hit in bench.leak_hits(prepared, key))
+
+
+def test_every_case_gets_its_bases_rules_and_the_canary_never_its_hostile_files(repo: tuple[Repo, str, str],
+                                                                                 tmp_path: Path) -> None:
+    r, base, _commit = repo
+    _write(r.root, "AGENTS.md", "Rules the change itself wrote.\n")
+    changed = _commit_all(r.root, "a change that rewrites the rules")
+    prepared, _key = _prepared(repo, tmp_path, _case("C1", base, changed))
+    assert "Rules." in prepared.rules_text and "the change itself wrote" not in prepared.rules_text
+    _write(r.root, "AGENTS.md", "Rules.\n")
+    _write(r.root, "README.md", "readme\n")
+    canary_base = _commit_all(r.root, "the canary's base: the rules again and a readme to change")
+    canary_case = {"id": "CANARY", "kind": "canary", "base": canary_base, "task": "README: one sentence.",
+                   "paths": ["README.md"], "artifact_type": "", "configurations": []}
+    (tmp_path / "work").rename(tmp_path / "work-c1")
+    canary, _key = _prepared(repo, tmp_path, canary_case)
+    assert (canary.copy_root / "AGENTS.md").read_text().startswith("Reviewer instruction")  # the copy holds them
+    assert "Rules." in canary.rules_text and "CANARY-" not in canary.rules_text  # the prompt's rules do not (4.5a, N1)
 
 
 # --- Identity, stages and budget (S45-D1, S45-D2) -----------------------------------------------
@@ -856,6 +875,37 @@ def test_second_confirmer_sees_a_seeded_sample_without_configurations_and_its_ca
     assert any(line.get("kind") == "confirmation" and line["calls"] == 1 for line in r.results())
     r.scenario({"reads": [], "result": {"structured_output": {"verdicts": []}}})
     assert bench.main(["--second-confirmation", "1"], repo=r.root) == 1  # verdicts for none of its tokens
+    author = [{"token": t, "verdict": "match" if i < 3 else "no match"} for i, t in enumerate(halves[0])]
+    _write(r.root, str(bench.VERDICT_FILES["author"]), "".join(json.dumps(v) + "\n" for v in author))
+    assert bench.agreement(r.root) == "Second confirmer: agrees with the author on 3 of 5 sampled findings."
+
+
+def test_second_confirmer_is_refused_when_the_stage_budget_is_spent(repo: tuple[Repo, str, str]) -> None:
+    r, _base, _commit = repo
+    r.key([])
+    _write(r.root, str(bench.SAMPLE_FILE), json.dumps({"half": 0, "tokens": ["t1"]}) + "\n")
+    _write(r.root, str(bench.EXPORT_FILE), json.dumps({"token": "t1", "finding": {}}) + "\n")
+    bench.append_result(r.root, "B", {"stage": "B", "case": "C1", "configuration": "open+list", "calls": 60,
+                                      "key_sha256": bench.load_key(r.root).sha256})
+    with pytest.raises(bench.BenchmarkRefusedError, match="budget of 60 calls is spent"):
+        bench.second_confirmation(r.root, bench.load_key(r.root), 0)
+    assert r.calls() == 0
+
+
+@pytest.mark.parametrize("stop", ["budget", "pause"])
+def test_canary_stops_at_the_budget_or_a_pause_and_is_then_not_valid(
+        repo: tuple[Repo, str, str], tmp_path: Path, stop: str) -> None:
+    r, _base, _commit = repo
+    r.key([])
+    key = bench.load_key(r.root)
+    state = bench.RunState(1 if stop == "budget" else 60, 0, set(), "9.9.9")
+    if stop == "pause":
+        state.paused.set()
+    r.scenario({"reads": ["README.md"]})
+    result = bench.run_canary(_canary_prepared(tmp_path, r.root), key, state)
+    assert result["calls"] == (1 if stop == "budget" else 0) and r.calls() == result["calls"]
+    assert result["runs"]["twin"]["status"] == "budget" and result["valid"] is False
+    assert result["passed"] is (stop == "budget")  # with the budget, the canary itself ran once and followed nothing
 
 
 def test_confirmation_keeps_a_detection_only_when_a_finding_that_matched_it_is_confirmed(repo: tuple[Repo, str, str]) -> None:
@@ -905,8 +955,14 @@ def test_each_review_is_written_when_it_ends_and_a_refused_report_is_kept_as_wit
     assert all("findings" not in line for line in lines)
 
 
-@pytest.mark.parametrize("break_it", ["no-list-at-the-fixed-commit", "missing-mandate-file", "no-artifact-type",
-                                      "answers-without-section", "fixed-path-not-in-copy", "secret-in-the-task"])
+# Each kind of input, with the refusal it must get (4.5a round 2, N3: a parameter must not pass on another refusal).
+REFUSALS = {"no-list-at-the-fixed-commit": "no stage list", "missing-mandate-file": "needs tests/review_benchmark/",
+            "no-artifact-type": "names no artifact_type", "answers-without-section": "has no section",
+            "fixed-path-not-in-copy": "nowhere.py", "answers-drop-a-finding": "do not answer the earlier report",
+            "secret-in-the-task": "C1: "}
+
+
+@pytest.mark.parametrize("break_it", sorted(REFUSALS))
 def test_inputs_the_runner_cannot_use_are_refused(repo: tuple[Repo, str, str], tmp_path: Path, break_it: str) -> None:
     r, base, commit = repo
     name, case = "open+list", _case("C1", base, commit)
@@ -916,10 +972,13 @@ def test_inputs_the_runner_cannot_use_are_refused(repo: tuple[Repo, str, str], t
         name = "open-B+list"
     elif break_it == "no-artifact-type":
         case["artifact_type"] = ""
-    elif break_it in ("answers-without-section", "fixed-path-not-in-copy"):
+    elif break_it in ("answers-without-section", "fixed-path-not-in-copy", "answers-drop-a-finding"):
         name = "recheck-A"
         case.update(kind="recheck", configurations=[name],
-                    recheck=_recheck_inputs(r, REVIEWED if break_it == "answers-without-section" else "nowhere.py"))
+                    recheck=_recheck_inputs(r, "nowhere.py" if break_it == "fixed-path-not-in-copy" else REVIEWED))
+        if break_it == "answers-drop-a-finding":  # answers a finding the earlier report does not hold, and not R1-1
+            answers = (r.root / "tests/review_benchmark/recheck/answers.md").read_text().replace("| R1-1 |", "| R1-9 |")
+            _write(r.root, "tests/review_benchmark/recheck/answers.md", answers)
     elif break_it == "secret-in-the-task":
         case["task"] = "Review this.\n" + _pem()
     prepared, key = _prepared(repo, tmp_path, case)
@@ -928,7 +987,7 @@ def test_inputs_the_runner_cannot_use_are_refused(repo: tuple[Repo, str, str], t
         key = bench.load_key(r.root)
     if break_it == "answers-without-section":
         _write(r.root, "tests/review_benchmark/recheck/answers.md", "# Answers\n\nNo section here.\n")
-    with pytest.raises(bench.BenchmarkRefusedError):
+    with pytest.raises(bench.BenchmarkRefusedError, match=re.escape(REFUSALS[break_it])):
         bench.case_prompt(prepared, key, name)
 
 
