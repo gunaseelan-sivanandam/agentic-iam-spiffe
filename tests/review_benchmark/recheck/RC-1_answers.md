@@ -1,3 +1,8 @@
+# RC-1: the author's answers to the earlier report
+
+The answers section that the benchmark's recheck case (RC-1) gives the reviewer, as the launcher would
+take it from a review record. Its `fixed:` answer names a file whose change does not fix the finding.
+
 #### Answers to case/c1/r1/A/1
 
 | ID | Severity | Answer |

@@ -342,10 +342,14 @@ def _mandates(key: AnswerKey, name: str) -> tuple[dict[str, str], dict[str, str]
 
 def _recheck_inputs(repo: Path, case: Case) -> tuple[Any, Any]:
     """The recheck case's earlier report and answers (S45-D5), as the launcher would load them from a record."""
+    attempt = case.recheck.get("attempt", "case/c1/r1/A/1")
     report = (repo / BENCHMARK_DIR / case.recheck["earlier_report"]).read_text(encoding="utf-8")
-    answers = (repo / BENCHMARK_DIR / case.recheck["answers"]).read_text(encoding="utf-8")
+    answers = launcher.answers_section((repo / BENCHMARK_DIR / case.recheck["answers"]).read_text(encoding="utf-8"),
+                                       attempt)
+    if answers is None:
+        raise BenchmarkRefusedError(f"{case.recheck['answers']} has no section `#### Answers to {attempt}`")
     rows = tuple(launcher.answer_rows(answers))
-    recheck = launcher.Recheck(case.recheck.get("attempt", "case/c1/r1/A/1"), report, answers, rows)
+    recheck = launcher.Recheck(attempt, report, answers, rows)
     must = tuple(p for row in rows for p in launcher.fixed_paths(row.answer))
     accounting = launcher.Accounting({row.finding: launcher.ANSWER_STATUSES for row in rows}, must)
     return recheck, accounting
