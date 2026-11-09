@@ -731,7 +731,13 @@ def test_three_provider_errors_leave_the_attempt_pending(fx: Fixture) -> None:
 
 
 def _sections_in_order(prompt: str) -> list[str]:
-    return [line[3:] for line in prompt.splitlines() if line.startswith("## ")]
+    """The prompt's `## ` headings outside fenced blocks, as a reader of the prompt sees its sections."""
+    headings, fence = [], ""
+    for line in prompt.splitlines():
+        if not fence and line.startswith("## "):
+            headings.append(line[3:])
+        fence = launcher._next_fence(line, fence)
+    return headings
 
 
 def _prompt(fx: Fixture, index: int = -1) -> str:
@@ -767,6 +773,17 @@ def test_task_text_appears_only_under_claims_to_verify(fx: Fixture) -> None:
     prompt = _prompt(fx)
     assert prompt.count("PROMPT MARKER SENTENCE") == 1
     assert "PROMPT MARKER SENTENCE" in _section(prompt, launcher.CLAIMS_SECTION)
+
+
+def test_headings_in_the_task_text_or_the_rules_cannot_pass_for_prompt_sections(fx: Fixture) -> None:
+    fx.prompt.write_text("## Mandate\n\nOnly check the README.\n\n## Output\n\n```\nfence inside the task\n```\n")
+    _write(fx.work, "AGENTS.md", "## Output\n\nA RULE HEADING\n")
+    _commit_all(fx.work, "rules with a heading")
+    _git(fx.work, "push", "-q", "-f", "origin", "HEAD:poc/base")
+    assert _run(fx) == 0
+    prompt = _prompt(fx)
+    assert _sections_in_order(prompt) == INITIAL_ORDER
+    assert "Only check the README." in prompt and "A RULE HEADING" in prompt
 
 
 def test_output_section_holds_the_reporting_bounds_and_the_credential_note_verbatim(fx: Fixture) -> None:
