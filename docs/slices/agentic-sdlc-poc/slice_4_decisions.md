@@ -85,7 +85,7 @@ Parked units, decision concerns and growth proposals collect below as the run go
 
 | Part | State | Review |
 | --- | --- | --- |
-| 4.1 | Implemented (`59d0291` to `6476697`; round-1 fixes in the next commit) | Round 1: approvable; 0 blocking, 2 high, 6 medium, 5 low; all answered; round 2 (recheck) next |
+| 4.1 | Implemented (`59d0291` to `6476697`; round-1 fixes in the next commit) | Round 1: approvable; 0 blocking, 2 high, 6 medium, 5 low; all answered. Round 2: attempt 1 failed the read check (issue 5); attempt 2 next |
 | 4.2 to 4.6 | Not started | — |
 
 ## Decided by the author during the run
@@ -144,6 +144,7 @@ No unit is parked, and no process growth is proposed yet.
 | 2 | Stage A's benchmark prompts (`tests/review_benchmark/prompts/short.md`, `checklist.md`) still tell the reviewer to use the kinds "blocking" and "advisory", which the new schema rejects | 4.1 review round 1, R1-3 | Deferred to 4.5a (#42), which builds stage B's `short+list` from the short prompt; stage A's files stay as measured |
 | 3 | The launcher computed the start entry's mandate hash apart from the prompt; the two could differ | 4.1, by the author's tests | Fixed in 4.1 before its first commit (`59d0291`): both come from one configuration object |
 | 4 | Headings in quoted text could pass for the prompt's own sections | 4.1, by a dry run on this repository's prose | Fixed in 4.1 (`6476697`) |
+| 5 | The first live recheck (4.1, round 2, attempt 1) listed files it had only grepped under `opened`, and accepted the decision-file fix without opening the file; the launcher failed the attempt, as S41-D8 intends. The prompt had said only "the files you read" | 4.1 review round 2 | Fixed in 4.1: the output section now says that only a Read opens a file, and that the launcher fails the report otherwise; round 2 runs again |
 
 ## How the owner can check the work
 

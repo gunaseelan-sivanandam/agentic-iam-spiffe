@@ -794,6 +794,7 @@ def test_output_section_holds_the_reporting_bounds_and_the_credential_note_verba
             in output)
     assert f'"{launcher.CLAIMS_SECTION}"' in output and launcher.CLAIMS_SECTION == "Claims to verify"
     assert launcher.CREDENTIAL_NOTE in output and "`<token>`" in launcher.CREDENTIAL_NOTE
+    assert launcher.OPENED_RULE in output and "a Grep or Glob match does not open a file" in launcher.OPENED_RULE
 
 
 def test_command_line_has_no_option_that_changes_the_sections(fx: Fixture) -> None:

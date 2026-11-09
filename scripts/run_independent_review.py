@@ -94,6 +94,10 @@ MODES = tuple(MANDATES)
 CREDENTIAL_NOTE = ("Write `<token>` for any credential value, even a made-up example, because the publication check "
               "withholds a report that holds one.")
 ABSENCE_RULE = "A finding about something missing states \"X has no Y; searched A, B, C\"."
+# S41-D8 counts a file as opened only when the stream shows a Read of it; the prompt says so (first live recheck).
+OPENED_RULE = ("`opened` lists the files you read with the Read tool for that item; a Grep or Glob match does not open "
+               "a file. The launcher fails a report whose `opened` names a file it did not Read, and a recheck that did "
+               "not Read every file a `fixed:` answer names.")
 GATE_RULE = "do not report what a passing gate already checks; do report defects in the gates themselves"
 CLAIMS_SECTION = "Claims to verify"
 SECTIONS = ("role", "mandate", "rules", "checklist", "upstream", "evidence", "paths", "claims", "earlier_report",
@@ -445,7 +449,7 @@ def _output_section() -> str:
         f"- `origin_stage`: the stage where the problem arose: {', '.join(f'`{s}`' for s in ORIGIN_STAGES)}.\n"
         "- `accounted`: one entry for every item this prompt asks you to account for (each answer of the author "
         "in a recheck, each evidence entry), with `item` (the finding ID or the evidence entry), `status`, `note` "
-        "and `opened` (the files you read for it). For an answer, `status` is `accepted`, `re-raised` (the "
+        f"and `opened`. {OPENED_RULE} For an answer, `status` is `accepted`, `re-raised` (the "
         "finding is also in `findings`, with the same ID) or `cannot determine` (the note says why; it goes to "
         "the owner). For an evidence entry, `status` is `explained` (the note says why it is fine) or `flagged` "
         "(the note names the ID of the finding it raised). An empty list when the prompt lists no items.\n"
