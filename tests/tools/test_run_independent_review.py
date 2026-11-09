@@ -1204,10 +1204,16 @@ def test_answers_section_ends_at_the_next_heading_but_not_at_one_inside_a_fence(
     assert launcher.answers_section(record, "u/c1/r1/B/1") is None
 
 
-def test_invocation_from_an_entry_logged_before_slice_4_1_says_its_layout_is_retired(fx: Fixture) -> None:
+@pytest.mark.parametrize(("dropped", "slice_id"), [(("mode", "mandate_sha256"), "4.1"), (("path_hints",), "4.2"),
+                                                    (("stages", "checklist_sha256"), "4.4")],
+                         ids=["before-4.1", "before-4.2", "before-4.4"])
+def test_invocation_from_an_entry_logged_before_a_layout_change_says_its_layout_is_retired(
+        fx: Fixture, dropped: tuple[str, ...], slice_id: str) -> None:
+    """Entries of 4.1 to 4.3 have no checklist fields; their prompt said 'None: this review has no stage checklist',
+    so a rebuild would report false mismatches (4.4 review, F2)."""
     assert _run(fx) == 0
-    old = {k: v for k, v in fx.log()[0].items() if k not in ("mode", "mandate_sha256")}
-    with pytest.raises(ValueError, match="before slice 4.1: its prompt layout is retired"):
+    old = {k: v for k, v in fx.log()[0].items() if k not in dropped}
+    with pytest.raises(ValueError, match=f"before slice {slice_id}: its prompt layout is retired"):
         launcher.invocation_from_entry(old, fx.work, fx.prompt, diff_base=old["base_commit"], given=_given(fx))
 
 

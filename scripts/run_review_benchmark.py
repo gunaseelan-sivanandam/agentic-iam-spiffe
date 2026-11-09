@@ -850,8 +850,7 @@ def run_benchmark(repo: Path, key: AnswerKey, budget_limit: int, repeats: list[s
     check_budget(budget_limit, key.stage)
     check_budget(key.budget, key.stage)
     check_match_rule(key)
-    if not key.lists_commit and any(configuration_spec(n)["list"] for c in key.cases for n in c.configurations):
-        raise BenchmarkRefusedError("the key names no lists_commit, so a +list configuration would run without its list")
+    check_lists_commit(key)
     check_repeats(key, repeats or [])
     scratch = Path(tempfile.mkdtemp(prefix="review-benchmark-"))
     state = previous_state(repo, key, budget_limit)
@@ -877,9 +876,16 @@ def run_benchmark(repo: Path, key: AnswerKey, budget_limit: int, repeats: list[s
     return lines
 
 
+def check_lists_commit(key: AnswerKey) -> None:
+    """A +list configuration needs the key's lists commit; without it the prompt would hold no list (S44-D12)."""
+    if not key.lists_commit and any(configuration_spec(n)["list"] for c in key.cases for n in c.configurations):
+        raise BenchmarkRefusedError("the key names no lists_commit, so a +list configuration would run without its list")
+
+
 def dry_run(repo: Path, key: AnswerKey) -> int:
-    """Prepare every case, run the leak search and build every prompt; no reviewer call."""
+    """Prepare every case, run the leak search and build every prompt, as a run would; no reviewer call."""
     check_match_rule(key)
+    check_lists_commit(key)
     scratch = Path(tempfile.mkdtemp(prefix="review-benchmark-"))
     try:
         prepared = prepare_all(repo, key, scratch)

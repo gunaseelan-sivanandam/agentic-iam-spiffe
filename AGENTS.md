@@ -75,8 +75,9 @@ them.
 
   A blocking finding is fixed before merge, or the user decides. **High** is a real defect or false
   claim below that bar, for example a misleading document, new behaviour without a test or an
-  untested fail-closed path; it is fixed in the same PR unless the user defers it. **Medium** has
-  clear value (robustness, diagnosability, naming) and is fixed, or deferred with a tracking issue.
+  untested fail-closed path outside the system under test's security decisions; it is fixed in the
+  same PR unless the user defers it. **Medium** has clear value (robustness, diagnosability, naming)
+  and is fixed, or deferred with a tracking issue.
   **Low** (style, preference) is the author's choice. A simpler alternative is always low; a decision
   concern goes to the user, whatever its severity. Implementation details become notes for the
   implementation PR. Reviewers should expect production-hardening ideas (see the simplifications

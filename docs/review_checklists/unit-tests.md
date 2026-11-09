@@ -9,7 +9,7 @@ The minimum questions for reviewing unit and tooling tests, and the author's gui
 3. Does each test check observable behaviour rather than the code's internal structure? [S:fowler-pyramid]
 4. Does each test assert something, and say what each assertion checks when it has several, with no assertion that is always true? [S:test-smells]
 5. Does conditional logic inside a test change what it checks? [S:test-smells]
-6. Does every fail-closed or refusal path of the new code have a test that triggers it? [S:owasp-code-review]
+6. Does every fail-closed or refusal path of the new code have a test that triggers it? [S:owasp-code-review] [S:google-looking-for]
 7. Does a test depend on files or services outside its own fixture (other than the repository files it exists to check), on the order of tests, on sleeps or on the clock? [S:fowler-nondeterminism] [S:test-smells]
 8. Does a test assert an error path explicitly rather than catching and ignoring the error? [S:test-smells]
 9. Are the literal values in assertions explained, for example as boundary values below, at and above a limit? [S:test-smells]
@@ -21,4 +21,5 @@ Besides the blocking criteria of every stage (`AGENTS.md`, Review findings), a f
 
 - a test that can pass while the behaviour it claims to prove is broken (a false green);
 - a decision of the approved plan without a test;
-- a fail-closed path of a security decision without a test that triggers it.
+- a fail-closed path of a security decision of the system under test (an enforcement or validation path, coding
+  rule 4) without a test that triggers it.

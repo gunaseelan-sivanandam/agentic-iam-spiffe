@@ -22,10 +22,13 @@ TYPES = {"plan-and-test-plan", "requirements", "architecture-and-interfaces", "u
 QUESTION = re.compile(r"^(\d+)\. (.+)$")
 TAG = re.compile(r"\[S:([\w-]+)\]")
 SOURCE = re.compile(r"^### Source `([\w-]+)` — (.+)$")
-# S44-D1 and S44-D13: every source the plan names, by the key its section carries in research.md.
+# S44-D1 and S44-D13: every source the plan names, by the key its section carries in research.md. The plan's
+# "studies of LLM code review" are `cihan-acr` and `swr-bench`; "studies of LLMs as judges" are `zheng-judge` and
+# `sharma-sycophancy` (4.4 review, F1: the set had left the code-review studies out).
 PLANNED_SOURCES = {"iso29148", "incose", "atam", "stride", "owasp-threat", "istqb", "test-smells", "google-looking-for",
                    "google-standard", "owasp-code-review", "asvs", "cert", "ieee1028", "owasp-llm", "ieee1044",
-                   "conventional-comments", "zheng-judge", "sharma-sycophancy", "anthropic-prompting"}
+                   "conventional-comments", "zheng-judge", "sharma-sycophancy", "anthropic-prompting", "cihan-acr",
+                   "swr-bench"}
 PAID = {"iso29148", "ieee1028", "ieee1044"}
 PROOF_QUESTION = "have a test or check that proves it"
 CI_QUESTION = "run as its own required CI job, named after it"
@@ -84,6 +87,7 @@ def list_problems(text: str, keys: set[str]) -> list[str]:
 
 
 def draft(text: str, title: str) -> list[str]:
+    """The numbered sentences, with their tags, of one draft mandate in the research record."""
     body = text.split(f"#### Draft {title} mandate\n", 1)[1].split("\n####", 1)[0]
     return [QUESTION.match(line).group(2) for line in body.splitlines() if QUESTION.match(line)]  # type: ignore[union-attr]
 

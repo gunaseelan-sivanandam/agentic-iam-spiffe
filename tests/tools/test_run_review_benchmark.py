@@ -684,6 +684,16 @@ def test_dry_run_prepares_every_case_and_calls_no_reviewer(repo: tuple[Repo, str
     assert r.calls() == 0 and "2 of 2 cases pass the leak search; 4 prompts built" in capsys.readouterr().out
 
 
+def test_dry_run_is_refused_like_a_run_when_the_key_names_no_lists_commit(repo: tuple[Repo, str, str],
+                                                                          capsys: pytest.CaptureFixture[str]) -> None:
+    """4.4 review, F3: a dry run must not report every prompt built while the +list prompts hold no list."""
+    r, base, commit = repo
+    r.lists_commit = ""
+    r.key([_case("C1", base, commit)])
+    assert bench.main(["--dry-run"], repo=r.root) == 2
+    assert "names no lists_commit" in capsys.readouterr().err and r.calls() == 0
+
+
 @pytest.mark.parametrize(("result", "expected"), [
     ({"structured_output": {"findings": []}}, {"findings": []}),
     ({"result": '{"findings": [], "verdict": "yes"}'}, {"findings": [], "verdict": "yes"}),

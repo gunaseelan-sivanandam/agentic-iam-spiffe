@@ -1605,7 +1605,7 @@ def stage_lists(repo: Path, base_commit: str, names: list[str], unit: str) -> St
     """The lists named by `--stage`, from the base commit, so a change cannot rewrite the list it is reviewed against.
     Refused: a name with no list at the base; a final review with a stage; any other review without one when the
     base has lists. A base without lists gives none, and the prompt says so."""
-    listed = git(repo, "ls-tree", "--name-only", f"{base_commit}:{LISTS_DIR}") if _has_dir(repo, base_commit) else ""
+    listed = git(repo, "ls-tree", "--name-only", f"{base_commit}:{LISTS_DIR}") if _has_lists_dir(repo, base_commit) else ""
     available = sorted(Path(name).stem for name in listed.split() if name.endswith(".md"))
     if unit == FINAL_UNIT and names:
         raise ReviewRefusedError("the final review takes no --stage: it gets no question list (S41-D4)")
@@ -1622,7 +1622,8 @@ def stage_lists(repo: Path, base_commit: str, names: list[str], unit: str) -> St
     return StageLists("\n\n".join(texts.values()), {n: sha256_text(t) for n, t in texts.items()})
 
 
-def _has_dir(repo: Path, commit: str) -> bool:
+def _has_lists_dir(repo: Path, commit: str) -> bool:
+    """Whether the commit holds the stage lists' directory, `docs/review_checklists/`."""
     result = subprocess.run(["git", "-C", str(repo), "cat-file", "-t", f"{commit}:{LISTS_DIR}"],  # noqa: S603, S607 - fixed argv
                             capture_output=True, text=True, check=False)
     return result.returncode == 0 and result.stdout.strip() == "tree"
@@ -1672,7 +1673,7 @@ def invocation_from_entry(entry: dict[str, Any], repo: Path, prompt_file: Path, 
     The files under review and the upstream items are recomputed at the entry's commit. `diff_base` is the base of
     the change (S42-D10), normally the entry's `base_commit`."""
     evidence, recheck = given.evidence, given.recheck
-    for field_name, slice_id in (("mode", "4.1"), ("path_hints", "4.2")):
+    for field_name, slice_id in (("mode", "4.1"), ("path_hints", "4.2"), ("stages", "4.4")):
         if field_name not in entry:
             raise ValueError(f"this entry was logged before slice {slice_id}: its prompt layout is retired, so its "
                              "prompt cannot be rebuilt; its input hashes still identify what it reviewed")
