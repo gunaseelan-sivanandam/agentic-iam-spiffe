@@ -12,7 +12,8 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
   checklists (#41), benchmark (#42), stage rules (#43). Agents taking backlog items the owner did not
   write is [#32](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/32).
 - **Open PoC work, in "needed before" order:**
-  1. now: slice 4 ([#33](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/33), sub-issues #38–#43);
+  1. now: slice 4 ([#33](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/33), sub-issues #38–#43); the owner's
+     decision file: [`slice_4_decisions.md`](slices/agentic-sdlc-poc/slice_4_decisions.md);
      Next, before slice 5: a slice of author prompts and their benchmark (owner, 2026-11-09: "let's
      continue this slice for just review, after this let's run a new slice of author prompts and
      benchmark them, since the review prompts are finalized that would give us bit of data for
