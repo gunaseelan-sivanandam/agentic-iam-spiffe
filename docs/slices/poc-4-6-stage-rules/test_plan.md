@@ -5,12 +5,12 @@ handoff rules are stated in the rulebook and carried by the templates.
 
 ## Goal
 
-Prove S46-D1 to S46-D12 of [`plan.md`](plan.md). The stage table, the templates and the step
+Prove S46-D1 to S46-D14 of [`plan.md`](plan.md). The stage table, the templates and the step
 references are proved by a tooling test; the rule texts by review, which quotes each one.
 
 ## Inputs
 
-- Plan: [`plan.md`](plan.md), decisions S46-D1 to S46-D12.
+- Plan: [`plan.md`](plan.md), decisions S46-D1 to S46-D14.
 
 ## Unit test plan
 
@@ -20,11 +20,13 @@ references are proved by a tooling test; the rule texts by review, which quotes 
 | Plan template | `docs/slices/_template/plan.md` has the stage table with the seven stage names, a "Source" column in its decisions table, and a "Rule deviations" section | A template without any of the three fails | S46-D11 | plan |
 | Test-plan template | `docs/slices/_template/test_plan.md` names each stage's list and holds the implementation-review questions `AGENTS.md` requires: which wrong behaviour would still pass each test; whether a key, socket or secret reaches a service outside its holders; whether names and purpose comments say what they do | A template without one of them fails | S46-D11 | plan |
 | Bundle from the templates | A bundle copied from the templates, with placeholders filled by a fixed sample, passes `scripts/check_docs.py` and the lint gate's header check | — | S46-D11 | plan |
+| Decision brief | From throwaway attempt logs and records, the brief lists each unit's last verdict and severity counts, every `owner:` answer, decision concern, `cannot determine` answer and disputed finding, every rejected blocking or high finding with its reason, and the origin-against-found table; a unit with nothing open says so | A record with an unanswered finding, or a log whose hashes do not match its record, makes the script fail instead of writing a brief that omits it | S46-D13 | plan |
+| Grill-me in the repository | `.claude/skills/grill-me/SKILL.md` exists, starts with a purpose header, and `AGENTS.md` names it | — | S46-D14 | plan |
 | Step references | No live document (outside `docs/archive/`, `docs/slices/archive/` and frozen slice bundles) says "step 1" to "step 4" | A planted "see step 4" in a live document fails | S46-D12 | plan |
 
 ## Review-based proof
 
-The plan review, the implementation review and the final review quote, for each of S46-D1 to S46-D12,
+The plan review, the implementation review and the final review quote, for each of S46-D1 to S46-D14,
 the `AGENTS.md` or template text that states it. They check that every rule of the old steps listed
 in S46-D12 survives in a stage.
 

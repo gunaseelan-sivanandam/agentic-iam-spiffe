@@ -15,6 +15,15 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
   1. now: slice 4 ([#33](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/33), sub-issues #38–#43);
   2. before slice 5: QA-tooling gaps ([#44](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/44)) and publication scanning ([#21](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/21));
   3. slice 5 (one real backlog item through the whole cycle) and slice 6 (gates that run shows);
+     inputs recorded on 2026-11-09 from the research of agent-first delivery (owner's decision; they
+     become issues once the agent account is back):
+     - slice 5: design the authoring agents' prompts from 4.4's research; count rounds, re-raises and
+       retries from the attempt logs and check the review limits against them; record misses found
+       after a final review against the mandate used;
+     - slice 6 candidates: a check that each plan's retirement list was carried out, and a check that
+       the implementer did not change approved tests; one stated reason per gate threshold;
+     - slice 7: what the orchestrator may keep outside the repository; slice 8: whether agents follow
+       the rulebook;
   4. before slice 7: untested launcher and benchmark paths ([#45](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/45)); slice 7 itself ([#36](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/36));
   5. slice 8 (evaluation); at the PoC merge into `main`: the reset list ([#46](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/46)).
 - **Implemented milestones:** M1, M2, M2.5, M3, M4 (reduced scope), M4a, M4b, M5.

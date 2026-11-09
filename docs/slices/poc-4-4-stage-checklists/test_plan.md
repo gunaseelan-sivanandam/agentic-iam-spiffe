@@ -6,13 +6,13 @@ past misses.
 
 ## Goal
 
-Prove S44-D1 to S44-D12 of [`plan.md`](plan.md):
+Prove S44-D1 to S44-D13 of [`plan.md`](plan.md):
 - the form of the lists, the research sources and the launcher's `--stage` with tooling tests;
 - the rule texts, the code list's content, the critiques and the DPL mapping by review.
 
 ## Inputs
 
-- Plan: [`plan.md`](plan.md), decisions S44-D1 to S44-D12.
+- Plan: [`plan.md`](plan.md), decisions S44-D1 to S44-D13.
 - The DPL entries in `docs/delivery_problem_log.md` (DPL-001 to DPL-011) as test cases for the lists.
 
 ## Unit test plan
@@ -40,7 +40,7 @@ Tooling tests in `tests/tools/`.
 - **DPL mapping:** the critiques and the implementation review check that every DPL entry has a
   question at the stage where the miss happened, or a reason why not (S44-D9). The plan review cannot,
   because the lists do not exist yet.
-- **Critiques:** two or three models each review the drafts with the open mandate (S44-D10). Every
+- **Critiques:** Opus and Sonnet each review the drafts with the open mandate (S44-D10). Every
   finding gets an answer under 4.1's severity rules.
 
 ## E2E test plan
