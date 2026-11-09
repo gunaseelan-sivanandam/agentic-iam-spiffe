@@ -370,7 +370,15 @@ def _mandates(key: AnswerKey, name: str) -> tuple[dict[str, str], dict[str, str]
     stem = Path(spec["mandate_file"]).stem
     if stem not in key.prompts:
         raise BenchmarkRefusedError(f"configuration {name} needs {BENCHMARK_DIR}/{spec['mandate_file']}")
-    return {spec["mode"]: key.prompts[stem]}, {spec["mandate_file"]: sha256_text(key.prompts[stem])}
+    text = mandate_text(key.prompts[stem])
+    return {spec["mode"]: text}, {spec["mandate_file"]: sha256_text(text)}
+
+
+def mandate_text(file_text: str) -> str:
+    """The mandate a prompt file holds: the text under its `## Mandate` heading when it has one (a drafted mandate
+    with its title and purpose), else the whole file (stage A's prompts and the short prompt, sent as they were)."""
+    marker = "\n## Mandate\n"
+    return file_text.split(marker, 1)[1].strip() + "\n" if marker in file_text else file_text
 
 
 def _recheck_inputs(repo: Path, prepared: PreparedCase) -> tuple[Any, Any]:

@@ -18,6 +18,7 @@ the repo in the same change — do not leave them disagreeing.
 | How is it built, which runtime state exists? | [`docs/architecture.md`](docs/architecture.md) | authoritative |
 | What is the trust model, on one page? | [`docs/architecture.md` — Security model summary](docs/architecture.md#security-model-summary) | summary of the ARCH sections |
 | Which test proves which requirement? | [`trace/tests.yaml`](trace/tests.yaml) | authoritative |
+| What must each stage's review ask at least? | [`docs/review_checklists/`](docs/review_checklists/) | authoritative, read by the review launcher from the base branch |
 | What does each E2E or static test do, in plain English? | [`docs/test_spec.md`](docs/test_spec.md) | hand-written spec |
 | Unit-test requirement matrix (M4 trust gates) | [`docs/unit_test_spec.md`](docs/unit_test_spec.md) | authoritative, read by `make traceability-check` |
 | Known unfixed runtime/trust problems | [`docs/open_problem_log.md`](docs/open_problem_log.md) | authoritative |
@@ -66,6 +67,11 @@ them.
   - a contradiction;
   - an approved decision without a test;
   - a secret written into logs, evidence or any published record.
+
+  A finding also blocks when it meets the "Blocks at this stage" section of its stage's checklist in
+  [`docs/review_checklists/`](docs/review_checklists/): for example a requirement no test could
+  verify, a design that lets an asset reach a non-holder, or a test that can pass while the
+  behaviour is broken.
 
   A blocking finding is fixed before merge, or the user decides. **High** is a real defect or false
   claim below that bar, for example a misleading document, new behaviour without a test or an
@@ -244,6 +250,15 @@ template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>
   run, the trace gaps among the upstream items, and the CI results of the reviewed commit from the
   public API. A command that cannot run is shown as failed, and the reviewer accounts for every
   numbered evidence entry under `accounted`, as `explained` or `flagged` with the finding it raised.
+- **Stage checklists.** Each review gets its stage's list from
+  [`docs/review_checklists/`](docs/review_checklists/) as the minimum, never the limit: `--stage
+  <type>` reads the list from the base commit, so a change cannot rewrite the list it is reviewed
+  against; the tests-first stage takes `unit-tests` and `e2e-tests`; the final review takes none.
+  When the base has lists, a review without `--stage` is refused. The author reads the stage's list
+  before writing that stage's artifact. The research behind the lists, with each source quoted, is
+  [`research.md`](docs/slices/poc-4-4-stage-checklists/research.md) of slice 4.4. When an open review
+  finds a class of defect a list lacks, or a mandate wording that misled a reviewer, the author
+  proposes the list item or the wording in the PR, and the user approves it.
 - **Models and usage limits.** Agents use Claude models. Codex is used only for scoped
   implementation, and only while Claude's 5-hour or weekly usage is above 70%. Reviews run on
   Claude; when a usage limit is reached, work pauses until it resets. The default reviewer model is

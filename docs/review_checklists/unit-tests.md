@@ -1,0 +1,23 @@
+# Review checklist — unit tests
+
+The minimum questions for reviewing unit and tooling tests, and the author's guideline before writing it (S44-D8). The open mandate comes first: these questions are a floor, not the limit of the review. Each question names its source in [research.md](../slices/poc-4-4-stage-checklists/research.md).
+
+## Questions
+
+1. Will each new or changed test fail when the code it covers is broken? Name the wrong behaviour that would still pass it. [S:google-looking-for]
+2. Does every new or changed requirement or decision have a test or check that proves it? [S:owner]
+3. Does each test check observable behaviour rather than the code's internal structure? [S:fowler-pyramid]
+4. Does each test assert something, and say what each assertion checks when it has several, with no assertion that is always true? [S:test-smells]
+5. Does conditional logic inside a test change what it checks? [S:test-smells]
+6. Does every fail-closed or refusal path of the new code have a test that triggers it? [S:owasp-code-review]
+7. Does a test depend on external files or services, the order of tests, sleeps or the clock? [S:fowler-nondeterminism]
+8. Does a test assert an error path explicitly rather than catching and ignoring the error? [S:test-smells]
+9. Are the literal values in assertions explained, for example as boundary values below, at and above a limit? [S:test-smells]
+
+## Blocks at this stage
+
+Besides the blocking criteria of every stage (`AGENTS.md`, Review findings), a finding blocks here when:
+
+- a test that can pass while the behaviour it claims to prove is broken (a false green);
+- a decision of the approved plan without a test;
+- a fail-closed path of a security decision without a test that triggers it.

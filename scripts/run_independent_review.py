@@ -1295,12 +1295,13 @@ class RoundInputs:
     evidence: str = ""
     evidence_items: tuple[str, ...] = ()
     evidence_status: dict[str, str] = field(default_factory=dict)
+    lists: StageLists | None = None
 
 
 def make_parts(mode: str, task: str, unit: str, recheck: Recheck | None, shared: RoundInputs) -> PromptParts:
     """The prompt parts of a review; the launcher and `invocation_from_entry` build them the same way."""
     common = {"mode": mode, "task": task, "unit": unit, "records": shared.records, "upstream": shared.upstream,
-              "evidence": shared.evidence}
+              "evidence": shared.evidence, "checklist": shared.lists.text if shared.lists else None}
     if recheck is None:
         return PromptParts(**common)  # type: ignore[arg-type]
     return PromptParts(**common, earlier_attempt=recheck.earlier_attempt,  # type: ignore[arg-type]
@@ -1343,13 +1344,13 @@ def compute_evidence(spec: RoundSpec, inputs: ReviewInputs) -> tuple[str, Any]:
     return upstream_text, evidence
 
 
-def round_inputs(spec: RoundSpec, inputs: ReviewInputs) -> RoundInputs:
+def round_inputs(spec: RoundSpec, inputs: ReviewInputs, lists: StageLists | None = None) -> RoundInputs:
     """The round's shared inputs, computed once before any call."""
     withheld = list(inputs.withheld)
     final = review_mode(spec.unit, spec.round_no) == "final"
     records = final_records(spec.repo, inputs.commit, spec.record, inputs.base_commit, withheld) if final else ()
     upstream, evidence = compute_evidence(spec, inputs)
-    return RoundInputs(records, upstream, evidence.text(), tuple(evidence.items), dict(evidence.status))
+    return RoundInputs(records, upstream, evidence.text(), tuple(evidence.items), dict(evidence.status), lists)
 
 
 def plan_reviews(spec: RoundSpec, inputs: ReviewInputs, entries: list[dict[str, Any]],
@@ -1431,6 +1432,7 @@ def start_entry(spec: RoundSpec, inputs: ReviewInputs, plan: ReviewPlan, attempt
         "prompt_sha256": sha256_bytes(reviewer.prompt_file.read_bytes()), "full_prompt_sha256": extra["prompt_sha"],
         "paths_sha256": inputs.review_paths, "withheld_sha256": inputs.withheld, "diff_sha256": extra["diff_sha"],
         "path_hints": list(inputs.hints), "upstream_sha256": sha256_text(plan.parts.upstream or ""),
+        "stages": extra["stages"], "checklist_sha256": sha256_text(plan.parts.checklist or ""),
         "evidence_sha256": sha256_text(plan.parts.evidence or ""), "evidence_status": extra["evidence_status"],
         "earlier_attempt": recheck.earlier_attempt if recheck else None,
         "earlier_report_sha256": sha256_text(recheck.earlier_report) if recheck else None,
@@ -1524,7 +1526,8 @@ def run_round(spec: RoundSpec, inputs: ReviewInputs, log: AttemptLog, plans: lis
         withheld = list(inputs.withheld)
         diff_sha = make_frozen_copy(spec.repo, inputs.commit, copy_root, withheld, diff_base=inputs.base_commit)
         ctx = RoundContext(spec, inputs, copy_root, log, {"cli_version": cli_version(), "diff_sha": diff_sha,
-                                                         "evidence_status": shared.evidence_status})
+                                                         "evidence_status": shared.evidence_status,
+                                                         "stages": shared.lists.stages if shared.lists else {}})
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(plans)) as pool:
             futures = {p.reviewer.label: pool.submit(_guarded_attempts, ctx, p) for p in plans}
             return {label: future.result() for label, future in futures.items()}
@@ -1567,6 +1570,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--round", type=int, required=True, dest="round_no")
     parser.add_argument("--reviewer", action="append", required=True, dest="reviewers")
     parser.add_argument("--path", action="append", default=[], dest="paths")  # S42-D1: only orders the files
+    parser.add_argument("--stage", action="append", default=[], dest="stages")  # S44-D7: the stage list(s) to add
     parser.add_argument("--extension")
     parser.add_argument("--reset")
     return parser
@@ -1584,6 +1588,44 @@ def check_record(record: str) -> Path:
     if path.is_absolute() or ".." in path.parts or len(path.parts) != 4 or path.parts[:2] != ("docs", "slices"):
         raise ReviewRefusedError(f"--record must be docs/slices/<id>/<file>, got {record}")
     return path
+
+
+LISTS_DIR = "docs/review_checklists"
+
+
+@dataclass(frozen=True)
+class StageLists:
+    """S44-D7: the stage checklists a review gets, read from the base commit, and each one's SHA-256."""
+
+    text: str
+    stages: dict[str, str]
+
+
+def stage_lists(repo: Path, base_commit: str, names: list[str], unit: str) -> StageLists:
+    """The lists named by `--stage`, from the base commit, so a change cannot rewrite the list it is reviewed against.
+    Refused: a name with no list at the base; a final review with a stage; any other review without one when the
+    base has lists. A base without lists gives none, and the prompt says so."""
+    listed = git(repo, "ls-tree", "--name-only", f"{base_commit}:{LISTS_DIR}") if _has_dir(repo, base_commit) else ""
+    available = sorted(Path(name).stem for name in listed.split() if name.endswith(".md"))
+    if unit == FINAL_UNIT and names:
+        raise ReviewRefusedError("the final review takes no --stage: it gets no question list (S41-D4)")
+    if not available:
+        if names:
+            raise ReviewRefusedError(f"the base {base_commit[:12]} has no {LISTS_DIR}/, so --stage names nothing")
+        return StageLists(f"No checklist at base {base_commit[:12]}: the base branch has no `{LISTS_DIR}/`.", {})
+    unknown = [n for n in names if n not in available]
+    if unknown:
+        raise ReviewRefusedError(f"--stage {unknown[0]} names no list at the base; the lists are: {', '.join(available)}")
+    if not names and unit != FINAL_UNIT:
+        raise ReviewRefusedError(f"the base has stage lists ({', '.join(available)}); name the review's stage with --stage")
+    texts = {n: (file_at(repo, base_commit, f"{LISTS_DIR}/{n}.md") or b"").decode("utf-8") for n in dict.fromkeys(names)}
+    return StageLists("\n\n".join(texts.values()), {n: sha256_text(t) for n, t in texts.items()})
+
+
+def _has_dir(repo: Path, commit: str) -> bool:
+    result = subprocess.run(["git", "-C", str(repo), "cat-file", "-t", f"{commit}:{LISTS_DIR}"],  # noqa: S603, S607 - fixed argv
+                            capture_output=True, text=True, check=False)
+    return result.returncode == 0 and result.stdout.strip() == "tree"
 
 
 def plan_round(args: argparse.Namespace, repo: Path) -> tuple[RoundSpec, list[Reviewer]]:
@@ -1664,7 +1706,9 @@ def invocation_from_entry(entry: dict[str, Any], repo: Path, prompt_file: Path, 
         "evidence_sha256": sha256_text(evidence),
     }
     records = final_records(repo, entry["commit"], record, diff_base, withheld) if mode == "final" else ()
-    shared = RoundInputs(records, upstream, evidence)
+    shared = RoundInputs(records, upstream, evidence, lists=stage_lists(repo, entry["base_commit"],
+                                                                        list(entry.get("stages", {})), entry["unit"]))
+    recomputed["checklist_sha256"] = sha256_text(shared.lists.text if shared.lists else "")
     parts = make_parts(mode, prompt_file.read_bytes().decode("utf-8"), entry["unit"], recheck, shared)
     recomputed["full_prompt_sha256"] = sha256_text(build_prompt(inputs, parts, diff_base=diff_base))
     mismatches = [name for name, value in recomputed.items() if entry.get(name) != value]
@@ -1678,11 +1722,12 @@ def main(argv: list[str], repo: Path | None = None) -> int:
         spec, reviewers = plan_round(args, repo)
         inputs = resolve_inputs(repo, args.commit, args.base, args.paths,
                                 [spec.record, str(spec.log_path.relative_to(repo))])
+        lists = stage_lists(repo, inputs.base_commit, args.stages, spec.unit)
         with AttemptLog(spec.log_path, repo / spec.record) as log:
             recover(log, repo)
             admission = admit_round(log.entries(), spec.unit, spec.round_no, [r.label for r in reviewers], spec.refs)
             spec = RoundSpec(**{**spec.__dict__, "count": admission.count})
-            shared = round_inputs(spec, inputs)
+            shared = round_inputs(spec, inputs, lists)
             plans = plan_reviews(spec, inputs, log.entries(), [r for r in reviewers if r.label in admission.to_run],
                                  shared)
             statuses = run_round(spec, inputs, log, plans, shared)

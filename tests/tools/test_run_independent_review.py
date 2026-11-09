@@ -308,7 +308,8 @@ def test_invocation_and_hashes_are_rebuilt_from_a_log_entry(fx: Fixture) -> None
 START_FIELDS = {"event", "attempt", "unit", "count", "round", "round_reviewers", "reviewer", "model", "effort",
                 "cli_version", "mode", "mandate_sha256", "commit", "tree", "base", "base_commit", "rules_sha256",
                 "prompt_file", "prompt_sha256", "full_prompt_sha256", "paths_sha256", "withheld_sha256",
-                "diff_sha256", "path_hints", "upstream_sha256", "evidence_sha256", "evidence_status",
+                "diff_sha256", "path_hints", "upstream_sha256", "stages", "checklist_sha256", "evidence_sha256",
+                "evidence_status",
                 "earlier_attempt", "earlier_report_sha256", "answers_sha256", "schema_sha256",
                 "extension", "reset", "report_path", "record_blocks", "started_at"}
 END_FIELDS = {"event", "attempt", "status", "reason", "ended_at", "verdict", "report_sha256", "severity_counts",
@@ -793,7 +794,7 @@ def test_prompt_sections_come_in_the_fixed_order_and_empty_ones_say_so(fx: Fixtu
     assert prompt.startswith("You are an independent reviewer.")
     assert _sections_in_order(prompt) == INITIAL_ORDER
     assert prompt.index(launcher.MANDATES["initial"]) < prompt.index("## Approved rules") < prompt.index("PROMPT MARKER")
-    assert "None: this review has no stage checklist." in _section(prompt, "Stage checklist")
+    assert "No checklist at base " in _section(prompt, "Stage checklist")  # the fixture's base has no lists
     assert launcher._INPUTS.UPSTREAM_QUESTION in _section(prompt, "Upstream items")
     assert "No entries: nothing to account for." in _section(prompt, "Evidence")
 
@@ -832,7 +833,7 @@ def test_output_section_holds_the_reporting_bounds_and_the_credential_note_verba
 def test_command_line_has_no_option_that_changes_the_sections(fx: Fixture) -> None:
     options = {o for action in launcher.build_parser()._actions for o in action.option_strings}
     assert options == {"-h", "--help", "--commit", "--base", "--record", "--unit", "--round", "--reviewer", "--path",
-                       "--extension", "--reset"}
+                       "--stage", "--extension", "--reset"}  # --stage adds the stage list's content, never a section
     assert _run(fx, "--no-mandate") == 2
     assert fx.calls() == []
 
