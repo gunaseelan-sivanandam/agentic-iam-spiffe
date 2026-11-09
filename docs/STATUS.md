@@ -13,12 +13,16 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
   write is [#32](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/32).
 - **Open PoC work, in "needed before" order:**
   1. now: slice 4 ([#33](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/33), sub-issues #38–#43);
+     Next, before slice 5: a slice of author prompts and their benchmark (owner, 2026-11-09: "let's
+     continue this slice for just review, after this let's run a new slice of author prompts and
+     benchmark them, since the review prompts are finalized that would give us bit of data for
+     selecting good author prompts");
   2. before slice 5: QA-tooling gaps ([#44](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/44)) and publication scanning ([#21](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/21));
   3. slice 5 (one real backlog item through the whole cycle) and slice 6 (gates that run shows);
      inputs recorded on 2026-11-09 from the research of agent-first delivery (owner's decision; they
      become issues when they can be opened again):
-     - slice 5: design the authoring agents' prompts from 4.4's research; count rounds, re-raises and
-       retries from the attempt logs and check the review limits against them; record misses found
+     - slice 5: count rounds, re-raises and retries from the attempt logs and check the review limits
+       against them (the authoring prompts move to the author-prompts slice); record misses found
        after a final review against the mandate used;
      - slice 6 candidates: a check that each plan's retirement list was carried out, and a check that
        the implementer did not change approved tests; one stated reason per gate threshold;
