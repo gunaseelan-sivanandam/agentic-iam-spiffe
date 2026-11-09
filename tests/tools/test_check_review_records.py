@@ -179,7 +179,7 @@ def test_one_changed_character_in_a_block_fails(fx: base.Fixture, block: str) ->
 
 def test_report_block_under_another_attempts_heading_fails(fx: base.Fixture) -> None:
     _completed(fx, base._finding("X1"))
-    base._answers(fx, "unit1/c1/r1/A/1", "| X1 | high | rejected: style, see docs/x.md |")
+    base._answers(fx, "unit1/c1/r1/A/1", "| X1 | high | rejected: style; owner: docs/x.md |")
     fx.scenario(base._reply(accounted=[base._accounted("X1"), base._accounted("EV1", "explained")]))
     assert base._run(fx, round_no=2, commit=base._git(fx.work, "rev-parse", "HEAD")) == 0
     text = _record(fx).read_text()
@@ -261,8 +261,10 @@ def test_docs_check_runs_the_record_check(fx: base.Fixture) -> None:
     (base._finding("X1", severity="high"), "owner: https://github.com/o/r/pull/1#issuecomment-2"),
     (base._finding("X1", severity="medium"), "deferred: #12"),
     (base._finding("X1", severity="low"), "rejected: style"),
+    (base._finding("X1", severity="high"), "rejected: disputed; owner: https://github.com/o/r/pull/1#issuecomment-3"),
     (base._finding("X1", kind="decision_concern", severity="medium"), "owner: docs/slices/demo/decisions.md"),
-], ids=["blocking-fixed", "high-owner", "medium-deferred", "low-rejected", "decision-concern-owner"])
+], ids=["blocking-fixed", "high-owner", "medium-deferred", "low-rejected", "high-rejected-with-owner-link",
+        "decision-concern-owner"])
 def test_each_allowed_answer_passes(fx: base.Fixture, finding: dict, answer: str) -> None:
     _completed(fx, finding)
     base._answers(fx, "unit1/c1/r1/A/1", f"| X1 | {finding['severity']} | {answer} |")
@@ -284,11 +286,14 @@ def test_rejected_blocking_finding_that_the_next_round_accepts_passes(fx: base.F
     (base._finding("X1", severity="medium"), ("| X1 | medium | deferred: later |",), "names no issue"),
     (base._finding("X1", severity="blocking"), ("| X1 | blocking | deferred: #3 |",), "cannot be answered deferred"),
     (base._finding("X1", severity="high"), ("| X1 | high | rejected: no |",), "no later round accepted"),
+    (base._finding("X1", severity="high"), ("| X1 | high | rejected: see docs/slices/demo/plan.md |",),
+     "no later round accepted"),
     (base._finding("X1", kind="decision_concern", severity="low"), ("| X1 | low | rejected: no |",),
      "must be answered owner"),
     (base._finding("X1"), ("| X1 | high | fixed: scripts/review_me.py: g |", "| X9 | low | rejected: r |"),
      "which the report does not hold"),
 ], ids=["no-row", "other-first-word", "deferred-without-issue", "blocking-deferred", "high-rejected-alone",
+     "high-rejected-with-a-link-but-no-owner",
         "decision-concern-rejected", "row-for-unknown-id"])
 def test_each_answer_the_rules_do_not_allow_fails(fx: base.Fixture, finding: dict, rows: tuple[str, ...],
                                                   problem: str) -> None:

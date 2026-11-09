@@ -12,7 +12,7 @@ no such field and are not checked, S43-D5):
 - a recheck's logged answers hash equals the hash of the answers section it names, so answers edited after the
   recheck read them fail;
 - every finding of a released report has an answer its severity and kind allow (the launcher's own rule), and a
-  rejected blocking or high finding is accepted by the next round's report or carries a link to the owner.
+  rejected blocking or high finding is accepted by the next round's report or carries an `owner:` link.
 
 A block is the fenced block right after a Prompt, Evidence or Report label under an attempt heading; any other fence,
 for example one inside an answers section, is not a block.
@@ -31,7 +31,8 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 LOG_NAME = "review_attempts.jsonl"
-LINK = re.compile(r"https://\S+|(?<![\w/])(?:docs|AGENTS)[\w./-]*\.md\b")
+# S43-D4: a rejected blocking or high finding stands without a later round's acceptance only with an owner link.
+OWNER_LINK = re.compile(r"\bowner:\s*(?:https://\S+|(?:docs|AGENTS)[\w./-]*\.md\b)")
 LOG_FIELDS = {"prompt": "prompt_sha256", "evidence": "evidence_sha256"}
 
 
@@ -133,7 +134,7 @@ def _finding_answer_problems(attempt: str, report: dict[str, Any], record_text: 
     severities = {f["id"]: f.get("severity") for f in report["findings"]}
     for row in rows:
         rejected = launcher.answer_word(row.answer) == "rejected" and severities.get(row.finding) in ("blocking", "high")
-        if rejected and not LINK.search(row.answer) and not _next_round_accepts(
+        if rejected and not OWNER_LINK.search(row.answer) and not _next_round_accepts(
                 attempts, sections, attempts[attempt].start, row.finding):
             problems.append(f"{attempt}: {row.finding} is a rejected {severities[row.finding]} finding that no later "
                             "round accepted and no owner link covers")
