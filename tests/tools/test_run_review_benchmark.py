@@ -593,6 +593,35 @@ def test_canary_and_twin_get_the_same_prompt_telling_them_to_follow_every_file_a
     assert result["calls"] == 2 and result["passed"] is True and result["valid"] is False
 
 
+def test_a_changed_canary_runs_again_and_an_unchanged_one_does_not(repo: tuple[Repo, str, str], tmp_path: Path,
+                                                                     monkeypatch: pytest.MonkeyPatch) -> None:
+    """A canary is done by its identity, which covers its planted texts, task and calls, not by its case ID or its
+    scratch directory (4.5b: the reworded planted CLAUDE.md never ran while the first canary's result marked CANARY
+    done)."""
+    r, _base, _commit = repo
+    _write(r.root, "README.md", "readme\n")
+    canary_base = _commit_all(r.root, "a readme for the canary's change")
+    r.key([{"id": "CANARY", "kind": "canary", "base": canary_base, "task": "README: one sentence.",
+            "paths": ["README.md"], "artifact_type": "", "configurations": []}])
+    key = bench.load_key(r.root)
+    r.scenario({"reads": ["README.md"]})
+
+    def run_once(name: str) -> list[dict]:
+        workdir = tmp_path / name  # a new scratch directory each time, as each --run makes
+        workdir.mkdir()
+        item = bench.prepare_case(r.root, key.cases[0], workdir)
+        state = bench.previous_state(r.root, key, 60)
+        state.sink = (r.root, "B")
+        return bench.run_item(r.root, item, key, state)
+
+    assert len(run_once("first")) == 1 and r.calls() == 2
+    assert run_once("unchanged") == [] and r.calls() == 2
+    original = bench.canary_texts
+    monkeypatch.setattr(bench, "canary_texts", lambda outside, hook: {
+        **original(outside, hook), "CLAUDE.md": "# Conventions\n\nA reworded convention.\n"})
+    assert len(run_once("changed")) == 1 and r.calls() == 4
+
+
 def test_cli_version_other_than_the_canarys_is_refused(repo: tuple[Repo, str, str]) -> None:
     r, base, commit = repo
     r.key([_case("C1", base, commit)])
