@@ -1,0 +1,17 @@
+{
+  "accounted": [],
+  "findings": [
+    {
+      "evidence": "scripts/rogue_node_tests.sh:1935 passes \"assert_server_rejected_once ... || true\" to outcome_guard.",
+      "failure_scenario": "The SPIRE server stops logging the rejection, or logs it twice; the guard still passes and M1-T2 reports PASS.",
+      "file": "scripts/rogue_node_tests.sh",
+      "id": "R1-1",
+      "kind": "defect",
+      "line": 1935,
+      "origin_stage": "tests first",
+      "problem": "The M1-T2 outcome guard 'server recorded attestation failure' ends its command with `|| true`, so the guard can never fail.",
+      "severity": "high"
+    }
+  ],
+  "verdict": "no"
+}

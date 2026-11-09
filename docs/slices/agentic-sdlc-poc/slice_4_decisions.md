@@ -88,7 +88,7 @@ Parked units, decision concerns and growth proposals collect below as the run go
 | 4.1 | Implemented (`59d0291` to `9413020`) | Ended after round 2. Round 1: approvable; 0 blocking, 2 high, 6 medium, 5 low. Round 2: attempt 1 failed the read check (issue 5); attempt 2 accepted all 13 answers and found nothing new |
 | 4.2 | Implemented (`381dc2b` to the round-2 fix) | Ended after round 2. Round 1: approvable; 0 blocking, 3 high, 4 medium, 3 low. Round 2: all 10 answers accepted, the 3 evidence entries explained; 1 new low finding, fixed |
 | 4.3 | Implemented (`89b8f2b` to the round-2 fixes) | Ended after round 2. Round 1: attempt 1 failed the schema check (issue 6); attempt 2 not approvable: 2 blocking, 1 high, 3 medium, 2 low. Round 2: approvable; all 8 answers accepted; 2 new low findings, fixed |
-| 4.5a | In progress | — |
+| 4.5a | Implemented (benchmark identity, configurations, cases, scoring, blinding, canary, report) | Review next |
 | 4.4, 4.5b, 4.6 | Not started | — |
 
 ## Decided by the author during the run
@@ -117,6 +117,12 @@ a decision concern below instead.
 | 4.3 | A withheld attempt gets an end entry with status `withheld` (counts and paths only, never the report) | So the record keeps its withheld status and the log tells a withheld report from a killed launcher (review round 1, R1-8); slice 2 had logged no end entry |
 | 4.3 | A rejected blocking or high finding is settled by the next round's acceptance, an `owner:` link in its own row, or a later round's `owner:` answer to the same finding ID | S43-D4's "or an `owner:` link" read so that a rejection the recheck re-raised can reach the owner without editing answers a recheck already read (review round 1, R1-3; decision concern 2) |
 | 4.3 | A failed schema check logs the schema problems (fields and rules, never values) | The first launcher-written review attempt failed the schema check and its cause could not be found (issue 6) |
+| 4.5a | `short+list` uses stage A's short prompt without its last sentence, which told the reviewer to use the retired kinds "blocking" and "advisory" (`tests/review_benchmark/prompts/short_list.md`); stage A's own files stay as measured | Every configuration gets the same severity rules (S45-D3); the old sentence contradicted them (4.1 review round 1, R1-3, deferred to #42) |
+| 4.5a | The DPL-010 case (`RM-6`) has one expected finding, "the refusal paths have no test", whose places are all the untested refusal paths and which an absence finding naming them also detects | Ten separate expected findings would weigh this one miss ten times in the counts |
+| 4.5a | Stage B's cases: the clean case CL-3 is `6feedfa` (a one-line README fix); the decoy DC-1 makes the harness's temp-file teardown non-fatal with `\|\| true` and a comment; the recheck case RC-1 puts stage A's PD-2 plant under a `fixed:` answer naming only `docs/test_spec.md` | Small, real or self-evidently correct changes; the decoy looks like a swallowed failure but is teardown after the status is decided |
+| 4.5a | Artifact types per case: requirements (RM-3, PB-1), architecture and interfaces (PB-2), E2E tests (RM-2, PB-3, RC-1, DC-1), code (RM-1, RM-4, RM-5, RM-6), plan and test plan (CL-1, CL-2, CL-3) | The list each case gets (S44-D12); a README and the rulebook's own documents are reviewed with the plan-and-test-plan list |
+| 4.5a | Stage A's results are read with the key committed at `c325e7d`; every call recorded for stage B counts against its 60, whatever key produced it | Stage A's report stays reproducible after the key's new version; a changed key cannot reset the budget |
+| 4.5a | The marker "Planted defect" refuses only author-written plants (planted, decoy, recheck), not a real miss rebuilt by a patch; leak terms that already occur in this repository's documents were dropped | The 2026 plan text at `c4f9ca2` uses the phrase; a word the base already holds reveals nothing |
 | 4.2 | `invocation_from_entry` refuses entries logged by 4.1's launcher with a clear message, as it refuses earlier ones | 4.2 retires 4.1's prompt layout (the file list from `--path`, empty upstream and evidence sections); its plan did not say so (review round 1, R1-4) |
 
 ## Decisions made

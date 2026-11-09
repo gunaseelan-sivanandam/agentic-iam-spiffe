@@ -1,0 +1,13 @@
+diff --git a/docs/architecture.md b/docs/architecture.md
+index 8b07bda..11f3847 100644
+--- a/docs/architecture.md
++++ b/docs/architecture.md
+@@ -283,7 +283,7 @@ Trust/Responsibility:
+ It is responsible for enforcing that identity alone is not enough, that tokens are valid for the caller and requested action, and that the M4 chain, budget, and discovery behaviors are checked during actual use. In the canonical-resource cleanup slice it is responsible for mapping request paths to canonical `tool-b:/...` resource identifiers before authorization.
+ 
+ Interactions:
+-It receives verified caller identity from tool-b-envoy, consults Redis during M4 enforcement, and writes discovery records for the current registry-based flow.
++It receives verified caller identity from tool-b-envoy, consults Redis during M4 enforcement, and writes discovery records for the current registry-based flow. To verify capability tokens offline, it reads the capiss signing key pair from the shared `capiss_keys` volume, mounted read-only.
+ 
+ ## ARCH-016 Redis
+ 

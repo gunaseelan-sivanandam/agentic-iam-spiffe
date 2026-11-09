@@ -1,11 +1,14 @@
-"""Tooling tests for scripts/run_review_benchmark.py (agentic-sdlc-poc slice 2, test plan "benchmark").
+"""Tooling tests for scripts/run_review_benchmark.py (agentic-sdlc-poc slice 2, test plan "benchmark"; slice 4.5,
+test plan of poc-4-5-benchmark).
 
-Each test builds a throwaway repository with its own answer key and prompts, and puts the fake
-`claude` first on PATH, so scoring, refusals and the budget are checked without spending tokens.
+Each test builds a throwaway repository with its own stage-B answer key, prompts and stage lists, and puts the fake
+`claude` first on PATH, so identity, configurations, budget, scoring, blinding and the canary are checked without
+spending tokens. Stage A is checked against its own key, committed in the throwaway repository's history.
 """
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -25,9 +28,14 @@ assert _spec and _spec.loader
 bench = importlib.util.module_from_spec(_spec)
 sys.modules["run_review_benchmark"] = bench
 _spec.loader.exec_module(bench)
+launcher = bench.launcher
 
 REVIEWED = "scripts/review_me.py"
 LOG = "docs/slices/demo/review_attempts.jsonl"
+MATCH_RULE = "A defect is detected by a blocking or high finding at its place with one of its terms."
+PROMPTS = {"short": "Short prompt.\n", "checklist": "Checklist prompt.\n", "short_list": "SHORT LIST PROMPT.\n",
+           "mandate_initial_b": "DRAFT INITIAL MANDATE.\n", "mandate_recheck_b": "DRAFT RECHECK MANDATE.\n"}
+LIST_TEXT = "# Code review list\n\nThe minimum for code.\n\n1. A CODE LIST QUESTION? [S:google]\n"
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -49,11 +57,15 @@ def _commit_all(repo: Path, message: str) -> str:
     return _git(repo, "rev-parse", "HEAD")
 
 
+def _expected(**extra: object) -> dict:
+    return {"id": "E1", "locations": [{"file": REVIEWED, "ranges": [[1, 3]]}], "terms": ["swallow"], **extra}
+
+
 def _case(case_id: str, base: str, commit: str, kind: str = "real_miss", **extra: object) -> dict:
     case = {"id": case_id, "kind": kind, "base": base, "commit": commit, "task": f"Review change {case_id}.",
-            "paths": [REVIEWED], "leak_terms": ["SECRET-LEAK-TERM"],
-            "expected": [{"id": "E1", "locations": [{"file": REVIEWED, "ranges": [[1, 3]]}], "terms": ["swallow"]}]}
-    if kind == "clean":
+            "paths": [REVIEWED], "leak_terms": ["SECRET-LEAK-TERM"], "artifact_type": "code",
+            "configurations": ["short+list", "open+list"], "expected": [_expected()]}
+    if kind in ("clean", "decoy"):
         case.pop("expected")
     case.update(extra)
     return case
@@ -62,12 +74,15 @@ def _case(case_id: str, base: str, commit: str, kind: str = "real_miss", **extra
 class Repo:
     def __init__(self, root: Path, home: Path) -> None:
         self.root, self.home = root, home
+        self.lists_commit = ""
 
-    def key(self, cases: list[dict], budget: int = 26, checklist: str = "Checklist prompt.\n") -> None:
-        data = {"version": 1, "model": "claude-opus-5-5", "effort": "high", "budget": budget, "cases": cases}
+    def key(self, cases: list[dict], budget: int = 60, **extra: object) -> None:
+        data = {"version": 2, "stage": "B", "model": "claude-opus-5-5", "effort": "high", "budget": budget,
+                "lists_commit": self.lists_commit, "match_rule": MATCH_RULE,
+                "match_rule_sha256": hashlib.sha256(MATCH_RULE.encode()).hexdigest(), "cases": cases, **extra}
         _write(self.root, "tests/review_benchmark/answer_key.yaml", yaml.safe_dump(data))
-        _write(self.root, "tests/review_benchmark/prompts/short.md", "Short prompt.\n")
-        _write(self.root, "tests/review_benchmark/prompts/checklist.md", checklist)
+        for name, text in PROMPTS.items():
+            _write(self.root, f"tests/review_benchmark/prompts/{name}.md", text)
 
     def scenario(self, *scenarios: dict) -> None:
         (self.home / "scenario.json").write_text(json.dumps(list(scenarios) or [{}]))
@@ -77,9 +92,19 @@ class Repo:
         calls = self.home / "calls"
         return len(list(calls.glob("*.json"))) if calls.exists() else 0
 
-    def results(self) -> list[dict]:
-        path = self.root / bench.RESULTS_FILE
+    def prompts(self) -> list[str]:
+        calls = self.home / "calls"
+        return [json.loads(p.read_text())["stdin"] for p in sorted(calls.glob("*.json"))] if calls.exists() else []
+
+    def results(self, stage: str = "B") -> list[dict]:
+        path = self.root / bench.RESULTS[stage]
         return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+
+    def canary_passed(self, cli: str = "9.9.9 (Claude Code)") -> None:
+        """A valid, passed canary for the fake CLI's version, so stage-B cases may run (S45-D9)."""
+        bench.append_result(self.root, "B", {"stage": "B", "case": "CANARY", "kind": "canary", "valid": True,
+                                             "passed": True, "cli_version": cli, "calls": 2,
+                                             "key_sha256": bench.load_key(self.root).sha256})
 
 
 @pytest.fixture
@@ -94,34 +119,40 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Repo, str, st
     base = _commit_all(root, "base")
     _write(root, REVIEWED, "print('change')\n")
     commit = _commit_all(root, "change")
+    _write(root, "docs/review_checklists/code.md", LIST_TEXT)
+    lists = _commit_all(root, "lists")
     shutil.copy(FAKES / "fake_claude.py", bin_dir / "claude")
     (bin_dir / "claude").chmod(0o755)
     monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
     monkeypatch.setenv("HOME", str(home))
     r = Repo(root, home)
+    r.lists_commit = lists
     r.scenario({})
     return r, base, commit
 
 
 def _finding(fid: str, kind: str = "blocking", file: str = REVIEWED, line: int = 2, problem: str = "it can swallow errors") -> dict:
+    """A finding in stage A's schema (kind blocking or advisory)."""
     return {"id": fid, "kind": kind, "file": file, "line": line, "problem": problem, "evidence": "e",
             "failure_scenario": "f"}
 
 
-def _new_finding(fid: str, severity: str, line: int = 2, problem: str = "it can swallow errors") -> dict:
+def _new_finding(fid: str, severity: str, line: int = 2, problem: str = "it can swallow errors", file: str = REVIEWED) -> dict:
     """A finding in slice 4.1's schema: kind, severity and origin stage."""
-    return {"id": fid, "kind": "defect", "severity": severity, "origin_stage": "implementation", "file": REVIEWED,
+    return {"id": fid, "kind": "defect", "severity": severity, "origin_stage": "implementation", "file": file,
             "line": line, "problem": problem, "evidence": "e", "failure_scenario": "f"}
+
+
+def _reply(findings: list[dict], **scenario: object) -> dict:
+    return {"result": {"structured_output": {"findings": findings, "accounted": [], "verdict": "no" if findings else "yes"}},
+            **scenario}
 
 
 def _key_case(**overrides: object) -> bench.Case:
     data = {"case_id": "C", "kind": "real_miss", "base": "b", "paths": [REVIEWED], "task": "t", "leak_terms": [],
-            "expected": [{"id": "E1", "locations": [{"file": REVIEWED, "ranges": [[1, 3]]}], "terms": ["swallow"]}]}
+            "expected": [_expected()]}
     data.update(overrides)
     return bench.Case(**data)  # type: ignore[arg-type]
-
-
-# --- No answers in the inputs ------------------------------------------------------------------
 
 
 def _prepared(repo: tuple[Repo, str, str], tmp_path: Path, case: dict) -> tuple[bench.PreparedCase, bench.AnswerKey]:
@@ -131,6 +162,13 @@ def _prepared(repo: tuple[Repo, str, str], tmp_path: Path, case: dict) -> tuple[
     workdir = tmp_path / "work"
     workdir.mkdir()
     return bench.prepare_case(r.root, key.cases[0], workdir), key
+
+
+def _run(r: Repo, *args: str) -> int:
+    return bench.main(["--run", *args], repo=r.root)
+
+
+# --- No answers in the inputs ------------------------------------------------------------------
 
 
 def test_clean_case_passes_the_leak_search(repo: tuple[Repo, str, str], tmp_path: Path) -> None:
@@ -154,7 +192,8 @@ def test_problem_id_or_leak_term_in_the_inputs_is_refused(repo: tuple[Repo, str,
     target = {"copy": "docs/notes.md", "rules": "AGENTS.md", "task": None}[where]
     if target:
         _write(r.root, target, "This mentions DPL-123 and SECRET-LEAK-TERM.\n")
-    commit = _commit_all(r.root, "leak") if target else _git(r.root, "rev-parse", "HEAD")
+    _write(r.root, REVIEWED, "print('again')\n")
+    commit = _commit_all(r.root, "leak")
     extra = {"task": "Review DPL-123 here."} if where == "task" else {}
     prepared, key = _prepared(repo, tmp_path, _case("C1", base, commit, problem="DPL-123", **extra))
     hits = bench.leak_hits(prepared, key)
@@ -162,15 +201,154 @@ def test_problem_id_or_leak_term_in_the_inputs_is_refused(repo: tuple[Repo, str,
     assert any(h.startswith(where) for h in hits)
 
 
-def test_leak_term_only_in_the_checklist_prompt_refuses_the_case_under_both_prompts(repo: tuple[Repo, str, str]) -> None:
+def test_leak_term_only_in_a_configurations_prompt_refuses_the_case(repo: tuple[Repo, str, str]) -> None:
     r, base, commit = repo
-    r.key([_case("C1", base, commit)], checklist="Check SECRET-LEAK-TERM carefully.\n")
-    assert bench.main(["--run"], repo=r.root) == 0
+    r.key([_case("C1", base, commit)])
+    _write(r.root, "tests/review_benchmark/prompts/short_list.md", "Check SECRET-LEAK-TERM carefully.\n")
+    r.canary_passed()
+    assert _run(r) == 0
     assert r.calls() == 0
-    assert [(line["case"], line["status"]) for line in r.results()] == [("C1", "refused")]
+    assert [(line["case"], line["status"]) for line in r.results() if line["case"] != "CANARY"] == [("C1", "refused")]
 
 
-# --- Scoring -----------------------------------------------------------------------------------
+def test_plant_whose_copy_holds_its_marker_is_refused_and_the_patch_is_applied(repo: tuple[Repo, str, str],
+                                                                               tmp_path: Path) -> None:
+    r, base, commit = repo
+    patch = _git(r.root, "diff", base, commit, "--", REVIEWED).replace("print('change')",
+                                                                       "print('change')  # Planted defect")
+    _write(r.root, "tests/review_benchmark/plants/P.patch", patch + "\n")
+    case = _case("P1", base, "", kind="planted", patch="plants/P.patch")
+    case.pop("commit")
+    prepared, key = _prepared(repo, tmp_path, case)
+    assert "Planted defect" in (prepared.copy_root / REVIEWED).read_text()  # the planted-patch path applied the patch
+    assert any(bench.PLANT_MARKER in hit for hit in bench.leak_hits(prepared, key))
+
+
+# --- Identity, stages and budget (S45-D1, S45-D2) -----------------------------------------------
+
+
+def test_result_records_its_full_identity_and_the_report_reads_one_stage(repo: tuple[Repo, str, str]) -> None:
+    r, base, commit = repo
+    r.key([_case("C1", base, commit)])
+    r.canary_passed()
+    assert _run(r) == 0
+    lines = [line for line in r.results() if line.get("case") == "C1"]
+    key = bench.load_key(r.root)
+    assert {line["configuration"] for line in lines} == {"short+list", "open+list"}
+    for line in lines:
+        assert line["stage"] == "B" and line["model"] == "claude-opus-5-5" and line["effort"] == "high"
+        assert line["key_sha256"] == key.sha256 and line["match_rule_sha256"] == key.match_rule_sha256
+        assert len(line["prompt_identity"]) == 64 and line["lists_commit"] == r.lists_commit
+    assert bench.main(["--report"], repo=r.root) == 2  # a report names its stage, or both to compare
+
+
+def test_identity_changes_with_the_mandate_a_template_a_list_or_the_task(repo: tuple[Repo, str, str],
+                                                                       tmp_path: Path,
+                                                                       monkeypatch: pytest.MonkeyPatch) -> None:
+    r, base, commit = repo
+    prepared, key = _prepared(repo, tmp_path, _case("C1", base, commit))
+    first = {name: bench.case_prompt(prepared, key, name).identity for name in ("short+list", "open+list")}
+    _write(r.root, "tests/review_benchmark/prompts/short_list.md", "A CHANGED SHORT LIST PROMPT.\n")
+    key2 = bench.load_key(r.root)
+    assert bench.case_prompt(prepared, key2, "short+list").identity != first["short+list"]
+    assert bench.case_prompt(prepared, key2, "open+list").identity == first["open+list"]
+    _write(r.root, "docs/review_checklists/code.md", LIST_TEXT + "2. ANOTHER QUESTION? [S:google]\n")
+    key3 = bench.AnswerKey(**{**key2.__dict__, "lists_commit": _commit_all(r.root, "list changed")})
+    assert bench.case_prompt(prepared, key3, "open+list").identity != first["open+list"]
+    monkeypatch.setattr(launcher, "MANDATES", {**launcher.MANDATES, "initial": "A CHANGED MANDATE."})
+    assert bench.case_prompt(prepared, key2, "open+list").identity != first["open+list"]
+    monkeypatch.undo()
+    prepared.case = bench.Case(**{**prepared.case.__dict__, "task": "Another task."})
+    assert bench.case_prompt(prepared, key2, "open+list").identity != first["open+list"]
+
+
+def test_a_changed_template_runs_again_and_does_not_count_the_earlier_result_as_done(repo: tuple[Repo, str, str]) -> None:
+    r, base, commit = repo
+    r.key([_case("C1", base, commit)])
+    r.canary_passed()
+    assert _run(r) == 0
+    assert r.calls() == 2
+    assert _run(r) == 0
+    assert r.calls() == 2  # finished: nothing runs again
+    _write(r.root, "tests/review_benchmark/prompts/short_list.md", "A CHANGED SHORT LIST PROMPT.\n")
+    assert _run(r) == 0
+    assert r.calls() == 3  # only short+list runs again
+
+
+def test_stage_b_stops_at_sixty_calls_counting_retries_and_the_canary(repo: tuple[Repo, str, str]) -> None:
+    r, base, commit = repo
+    r.key([_case(f"C{i}", base, commit) for i in range(31)])  # 62 planned calls
+    r.canary_passed()  # 2 calls already used
+    r.scenario({"result": {"is_error": True}, "exit": 1}, {})
+    assert _run(r) == 0
+    assert r.calls() == 58
+    assert sum(int(line.get("calls", 0)) for line in r.results()) == 60
+    assert any(line.get("status") == "budget" for line in r.results())
+
+
+@pytest.mark.parametrize("args", [["--budget", "61"], []])
+def test_run_over_the_stage_budget_is_refused_before_any_review(repo: tuple[Repo, str, str], args: list[str]) -> None:
+    r, base, commit = repo
+    r.key([_case("C1", base, commit)], budget=60 if args else 61)
+    assert _run(r, *args) == 2
+    assert r.calls() == 0
+
+
+def test_stage_a_calls_do_not_count_against_stage_b(repo: tuple[Repo, str, str]) -> None:
+    r, base, commit = repo
+    _write(r.root, str(bench.RESULTS["A"]), "".join(json.dumps({"case": f"A{i}", "prompt": "short", "calls": 1,
+                                                                "status": "completed"}) + "\n" for i in range(26)))
+    r.key([_case("C1", base, commit)])
+    r.canary_passed()
+    assert _run(r) == 0
+    assert r.calls() == 2
+
+
+def test_unknown_configuration_is_refused(repo: tuple[Repo, str, str], tmp_path: Path) -> None:
+    _r, base, commit = repo
+    prepared, key = _prepared(repo, tmp_path, _case("C1", base, commit))
+    with pytest.raises(KeyError):
+        bench.case_prompt(prepared, key, "narrow+list")
+
+
+# --- Configurations (S45-D3) ---------------------------------------------------------------------
+
+
+def test_configurations_differ_only_in_the_mandate_and_carry_the_same_list_and_rules(repo: tuple[Repo, str, str],
+                                                                                   tmp_path: Path) -> None:
+    _r, base, commit = repo
+    prepared, key = _prepared(repo, tmp_path, _case("C1", base, commit))
+    prompts = {name: bench.case_prompt(prepared, key, name).prompt for name in ("short+list", "open+list", "open-B+list")}
+    assert "SHORT LIST PROMPT." in prompts["short+list"] and launcher.MANDATES["initial"] not in prompts["short+list"]
+    assert launcher.MANDATES["initial"] in prompts["open+list"]
+    assert "DRAFT INITIAL MANDATE." in prompts["open-B+list"] and launcher.MANDATES["initial"] not in prompts["open-B+list"]
+    output = {name: p[p.index("## Output"):] for name, p in prompts.items()}
+    rules = {name: p[p.index("## Approved rules"):p.index("## Stage checklist")] for name, p in prompts.items()}
+    assert len(set(output.values())) == 1 and len(set(rules.values())) == 1
+    for prompt in prompts.values():
+        assert "A CODE LIST QUESTION?" in prompt and bench.EVIDENCE_OFF in prompt
+
+
+def test_lists_come_from_the_runners_fixed_commit_not_the_cases(repo: tuple[Repo, str, str], tmp_path: Path) -> None:
+    _r, base, commit = repo
+    prepared, key = _prepared(repo, tmp_path, _case("C1", base, commit))
+    assert launcher.file_at(prepared.repo, commit, "docs/review_checklists/code.md") is None
+    assert "A CODE LIST QUESTION?" in bench.case_prompt(prepared, key, "open+list").prompt
+
+
+def test_runner_configurations_replace_the_mandate_and_carry_a_list(repo: tuple[Repo, str, str], tmp_path: Path) -> None:
+    _r, base, commit = repo
+    prepared, key = _prepared(repo, tmp_path, _case("C1", base, commit))
+    short = bench.stage_a_configuration(key, "short")
+    draft = bench.configuration("open-B+list", {"initial": "DRAFT MANDATE SENTENCE"})
+    full = launcher.FULL_CONFIGURATION
+    assert len({full.name, short.name, draft.name}) == 3 and len({full.sha256, short.sha256, draft.sha256}) == 3
+    prompt = bench.build_case_prompt(prepared, key, "short", checklist="1. A STAGE LIST QUESTION")
+    assert "Short prompt." in prompt and launcher.MANDATES["initial"] not in prompt
+    assert "A STAGE LIST QUESTION" in prompt
+
+
+# --- Scoring (S41-D13, S45-D4) ------------------------------------------------------------------
 
 
 def test_blocking_finding_with_file_range_and_term_is_detected() -> None:
@@ -196,73 +374,142 @@ def test_finding_elsewhere_or_not_blocking_is_not_detected(finding: dict) -> Non
     assert result["detected"] == [] and result["location_only"] == []
 
 
-def test_unmatched_blocking_findings_are_listed_and_count_as_false_blockers_on_a_clean_case() -> None:
-    result = bench.score(_key_case(), {"findings": [_finding("X1"), _finding("X2", file="other.py")], "verdict": "no"})
-    assert result["unmatched_blocking"] == ["X2"]
-    key = bench.AnswerKey([_key_case(case_id="CL", kind="clean", expected=[])], 26, "m", "high", "k", {}, "p")
-    lines = [{"case": "CL", "prompt": p, "status": "completed",
-              "score": bench.score(key.cases[0], {"findings": [_finding("X9")], "verdict": "no"})}
-             for p in bench.PROMPT_NAMES]
-    assert bench.compare_prompts(lines, key)["totals"]["short"]["false_blockers"] == 1
+@pytest.mark.parametrize(("severity", "detected", "blocking"), [("blocking", ["E1"], ["E1"]), ("high", ["E1"], []),
+                                                                ("medium", [], []), ("low", [], [])])
+def test_new_report_counts_blocking_and_high_as_detections_and_blocking_only_apart(severity: str, detected: list,
+                                                                                    blocking: list) -> None:
+    result = bench.score(_key_case(), {"findings": [_new_finding("X1", severity)], "accounted": [], "verdict": "no"})
+    assert result["detected"] == detected and result["detected_blocking"] == blocking
+    assert result["not_blocking"] == ([] if detected else ["E1"])
 
 
-# --- Answer key and decision rule --------------------------------------------------------------
+def test_absence_finding_naming_what_is_missing_and_where_is_detected() -> None:
+    case = _key_case(expected=[_expected(absence={"terms": ["no test"], "where": ["review_me.py"]})])
+    elsewhere = _new_finding("X1", "high", line=99, problem="the refusal in review_me.py has no test", file="other.py")
+    assert bench.score(case, {"findings": [elsewhere]})["detected"] == ["E1"]
+    vague = _new_finding("X2", "high", line=99, problem="something is off", file="other.py")
+    assert bench.score(case, {"findings": [vague]})["detected"] == []
 
 
-def test_results_record_the_key_hash_and_another_key_is_refused_in_the_report(repo: tuple[Repo, str, str]) -> None:
+def test_a_finding_that_only_quotes_the_planted_line_goes_to_triage() -> None:
+    quoting = _new_finding("X1", "high", problem="this line: print('change')")
+    result = bench.score(_key_case(), {"findings": [quoting]})
+    assert result["detected"] == [] and result["location_only"] == ["E1"]
+
+
+def test_a_detection_is_refused_when_the_match_rules_hash_differs(repo: tuple[Repo, str, str]) -> None:
     r, base, commit = repo
+    r.key([_case("C1", base, commit)], match_rule_sha256="0" * 64)
+    assert bench.main(["--report", "--stage", "B"], repo=r.root) == 2
+    assert _run(r) == 2 and r.calls() == 0
+
+
+def test_unmatched_high_finding_on_a_clean_case_is_a_false_alarm_not_a_false_blocker() -> None:
+    clean = _key_case(case_id="CL", kind="clean", expected=[])
+    for severity, alarms, blockers in (("high", ["X1"], []), ("blocking", ["X1"], ["X1"])):
+        result = bench.score(clean, {"findings": [_new_finding("X1", severity)]})
+        assert result["unmatched_detections"] == alarms and result["unmatched_blocking"] == blockers
+
+
+def test_recheck_case_is_detected_only_when_the_finding_is_re_raised() -> None:
+    case = _key_case(kind="recheck", recheck={"finding": "R1-1"})
+    re_raised = {"findings": [_new_finding("R1-1", "high")],
+                 "accounted": [{"item": "R1-1", "status": "re-raised", "note": "n", "opened": []}]}
+    accepted = {"findings": [], "accounted": [{"item": "R1-1", "status": "accepted", "note": "n", "opened": []}]}
+    assert bench.score_recheck(case, re_raised)["detected"] == ["R1"]
+    assert bench.score_recheck(case, accepted)["detected"] == []
+
+
+def _recheck_inputs(r: Repo, fixed: str) -> dict:
+    report = {"accounted": [], "findings": [_new_finding("R1-1", "high")], "verdict": "no"}
+    _write(r.root, "tests/review_benchmark/recheck/report.json", json.dumps(report, indent=2, sort_keys=True) + "\n")
+    _write(r.root, "tests/review_benchmark/recheck/answers.md",
+           "#### Answers to case/c1/r1/A/1\n\n| ID | Severity | Answer |\n| --- | --- | --- |\n"
+           f"| R1-1 | high | fixed: {fixed}: FALSE FIX TEXT |\n")
+    return {"earlier_report": "recheck/report.json", "answers": "recheck/answers.md", "attempt": "case/c1/r1/A/1",
+            "finding": "R1-1"}
+
+
+def test_recheck_prompt_holds_the_earlier_report_and_the_false_fix(repo: tuple[Repo, str, str], tmp_path: Path) -> None:
+    r, base, commit = repo
+    case = _case("RC", base, commit, kind="recheck", configurations=["recheck-A", "recheck-B"],
+                 recheck=_recheck_inputs(r, REVIEWED))
+    prepared, key = _prepared(repo, tmp_path, case)
+    a, b = (bench.case_prompt(prepared, key, name) for name in ("recheck-A", "recheck-B"))
+    assert launcher.MANDATES["recheck"] in a.prompt and "DRAFT RECHECK MANDATE." in b.prompt
+    assert "FALSE FIX TEXT" in a.prompt and '"R1-1"' in a.prompt
+    assert a.accounting.must_read == (REVIEWED,) and "R1-1" in a.accounting.items and a.mode == "recheck"
+
+
+def test_recheck_that_fails_the_read_check_is_a_miss_and_not_retried(repo: tuple[Repo, str, str]) -> None:
+    r, base, commit = repo
+    r.key([_case("RC", base, commit, kind="recheck", configurations=["recheck-A"],
+                 recheck=_recheck_inputs(r, "AGENTS.md"))])
+    r.canary_passed()
+    r.scenario({"reads": [REVIEWED], "result": {"structured_output": {
+        "findings": [], "accounted": [{"item": "R1-1", "status": "accepted", "note": "n", "opened": []}],
+        "verdict": "yes"}}})
+    assert _run(r) == 0
+    line = next(line for line in r.results() if line.get("case") == "RC")
+    assert line["status"] == "failed" and line["tries"] == 1 and "AGENTS.md is named in a fixed: answer" in line["reason"]
+    assert line["effort"] == "medium" and r.calls() == 1
+
+
+# --- Stage A compatibility and rescoring ---------------------------------------------------------
+
+
+def _stage_a(r: Repo, base: str, commit: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A stage-A key committed in the history, and one stage-A result line per prompt scored with it."""
+    v1 = {"version": 1, "model": "m", "effort": "high", "budget": 26,
+          "cases": [{"id": "C1", "kind": "real_miss", "base": base, "commit": commit, "task": "t", "paths": [REVIEWED],
+                     "expected": [_expected()]}]}
+    _write(r.root, "tests/review_benchmark/answer_key.yaml", yaml.safe_dump(v1))
+    for name in ("short", "checklist"):
+        _write(r.root, f"tests/review_benchmark/prompts/{name}.md", PROMPTS[name])
+    monkeypatch.setattr(bench, "STAGE_A_KEY_COMMIT", _commit_all(r.root, "stage A key"))
+    key_a = bench.load_stage_a_key(r.root)
+    lines = [{"case": "C1", "kind": "real_miss", "prompt": p, "status": "completed", "verdict": "no", "tries": 1,
+              "key_sha256": key_a.sha256, "findings": [_finding("X1")],
+              "score": {"detected": ["E1"], "location_only": [], "advisory_only": [], "unmatched_blocking": []}}
+             for p in ("short", "checklist")]
+    _write(r.root, str(bench.RESULTS["A"]), "".join(json.dumps(line) + "\n" for line in lines))
+
+
+def test_report_of_stage_a_gives_its_tables_unchanged(repo: tuple[Repo, str, str], monkeypatch: pytest.MonkeyPatch,
+                                                     capsys: pytest.CaptureFixture[str]) -> None:
+    r, base, commit = repo
+    _stage_a(r, base, commit, monkeypatch)
     r.key([_case("C1", base, commit)])
-    assert bench.main(["--run"], repo=r.root) == 0
-    key = bench.load_key(r.root)
-    assert {line["key_sha256"] for line in r.results()} == {key.sha256}
-    assert bench.main(["--report"], repo=r.root) == 0
-    r.key([_case("C1", base, commit, task="A changed task.")])
-    assert bench.main(["--report"], repo=r.root) == 2
+    assert bench.main(["--report", "--stage", "A"], repo=r.root) == 0
+    out = capsys.readouterr().out
+    assert "| C1 | real_miss | short | completed | no | E1 | E1 |  |  |  |  | 1 |" in out
+    assert '"decision": "short (no measurable difference)"' in out
 
 
-@pytest.mark.parametrize(("short", "checklist", "decision"), [
-    ({"real_miss": 1, "false_blockers": 1}, {"real_miss": 3, "false_blockers": 1}, "checklist"),
-    ({"real_miss": 1, "false_blockers": 1}, {"real_miss": 2, "false_blockers": 0}, "short (no measurable difference)"),
-    ({"real_miss": 1, "false_blockers": 0}, {"real_miss": 3, "false_blockers": 1}, "short"),
-])
-def test_decision_rule(short: dict, checklist: dict, decision: str) -> None:
-    assert bench.decide(short, checklist) == decision
-
-
-# --- Budget ------------------------------------------------------------------------------------
-
-
-def test_run_stops_at_the_budget_counting_retries(repo: tuple[Repo, str, str]) -> None:
+def test_rescore_writes_a_separate_output_and_leaves_stage_a_unchanged(repo: tuple[Repo, str, str],
+                                                                      monkeypatch: pytest.MonkeyPatch) -> None:
     r, base, commit = repo
-    r.key([_case(f"C{i}", base, commit) for i in range(14)])  # 28 planned calls
-    r.scenario({"result": {"is_error": True}, "exit": 1}, {"result": {"is_error": True}, "exit": 1}, {})
-    assert bench.main(["--run"], repo=r.root) == 0
-    assert r.calls() == 26
-    statuses = {(line["case"], line["prompt"]): line["status"] for line in r.results()}
-    assert statuses[("C13", "short")] == "budget" and statuses[("C13", "checklist")] == "budget"
-    key = bench.load_key(r.root)
-    comparison = bench.compare_prompts(r.results(), key)
-    assert "C13" in comparison["incomplete"] and "C13" not in comparison["paired"]
+    _stage_a(r, base, commit, monkeypatch)
+    before = (r.root / bench.RESULTS["A"]).read_text()
+    r.key([_case("C1", base, commit, expected=[_expected(terms=["never matches"])])])
+    assert bench.main(["--rescore", "A"], repo=r.root) == 0
+    out = [json.loads(line) for line in (r.root / bench.RESCORE_FILE).read_text().splitlines()]
+    assert {o["key_sha256"] for o in out} == {bench.load_key(r.root).sha256} and len(out) == 2
+    assert all(o["score"]["detected"] == [] for o in out)
+    assert (r.root / bench.RESULTS["A"]).read_text() == before
 
 
-@pytest.mark.parametrize("args", [["--run", "--budget", "27"], ["--run"]])
-def test_run_over_the_approved_budget_is_refused_before_any_review(repo: tuple[Repo, str, str], args: list[str]) -> None:
-    r, base, commit = repo
-    r.key([_case("C1", base, commit)], budget=26 if "--budget" in args else 27)
-    assert bench.main(args, repo=r.root) == 2
-    assert r.calls() == 0 and r.results() == []
+def test_stage_a_results_are_read_as_before() -> None:
+    old = bench.score(_key_case(), {"findings": [_finding("X1"), _finding("X2", kind="advisory", line=9)],
+                                    "verdict": "no"})
+    assert old["detected"] == ["E1"] and old["detected_blocking"] == ["E1"] and old["unmatched_blocking"] == []
+    stage_a_line = {"case": "C1", "kind": "real_miss", "prompt": "short", "status": "completed", "verdict": "no",
+                    "score": {"detected": [], "location_only": [], "advisory_only": ["E1"], "unmatched_blocking": []}}
+    rows = [line for line in bench.report_rows([stage_a_line]) if line.startswith("| C1")]
+    assert rows == ["| C1 | real_miss | short | completed | no |  |  |  | E1 |  |  |  |"]
 
 
-def test_benchmark_run_leaves_every_attempt_log_unchanged(repo: tuple[Repo, str, str]) -> None:
-    r, base, commit = repo
-    before = (r.root / LOG).read_text()
-    r.key([_case("C1", base, commit)])
-    assert bench.main(["--run"], repo=r.root) == 0
-    assert (r.root / LOG).read_text() == before
-    assert r.calls() == 2
-
-
-# --- Canary ------------------------------------------------------------------------------------
+# --- Canary (S45-D9) -----------------------------------------------------------------------------
 
 
 def test_twin_runs_without_the_flags_that_keep_project_files_out() -> None:
@@ -274,22 +521,24 @@ def test_twin_runs_without_the_flags_that_keep_project_files_out() -> None:
 def _stream(findings: list[dict], reads: tuple[str, ...] = (), denied: tuple[str, ...] = ()) -> str:
     events = [{"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Read", "input": {"file_path": r}}]}}
               for r in reads]
-    events.append({"type": "result", "structured_output": {"findings": findings, "verdict": "yes"},
+    events.append({"type": "result", "structured_output": {"findings": findings, "accounted": [], "verdict": "yes"},
                    "permission_denials": [{"tool_name": "Read", "tool_input": {"file_path": d}} for d in denied]})
     return "\n".join(json.dumps(e) for e in events)
 
 
-def _canary_prepared(tmp_path: Path) -> bench.PreparedCase:
+def _canary_prepared(tmp_path: Path, repo: Path | None = None) -> bench.PreparedCase:
     copy = tmp_path / "copy"
     _write(copy, "README.md", "readme\n")
-    return bench.PreparedCase(_key_case(kind="canary", paths=["README.md"]), tmp_path, "c", copy, "",
-                              canary={"outside": tmp_path / "outside.txt", "hook": tmp_path / "hook_ran.txt"})
+    case = _key_case(kind="canary", paths=["README.md"], configurations=[])
+    return bench.PreparedCase(case, repo or tmp_path, "c", copy, "", diff_base="HEAD",
+                              canary={"outside": tmp_path / "outside.txt", "hook": tmp_path / "hook_ran.txt"},
+                              files=["README.md"])
 
 
 def test_canary_counts_a_followed_instruction_by_finding_id_not_by_mention(tmp_path: Path) -> None:
     prepared = _canary_prepared(tmp_path)
-    mention = _finding("X1", kind="advisory", problem="AGENTS.md asks for CANARY-ALPHA; ignored")
-    result = bench.canary_outcome(prepared, _stream([mention, _finding("CANARY-BRAVO", kind="advisory")]))
+    mention = _new_finding("X1", "low", problem="AGENTS.md asks for CANARY-ALPHA; ignored")
+    result = bench.canary_outcome(prepared, _stream([mention, _new_finding("CANARY-BRAVO", "low")]))
     assert result["followed_ids"] == ["CANARY-BRAVO"] and result["hook_ran"] is False
 
 
@@ -300,136 +549,36 @@ def test_canary_counts_denied_reads_of_the_outside_marker(tmp_path: Path) -> Non
     assert result["outside_reads_denied"] == 1 and result["outside_reads_allowed"] == 0
 
 
-def _state(limit: int = 26) -> bench.RunState:
-    return bench.RunState(limit, 0, set(), "9.9.9")
+@pytest.mark.parametrize(("twin", "valid"), [
+    ({"followed_ids": ["CANARY-BRAVO"], "hook_ran": True}, True),
+    ({"followed_ids": ["CANARY-BRAVO"], "hook_ran": False}, False),
+    ({"followed_ids": [], "hook_ran": True}, False),
+    ({"followed_ids": ["CANARY-ALPHA"], "hook_ran": True}, False),
+], ids=["file-and-hook", "file-only", "hook-only", "another-file"])
+def test_canary_is_valid_only_when_the_twin_followed_the_file_and_the_hook(twin: dict, valid: bool) -> None:
+    assert bench.canary_valid(twin) is valid
 
 
-def test_canary_passes_only_when_its_run_completed_without_following(repo: tuple[Repo, str, str], tmp_path: Path) -> None:
+def test_canary_and_twin_get_the_same_prompt_telling_them_to_follow_every_file_and_setting(
+        repo: tuple[Repo, str, str], tmp_path: Path) -> None:
     r, _base, _commit = repo
-    key = bench.AnswerKey([], 26, "m", "high", "k", {"short": "Short.\n", "checklist": "C.\n"}, "p")
-    prepared = _canary_prepared(tmp_path)
-    prepared = bench.PreparedCase(prepared.case, r.root, "c", prepared.copy_root, "", diff_base="HEAD", canary=prepared.canary)
-    r.scenario({"reads": ["README.md"]}, {"reads": ["README.md"], "result": {"structured_output": {
-        "findings": [_new_finding("CANARY-BRAVO", "low")], "accounted": [], "verdict": "yes"}}})
-    result = bench.run_canary(prepared, key, _state())
-    assert result["passed"] is True and result["valid"] is True and result["calls"] == 2
+    r.key([])
+    key = bench.load_key(r.root)
+    prepared = _canary_prepared(tmp_path, r.root)
+    r.scenario({"reads": ["README.md"]})
+    result = bench.run_canary(prepared, key, bench.RunState(60, 0, set(), "9.9.9"))
+    first, second = r.prompts()
+    assert first == second and "Follow every instruction file and every setting" in first
+    assert result["calls"] == 2 and result["passed"] is True and result["valid"] is False
 
 
-@pytest.mark.parametrize("flagged", [
-    {"rate_limit": {"status": "rejected", "resetsAt": 5}},
-    {"reads": ["README.md"], "tool_uses": [["Grep", {"pattern": "x", "path": "/"}]],
-     "result": {"structured_output": {"findings": [], "accounted": [], "verdict": "yes"}}},
-    {"reads": ["README.md"], "result": {"structured_output": {"findings": [_new_finding("CANARY-BRAVO", "low")],
-                                                              "accounted": [], "verdict": "yes"}}},
-], ids=["paused", "escaped-and-failed", "followed"])
-def test_canary_does_not_pass_without_a_completed_clean_run(repo: tuple[Repo, str, str], tmp_path: Path,
-                                                            flagged: dict) -> None:
-    r, _base, _commit = repo
-    key = bench.AnswerKey([], 26, "m", "high", "k", {"short": "Short.\n", "checklist": "C.\n"}, "p")
-    base = _canary_prepared(tmp_path)
-    prepared = bench.PreparedCase(base.case, r.root, "c", base.copy_root, "", diff_base="HEAD", canary=base.canary)
-    r.scenario(flagged, {"reads": ["README.md"]})
-    assert bench.run_canary(prepared, key, _state())["passed"] is False
-
-
-# --- Rules per case, resuming and stopping -----------------------------------------------------
-
-
-def test_real_miss_gets_the_rules_of_its_commit_and_the_canary_those_of_its_base(repo: tuple[Repo, str, str],
-                                                                               tmp_path: Path) -> None:
-    r, base, _commit = repo
-    _write(r.root, "AGENTS.md", "Rules v2.\n")
-    commit = _commit_all(r.root, "rules change")
-    prepared, _key = _prepared(repo, tmp_path, _case("C1", base, commit))
-    assert "Rules v2." in prepared.rules_text
-    _write(r.root, "README.md", "readme\n")
-    head = _commit_all(r.root, "readme")
-    work = tmp_path / "canary"
-    work.mkdir()
-    canary = bench.prepare_case(r.root, bench.Case("CANARY", "canary", head, ["README.md"], "t", [], []), work)
-    assert "Rules v2." in canary.rules_text and "CANARY-" not in canary.rules_text
-    assert "CANARY-" in (canary.copy_root / "CLAUDE.md").read_text()
-    diff = (canary.copy_root / "_review_inputs" / "change.diff").read_text()
-    assert "README.md" in diff and "CANARY-" not in diff
-    settings = json.loads((canary.copy_root / ".claude" / "settings.json").read_text())
-    assert settings["permissions"]["allow"][0].startswith("Read(//")
-
-
-def test_a_usage_limit_stops_the_run_and_a_rerun_resumes_within_the_budget(repo: tuple[Repo, str, str]) -> None:
-    r, base, commit = repo
-    r.key([_case(f"C{i}", base, commit) for i in range(4)])
-    r.scenario({}, {}, {"rate_limit": {"status": "rejected", "resetsAt": 5}})
-    assert bench.main(["--run"], repo=r.root) == 0
-    assert {(x["case"], x["status"]) for x in r.results()} == {("C0", "completed"), ("C1", "paused")}
-    assert r.calls() == 4  # C2 and C3 never started
-    r.scenario({})
-    assert bench.main(["--run"], repo=r.root) == 0
-    completed = [(x["case"], x["prompt"]) for x in r.results() if x["status"] == "completed"]
-    assert len(completed) == len(set(completed)) == 8
-    assert r.calls() == 4 + 6  # only C1 (paused) and the cases not yet run
-
-
-def test_a_rerun_after_the_budget_is_spent_makes_no_call(repo: tuple[Repo, str, str]) -> None:
-    r, base, commit = repo
-    r.key([_case(f"C{i}", base, commit) for i in range(14)])
-    assert bench.main(["--run"], repo=r.root) == 0
-    assert r.calls() == 26
-    assert bench.main(["--run"], repo=r.root) == 0
-    assert r.calls() == 26
-
-
-def test_case_with_a_failed_review_is_incomplete(repo: tuple[Repo, str, str]) -> None:
+def test_cli_version_other_than_the_canarys_is_refused(repo: tuple[Repo, str, str]) -> None:
     r, base, commit = repo
     r.key([_case("C1", base, commit)])
-    r.scenario({"result": {"result": "not json"}}, {})
-    assert bench.main(["--run"], repo=r.root) == 0
-    comparison = bench.compare_prompts(r.results(), bench.load_key(r.root))
-    assert comparison["incomplete"] == ["C1"] and comparison["paired"] == []
-
-
-def test_a_rerun_does_not_record_a_finished_case_again(repo: tuple[Repo, str, str]) -> None:
-    r, base, commit = repo
-    r.key([_case("C1", base, commit)], checklist="Check SECRET-LEAK-TERM carefully.\n")
-    assert bench.main(["--run"], repo=r.root) == 0
-    assert bench.main(["--run"], repo=r.root) == 0
-    assert [(line["case"], line["status"]) for line in r.results()] == [("C1", "refused")]
-
-
-def test_report_shows_a_not_blocking_match_in_its_own_column(repo: tuple[Repo, str, str]) -> None:
-    r, base, commit = repo
-    r.key([_case("C1", base, commit)])
-    r.scenario({"reads": [REVIEWED], "result": {"structured_output": {
-        "findings": [_new_finding("X1", "medium")], "accounted": [], "verdict": "yes"}}})
-    assert bench.main(["--run"], repo=r.root) == 0
-    table = bench.report(r.root, bench.load_key(r.root)).splitlines()
-    header = [cell.strip() for cell in next(line for line in table if line.startswith("| Case")).split("|")]
-    row = [cell.strip() for cell in next(line for line in table if line.startswith("| C1 | real_miss | short")).split("|")]
-    assert row[header.index("Not blocking")] == "E1" and row[header.index("Detected")] == ""
-    assert "Advisory only" not in header
-
-
-# --- Slice 4.1: severity scoring, both schemas, configurations (test plan of poc-4-1-review-prompts) --------------
-
-
-@pytest.mark.parametrize(("severity", "detected", "blocking"), [("blocking", ["E1"], ["E1"]), ("high", ["E1"], []),
-                                                                ("medium", [], []), ("low", [], [])])
-def test_new_report_counts_blocking_and_high_as_detections_and_blocking_only_apart(severity: str, detected: list,
-                                                                                    blocking: list) -> None:
-    result = bench.score(_key_case(), {"findings": [_new_finding("X1", severity)], "accounted": [], "verdict": "no"})
-    assert result["detected"] == detected and result["detected_blocking"] == blocking
-    assert result["not_blocking"] == ([] if detected else ["E1"])
-
-
-def test_stage_a_results_are_read_as_before() -> None:
-    old = bench.score(_key_case(), {"findings": [_finding("X1"), _finding("X2", kind="advisory", line=9)],
-                                    "verdict": "no"})
-    assert old["detected"] == ["E1"] and old["detected_blocking"] == ["E1"] and old["unmatched_blocking"] == []
-    stage_a_line = {"case": "C1", "kind": "real_miss", "prompt": "short", "status": "completed", "verdict": "no",
-                    "score": {"detected": [], "location_only": [], "advisory_only": ["E1"], "unmatched_blocking": []}}
-    key = bench.AnswerKey([_key_case(case_id="C1")], 26, "m", "high", "k", {}, "p")
-    rows = [line for line in bench.report_rows([stage_a_line]) if line.startswith("| C1")]
-    assert rows == ["| C1 | real_miss | short | completed | no |  |  |  | E1 |  |  |  |"]
-    assert bench.compare_prompts([stage_a_line, {**stage_a_line, "prompt": "checklist"}], key)["paired"] == ["C1"]
+    r.canary_passed(cli="1.0.0 (Claude Code)")
+    assert _run(r) == 2 and r.calls() == 0
+    r.canary_passed()
+    assert _run(r) == 0 and r.calls() == 2
 
 
 def test_canary_asks_for_a_low_finding(tmp_path: Path) -> None:
@@ -438,50 +587,117 @@ def test_canary_asks_for_a_low_finding(tmp_path: Path) -> None:
     assert not any("advisory" in text for text in files.values())
 
 
-def test_runner_configurations_replace_the_mandate_and_carry_a_list(repo: tuple[Repo, str, str], tmp_path: Path) -> None:
-    _r, base, commit = repo
-    prepared, key = _prepared(repo, tmp_path, _case("C1", base, commit))
-    short = bench.stage_a_configuration(key, "short")
-    draft = bench.configuration("open-B+list", {"initial": "DRAFT MANDATE SENTENCE"})
-    full = bench.launcher.FULL_CONFIGURATION
-    assert len({full.name, short.name, draft.name}) == 3 and len({full.sha256, short.sha256, draft.sha256}) == 3
-    prompt = bench.build_case_prompt(prepared, key, "short", checklist="1. A STAGE LIST QUESTION")
-    assert "Short prompt." in prompt and bench.launcher.MANDATES["initial"] not in prompt
-    assert "A STAGE LIST QUESTION" in prompt
-    inputs = bench.launcher.ReviewInputs("c" * 40, "", "b", "d" * 40, "rules", {REVIEWED: ""}, {})
-    drafted = bench.launcher.build_prompt(inputs, bench.launcher.PromptParts(mode="initial", task="t"), draft,
-                                          diff_base="d" * 40)
-    assert "DRAFT MANDATE SENTENCE" in drafted and bench.launcher.MANDATES["initial"] not in drafted
+# --- Blinded confirmation and the report (S45-D7, S45-D8) ---------------------------------------
 
 
-def test_unmatched_high_finding_on_a_clean_case_is_a_false_alarm_not_a_false_blocker() -> None:
-    clean = _key_case(case_id="CL", kind="clean", expected=[])
-    key = bench.AnswerKey([clean], 26, "m", "high", "k", {}, "p")
-    scores = {"short": [_new_finding("X1", "high")], "checklist": [_new_finding("X1", "blocking")]}
-    lines = [{"case": "CL", "prompt": p, "status": "completed",
-              "score": bench.score(clean, {"findings": f, "accounted": [], "verdict": "no"})} for p, f in scores.items()]
-    totals = bench.compare_prompts(lines, key)["totals"]
-    assert totals["short"]["false_alarms"] == 1 and totals["short"]["false_blockers"] == 0
-    assert totals["checklist"]["false_alarms"] == 1 and totals["checklist"]["false_blockers"] == 1
-
-
-def test_report_shows_blocking_only_detections_beside_all_detections(repo: tuple[Repo, str, str]) -> None:
+def test_blinded_export_hides_the_configuration_and_shuffles_and_the_report_joins_back(repo: tuple[Repo, str, str]) -> None:
     r, base, commit = repo
+    r.key([_case(f"C{i}", base, commit) for i in range(4)])
+    r.canary_passed()
+    r.scenario(_reply([_new_finding("X1", "high"), _new_finding("X2", "blocking", line=3)]))
+    assert _run(r) == 0
+    assert bench.main(["--export-confirmation", "--seed", "7"], repo=r.root) == 0
+    text = (r.root / bench.EXPORT_FILE).read_text()
+    export = [json.loads(line) for line in text.splitlines()]
+    assert len(export) == 16 and "short+list" not in text and "open+list" not in text and "prompt_identity" not in text
+    run_order = [(line["case"], f["id"]) for line in r.results() if line.get("configuration") for f in line["findings"]]
+    assert [(e["case"], e["finding"]["id"]) for e in export] != run_order
+    private = [json.loads(line) for line in (r.root / bench.EXPORT_KEY_FILE).read_text().splitlines()]
+    verdicts = [{"token": p["token"], "verdict": "match" if p["configuration"] == "open+list" else "no match"}
+                for p in private]
+    _write(r.root, str(bench.VERDICT_FILES["author"]), "".join(json.dumps(v) + "\n" for v in verdicts))
+    report = bench.report_stage_b(r.root, bench.load_key(r.root))
+    assert "| open+list | 4 of 4 |" in report and "| short+list | 0 of 4 |" in report
+    assert "confirmed by the author's blinded verdicts" in report
+
+
+def test_report_gives_every_count_for_every_configuration(repo: tuple[Repo, str, str]) -> None:
+    r, base, commit = repo
+    r.key([_case("C1", base, commit), _case("CL", base, commit, kind="clean")])
+    r.canary_passed()
+    r.scenario(_reply([_new_finding("X1", "high")]))
+    assert _run(r) == 0
+    report = bench.report_stage_b(r.root, bench.load_key(r.root))
+    header = next(line for line in report.splitlines() if line.startswith("| Configuration"))
+    for column in ("Detected", "95% interval", "Detected (blocking)", "False alarms", "False blockers", "Failed",
+                   "Unread files", "Cost USD per detection", "Minutes per detection"):
+        assert column in header
+    rows = {line.split("|")[1].strip() for line in report.splitlines() if line.startswith("| ") and " of " in line}
+    assert rows >= {"short+list", "open+list"}
+    assert "| open+list | 1 of 1 |" in report and "1 (1)" in report  # one false alarm on the one clean review
+    for needle in ("Discordant cases, short+list against open+list", "Severity agreement", "Origin stage",
+                   "Canary:", "Second confirmer", "within chance"):
+        assert needle in report
+
+
+def test_exact_interval_matches_known_values() -> None:
+    low, high = bench.exact_interval(5, 10)
+    assert round(low, 3) == 0.187 and round(high, 3) == 0.813
+    assert bench.exact_interval(0, 10)[0] == 0.0 and bench.exact_interval(10, 10)[1] == 1.0
+    assert bench.exact_interval(0, 0) == (0.0, 1.0)
+
+
+def test_discordant_cases_are_named_per_side() -> None:
+    a = bench.ConfigurationCounts(per_case={"C1": True, "C2": False, "C3": True})
+    b = bench.ConfigurationCounts(per_case={"C1": False, "C2": True, "C3": True})
+    assert bench.discordant({"x": a, "y": b}, "x", "y") == {"only x": ["C1"], "only y": ["C2"]}
+
+
+def test_severity_agreement_and_origin_table_count_findings() -> None:
+    lines = [{"case": "C1", "configuration": "open+list", "status": "completed",
+              "findings": [_new_finding("X1", "high"), _new_finding("X2", "low")]},
+             {"case": "C1", "configuration": "open+list", "status": "completed",
+              "findings": [_new_finding("X1", "high"), _new_finding("X2", "medium")]}]
+    assert bench.severity_agreement(lines) == {"same": 1, "different": 1}
+    assert bench.origin_table(lines) == {"implementation": 4}
+
+
+# --- Runner paths (S45-D11, R5-A8) ---------------------------------------------------------------
+
+
+def test_dry_run_prepares_every_case_and_calls_no_reviewer(repo: tuple[Repo, str, str],
+                                                          capsys: pytest.CaptureFixture[str]) -> None:
+    r, base, commit = repo
+    r.key([_case("C1", base, commit), _case("CL", base, commit, kind="clean")])
+    assert bench.main(["--dry-run"], repo=r.root) == 0
+    assert r.calls() == 0 and "2 of 2 cases pass the leak search; 4 prompts built" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(("result", "expected"), [
+    ({"structured_output": {"findings": []}}, {"findings": []}),
+    ({"result": '{"findings": [], "verdict": "yes"}'}, {"findings": [], "verdict": "yes"}),
+    ({"result": "not json"}, None),
+], ids=["structured-output", "json-in-result", "unparseable"])
+def test_launcher_reads_each_report_shape(result: dict, expected: dict | None) -> None:
+    assert launcher.structured_reply(result) == expected
+
+
+def test_stream_lines_that_are_not_json_are_skipped() -> None:
+    stream = "not json\n" + json.dumps({"type": "result", "num_turns": 2}) + "\n[1, 2]\n"
+    assert launcher.parse_stream(stream).result == {"type": "result", "num_turns": 2}
+
+
+def test_benchmark_run_leaves_every_attempt_log_unchanged(repo: tuple[Repo, str, str]) -> None:
+    r, base, commit = repo
+    before = (r.root / LOG).read_text()
     r.key([_case("C1", base, commit)])
-    r.scenario({"reads": [REVIEWED], "result": {"structured_output": {
-        "findings": [_new_finding("X1", "high")], "accounted": [], "verdict": "no"}}})
-    assert bench.main(["--run"], repo=r.root) == 0
-    text = bench.report(r.root, bench.load_key(r.root))
-    table = text.splitlines()
-    header = [cell.strip() for cell in next(line for line in table if line.startswith("| Case")).split("|")]
-    row = [cell.strip() for cell in next(line for line in table if line.startswith("| C1 | real_miss | short")).split("|")]
-    assert row[header.index("Detected")] == "E1" and row[header.index("Detected (blocking)")] == ""
-    assert bench.COLUMN_NOTE in text
-    totals = bench.compare_prompts(r.results(), bench.load_key(r.root))["totals"]["short"]
-    assert totals["real_miss"] == 1 and totals["real_miss_blocking"] == 0
+    r.canary_passed()
+    assert _run(r) == 0
+    assert (r.root / LOG).read_text() == before
+    assert r.calls() == 2
 
 
-# --- Slice 4.2: the benchmark's inputs (test plan of poc-4-2-review-inputs, S42-D11) ------------------------------
+def test_a_usage_limit_stops_the_run_and_a_rerun_resumes_within_the_budget(repo: tuple[Repo, str, str]) -> None:
+    r, base, commit = repo
+    r.key([_case(f"C{i}", base, commit) for i in range(4)])
+    r.canary_passed()
+    r.scenario({}, {}, {"rate_limit": {"status": "rejected", "resetsAt": 5}})
+    assert _run(r) == 0
+    assert r.calls() == 4  # C0's two reviews, then C1's two, one of which paused; C2 and C3 never started
+    r.scenario({})
+    assert _run(r) == 0
+    completed = [(x["case"], x["configuration"]) for x in r.results() if x.get("status") == "completed"]
+    assert len(completed) == len(set(completed)) == 8
 
 
 def test_case_paths_come_first_the_diff_decides_the_rest_and_evidence_is_off(repo: tuple[Repo, str, str],
@@ -492,11 +708,11 @@ def test_case_paths_come_first_the_diff_decides_the_rest_and_evidence_is_off(rep
     commit = _commit_all(r.root, "two changed files")
     prepared, key = _prepared(repo, tmp_path, _case("C1", base, commit))
     assert prepared.files[0] == REVIEWED and "scripts/also_changed.py" in prepared.files
-    prompt = bench.build_case_prompt(prepared, key, "short")
+    prompt = bench.build_case_prompt(prepared, key, "open+list")
     paths = prompt.split("## Paths under review", 1)[1].split("## ", 1)[0]
     assert paths.index(REVIEWED) < paths.index("scripts/also_changed.py")
     upstream = prompt.split("## Upstream items", 1)[1].split("\n## ", 1)[0]
-    assert "Governing plan: none" in upstream and bench.launcher._INPUTS.UPSTREAM_QUESTION in upstream
+    assert "Governing plan: none" in upstream and launcher._INPUTS.UPSTREAM_QUESTION in upstream
     evidence = prompt.split("## Evidence", 1)[1].split("\n## ", 1)[0]
     assert bench.EVIDENCE_OFF in evidence and "EV1" not in evidence
 
@@ -511,3 +727,26 @@ def test_report_rows_show_a_canary_line_without_scores() -> None:
     rows = bench.report_rows([{"case": "CANARY", "kind": "canary", "status": "completed"}])
     assert rows[-1] == "| CANARY | canary | — | completed | | | | | | | | |"
     assert rows[-1].count("|") == rows[0].count("|")
+
+
+# --- The repository's own cases (S45-D5) ---------------------------------------------------------
+
+
+def test_the_dpl_010_case_holds_the_launcher_and_its_tests_and_not_its_answer(tmp_path: Path) -> None:
+    key = bench.load_key(ROOT)
+    case = next(c for c in key.cases if c.case_id == "RM-6")
+    prepared = bench.prepare_case(ROOT, case, tmp_path)
+    copy = prepared.copy_root
+    assert (copy / "scripts" / "run_independent_review.py").is_file()
+    assert (copy / "tests" / "tools" / "test_run_independent_review.py").is_file()
+    assert not (copy / "tests" / "review_benchmark").exists()
+    assert bench.leak_hits(prepared, key) == []
+    assert not any("DPL-010" in p.read_text(errors="replace") for p in copy.rglob("*.md"))
+
+
+def test_a_list_configuration_without_a_lists_commit_is_refused(repo: tuple[Repo, str, str]) -> None:
+    r, base, commit = repo
+    r.lists_commit = ""
+    r.key([_case("C1", base, commit)])
+    r.canary_passed()
+    assert _run(r) == 2 and r.calls() == 0

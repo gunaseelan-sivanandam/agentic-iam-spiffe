@@ -1,0 +1,13 @@
+diff --git a/trace/tests.yaml b/trace/tests.yaml
+index 43d4397..07c17e8 100644
+--- a/trace/tests.yaml
++++ b/trace/tests.yaml
+@@ -69,7 +69,7 @@ tests:
+ - id: E2E-M3-S4-SUITE
+   type: e2e_suite
+   source_requirements:
+-  - REQ-M4-E4
++  - REQ-M3-R18
+   location:
+     file: scripts/rogue_node_tests.sh
+     selector: TEST_PREFIX="M3.S4"
