@@ -6,9 +6,25 @@ it is the document's purpose line (`AGENTS.md`, coding rule 8).
 ## Goal
 - Describe the slice outcome in one paragraph.
 
-## Grill-Me Review Summary
-- Record the agreed design choices from the `grill-me` session.
-- Capture the important questions that were resolved and the final answer for each one.
+## Stages
+
+Each stage of `AGENTS.md`'s slice workflow applies, or is "none, with a reason".
+
+| Stage | Applies | Review list or reason |
+| --- | --- | --- |
+| Discovery | yes | `plan-and-test-plan` |
+| Requirements | yes, or none: <reason> | `requirements` |
+| Architecture and interfaces | yes, or none: <reason> | `architecture-and-interfaces` |
+| Tests first | yes, or none: <reason> | `unit-tests`, `e2e-tests` |
+| Implementation | yes, or none: <reason> | `code` |
+| Final review | yes | final mode, no list |
+| Handoff | yes | the user's approval |
+
+## Decisions
+
+| ID | Decision | Source |
+| --- | --- | --- |
+| <slice>-D1 | One decision per row; with a grill-me, the agreed answer to each question it resolved. | the user, <date>, <link> ("<the user's words>"); or default by the author: <reason> |
 
 ## Requirements
 - List the requirements that this slice adds, changes, narrows, or depends on.
@@ -53,6 +69,10 @@ it is the document's purpose line (`AGENTS.md`, coding rule 8).
 - For every new check or process step (gate, job, document, register, exception class, review
   step): the failure it catches, what it costs, and the simpler alternative that was considered.
   The user approves each addition. If the slice adds none, say so explicitly.
+
+## Rule deviations
+- One line per rule of `AGENTS.md` this slice does not follow: the rule, the deviation, the user's words
+  with the link, and the expiry. If none, say so explicitly.
 
 ## Retirement and compatibility
 - List what old logic, compatibility behavior, docs, tests, or artifacts must be removed or kept temporarily.

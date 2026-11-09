@@ -10,6 +10,13 @@ the document's purpose line (`AGENTS.md`, coding rule 8).
 - Link this test plan back to the approved `plan.md`.
 - List the requirements and agreed design choices this test plan covers.
 
+## Reviews per stage
+Each review gets its stage's list from `docs/review_checklists/` (`--stage`), read from the base branch:
+the plan review `plan-and-test-plan`, the requirements review `requirements`, the architecture review
+`architecture-and-interfaces`, the tests-first review `unit-tests` and `e2e-tests`, the implementation
+review `code`; the final review gets no list. The author reads the stage's list before writing that
+stage's artifact.
+
 ## Unit test plan
 - List the UT areas to add or change.
 - For each UT area, describe:
@@ -33,7 +40,7 @@ the document's purpose line (`AGENTS.md`, coding rule 8).
 | harness ID | component that must produce the outcome | exact outcome: status + `reason`, curl exit code, exact log line | positive control on the same route: a test ID, or `internal` (a premise in the same test) | `plan`, `probe@<commit>` (observed before the change), `existing@<commit>` | the loose check it replaces, or — |
 
 Every negative test has a twin. A `probe@` value is observed before any change; if it contradicts a
-`plan` value, stop for the user instead of changing the row (`AGENTS.md`, slice workflow step 2).
+`plan` value, stop for the user instead of changing the row (`AGENTS.md`, slice workflow, tests first).
 
 ## Assumptions and fixtures
 - List mock, live, or environment assumptions needed by the tests.

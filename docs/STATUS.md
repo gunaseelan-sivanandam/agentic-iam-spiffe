@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-11-10. Update this page at the end of every slice (see `AGENTS.md`, slice workflow step 4).
+Last updated: 2026-11-10. Update this page at the end of every slice (see `AGENTS.md`, slice workflow, handoff).
 Detailed history: [`docs/history/implementation_log.md`](history/implementation_log.md).
 
 ## Where the project stands

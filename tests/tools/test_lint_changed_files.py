@@ -375,8 +375,13 @@ def test_added_binary_file_is_skipped_without_an_error(repo: Repo) -> None:
     ("# Notes\n\n| a | b |\n", False),
     ("# Notes\n\n```\ncode\n```\n", False),
     ("# Notes\n\n<!-- comment -->\n", False),
+    ("---\nname: notes\n---\n\n# Notes\n\nNotes on the lint tests.\n", True),
+    ("---\nname: notes\n---\n\nNotes on the lint tests.\n", False),
+    ("---\nname: notes\n---\n", False),
+    ("---\nname: notes\n\n# Notes\n\nNotes on the lint tests.\n", False),
 ], ids=["title-and-paragraph", "no-title", "title-then-heading", "title-only", "title-then-list", "title-then-table",
-        "title-then-code", "title-then-html-comment"])
+        "title-then-code", "title-then-html-comment", "front-matter-then-title-and-paragraph",
+        "front-matter-then-no-title", "front-matter-only", "front-matter-never-closed"])
 def test_new_markdown_file_needs_a_title_and_a_purpose_paragraph(repo: Repo, text: str, passes: bool) -> None:
     repo.base({"README.md": "# Readme\n\nbase\n"})
     repo.change({"docs/notes.md": text})

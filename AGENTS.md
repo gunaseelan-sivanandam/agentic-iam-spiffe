@@ -18,6 +18,7 @@ the repo in the same change — do not leave them disagreeing.
 | How is it built, which runtime state exists? | [`docs/architecture.md`](docs/architecture.md) | authoritative |
 | What is the trust model, on one page? | [`docs/architecture.md` — Security model summary](docs/architecture.md#security-model-summary) | summary of the ARCH sections |
 | Which test proves which requirement? | [`trace/tests.yaml`](trace/tests.yaml) | authoritative |
+| How do I run a review, and where do its records live? | [Independent review](#independent-review): `scripts/run_independent_review.py`; each bundle's `review_attempts.jsonl` (attempt log) and `plan_review.md` or `review_<unit>.md` (review record); `scripts/review_brief.py` for the PR's decision brief | how-to |
 | What must each stage's review ask at least? | [`docs/review_checklists/`](docs/review_checklists/) | authoritative, read by the review launcher from the base branch |
 | What does each E2E or static test do, in plain English? | [`docs/test_spec.md`](docs/test_spec.md) | hand-written spec |
 | Unit-test requirement matrix (M4 trust gates) | [`docs/unit_test_spec.md`](docs/unit_test_spec.md) | authoritative, read by `make traceability-check` |
@@ -105,7 +106,10 @@ them.
   author searches for the same cause elsewhere and says where it looked
   ([DPL-007](docs/delivery_problem_log.md#dpl-007-plan-review-answered-every-finding-by-adding-mechanisms)).
   The review ends when every blocking and high finding is fixed, accepted as rejected, or decided by
-  the user.
+  the user. Only the user waives a blocker that is still disputed. The author asks the user before
+  round 4 when a finding conflicts with an approved decision, or when rechecks re-raise the answer to
+  the same finding in two rounds in a row (status `re-raised` under `accounted`; a re-raised finding
+  keeps its ID).
 
 ## Operating model (black-box first)
 - Treat the system as a black box first:
@@ -161,53 +165,123 @@ few lines), tests first, an independent review and the close-out, but not every 
 template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>/`, starts from
 `docs/slices/_template/`, and gets a row in the [slice index](docs/slices/README.md).
 
-1. **Plan and review.** Run the `grill-me` skill and resolve design choices one branch at a time.
-   Grill-me always asks which keys, sockets and secrets the slice touches and who may hold them,
-   against the holders in `security/invariants.yaml`.
-   Write `plan.md` (decisions, requirements to add or change, hidden-state decisions, assets and
-   holders, environment facts, rulebook changes, scope, out-of-scope, retirement) and
-   `test_plan.md` (UT and E2E derived from the decisions). A decision that depends on a fact outside
-   the repository (file ownership, an API, CI history) records the probe and its result under
-   environment facts; never assume it. An [independent review](#independent-review) of both runs
-   before the user sees them. The user approves the plan by merging the plan PR; implement only from
-   the plan as merged on the integration branch (see [Git rules](#git-rules)). On a branch that
-   changes the rulebook (this file, `tests/unit/AGENTS.md`) or the slice templates, the author works
-   by the base branch's version until the change merges.
-2. **Tests first.** Add UT/E2E only from the reviewed `test_plan.md`. Update requirements,
-   architecture, and `trace/tests.yaml` before making runtime code pass. If a test needs a new
-   assumption, return to step 1.
-   - Each expected outcome comes from the approved plan, from a probe of the stack *before* the
-     change (`probe@<commit>`), or from an existing assertion (`existing@<commit>`); never from
-     watching the new implementation run. If a probe contradicts a value the plan approved, stop
-     and ask the user; do not adjust the row.
-   - Every negative E2E test names a positive twin: the allowed case on the same route, which must
-     pass in the same run (another test ID, or `internal` when a premise of the same test performs
-     it).
-   - A requirement may be proved statically, by a gate whose tooling tests show it fails on each
-     kind of violation (as `make qa-deploy` proves the `REQ-SEC` requirements), where a runtime
-     test would add nothing; the plan says which. It gets a static test entry in `trace/tests.yaml`
-     and a heading in `docs/test_spec.md`.
-3. **Implement.** Only approved behavior. Remove the dead code, stale paths, and artifacts that
-   `plan.md` lists for retirement.
-4. **Verify and close.** All of the following, in the same change:
-   - run `make qa-quality` (includes `qa-trace`, `docs-check`, `test-lint` and `qa-deploy`), the full E2E suite on a clean
-     stack (`scripts/clean_stack.sh`, then `make e2e`), and `make qa-evidence`; the `e2e` CI check runs the same
-     suite on the PR;
-   - **update `docs/test_spec.md` by hand** for every E2E or static test added or changed — plain
-     English, not code: what it tests, how (premise, exercise, outcome, or the gate's check), and
-     the evidence or result it leaves. Each test gets a heading `### <ID> — “<name>”`; `make
-     docs-check` fails on a missing or stale heading, but it cannot judge the prose, so review it;
-   - add a dated entry to `docs/history/implementation_log.md` (what changed, validation results,
-     what was not run and why);
-   - update `docs/STATUS.md` and the slice's row in `docs/slices/README.md`;
-   - add or close entries in `docs/open_problem_log.md` for problems inside the threat model found
-     or fixed, and in `docs/delivery_problem_log.md` for delivery misses (a step skipped, a false
-     claim, a review miss) found or fixed;
-   - open a GitHub issue for work found but not done (label `slice` or `user-action`) and lock its
-     conversation right away, and close the issues the change finishes (`Closes #N` in the PR body);
-   - put the independent review's answers to the implementation questions, and every discovered
-     issue with its disposition (see [PoC scope and proportion](#poc-scope-and-proportion)), in the
-     PR body.
+A slice passes seven stages, in this order. The plan's stage table says for each whether it applies;
+a stage that does not apply is marked "none, with a reason". Each review is an
+[independent review](#independent-review) with the stage's checklist from
+[`docs/review_checklists/`](docs/review_checklists/) (`--stage`), and each review unit has its own round
+limit (the [review loop](#poc-scope-and-proportion)).
+
+| Stage | Produces | Review | Checks | Exit |
+| --- | --- | --- | --- | --- |
+| Discovery | `plan.md` and `test_plan.md` | plan review, list `plan-and-test-plan` | `make docs-check`, `make lint` | the plan review has no blocking or high finding open, and the user merges the plan PR |
+| Requirements | new or changed `REQ` items in `docs/requirements.md` and their entries in `trace/tests.yaml` | requirements review, list `requirements` | `make qa-trace`, `make docs-check` | the review has no blocking or high finding open |
+| Architecture and interfaces | `ARCH` sections and the state inventory of `docs/architecture.md`, and `security/invariants.yaml` | architecture review, list `architecture-and-interfaces` | `make qa-trace`, `make qa-deploy` | the review has no blocking or high finding open |
+| Tests first | unit and E2E tests from the reviewed test plan, and their `docs/test_spec.md` entries | tests-first review, lists `unit-tests` and `e2e-tests` | `make tooling-test`, `make test-lint`, `make unit-guard-check`, `make docs-check` | each new test fails on the base code for the reason it exists, and the review has no blocking or high finding open |
+| Implementation | the code and configuration the plan approved, with what it retires removed | implementation review, list `code` | every gate of [Quality gates](#quality-gates), the full E2E suite on a clean stack, `make qa-evidence` | every gate's CI job passes on the PR, and the review has no blocking or high finding open |
+| Final review | the record of the unit `final` | final review, 4.1's final mode, no list | the decision brief, `scripts/review_brief.py` | no blocking or high finding open |
+| Handoff | the PR body: the decision brief, the review answers, every discovered issue with its disposition | the user's approval | the CI result of the PR's head commit | the user merges |
+
+### Discovery
+
+- When the design or approach is not clear, run the grill-me skill
+  ([`.claude/skills/grill-me/SKILL.md`](.claude/skills/grill-me/SKILL.md)) and resolve design choices one
+  branch at a time; it is a prompt, versioned and reviewed like any other. Grill-me always asks which
+  keys, sockets and secrets the slice touches and who may hold them, against the holders in
+  `security/invariants.yaml`. When the design is clear, no grill-me is needed: the plan lists every
+  decision with its source, either the user with the date, a link and the user's words quoted
+  (reviewers cannot open GitHub), or "default by the author" with a reason, and the user confirms
+  the defaults by approving the plan. The plan's "Assets and holders" section answers the keys,
+  sockets and secrets question either way.
+- Write `plan.md` (the stage table, decisions with their sources, requirements to add or change,
+  hidden-state decisions, assets and holders, environment facts, rulebook changes, rule deviations,
+  scope, out-of-scope, retirement) and `test_plan.md` (unit and E2E tests derived from the
+  decisions, and each stage's list). A decision that depends on a fact outside the repository (file
+  ownership, an API, CI history) records the probe and its result under environment facts; never
+  assume it. A rule the slice does not follow is one line under "Rule deviations": the rule, the
+  deviation, the user's words with the link, and the expiry.
+- The plan review of both files runs before the user sees them. The user approves the plan by
+  merging the plan PR; implement only from the plan as merged on the integration branch (see
+  [Git rules](#git-rules)). On a branch that changes the rulebook (this file, `tests/unit/AGENTS.md`)
+  or the slice templates, the author works by the base branch's version until the change merges.
+- When the user chooses it for a slice, a slice may hold several sub-issues. They share one plan PR,
+  which the user approves once, and one final PR with a section per sub-issue. Each sub-issue keeps
+  its own review units (plan, implementation) with their own round limits, and the slice has one
+  final review unit.
+
+### Requirements, and architecture and interfaces
+
+- Requirements and architecture are written and reviewed at their own stage, before tests and code
+  are built on them; requirements, architecture and `trace/tests.yaml` are updated before runtime
+  code is made to pass.
+- When an upstream document is corrected after a downstream unit reviewed it, that unit's next round
+  reviews the correction. The round counts against its limit, since a new revision keeps the count;
+  a unit that had ended reopens with its next round number, and beyond round 4 the user decides, as
+  for any extension. The reopened unit's review record notes the reopening and the corrected
+  document.
+
+### Tests first
+
+- Add unit and E2E tests only from the reviewed `test_plan.md`. If a test needs a new assumption,
+  return to discovery.
+- Interface skeletons exist before the tests, so a red test fails for the reason it exists. The
+  implementation log lists, for each new test, the failure it showed on the base code (the command
+  and the first failure line).
+- Each expected outcome comes from the approved plan, from a probe of the stack *before* the change
+  (`probe@<commit>`), or from an existing assertion (`existing@<commit>`); never from watching the
+  new implementation run. If a probe contradicts a value the plan approved, stop and ask the user;
+  do not adjust the row.
+- Every negative E2E test names a positive twin: the allowed case on the same route, which must pass
+  in the same run (another test ID, or `internal` when a premise of the same test performs it).
+- Every fail-closed path of a security decision gets a test that triggers it, and in
+  capability-issuer and tool-b a mutant that the tests kill (`make unit-mutation`).
+- A requirement may be proved statically, by a gate whose tooling tests show it fails on each kind
+  of violation (as `make qa-deploy` proves the `REQ-SEC` requirements), where a runtime test would
+  add nothing; the plan says which. It gets a static test entry in `trace/tests.yaml` and a heading in
+  `docs/test_spec.md`.
+- **Update `docs/test_spec.md` by hand** for every E2E or static test added or changed — plain
+  English, not code: what it tests, how (premise, exercise, outcome, or the gate's check), and the
+  evidence or result it leaves. Each test gets a heading `### <ID> — “<name>”`; `make docs-check`
+  fails on a missing or stale heading, but it cannot judge the prose, so review it.
+
+### Implementation
+
+- Only approved behavior. Remove the dead code, stale paths, and artifacts that `plan.md` lists for
+  retirement.
+- Run `make qa-quality` (includes `qa-trace`, `docs-check`, `test-lint` and `qa-deploy`), the full E2E
+  suite on a clean stack (`scripts/clean_stack.sh`, then `make e2e`), and `make qa-evidence`; the
+  `e2e` CI check runs the same suite on the PR.
+
+### Final review
+
+- One unit `final` per slice, run in 4.1's final mode: the open question "What did everyone before
+  you miss?", including any tracked document the change made false, with all the evidence and no
+  question list. Its finding history is the other units' review records, which are in its copy. Its
+  later rounds are rechecks.
+
+### Handoff
+
+All of the following, in the same change:
+- add a dated entry to `docs/history/implementation_log.md` (what changed, validation results, what
+  was not run and why);
+- update `docs/STATUS.md`, which shows the open PoC work in its "needed before" order, and the
+  slice's row in `docs/slices/README.md`;
+- add or close entries in `docs/open_problem_log.md` for problems inside the threat model found or
+  fixed, and in `docs/delivery_problem_log.md` for delivery misses (a stage skipped, a false claim, a
+  review miss) found or fixed;
+- turn work found but not done into a GitHub issue (label `slice` or `user-action`) whose body starts
+  with "Needed before: <point>" and whose conversation is locked right away, or into a comment on the
+  issue it belongs to; findings fixed or rejected in the PR, and notes outside the threat model, are
+  not issues ("Few exceptions"). Close the issues the change finishes (`Closes #N` in the PR body);
+- open the PR body with the decision brief that `scripts/review_brief.py` builds from the attempt logs
+  and review records of the units in the PR (each unit's last verdict and severity counts; every
+  `owner:` answer, decision concern, `cannot determine` answer and finding still disputed; every
+  blocking or high finding answered `rejected`, with its reason; the origin stage against the stage
+  that found each finding; the CI result of the PR's head commit). The user reads the plans and
+  records where the brief points;
+- put the implementation review's answers to the test-plan questions, every discovered issue with
+  its disposition (see [PoC scope and proportion](#poc-scope-and-proportion)) and each issue's link in
+  the PR body. The issue is the home of its status; the PR body is a snapshot and is not updated
+  later.
 
 ### Independent review
 - **Reviewer.** Never the author: a fresh headless Claude session confined to a frozen copy of the
@@ -265,7 +339,7 @@ template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>
   Claude; when a usage limit is reached, work pauses until it resets. The default reviewer model is
   Claude Opus, by the user's reasoned choice of 2026-11-09; slice 4's benchmark measures prompts, not
   models.
-- **Plan review** (step 1). The reviewer reviews `plan.md` and `test_plan.md` for security, test
+- **Plan review** (discovery). The reviewer reviews `plan.md` and `test_plan.md` for security, test
   adequacy and consistency, under [PoC scope and proportion](#poc-scope-and-proportion).
   `docs/slices/<id>/plan_review.md` keeps each round's report verbatim, the SHA-256 of the files
   reviewed, and the author's answers (in the review loop's table) separately. Each round ends with
@@ -275,7 +349,7 @@ template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>
   The plan states the threat model the reviewer judges against: the
   [delivery threat model](#poc-scope-and-proportion) applied to the slice's own change, and the
   system-under-test threat the slice touches.
-- **Implementation review** (step 4). The reviewer answers the questions in the test-plan template
+- **Implementation review** (implementation). The reviewer answers the questions in the test-plan template
   (`docs/slices/_template/test_plan.md`: which wrong failure would still pass each new or changed
   test, whether a key, socket or secret now reaches a service outside its holders, and whether each
   new file's purpose comment and names say what it does) in the PR body. A "yes" to the first two
@@ -317,7 +391,7 @@ never replaces it.
 | Diff coverage | `make unit-diff-cov` | CI, PRs only (own job) | ≥ 90% of changed lines in `services/capability-issuer/` and `services/tool-b/` |
 | Mutation | `make unit-mutation` | CI | score ≥ 70% (capiss and tool-b), counting untested and skipped mutants as not killed; an empty run fails |
 | Gate consistency | `make gate-consistency` | CI | every row this table marks as enforced by CI has a CI job of the same name that runs `make <name>`; every CI job has such a row; every CI job is a required check of the integration branch's ruleset (`RULESET_URL` in the `Makefile`) and every required check is a job (the ruleset is read from the public GitHub API; a failed read fails) |
-| Full E2E suite | `make e2e` | CI, every push/PR; and local on a clean stack, required in step 4 | all pass; warnings reviewed. The CI job then runs `make qa-deploy` with image users inspected and `make qa-evidence`, and uploads the publication set for 14 days only if the secret check found nothing |
+| Full E2E suite | `make e2e` | CI, every push/PR; and local on a clean stack, required at the implementation stage | all pass; warnings reviewed. The CI job then runs `make qa-deploy` with image users inspected and `make qa-evidence`, and uploads the publication set for 14 days only if the secret check found nothing |
 | E2E evidence | `make qa-evidence` | in the CI `e2e` job; local, after the E2E run | every test has premise/exercise/outcome evidence and a PASS line; no file of the publication set (`PUBLICATION_SET` in the `Makefile`: `test_report.log`, `artifacts/rogue-tests/`, `artifacts/quality/`) holds a secret by shape: a PEM private key, a base64 PKCS#8 private key, base64 of a PEM private key, a base64 or base64url run of ≥ 200 characters with ≥ 20 distinct ones outside certificates, a `JIRA_API_TOKEN=` or `Authorization:` line with a token-like value (20 characters or more, or a digit), or an Atlassian API token; an unreadable file fails; a finding names the file and kind, never the value |
 
 Standards that are **not** gated yet (follow them for new and changed code):

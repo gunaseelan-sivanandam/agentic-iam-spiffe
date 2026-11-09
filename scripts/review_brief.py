@@ -1,0 +1,298 @@
+"""The decision brief that opens a plan PR or a final PR (agentic-sdlc-poc slice 4.6, S46-D13).
+
+It reads the attempt logs and review records of the review units a PR adds (the attempts logged since the merge-base
+with the base branch) and writes Markdown for the top of the PR body:
+
+- each unit's last verdict and its findings by severity;
+- every finding answered `owner:`, every decision concern, every recheck answer marked `cannot determine`, and every
+  finding still disputed after its recheck;
+- the blocking and high findings answered `rejected`, with their reasons;
+- the origin stage of each finding against the review that found it (S41-D16);
+- the CI result of the head commit, from the public GitHub API without a token. When it cannot be read, when there is
+  no run, or while a job is still running, the brief says so and never shows a pass.
+
+It writes no brief, and fails, when a record does not hold what its attempt log says (`scripts/check_review_records.py`)
+or when a released report has a finding without an answer, so the brief cannot omit what the records hold. It reads the
+working tree, so it runs on a clean checkout of the PR's head.
+
+Usage: python3 scripts/review_brief.py --base origin/poc/agentic-sdlc [--head HEAD]
+"""
+
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+import subprocess
+import sys
+import urllib.error
+from collections import Counter
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
+LOG_NAME = "review_attempts.jsonl"
+SEVERITIES = ("blocking", "high", "medium", "low")
+Fetch = Callable[[str], Any]
+
+
+def _load(name: str) -> Any:
+    spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / f"{name}.py")
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load scripts/{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault(name, module)  # dataclasses resolve their module by name
+    spec.loader.exec_module(module)
+    return module
+
+
+checker = _load("check_review_records")
+launcher = checker.launcher
+records = checker.records
+inputs = launcher._INPUTS
+
+
+class BriefError(Exception):
+    """The records cannot give a complete brief; nothing is written."""
+
+
+@dataclass
+class Attempt:
+    """One logged attempt of a unit, with its released report and the author's answers to it, as the record holds."""
+
+    start: dict[str, Any]
+    end: dict[str, Any] | None
+    report: dict[str, Any] | None = None
+    answers: list[Any] = field(default_factory=list)
+
+    @property
+    def completed(self) -> bool:
+        return (self.end or {}).get("status") == "completed"
+
+
+@dataclass
+class Unit:
+    """A review unit of the PR: its bundle, name and count, and its attempts in the order they were logged."""
+
+    bundle: str
+    name: str
+    count: int
+    attempts: list[Attempt] = field(default_factory=list)
+
+    @property
+    def label(self) -> str:
+        suffix = f" (count {self.count})" if self.count > 1 else ""
+        return f"`{Path(self.bundle).name}` `{self.name}`{suffix}"
+
+    def reported(self) -> list[Attempt]:
+        return [a for a in self.attempts if a.completed and a.report is not None]
+
+
+def git(repo: Path, *args: str) -> str:
+    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=False)  # noqa: S603, S607 - fixed argv, no shell
+    if result.returncode != 0:
+        raise BriefError(f"git {args[0]} failed: {result.stderr.strip()[:200]}")
+    return result.stdout
+
+
+def _entries(text: str) -> list[dict[str, Any]]:
+    return [json.loads(line) for line in text.splitlines() if line.strip()]
+
+
+def changed_logs(repo: Path, merge_base: str, head: str) -> list[str]:
+    names = git(repo, "diff", "--name-only", merge_base, head, "--", "docs/slices").split()
+    return sorted(n for n in names if Path(n).name == LOG_NAME and (repo / n).is_file())
+
+
+def units_of_log(repo: Path, log: str, merge_base: str) -> list[Unit]:
+    """The units whose attempts this PR logged: the start entries the log at the merge-base does not hold."""
+    before = subprocess.run(["git", "-C", str(repo), "show", f"{merge_base}:{log}"],  # noqa: S603, S607 - fixed argv
+                            capture_output=True, text=True, check=False).stdout
+    known = {e["attempt"] for e in _entries(before) if e.get("event") == "start"}
+    entries = _entries((repo / log).read_bytes().decode("utf-8"))
+    ends = {e["attempt"]: e for e in entries if e.get("event") == "end"}
+    units: dict[tuple[str, int], Unit] = {}
+    for start in (e for e in entries if e.get("event") == "start" and e["attempt"] not in known):
+        unit = units.setdefault((start["unit"], start.get("count", 1)),
+                                Unit(str(Path(log).parent), start["unit"], start.get("count", 1)))
+        unit.attempts.append(_attempt(repo, start, ends.get(start["attempt"])))
+    return list(units.values())
+
+
+def _attempt(repo: Path, start: dict[str, Any], end: dict[str, Any] | None) -> Attempt:
+    record = repo / checker.record_of(start)
+    text = record.read_bytes().decode("utf-8") if record.is_file() else ""
+    section = records.parse_record(text)[0].get(start["attempt"])
+    block = section.blocks.get("report") if section else None
+    answers = launcher.answers_section(text, start["attempt"])
+    return Attempt(start, end, json.loads(block) if block else None, launcher.answer_rows(answers) if answers else [])
+
+
+def integrity_problems(repo: Path, logs: list[str], units: list[Unit]) -> list[str]:
+    """What would make the brief omit something: the record check's problems for these logs, and, for attempts the
+    record check does not cover (logged before slice 4.3), a missing Report block or a finding without its answer."""
+    problems = [p for log in logs for p in checker.check_log(repo, repo / log)]
+    for unit in units:
+        for attempt in (a for a in unit.attempts if a.completed):
+            name = f"{unit.bundle}: {attempt.start['attempt']}"
+            if attempt.report is None:
+                problems.append(f"{name}: completed, but its record holds no Report block")
+            elif attempt.report.get("findings") and not attempt.answers:
+                problems.append(f"{name}: its report has findings and the record has no answers to it")
+            else:
+                problems += [f"{name}: {p}" for p in launcher.answer_table_problems(attempt.report, attempt.answers)]
+    return sorted(set(problems))
+
+
+@dataclass
+class Brief:
+    """What the brief shows, collected from the units."""
+
+    rows: list[str] = field(default_factory=list)
+    owner: list[str] = field(default_factory=list)
+    concerns: list[str] = field(default_factory=list)
+    undetermined: list[str] = field(default_factory=list)
+    disputed: list[str] = field(default_factory=list)
+    rejected: list[str] = field(default_factory=list)
+    origins: Counter[tuple[str, str]] = field(default_factory=Counter)
+
+
+def _answer_to(attempt: Attempt, finding: str) -> Any:
+    return next((row for row in attempt.answers if row.finding == finding), None)
+
+
+def _found_by(unit: Unit, attempt: Attempt) -> str:
+    stages = attempt.start.get("stages") or {}
+    return ", ".join(sorted(stages)) if stages else unit.name
+
+
+def _unit_row(unit: Unit, brief: Brief, open_before: int) -> str:
+    reported = unit.reported()
+    last = (reported[-1].end or {}).get("verdict", "—") if reported else "no completed attempt"
+    counts = Counter(f["severity"] for a in reported for f in a.report.get("findings", []))  # type: ignore[union-attr]
+    rounds = max((a.start["round"] for a in unit.attempts), default=0)
+    opened = len(brief.owner) + len(brief.concerns) + len(brief.undetermined) + len(brief.disputed) - open_before
+    cells = [unit.label, str(last), str(rounds), *(str(counts.get(s, 0)) for s in SEVERITIES),
+             "nothing open" if opened == 0 else f"{opened} for the owner"]
+    return "| " + " | ".join(cells) + " |"
+
+
+def _collect_findings(unit: Unit, brief: Brief) -> None:
+    for attempt in unit.reported():
+        for finding in attempt.report.get("findings", []):  # type: ignore[union-attr]
+            row = _answer_to(attempt, finding["id"])
+            answer = row.answer if row else "(no answer)"
+            word = launcher.answer_word(answer) if row else None
+            where = f"{unit.label} {finding['id']} ({finding['severity']})"
+            brief.origins[(finding.get("origin_stage", "unknown"), _found_by(unit, attempt))] += 1
+            if finding.get("kind") == "decision_concern":
+                brief.concerns.append(f"{where}: {answer}")
+            elif word == "owner":
+                brief.owner.append(f"{where}: {answer}")
+            if word == "rejected" and finding["severity"] in ("blocking", "high"):
+                brief.rejected.append(f"{where}: {answer}")
+
+
+def _collect_rechecks(unit: Unit, brief: Brief) -> None:
+    """`cannot determine` answers, and findings a recheck re-raised whose latest answer is again `rejected:`."""
+    reraised: dict[str, Attempt] = {}
+    for attempt in unit.reported():
+        for entry in attempt.report.get("accounted", []):  # type: ignore[union-attr]
+            if entry.get("status") == "cannot determine":
+                brief.undetermined.append(f"{unit.label} {entry['item']}: {entry.get('note', '')}")
+            elif entry.get("status") == "re-raised":
+                reraised[entry["item"]] = attempt
+            elif entry.get("status") == "accepted":
+                reraised.pop(entry["item"], None)
+    for finding, attempt in sorted(reraised.items()):
+        row = _answer_to(attempt, finding)
+        if row is not None and launcher.answer_word(row.answer) == "rejected":
+            brief.disputed.append(f"{unit.label} {finding}: re-raised by the recheck, answered again: {row.answer}")
+
+
+def summarise(units: list[Unit]) -> Brief:
+    brief = Brief()
+    for unit in units:
+        before = len(brief.owner) + len(brief.concerns) + len(brief.undetermined) + len(brief.disputed)
+        _collect_findings(unit, brief)
+        _collect_rechecks(unit, brief)
+        brief.rows.append(_unit_row(unit, brief, before))
+    return brief
+
+
+def ci_line(repo: Path, head: str, fetch: Fetch) -> str:
+    """The CI result of the head commit. Only a run whose every job completed with success is a pass."""
+    owner_repo = inputs.github_repo(repo)
+    if owner_repo is None:
+        return f"CI of `{head[:12]}`: cannot be read: the origin remote is not a GitHub repository."
+    api = f"https://api.github.com/repos/{owner_repo[0]}/{owner_repo[1]}/actions/runs"
+    try:
+        runs = [r for r in fetch(f"{api}?head_sha={head}&per_page=50").get("workflow_runs", []) if r.get("head_sha") == head]
+        jobs = [j for r in runs for j in fetch(f"{api}/{r['id']}/jobs?per_page=100").get("jobs", [])]
+    except (OSError, ValueError, KeyError, AttributeError, urllib.error.URLError) as exc:
+        return f"CI of `{head[:12]}`: cannot be read ({type(exc).__name__}); not a pass."
+    if not runs or not jobs:
+        return f"CI of `{head[:12]}`: no run{' with jobs' if runs else ''} for this commit; not a pass."
+    running = sorted(j.get("name", "?") for j in jobs if j.get("status") != "completed")
+    failed = sorted(f"{j.get('name', '?')} ({j.get('conclusion')})" for j in jobs
+                    if j.get("status") == "completed" and j.get("conclusion") != "success")
+    if running:
+        return f"CI of `{head[:12]}`: still running: {', '.join(running)}; not a pass yet."
+    if failed:
+        return f"CI of `{head[:12]}`: not passed: {', '.join(failed)}."
+    return f"CI of `{head[:12]}`: passed, all {len(jobs)} jobs."
+
+
+def _items(title: str, items: list[str]) -> list[str]:
+    return [f"**{title}**", "", *([f"- {item}" for item in items] or ["None."]), ""]
+
+
+def render(brief: Brief, ci: str, head: str, merge_base: str) -> str:
+    lines = ["## Decision brief", "",
+             f"Built by `scripts/review_brief.py` from the review units this PR adds (head `{head[:12]}`, merge-base "
+             f"`{merge_base[:12]}`). The plans and records are worth reading where this brief points.", "",
+             "| Unit | Last verdict | Rounds | Blocking | High | Medium | Low | Open |",
+             "| --- | --- | --- | --- | --- | --- | --- | --- |", *brief.rows, ""]
+    lines += _items("Answered `owner:`", brief.owner) + _items("Decision concerns", brief.concerns)
+    lines += _items("`cannot determine` in a recheck", brief.undetermined)
+    lines += _items("Still disputed after a recheck", brief.disputed)
+    lines += _items("Blocking and high findings answered `rejected`", brief.rejected)
+    found_by = sorted({f for _o, f in brief.origins})
+    lines += ["**Where findings started** (origin stage against the review that found them)", ""]
+    if brief.origins:
+        lines += ["| Origin | " + " | ".join(found_by) + " |", "| --- |" + " --- |" * len(found_by)]
+        for origin in sorted({o for o, _f in brief.origins}):
+            lines.append(f"| {origin} | " + " | ".join(str(brief.origins.get((origin, f), 0)) for f in found_by) + " |")
+    else:
+        lines.append("No findings.")
+    return "\n".join([*lines, "", ci, ""])
+
+
+def build(repo: Path, base: str, head: str, fetch: Fetch) -> str:
+    merge_base = git(repo, "merge-base", base, head).strip()
+    head_sha = git(repo, "rev-parse", head).strip()
+    logs = changed_logs(repo, merge_base, head_sha)
+    units = [unit for log in logs for unit in units_of_log(repo, log, merge_base)]
+    problems = integrity_problems(repo, logs, units)
+    if problems:
+        raise BriefError("the records cannot give a complete brief:\n" + "\n".join(f"  - {p}" for p in problems))
+    return render(summarise(units), ci_line(repo, head_sha, fetch), head_sha, merge_base)
+
+
+def main(argv: list[str] | None = None, repo: Path = ROOT, fetch: Fetch = inputs.fetch_json) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--base", required=True, help="the base branch ref, for example origin/poc/agentic-sdlc")
+    parser.add_argument("--head", default="HEAD")
+    args = parser.parse_args(argv)
+    try:
+        print(build(repo, args.base, args.head, fetch))
+    except BriefError as error:
+        print(f"[review-brief] FAILED: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
