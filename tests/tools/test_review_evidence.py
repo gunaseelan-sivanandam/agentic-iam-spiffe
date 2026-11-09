@@ -569,3 +569,15 @@ def test_evidence_that_cannot_be_prepared_refuses_before_any_call(ev: base.Fixtu
     _change(ev, **{"scripts/tool.py": TOOL_CHANGED})
     assert base._run(ev) == 2
     assert ev.calls() == [] and ev.log() == []
+
+
+def test_ci_of_a_repository_without_a_github_origin_is_shown_as_failed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(evidence_module, "github_repo", lambda _repo: None)
+    evidence = evidence_module.Evidence()
+    evidence_module.ci_evidence(evidence, ROOT, "c" * 40, lambda _url: pytest.fail("no API call without a repository"))
+    assert evidence.entries == [f"EV1: failed: {evidence_module.CI_COMMAND}: the origin remote is not a GitHub repository"]
+    assert evidence.status["ci"] == "failed"
+
+
+def test_ranges_of_no_lines_is_empty() -> None:
+    assert evidence_module._ranges([]) == ""
