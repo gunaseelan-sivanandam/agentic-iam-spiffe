@@ -7,7 +7,7 @@ file current during the run and says in it what was decided on the owner's behal
 checklists, the benchmark counts, every decision concern, every parked unit, every process-growth proposal and
 every discovered issue with its disposition.
 
-Last updated: 2026-11-10, 4.1 and 4.2 reviewed; 4.3 in review (round 1 answered).
+Last updated: 2026-11-10, 4.1 to 4.3 reviewed; 4.5a in progress.
 
 ## Goal (the owner's, 2026-11-09)
 
@@ -87,8 +87,9 @@ Parked units, decision concerns and growth proposals collect below as the run go
 | --- | --- | --- |
 | 4.1 | Implemented (`59d0291` to `9413020`) | Ended after round 2. Round 1: approvable; 0 blocking, 2 high, 6 medium, 5 low. Round 2: attempt 1 failed the read check (issue 5); attempt 2 accepted all 13 answers and found nothing new |
 | 4.2 | Implemented (`381dc2b` to the round-2 fix) | Ended after round 2. Round 1: approvable; 0 blocking, 3 high, 4 medium, 3 low. Round 2: all 10 answers accepted, the 3 evidence entries explained; 1 new low finding, fixed |
-| 4.3 | Implemented (`89b8f2b` to the round-1 fixes) | Round 1: attempt 1 failed the schema check (issue 6); attempt 2 not approvable: 2 blocking, 1 high, 3 medium, 2 low; all answered; round 2 next |
-| 4.4 to 4.6 | Not started | — |
+| 4.3 | Implemented (`89b8f2b` to the round-2 fixes) | Ended after round 2. Round 1: attempt 1 failed the schema check (issue 6); attempt 2 not approvable: 2 blocking, 1 high, 3 medium, 2 low. Round 2: approvable; all 8 answers accepted; 2 new low findings, fixed |
+| 4.5a | In progress | — |
+| 4.4, 4.5b, 4.6 | Not started | — |
 
 ## Decided by the author during the run
 
@@ -148,7 +149,6 @@ a decision concern below instead.
 | # | Kind | Part | Item | The author's recommendation |
 | --- | --- | --- | --- | --- |
 | 1 | Decision concern | 4.1 | S41-D8 makes a recheck read only the files a `fixed:` answer names. A `rejected:` answer that rests on a file ("already covered by `tests/…::test_x`") can be accepted without opening it, though the recheck mandate says to open "the tests that cover them" (4.1 review round 1, R1-5) | Extend the read check to every repository path any answer names; it is a few lines on data the launcher already has. Implemented as written until the owner decides |
-
 | 2 | Decision concern | 4.3 | S43-D3 fails a record whose answers changed after a recheck read them, and S43-D4 settles a rejected blocking or high finding only by the next round's acceptance or an `owner:` link. Read narrowly, a rejection the recheck re-raised could never be decided by the owner without editing answers the recheck read, and `make docs-check` would stay red (4.3 review round 1, R1-3). The check is also red between the answers commit and the recheck, by design | Keep the implemented reading: a later round's `owner:` answer to the same finding ID settles it. Confirm, or choose another way to record the owner's decision |
 
 No unit is parked, and no process growth is proposed yet.
@@ -161,8 +161,8 @@ No unit is parked, and no process growth is proposed yet.
 | 2 | Stage A's benchmark prompts (`tests/review_benchmark/prompts/short.md`, `checklist.md`) still tell the reviewer to use the kinds "blocking" and "advisory", which the new schema rejects | 4.1 review round 1, R1-3 | Deferred to 4.5a (#42), which builds stage B's `short+list` from the short prompt; stage A's files stay as measured |
 | 3 | The launcher computed the start entry's mandate hash apart from the prompt; the two could differ | 4.1, by the author's tests | Fixed in 4.1 before its first commit (`59d0291`): both come from one configuration object |
 | 4 | Headings in quoted text could pass for the prompt's own sections | 4.1, by a dry run on this repository's prose | Fixed in 4.1 (`6476697`) |
-| 6 | The first launcher-written review attempt (4.3, round 1, attempt 1) failed the schema check after 8 minutes and about USD 2.75, and the log said only "does not match the report schema" | 4.3 review round 1 | Fixed in 4.3: the reason names the schema problems; one likely cause, a `flagged` note ending a finding ID with a full stop, is accepted now; round 1 ran again |
 | 5 | The first live recheck (4.1, round 2, attempt 1) listed files it had only grepped under `opened`, and accepted the decision-file fix without opening the file; the launcher failed the attempt, as S41-D8 intends. The prompt had said only "the files you read" | 4.1 review round 2 | Fixed in 4.1: the output section now says that only a Read opens a file, and that the launcher fails the report otherwise; round 2 runs again |
+| 6 | The first launcher-written review attempt (4.3, round 1, attempt 1) failed the schema check after 8 minutes and about USD 2.75, and the log said only "does not match the report schema" | 4.3 review round 1 | Fixed in 4.3: the reason names the schema problems; one likely cause, a `flagged` note ending a finding ID with a full stop, is accepted now; round 1 ran again |
 
 ## How the owner can check the work
 

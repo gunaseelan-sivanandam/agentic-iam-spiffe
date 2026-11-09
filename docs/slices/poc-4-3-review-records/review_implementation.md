@@ -377,3 +377,205 @@ No trace gap among the upstream items (python3 scripts/validate_traceability.py 
 | R1-6 | medium | fixed: docs/slices/README.md: the 4.3 row says it is implemented and in review; the 4.4 to 4.6 rows say their plans merged and they have not started |
 | R1-7 | low | fixed: docs/slices/agentic-sdlc-poc/slice_4_decisions.md: the 4.3 decisions made on the owner's behalf are recorded (the records module, the final newline and exact bytes, safe recovery, the withheld end entry, the reading of S43-D4, the schema problems in the reason) |
 | R1-8 | low | fixed: scripts/run_independent_review.py, scripts/review_records.py, tests/tools/test_check_review_records.py, tests/tools/test_run_independent_review.py: a withheld attempt gets an end entry with status `withheld` (counts and paths only), so recovery no longer overwrites its status line; the dead branch of `status_text` is removed. Tests: `test_withheld_attempt_keeps_its_prompt_and_evidence_and_says_it_was_withheld`, `test_secret_in_the_reply_leaves_no_report_and_a_withheld_end_entry` |
+
+## Round 2
+
+### Attempt implementation/c1/r2/A/1
+
+Reviewer `A`: `claude-opus-5-5`, effort medium, mode recheck, commit `771c02a50c55`, base `3347754ef038`.
+
+Status: completed; approvable within the threat model: yes.
+
+#### Prompt
+
+```markdown
+# Recheck of slice 4.3's implementation (issue #40), round 2
+
+The intent is unchanged from round 1: the approved plan and test plan of `docs/slices/poc-4-3-review-records/`
+(decisions S43-D1 to S43-D8), merged into `poc/agentic-sdlc` by plan PR #48. Round 1's report and the author's answers
+are below; the fixes are the part of `_review_inputs/change.diff` that the reviewed commit adds after `e9fc5e7`, which round 1 reviewed. One
+finding (R1-3) is a decision concern, put to the owner in the decision file with the reading the author implemented.
+```
+
+#### Evidence
+
+```text
+Each numbered entry must be listed under `accounted`.
+
+EV1: scripts/review_records.py: changed lines not run: 148, 188; branches not taken: 187->188, 189->191, 228->230 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV2: scripts/check_review_records.py: changed lines not run: 43, 203-206, 210; branches not taken: 42->43, 117->110, 204->205, 204->206, 209->210 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV3: scripts/check_docs.py: changed lines not run: 215; branches not taken: 214->215 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV4: scripts/review_inputs.py: changed lines not run: 286; branches not taken: 285->286 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV5: scripts/run_independent_review.py: changed lines not run: 166, 906, 964-965; branches not taken: 905->906, 928->exit, 1417->1419 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV6: no CI run for this commit (GET https://api.github.com/repos/<owner>/<repo>/actions/runs?head_sha=<commit> (no token))
+
+Every changed line and branch run by the tooling tests: scripts/run_review_benchmark.py.
+A script the tooling tests run only as a subprocess shows as not run here, because coverage is measured in-process (issue #44).
+No trace gap among the upstream items (python3 scripts/validate_traceability.py --mode pr --base <merge-base> --report-json <scratch>/trace.json --design-report-json <scratch>/design.json).
+```
+
+#### Report
+
+```json
+{
+  "accounted": [
+    {
+      "item": "R1-1",
+      "note": "`test_docs_check_reports_the_record_problems_through_run_checks` replaces `check_records` in the module namespace that `run_checks` resolves at call time (check_docs.py:205), runs `run_checks` on the repository, and requires the planted problem in the output. Removing line 205 makes the test fail.",
+      "opened": [
+        "tests/tools/test_check_review_records.py",
+        "scripts/check_review_records.py",
+        "scripts/review_records.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-2",
+      "note": "New tests cover each case raised in round 1, with specific messages: a missing Prompt or Evidence block, a label without a fenced block, a heading twice, a label twice ('appears 2 times'), a rejected blocking finding re-raised by round 2 (still fails, using the round-1 attempt's message), and an unreadable log. The unclosed-fence assertion is weak (R2-2, low), but it still fails closed.",
+      "opened": [
+        "tests/tools/test_check_review_records.py",
+        "scripts/check_review_records.py",
+        "scripts/review_records.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-3",
+      "note": "This is a decision concern and correctly goes to the owner, as decision concern 2 in slice_4_decisions.md. The implemented reading (`_later_owner_answer`, check_review_records.py:124-137) finds an `owner:` answer to the same finding ID in any later round of the same reviewer, so no answers section that a recheck has read needs editing. Two tests cover the re-raised path and the owner-settled path. The table formatting of that row is R2-1.",
+      "opened": [
+        "scripts/check_review_records.py",
+        "tests/tools/test_check_review_records.py",
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-4",
+      "note": "The task is read as bytes (run_independent_review.py:1373). Records are read and written as bytes, `lines_of` splits on '\\n' only, and `fenced` drops exactly one final newline. Together these make the round trip exact. The four-case test checks the block both against the task bytes and through the check. I checked the Report path: report_text is json.dumps with ensure_ascii, so `.splitlines()` in `finish` cannot split inside it. Evidence.text() always ends with one newline (review_inputs.py:254).",
+      "opened": [
+        "scripts/review_records.py",
+        "scripts/run_independent_review.py",
+        "scripts/check_review_records.py",
+        "tests/tools/test_check_review_records.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-5",
+      "note": "OPEN_FENCE now follows the CommonMark rule, and the answers reader uses it through `next_fence`. `_launcher_wrote` removes a tail section only if it has a launcher-form attempt ID, 'Status: started.', exactly the Prompt and Evidence blocks, and nothing after them. The three-case test covers a word heading, an unlogged heading that is not a launcher section, and a heading inside an indented fence with an info string.",
+      "opened": [
+        "scripts/review_records.py",
+        "scripts/run_independent_review.py",
+        "tests/tools/test_check_review_records.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-6",
+      "note": "README.md:19 now says the 4.3 plan merged and 4.3 is implemented and in review. Rows 20-22 (4.4 to 4.6) say their plans merged and they have not started.",
+      "opened": [
+        "docs/slices/README.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-7",
+      "note": "slice_4_decisions.md lines 113-118 record the 4.3 decisions made on the owner's behalf: the records module, the final newline and exact bytes, safe recovery, the withheld end entry, the reading of S43-D4, and the schema-problem reason.",
+      "opened": [
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "R1-8",
+      "note": "`finish_attempt` (run_independent_review.py:1504-1508) logs an end entry with status `withheld` before raising. The entry holds no report hash, and check_publishable runs on the log line. On recovery, status_text(end) rewrites the same line. The record test reruns the launcher and asserts the withheld status survives. The launcher test asserts the log holds a withheld end entry and no key text. The dead `end is None` branch is gone.",
+      "opened": [
+        "scripts/run_independent_review.py",
+        "scripts/review_records.py",
+        "tests/tools/test_check_review_records.py",
+        "tests/tools/test_run_independent_review.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "EV1",
+      "note": "Line 148 is new_record, which runs only in the launcher subprocess (issue #44). Line 188 and branch 187->188 raise ValueError for a missing section; `_complete_record` catches it, and the record check reports the missing heading, which is tested. Branch 189->191 is a section without a status line. Branch 228->230 is an unlogged tail that is not its round's first section, where correctly nothing is popped. Each is a small defensive or plain path; none is a false green.",
+      "opened": [
+        "scripts/review_records.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV2",
+      "note": "Line 43 and branch 42->43 are a defensive loader failure. Lines 203-206 and 210 are the standalone CLI main; docs-check imports the module, and the run_checks wiring is now tested. Branch 117->110 is a next-round attempt that is not completed or has no Report block, where returning False is fail-closed. The completed-but-re-raising case is tested.",
+      "opened": [
+        "scripts/check_review_records.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV3",
+      "note": "check_docs.py:215 and branch 214->215 are the defensive failure when check_review_records.py cannot be loaded.",
+      "opened": [
+        "scripts/check_review_records.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV4",
+      "note": "review_inputs.py:286 is the return taken when the interpreter has no user site-packages directory. It depends on the environment and is already-reviewed 4.2 code.",
+      "opened": [
+        "scripts/review_records.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV5",
+      "note": "These are defensive or environment paths. Line 166 is a loader failure. Line 906 and branch 905->906 are a log without a record. Lines 964-965 swallow ValueError for a missing section, which the record check then reports. Branch 928->exit is a record file that does not exist. Branch 1417->1419 is HOME == '/'.",
+      "opened": [
+        "scripts/run_independent_review.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV6",
+      "note": "No CI run exists for this commit. Under AGENTS.md, local results are diagnoses only, and slice 4 defers CI to the owner's final push. No finding here depends on a CI result.",
+      "opened": [],
+      "status": "explained"
+    }
+  ],
+  "findings": [
+    {
+      "evidence": "slice_4_decisions.md lines 148-152: the header and separator are on 148-149, row 1 is on 150, line 151 is blank, and row 2 is on 152. Lines 164-165 give row 6, then row 5.",
+      "failure_scenario": "The owner reads the rendered decision file at the end review and sees a broken table with the R1-3 question as loose text, so it is easy to miss among the items that need the owner's decision.",
+      "file": "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+      "id": "R2-1",
+      "kind": "defect",
+      "line": 152,
+      "origin_stage": "implementation",
+      "problem": "The new decision concern 2 row (the owner question for R1-3) is separated from the table by a blank line at line 151. In Markdown it therefore renders as a paragraph of pipe-separated text, not as a row of the 'Parked units, decision concerns and growth proposals' table. In the 'Discovered issues' table, row 6 is also listed before row 5.",
+      "severity": "low"
+    },
+    {
+      "evidence": "test_check_review_records.py:359-361: `assert any(\"Report\" in p for p in _problems(fx))`. 'the released report has no Report block' and 'the Report block does not match' would both satisfy it.",
+      "failure_scenario": "A parser change that takes an unclosed fence as running to the end of the file still fails the check through the hash mismatch, so this is not a false green today. However, the test no longer proves which form problem it detects, so a regression in the form message goes unnoticed.",
+      "file": "tests/tools/test_check_review_records.py",
+      "id": "R2-2",
+      "kind": "defect",
+      "line": 361,
+      "origin_stage": "tests first",
+      "problem": "The unclosed-fence half of `test_a_label_twice_and_an_unclosed_fence_fail` asserts only that some problem contains the word 'Report'. It does not check for the specific message 'the Report label has no fenced block after it'.",
+      "severity": "low"
+    }
+  ],
+  "verdict": "yes"
+}
+```
+
+
+#### Answers to implementation/c1/r2/A/1
+
+| ID | Severity | Answer |
+| --- | --- | --- |
+| R2-1 | low | fixed: docs/slices/agentic-sdlc-poc/slice_4_decisions.md: the blank line inside the decision-concern table is removed, so row 2 renders in the table, and discovered issues 5 and 6 are in order |
+| R2-2 | low | fixed: tests/tools/test_check_review_records.py: the unclosed-fence half asserts the form message, "the Report label has no fenced block after it". No later round: low findings do not keep the review open |

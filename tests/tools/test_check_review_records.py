@@ -358,7 +358,7 @@ def test_a_label_twice_and_an_unclosed_fence_fail(fx: base.Fixture) -> None:
     assert any("Evidence block appears 2 times" in p for p in _problems(fx))
     _record(fx).write_text(text.replace("#### Report\n\n````json", "#### Report\n\n`````json", 1)
                            if "````json" in text else text.replace("#### Report\n\n```json", "#### Report\n\n````json", 1))
-    assert any("Report" in p for p in _problems(fx))
+    assert any("the Report label has no fenced block after it" in p for p in _problems(fx))
 
 
 def test_rejected_finding_that_the_next_round_re_raises_still_fails(fx: base.Fixture) -> None:
