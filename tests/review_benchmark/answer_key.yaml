@@ -356,6 +356,66 @@ cases:
       ranges:
       - - 9
         - 11
+- id: FS-1
+  kind: planted
+  base: e842e97
+  patch: plants/FS-1.patch
+  artifact_type: architecture-and-interfaces
+  configurations: *id001
+  task: 'Architecture: record the upstream request in gateway decision events for live-mode failure diagnosis.'
+  paths:
+  - docs/architecture.md
+  leak_terms:
+  - logs the jira credential
+  - credential in the gateway's audit
+  - PLANT-
+  expected:
+  - id: E1
+    terms:
+    - credenti
+    - secret
+    - leak
+    - sensitiv
+    - redact
+    - expos
+    - basic
+    locations:
+    - file: docs/architecture.md
+      ranges:
+      - - 566
+        - 566
+    - file: services/jira-mcp-gateway/server.py
+      ranges:
+      - - 314
+        - 324
+- id: FS-2
+  kind: planted
+  base: e842e97
+  patch: plants/FS-2.patch
+  artifact_type: plan-and-test-plan
+  configurations: *id001
+  task: 'Test plan: wait for the gateway tailer before asserting trace legs in M5-T49 and M5-T57.'
+  paths:
+  - docs/slices/m5-full-chain-audit-trace/test_plan.md
+  leak_terms:
+  - bare sleep and one read
+  - PLANT-
+  expected:
+  - id: E1
+    terms:
+    - poll
+    - flak
+    - nondetermin
+    - bare
+    - intermitt
+    - loop
+    - determinis
+    - timeout
+    locations:
+    - file: docs/slices/m5-full-chain-audit-trace/test_plan.md
+      ranges:
+      - - 403
+        - 410
 - id: RC-1
   kind: recheck
   base: e842e97
