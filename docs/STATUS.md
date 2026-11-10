@@ -13,9 +13,9 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
   write is [#32](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/32).
 - **Open PoC work, in "needed before" order:**
   1. now: slice 4 ([#33](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/33), sub-issues #38–#43), implemented on
-     the branch `poc/slice-4-implementation` for one final PR: 4.1 to 4.3 and 4.5a implemented and reviewed;
-     4.4's stage checklists implemented, critiqued by two models and reviewed; 4.6's seven stages implemented,
-     in review; 4.5b's benchmark running; then the final review and one dry slice.
+     the branch `poc/slice-4-implementation` for one final PR: 4.1 to 4.6 implemented and reviewed; 4.5b's
+     benchmark ran (57 of 60 calls, [report](slices/poc-4-5-benchmark/benchmark_report.md)); one dry slice ran;
+     the final review and the handoff are next.
      Progress and the owner's decisions: [`slice_4_decisions.md`](slices/agentic-sdlc-poc/slice_4_decisions.md);
      Next, before slice 5: a slice of author prompts and their benchmark (owner, 2026-11-09: "let's
      continue this slice for just review, after this let's run a new slice of author prompts and

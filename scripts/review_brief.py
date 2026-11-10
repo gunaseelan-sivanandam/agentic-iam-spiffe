@@ -147,7 +147,7 @@ def integrity_problems(repo: Path, logs: list[str], units: list[Unit]) -> list[s
 
 @dataclass
 class Brief:
-    """What the brief shows, collected from the units."""
+    """What the brief shows, collected from the units; `final` says whether one of them is a final review unit."""
 
     rows: list[str] = field(default_factory=list)
     owner: list[str] = field(default_factory=list)
@@ -156,6 +156,7 @@ class Brief:
     disputed: list[str] = field(default_factory=list)
     rejected: list[str] = field(default_factory=list)
     origins: Counter[tuple[str, str]] = field(default_factory=Counter)
+    final: bool = False
 
 
 def _answer_to(attempt: Attempt, finding: str) -> Any:
@@ -192,8 +193,9 @@ def _unit_row(unit: Unit, brief: Brief, open_before: int) -> str:
     counts = finding_counts(unit)
     rounds = max((a.start["round"] for a in unit.attempts), default=0)
     opened = len(brief.owner) + len(brief.concerns) + len(brief.undetermined) + len(brief.disputed) - open_before
-    cells = [unit.label, str(last), str(rounds), *(str(counts.get(s, 0)) for s in SEVERITIES),
-             "nothing open" if opened == 0 else f"{opened} for the owner"]
+    state = "not reviewed: no completed attempt" if not unit.reported() else (
+        "nothing open" if opened == 0 else f"{opened} for the owner")
+    cells = [unit.label, str(last), str(rounds), *(str(counts.get(s, 0)) for s in SEVERITIES), state]
     return "| " + " | ".join(cells) + " |"
 
 
@@ -231,7 +233,7 @@ def _collect_rechecks(unit: Unit, brief: Brief) -> None:
 
 
 def summarise(units: list[Unit]) -> Brief:
-    brief = Brief()
+    brief = Brief(final=any(unit.name == "final" for unit in units))
     for unit in units:
         before = len(brief.owner) + len(brief.concerns) + len(brief.undetermined) + len(brief.disputed)
         _collect_findings(unit, brief)
@@ -272,6 +274,9 @@ def render(brief: Brief, ci: str, head: str, merge_base: str) -> str:
              f"`{merge_base[:12]}`). The plans and records are worth reading where this brief points.", "",
              "| Unit | Last verdict | Rounds | Blocking | High | Medium | Low | Open |",  # findings counted once each
              "| --- | --- | --- | --- | --- | --- | --- | --- |", *brief.rows, ""]
+    if not brief.final:
+        lines += ["No unit `final` among the review units this PR adds: a plan PR has none, a final PR needs one "
+                  "(`AGENTS.md`, slice workflow).", ""]
     lines += _items("Answered `owner:`", brief.owner) + _items("Decision concerns", brief.concerns)
     lines += _items("`cannot determine` in a recheck", brief.undetermined)
     lines += _items("Still disputed after a recheck", brief.disputed)

@@ -106,6 +106,15 @@ def test_a_unit_with_nothing_open_says_so(fx: base.Fixture) -> None:
         assert text.split(title, 1)[1].lstrip().startswith("None.")
 
 
+def test_a_unit_never_reviewed_and_a_missing_final_unit_are_shown(fx: base.Fixture) -> None:
+    """The dry slice found a never-completed unit shown as "nothing open", and no word of a missing final unit."""
+    fx.scenario({"reads": []})  # the review reads nothing, so the launcher fails it
+    assert base._run(fx) == 1
+    base._commit_all(fx.work, "a failed review")
+    text = _brief(fx)
+    assert "| not reviewed: no completed attempt |" in text and "No unit `final`" in text
+
+
 def test_a_finding_without_an_answer_fails_instead_of_a_brief_that_omits_it(fx: base.Fixture) -> None:
     base._first_round(fx, base._finding("X1", severity="medium"))
     base._commit_all(fx.work, "the review, not answered")

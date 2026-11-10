@@ -26,6 +26,11 @@ Each stage of `AGENTS.md`'s slice workflow applies, or is "none, with a reason".
 | --- | --- | --- |
 | <slice>-D1 | One decision per row; with a grill-me, the agreed answer to each question it resolved. | the user, <date>, <link> ("<the user's words>"); or default by the author: <reason> |
 
+## Threat model
+- The threat model the reviews judge against: the delivery threat model of `AGENTS.md` (PoC scope and
+  proportion) applied to this slice's change, and the system-under-test threat the slice touches. A change
+  to an approved threat model goes to the user.
+
 ## Requirements
 - List the requirements that this slice adds, changes, narrows, or depends on.
 - For each requirement, describe the runtime-visible behavior that must be true.

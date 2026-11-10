@@ -20,7 +20,8 @@ STAGES = ["Discovery", "Requirements", "Architecture and interfaces", "Tests fir
           "Handoff"]
 LISTS = sorted(p.stem for p in (ROOT / "docs" / "review_checklists").glob("*.md"))
 HEADER = "| Stage | Produces | Review | Checks | Exit |"
-STEP_REFERENCE = re.compile(r"\bstep [1-4]\b", re.IGNORECASE)  # the plan's probe (environment facts of 4.6)
+# The plan's probe (environment facts of 4.6), and the README's old name for the workflow (the dry slice found it).
+STEP_REFERENCE = re.compile(r"\bstep [1-4]\b|\bfour-phase\b", re.IGNORECASE)
 # The implementation-review questions AGENTS.md requires of the test-plan template (Independent review).
 REVIEW_QUESTIONS = ("which wrong failure would still pass it", "a key, socket or secret reachable by a service outside",
                     "start with a comment that says what the file is for")
@@ -196,3 +197,5 @@ def test_a_planted_step_reference_fails(tmp_path: Path) -> None:
     planted = tmp_path / "planted-step-reference.md"
     planted.write_text("# Planted\n\nSee step 4 of the slice workflow.\n")
     assert step_references([planted]) == ["planted-step-reference.md:3: See step 4 of the slice workflow."]
+    planted.write_text("# Planted\n\nChanges follow a four-phase slice workflow.\n")
+    assert len(step_references([planted])) == 1

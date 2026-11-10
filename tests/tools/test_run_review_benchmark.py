@@ -629,15 +629,14 @@ def test_a_changed_canary_runs_again_and_an_unchanged_one_does_not(repo: tuple[R
 
 
 @pytest.mark.parametrize(("canary", "runs"), [
-    ({"valid": True, "passed": True}, True),
-    ({"valid": False, "passed": True, "runs": {"twin": {"hook_ran": True}}}, True),
+    ({"valid": True, "passed": True, "runs": {"twin": {"hook_ran": True}}}, True),
+    ({"valid": False, "passed": True, "runs": {"twin": {"hook_ran": True}}}, False),
     ({"valid": False, "passed": True, "runs": {"twin": {"hook_ran": False}}}, False),
     ({"valid": True, "passed": False}, False),
 ], ids=["valid-and-passed", "passed-twin-ran-only-the-hook", "passed-twin-ran-nothing", "not-passed"])
-def test_cases_run_only_after_a_passed_canary_whose_twin_ran_the_hook(repo: tuple[Repo, str, str], canary: dict,
-                                                                       runs: bool) -> None:
-    """S45-D9 refuses stage-B runs under another CLI than the canary's; a passed canary whose twin showed only that
-    settings reach an unflagged session is enough to run, and the report says what it showed (4.5b's canaries)."""
+def test_cases_run_only_after_a_valid_and_passed_canary(repo: tuple[Repo, str, str], canary: dict, runs: bool) -> None:
+    """S45-D9 and the plan's success criterion: a valid, passed canary for the installed CLI; a canary whose twin ran
+    only the hook is not enough (4.5b report review, B2)."""
     r, base, commit = repo
     r.key([_case("C1", base, commit)])
     bench.append_result(r.root, "B", {"stage": "B", "case": "CANARY", "kind": "canary", "cli_version": "9.9.9 (Claude Code)",
