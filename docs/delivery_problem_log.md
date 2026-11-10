@@ -409,9 +409,9 @@ Why review did not catch it:
   error, is logged instead of failing (`8d80ce8`); a credential value must be token-like (`d56c69a`)
   and is found in code spans and quotes (`f8b6200`, `8d80ce8`).
 - Preventive: tests for two slices with the same unit, for prose and quoted forms of the header, for
-  the rulebook passing the check, and for offered and unoffered tools. Pending in 4.1 (S41-D1): the
-  launcher's output section tells reviewers to write `<token>` for any credential, so a review of the
-  secret check is not withheld for a made-up example.
+  the rulebook passing the check, and for offered and unoffered tools. Implemented in 4.1 (S41-D1) on the
+  slice 4 branch: the launcher's output section tells reviewers to write `<token>` for any credential
+  (`CREDENTIAL_NOTE`), so a review of the secret check is not withheld for a made-up example.
 
 ### Lesson
 Try a tool the way its next user will run it: in parallel, with the same names, on its own prose.

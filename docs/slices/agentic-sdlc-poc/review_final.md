@@ -274,3 +274,217 @@ No trace gap among the upstream items (python3 scripts/validate_traceability.py 
 | FR-7 | medium | fixed: AGENTS.md, docs/slices/agentic-sdlc-poc/slice_4_decisions.md: (a) the handoff rule is back to S46-D9's and S46-D13's words, and the CI-line question goes to the owner as decision concern 10; (b) and (c) the plan template's "Threat model" section and the mislabelled-blocker sentence are recorded as author decisions, each with the rule it follows |
 | FR-8 | low | fixed: docs/slices/agentic-sdlc-poc/slice_4_decisions.md: an author-decision row and the decision map's S43-D5 row say that 4.1's and 4.2's records, built before 4.3, are not checked by `make docs-check` |
 | FR-9 | low | fixed: tests/tools/test_review_brief.py: `test_a_pr_with_a_final_unit_gets_no_missing_final_line` and `test_a_base_git_cannot_resolve_is_refused` |
+
+## Round 2
+
+### Attempt final/c1/r2/A/1
+
+Reviewer `A`: `claude-opus-5-5`, effort medium, mode recheck, commit `01da96dd4a9e`, base `3347754ef038`.
+
+Status: completed; approvable within the threat model: yes.
+
+#### Prompt
+
+```markdown
+# Recheck of slice 4's final review, round 2
+
+The intent is unchanged from round 1: slice 4's six plans (merged with plan PR #48, the base), the owner's question
+"what does a plan promise that the change does not do, and what does the change do that no plan asked for?", and the
+decision page `docs/slices/agentic-sdlc-poc/slice_4_decisions.md`. Round 1's report and the author's answers are
+below; the fixes are what the reviewed commit adds after `e318d95`. Among them: two RM-6 verdicts changed by the
+match rule's absence clause after unblinding, which the benchmark report says; a rule for the plan PR's brief; the
+final review's finding history widened to the merged records of every bundle the change touches; a map from each
+of the 73 decisions to its proof on the decision page; the handoff rule returned to the plan's words, with the
+question put to the owner; and DPL-012.
+```
+
+#### Evidence
+
+```text
+Each numbered entry must be listed under `accounted`.
+
+EV1: scripts/check_docs.py: changed lines not run: 215; branches not taken: 214->215 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV2: scripts/check_review_records.py: changed lines not run: 43, 203-206, 210; branches not taken: 42->43, 204->205, 204->206, 209->210 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV3: scripts/review_brief.py: changed lines not run: 43, 317, 321; branches not taken: 42->43, 227->222, 320->321 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV4: scripts/review_inputs.py: changed lines not run: 286; branches not taken: 285->286 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV5: scripts/review_records.py: changed lines not run: none; branches not taken: 189->191, 228->230 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV6: scripts/run_independent_review.py: changed lines not run: 166, 906, 964-965; branches not taken: 905->906, 1421->1423 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV7: scripts/run_review_benchmark.py: changed lines not run: 313, 359, 634, 868, 1108, 1425-1426; branches not taken: 312->313, 316->315, 358->359, 438->442, 633->634, 801->798, 807->801, 866->868, 903->906, 1089->1087, 1250->1253, 1424->1425 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV8: no CI run for this commit (GET https://api.github.com/repos/<owner>/<repo>/actions/runs?head_sha=<commit> (no token))
+
+Every changed line and branch run by the tooling tests: scripts/lint_changed_files.py.
+A script the tooling tests run only as a subprocess shows as not run here, because coverage is measured in-process (issue #44).
+No trace gap among the upstream items (python3 scripts/validate_traceability.py --mode pr --base <merge-base> --report-json <scratch>/trace.json --design-report-json <scratch>/design.json).
+```
+
+#### Report
+
+```json
+{
+  "accounted": [
+    {
+      "item": "FR-1",
+      "note": "confirmation_author.jsonl:8 and :47 now say match, with the absence-clause reason and an open note that they were re-judged after unblinding. benchmark_report.md:23-27 says so; :40-44 gives RM-6 open+list as detected twice and says RM-6 kept the difference; the runner's repeat line (:154) says True, True. The first-run counts (7/6/6) are unchanged because both findings are second runs. The decision page's 4.5b row notes the re-judging.",
+      "opened": [
+        "docs/slices/poc-4-5-benchmark/confirmation_author.jsonl",
+        "docs/slices/poc-4-5-benchmark/benchmark_report.md",
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "FR-2",
+      "note": "AGENTS.md:202-203 (Discovery) now says the plan PR's body opens with the decision brief, built by scripts/review_brief.py as at handoff, which matches S46-D13.",
+      "opened": [
+        "AGENTS.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "FR-3",
+      "note": "final_records (run_independent_review.py:1242-1251) now lists every record in every bundle the change touches, using ls-tree at the commit, so plan reviews merged earlier are included. The new test (test_run_independent_review.py:896-908) merges a plan review into the base, touches only that bundle's attempt log, and checks that the plan review is listed and the untouched bundle is not. On the old code, which took only AMR-changed records, the test would fail.",
+      "opened": [
+        "scripts/run_independent_review.py",
+        "tests/tools/test_run_independent_review.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "FR-4",
+      "note": "The date line (:10) and the 4.6 progress row (:94) are current. A new section (:96-181) maps all 73 decisions (16+11+8+13+11+14) to where they are implemented and their proof, records that the retirements are done, and links the six checklists with their question counts.",
+      "opened": [
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "FR-5",
+      "note": "STATUS.md: work in flight is poc/slice-4-implementation (:86); DPL-010, -011 and -012 are listed as closing when slice 4 merges (:103-108); the 2026-11-10 E2E, qa-evidence, qa-quality, lint and tooling runs are recorded (:69-70). A misplaced DPL-008 sentence is noted under FR-10.",
+      "opened": [
+        "docs/STATUS.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "FR-6",
+      "note": "DPL-010's status and preventive actions are marked implemented, including the 4.3 record check (:306-309, :358-364). DPL-011's status says what closes it. DPL-012 (:419-465) records slice 4's misses with root causes, actions and a lesson. Dry-slice trip 18 points to it. One stale Preventive line in DPL-011 remains (FR-10, low).",
+      "opened": [
+        "docs/delivery_problem_log.md",
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "FR-7",
+      "note": "(a) AGENTS.md:276-285 has the brief at the top of the PR body and the body as a snapshot not updated later, which are the words of S46-D9 and S46-D13; the CI-line question is decision concern 10 (decisions page :277). (b) The Threat model section is recorded as an author decision at :236 and (c) the mislabelled-blocker sentence at :234, each with the rule it follows.",
+      "opened": [
+        "AGENTS.md",
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "FR-8",
+      "note": "The answer discloses the gap and does not fix it: decision page :235 and the S43-D5 row at :140 say that 4.1's and 4.2's records are not checked by docs-check. That is enough for a low finding.",
+      "opened": [
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "FR-9",
+      "note": "test_review_brief.py:118-128 adds a test for a PR with a final unit (no missing-final line, which covers branch 277->280) and a test for a git merge-base failure being refused. EV3 no longer lists line 95.",
+      "opened": [
+        "tests/tools/test_review_brief.py",
+        "scripts/review_brief.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "EV1",
+      "note": "check_docs.py:215 is the defensive return when the loader of a fixed sibling file is None, which cannot happen for an existing path.",
+      "opened": [
+        "scripts/check_docs.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV2",
+      "note": "Line 43 is the loader failure on a fixed path. Lines 203-210 are the standalone main; docs-check calls check_review_records() directly, and the tests exercise that. The coverage gap of 4.1 and 4.2 is disclosed (FR-8).",
+      "opened": [
+        "scripts/check_review_records.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV3",
+      "note": "Lines 43, 317 and 321 are the loader and the entry point. Branch 227->222 is an accounted entry with another status, which is benign. The earlier gaps (95, 277->280) are now tested (FR-9).",
+      "opened": [
+        "scripts/review_brief.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV4",
+      "note": "review_inputs.py:286 returns early when there is no user site directory. It only skips the link, and the evidence commands then fail visibly (S42-D7).",
+      "opened": [
+        "scripts/review_inputs.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV5",
+      "note": "189->191 is a section without a status line; 228->230 is a tail without a preceding round heading. Both are structural variants and change no check outcome.",
+      "opened": [
+        "scripts/review_records.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV6",
+      "note": "166 is a loader failure; 906 is a defensive log without a record; 964-965 is recovery that leaves the problem to the record check; 1421->1423 is a HOME that is the root. The untested launcher paths are tracked in #45.",
+      "opened": [
+        "scripts/run_independent_review.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV7",
+      "note": "These are benchmark bookkeeping and CLI print branches (1425-1426 is the --sample-confirmation print). They decide nothing about the system under test, and the 4.5b runs exercised them live.",
+      "opened": [
+        "scripts/run_review_benchmark.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV8",
+      "note": "The branch is unpushed and CI runs on PRs, so no run exists yet. The CI result is still needed on the PR at handoff (the Implementation exit), and the CI-line timing question is decision concern 10.",
+      "opened": [
+        "AGENTS.md"
+      ],
+      "status": "explained"
+    }
+  ],
+  "findings": [
+    {
+      "evidence": "delivery_problem_log.md:373-374 (the Status line names CREDENTIAL_NOTE as present) against :411-414 (the Preventive line says \"Pending in 4.1\"). STATUS.md:107-108.",
+      "failure_scenario": "Someone deciding whether DPL-011 can close reads the Preventive line and thinks the `<token>` note still has to be built. The STATUS bullet makes it look as if DPL-008 is related to DPL-012.",
+      "file": "docs/delivery_problem_log.md",
+      "id": "FR-10",
+      "kind": "defect",
+      "line": 412,
+      "origin_stage": "implementation",
+      "problem": "The FR-6 fix updated DPL-011's Status line to say the `<token>` note is in the launcher (`CREDENTIAL_NOTE`). The entry's Preventive bullet still says \"Pending in 4.1 (S41-D1): the launcher's output section tells reviewers to write `<token>`\u2026\", so the same entry says the action is both done and pending. Separately, `docs/STATUS.md:108` adds \"DPL-008 closed on 2026-11-04.\" to the end of the DPL-012 bullet, where it does not belong.",
+      "severity": "low"
+    }
+  ],
+  "verdict": "yes"
+}
+```
+
+
+#### Answers to final/c1/r2/A/1
+
+| ID | Severity | Answer |
+| --- | --- | --- |
+| FR-10 | low | fixed: docs/delivery_problem_log.md, docs/STATUS.md: DPL-011's preventive bullet says the `<token>` note is implemented in 4.1 (`CREDENTIAL_NOTE`), and STATUS gives DPL-008's closing its own line |

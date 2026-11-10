@@ -105,7 +105,8 @@ Full entries, root causes and lessons in [`docs/delivery_problem_log.md`](delive
 - **DPL-011** Slice 2's launcher and the secret check broke on slice 4's parallel plan reviews; fixed with
   PR #48 and on the slice 4 branch, closing it when slice 4 merges.
 - **DPL-012** Slice 4's implementation run made claims and checks that did not hold; all fixed on the slice
-  4 branch, closing it when slice 4 merges. DPL-008 closed on 2026-11-04.
+  4 branch, closing it when slice 4 merges.
+- DPL-008 closed on 2026-11-04.
 
 ## Known gaps and debt
 - `M5-T55` (live Jira upstream) only runs with `JIRA_MCP_UPSTREAM_MODE=live`; default runs skip it.
