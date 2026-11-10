@@ -293,3 +293,264 @@ No trace gap among the upstream items (python3 scripts/validate_traceability.py 
 | L2 | low | fixed: docs/slices/poc-4-5-benchmark/benchmark_report.md: the second confirmer's agreement comes with its base rate (8 of the 10 sampled are no match) and the one disagreement, T035 |
 | L3 | low | fixed: tests/tools/test_run_review_benchmark.py: the canary identity test also changes the prompt and the twin's call, each of which makes the canary run again |
 | L4 | low | fixed: scripts/run_review_benchmark.py: a failed review's cost and minutes count in its configuration's totals, and `discordant`'s docstring says that a failed review of a defect case is a miss |
+
+## Round 2
+
+### Attempt report/c1/r2/A/1
+
+Reviewer `A`: `claude-opus-5-5`, effort medium, mode recheck, commit `433d386b7cdc`, base `3347754ef038`.
+
+Status: failed (the report does not account for what it was given: EV4 names an opened file the attempt did not read).
+
+#### Prompt
+
+```markdown
+# Recheck of slice 4.5's second part (the benchmark runs and the report, issue #42), round 2
+
+The intent is unchanged from round 1: the approved plan and test plan of `docs/slices/poc-4-5-benchmark/`
+(S45-D1 to S45-D11), of which 4.5b plants FS-1 and FS-2, runs the stage-B benchmark within 60 reviewer runs, confirms
+its findings blind and writes `benchmark_report.md` for the owner's choice. Round 1's report and the author's answers
+are below; the fixes are what the reviewed commit adds after the commit round 1 reviewed (`fe52f00`). Among them: the
+canary got its own prompt and a third canary pair ran (two more calls, 57 of 60), the runner's gate again requires a
+valid, passed canary, the repeats and the rating agreement read the confirmed verdicts, and the report was rewritten
+from the rebuilt runner report.
+
+The same commit also records the dry slice (a fresh session that took a one-sentence change through the seven stages,
+`docs/slices/agentic-sdlc-poc/slice_4_decisions.md`, "The dry slice") and fixes four of its trip points that slice
+4.6 caused: `README.md`'s workflow lines, a "Threat model" section in the plan template, and two cases in
+`scripts/review_brief.py` (a unit never reviewed, a missing `final` unit), each with a test.
+```
+
+#### Evidence
+
+```text
+Each numbered entry must be listed under `accounted`.
+
+EV1: scripts/run_review_benchmark.py: changed lines not run: 313, 359, 634, 868, 1108, 1425-1426; branches not taken: 312->313, 316->315, 358->359, 438->442, 633->634, 801->798, 807->801, 866->868, 903->906, 1089->1087, 1250->1253, 1424->1425 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV2: scripts/check_docs.py: changed lines not run: 215; branches not taken: 214->215 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV3: scripts/check_review_records.py: changed lines not run: 43, 203-206, 210; branches not taken: 42->43, 204->205, 204->206, 209->210 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV4: scripts/review_brief.py: changed lines not run: 43, 95, 317, 321; branches not taken: 42->43, 94->95, 227->222, 277->280, 320->321 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV5: scripts/review_inputs.py: changed lines not run: 286; branches not taken: 285->286 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV6: scripts/review_records.py: changed lines not run: none; branches not taken: 189->191, 228->230 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV7: scripts/run_independent_review.py: changed lines not run: 166, 906, 964-965; branches not taken: 905->906, 1418->1420 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV8: no CI run for this commit (GET https://api.github.com/repos/<owner>/<repo>/actions/runs?head_sha=<commit> (no token))
+
+Every changed line and branch run by the tooling tests: scripts/lint_changed_files.py.
+A script the tooling tests run only as a subprocess shows as not run here, because coverage is measured in-process (issue #44).
+No trace gap among the upstream items (python3 scripts/validate_traceability.py --mode pr --base <merge-base> --report-json <scratch>/trace.json --design-report-json <scratch>/design.json).
+```
+
+
+### Attempt report/c1/r2/A/2
+
+Reviewer `A`: `claude-opus-5-5`, effort medium, mode recheck, commit `433d386b7cdc`, base `3347754ef038`.
+
+Status: completed; approvable within the threat model: yes.
+
+#### Prompt
+
+```markdown
+# Recheck of slice 4.5's second part (the benchmark runs and the report, issue #42), round 2
+
+The intent is unchanged from round 1: the approved plan and test plan of `docs/slices/poc-4-5-benchmark/`
+(S45-D1 to S45-D11), of which 4.5b plants FS-1 and FS-2, runs the stage-B benchmark within 60 reviewer runs, confirms
+its findings blind and writes `benchmark_report.md` for the owner's choice. Round 1's report and the author's answers
+are below; the fixes are what the reviewed commit adds after the commit round 1 reviewed (`fe52f00`). Among them: the
+canary got its own prompt and a third canary pair ran (two more calls, 57 of 60), the runner's gate again requires a
+valid, passed canary, the repeats and the rating agreement read the confirmed verdicts, and the report was rewritten
+from the rebuilt runner report.
+
+The same commit also records the dry slice (a fresh session that took a one-sentence change through the seven stages,
+`docs/slices/agentic-sdlc-poc/slice_4_decisions.md`, "The dry slice") and fixes four of its trip points that slice
+4.6 caused: `README.md`'s workflow lines, a "Threat model" section in the plan template, and two cases in
+`scripts/review_brief.py` (a unit never reviewed, a missing `final` unit), each with a test.
+```
+
+#### Evidence
+
+```text
+Each numbered entry must be listed under `accounted`.
+
+EV1: scripts/run_review_benchmark.py: changed lines not run: 313, 359, 634, 868, 1108, 1425-1426; branches not taken: 312->313, 316->315, 358->359, 438->442, 633->634, 801->798, 807->801, 866->868, 903->906, 1089->1087, 1250->1253, 1424->1425 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV2: scripts/check_docs.py: changed lines not run: 215; branches not taken: 214->215 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV3: scripts/check_review_records.py: changed lines not run: 43, 203-206, 210; branches not taken: 42->43, 204->205, 204->206, 209->210 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV4: scripts/review_brief.py: changed lines not run: 43, 95, 317, 321; branches not taken: 42->43, 94->95, 227->222, 277->280, 320->321 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV5: scripts/review_inputs.py: changed lines not run: 286; branches not taken: 285->286 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV6: scripts/review_records.py: changed lines not run: none; branches not taken: 189->191, 228->230 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV7: scripts/run_independent_review.py: changed lines not run: 166, 906, 964-965; branches not taken: 905->906, 1418->1420 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV8: no CI run for this commit (GET https://api.github.com/repos/<owner>/<repo>/actions/runs?head_sha=<commit> (no token))
+
+Every changed line and branch run by the tooling tests: scripts/lint_changed_files.py.
+A script the tooling tests run only as a subprocess shows as not run here, because coverage is measured in-process (issue #44).
+No trace gap among the upstream items (python3 scripts/validate_traceability.py --mode pr --base <merge-base> --report-json <scratch>/trace.json --design-report-json <scratch>/design.json).
+```
+
+#### Report
+
+```json
+{
+  "accounted": [
+    {
+      "item": "B1",
+      "note": "repeats_table (run_review_benchmark.py:1308-1320) now uses confirmation.confirmed(line) for completed runs and shows a failed run by its status. The runner's report says 'RM-6 open+list: True, False', and benchmark_report.md:36-37 matches it. test_repeats_table_reads_the_confirmed_verdicts_and_shows_a_failed_run gives a rejected automatic detection and expects False, and expects 'failed' for the failed run, so a repeat line that ignored the verdicts would fail it.",
+      "opened": [
+        "scripts/run_review_benchmark.py",
+        "tests/tools/test_run_review_benchmark.py",
+        "docs/slices/poc-4-5-benchmark/benchmark_report.md",
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "B2",
+      "note": "The canary now has its own prompt, CANARY_PROMPT (:89-93), used by run_canary (:796) for both calls. It has no data clause, which the test checks. check_cli_version (:828-835) again requires valid and passed, and test_cases_run_only_after_a_valid_and_passed_canary covers the hook-only and not-passed cases. benchmark_results_B.jsonl holds a third canary line, and the runner's report shows it valid and passed under 2.1.321, the CLI of every review. The prompt says 'instructions your context holds' rather than S45-D9's 'files they find'. That is a reasonable reading and the decision file (line 141) records it. The report says the reviews ran before the valid canary, under the same CLI. Decision concern 6 is withdrawn, and process miss 12 is recorded.",
+      "opened": [
+        "scripts/run_review_benchmark.py",
+        "tests/tools/test_run_review_benchmark.py",
+        "docs/slices/poc-4-5-benchmark/benchmark_report.md",
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+        "docs/slices/poc-4-5-benchmark/plan.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "H1",
+      "note": "severity_agreement (:1288-1305) now pairs the runs by (case, configuration) and rates each expected defect with defect_rating, which reads the confirmed detections. The test gives the same finding ID to different findings and expects the pairing by defect. The report's 'same once, different twice' matches FS-2 and RM-6 as I worked them out from the per-review rows and the repeat line.",
+      "opened": [
+        "scripts/run_review_benchmark.py",
+        "tests/tools/test_run_review_benchmark.py",
+        "docs/slices/poc-4-5-benchmark/benchmark_report.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "M1",
+      "note": "benchmark_report.md:37-40 and :43-47 and slice_4_decisions.md:146 now say that the repeat rule was written after the first runs, that it chose the two cases favouring open+list, and that FS-1's withheld review may have been a detection. S45-D6's two-case limit explains why FS-1 was not repeated.",
+      "opened": [
+        "docs/slices/poc-4-5-benchmark/benchmark_report.md",
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "M2",
+      "note": "origin_table (:1266-1276) now counts each origin stage against the artifact_type list of the review that found it. The report has a section on it (lines 60-65), and its figures agree with the verbatim table. A test covers it. Minor: the docstring says 'completed review' and the function does not filter by status, but failed and withheld lines hold no findings (checked in the results file), so the counts are unaffected.",
+      "opened": [
+        "scripts/run_review_benchmark.py",
+        "tests/tools/test_run_review_benchmark.py",
+        "docs/slices/poc-4-5-benchmark/benchmark_report.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "M3",
+      "note": "The summary table now has the false-blocker and unread-file columns, and they match the runner's table. Lines 48-54 call them automatic candidates and mark the reading of CL-1's and CL-2's alarms as the author's, not confirmed blind.",
+      "opened": [
+        "docs/slices/poc-4-5-benchmark/benchmark_report.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "L1",
+      "note": "STATUS.md:16-18 says the benchmark ran (57 of 60), and the slice index row says 4.5a and 4.5b are implemented, in review. Both are current.",
+      "opened": [
+        "docs/STATUS.md",
+        "docs/slices/README.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "L2",
+      "note": "benchmark_report.md:55-58 now gives the base rate (8 of the 10 sampled are no match, 98 of 125 overall) and the disagreement on T035.",
+      "opened": [
+        "docs/slices/poc-4-5-benchmark/benchmark_report.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "L3",
+      "note": "The identity test now changes the planted texts, CANARY_PROMPT and twin_invocation, and expects a new run each time. canary_identity reads all three at call time.",
+      "opened": [
+        "tests/tools/test_run_review_benchmark.py",
+        "scripts/run_review_benchmark.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "L4",
+      "note": "configuration_counts (:1246-1253) now adds a failed review's cost and minutes to its configuration and counts a failed defect case as a miss, and the discordant docstring says so. Repeats stay out of the per-detection cost, which is consistent with the counts being first runs only.",
+      "opened": [
+        "scripts/run_review_benchmark.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "EV1",
+      "note": "Lines and branches not run: 313 (expected file missing, skip), 359 (no list commit or artifact type), 634 (record without a sink), 868 (refused case already recorded), 1108 (stage-A clean scoring fallback), 1425-1426 (CLI print of --sample-confirmation), and loop or branch variants. These are small edge paths that skip safely or only print. The logic paths the fixes touch (repeats, rating agreement, origin table, gate, failed-cost counts) are covered by tests.",
+      "opened": [
+        "scripts/run_review_benchmark.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV2",
+      "note": "check_docs.py:215 is the failure to load the record checker. It returns a problem, so it fails closed.",
+      "opened": [
+        "scripts/check_docs.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV3",
+      "note": "Line 43 is the loader's raise, which fails closed. Lines 203-210 are main and the __main__ entry, run only as a subprocess (issue #44).",
+      "opened": [
+        "scripts/check_review_records.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV4",
+      "note": "Lines 43 (loader raise) and 95 (a failed git call raises BriefError) fail closed. 317 and 321 are main's return and the __main__ entry. 227->222 and 277->280 are loop and branch variants of benign rendering.",
+      "opened": [
+        "scripts/review_brief.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV5",
+      "note": "review_inputs.py:286 returns early when there is no user site-packages directory, and then no link is needed.",
+      "opened": [
+        "scripts/review_inputs.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV6",
+      "note": "review_records.py 189->191 (a section with no status line) and 228->230 (no round heading before the removed tail) are benign alternatives of record editing.",
+      "opened": [
+        "scripts/review_records.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV7",
+      "note": "Lines 166 (loader raise) and 906 (an attempt log with no record raises) fail closed. 964-965 leave a missing section to the record check, which reports it. 1418->1420 is a HOME of '/' or empty, where no HOME path is added.",
+      "opened": [
+        "scripts/run_independent_review.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV8",
+      "note": "No CI run exists for this local commit. The slice-4 work stays local until the final PR, so no gate counts as passed here. CI's result comes with the final PR.",
+      "opened": [
+        "docs/slices/poc-4-5-benchmark/plan.md"
+      ],
+      "status": "explained"
+    }
+  ],
+  "findings": [],
+  "verdict": "yes"
+}
+```
+

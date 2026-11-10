@@ -5,6 +5,39 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-11-10 Slice agentic-sdlc-poc 4: review prompts, inputs, records, stage checklists, benchmark, stage rules
+
+- Branch `poc/slice-4-implementation`, from `poc/agentic-sdlc` at `3347754` (plan PR #48), local until the owner
+  pushes; one final PR with a section per sub-issue (#38 to #43). The owner's decision page, with every author
+  decision, decision concern, growth proposal and discovered issue:
+  [`slice_4_decisions.md`](../slices/agentic-sdlc-poc/slice_4_decisions.md).
+- 4.1 (#38): the launcher writes every prompt in fixed sections, opening with the mandate of the review's mode
+  (initial, recheck, final), with quoted text fenced; findings carry a severity, a kind and an origin stage; rechecks
+  account for every answer and must read the files a `fixed:` answer names.
+- 4.2 (#39): the files under review come from the diff; upstream items and evidence (uncovered changed lines, trace
+  gaps, CI results) are computed in a scratch clone (`scripts/review_inputs.py`).
+- 4.3 (#40): the launcher writes the review record, and `make docs-check` checks every record against its attempt
+  log and every answer against its finding (`scripts/review_records.py`, `scripts/check_review_records.py`).
+- 4.4 (#41): six stage checklists in `docs/review_checklists/` from researched sources
+  (`docs/slices/poc-4-4-stage-checklists/research.md`), critiqued by Opus and Sonnet; `--stage` reads a list from
+  the base commit.
+- 4.5 (#42): the stage-B benchmark (`scripts/run_review_benchmark.py`, `tests/review_benchmark/`) ran within 57 of
+  60 reviewer calls; the report is [`benchmark_report.md`](../slices/poc-4-5-benchmark/benchmark_report.md):
+  `open+list` 7 of 11 defect cases, `short+list` 6, `open-B+list` 6, both recheck wordings 1 of 1, all within
+  chance. The launcher's mandates stay 4.1's until the owner chooses.
+- 4.6 (#43): `AGENTS.md`'s slice workflow has seven stages, each with its review, list, checks and exit; the
+  templates carry the stage table, decision sources and rule deviations; `scripts/review_brief.py` builds a PR's
+  decision brief; the grill-me skill lives in `.claude/skills/grill-me/`.
+- Reviews: every sub-issue's implementation review ended with no blocking or high finding open (records in each
+  bundle); 4.4 had a two-model critique; a dry slice from a clean session recorded 18 trip points, in the decision
+  page. The final review of the slice is the unit `final` of `docs/slices/agentic-sdlc-poc/`.
+- Validation, local (CI's verdict comes when the owner pushes): `make tooling-test` 764 passed (with a scratch
+  shellcheck; this machine has none installed); `make qa-quality` passed (qa-trace, traceability, unit guard,
+  docs-check, test-lint, qa-deploy); `make lint` passed; the full E2E suite on a clean stack passed 120 of 120 with
+  one warning (M5-T55, live Jira not configured, skipped by its env gate); `make qa-evidence` passed (119 validated,
+  1 skipped). Not run: CI (the branch is not pushed) and `make unit-diff-cov` and `make unit-mutation` as CI runs
+  them on a PR (slice 4 changes no service code).
+
 ## 2026-11-08 Fixes to the review launcher and the secret check (slice 4 plan branch)
 
 - Branch `poc/slice-4-plans`, commits `f070669`, `d56c69a`, `f8b6200`, `8d80ce8` and the commit that ends a
