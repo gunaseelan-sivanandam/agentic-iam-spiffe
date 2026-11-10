@@ -1,0 +1,125 @@
+{"reason": "the requirement cannot be verified; unmeasurable terms", "token": "T001", "verdict": "match"}
+{"reason": "a different defect, or not at the planted place", "token": "T002", "verdict": "no match"}
+{"reason": "the clause is ambiguous and unmeasurable", "token": "T003", "verdict": "match"}
+{"reason": "a different defect, or not at the planted place", "token": "T004", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T005", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T006", "verdict": "no match"}
+{"reason": "same", "token": "T007", "verdict": "match"}
+{"reason": "a different defect, or not at the planted place", "token": "T008", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T009", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T010", "verdict": "no match"}
+{"reason": "the signing key pair reaches tool-b at the planted ARCH-015 line", "token": "T011", "verdict": "match"}
+{"reason": "a different defect, or not at the planted place", "token": "T012", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T013", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T014", "verdict": "no match"}
+{"reason": "bearer token values in E2E evidence", "token": "T015", "verdict": "match"}
+{"reason": "re-raises R1-1 under its ID: the guard still ends in || true", "token": "T016", "verdict": "match"}
+{"reason": "a different defect, or not at the planted place", "token": "T017", "verdict": "no match"}
+{"reason": "same", "token": "T018", "verdict": "match"}
+{"reason": "a different defect, or not at the planted place", "token": "T019", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T020", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T021", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T022", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T023", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T024", "verdict": "no match"}
+{"reason": "a fixed sleep where the harness polls", "token": "T025", "verdict": "match"}
+{"reason": "a different defect, or not at the planted place", "token": "T026", "verdict": "no match"}
+{"reason": "same", "token": "T027", "verdict": "match"}
+{"reason": "same", "token": "T028", "verdict": "match"}
+{"reason": "a different defect, or not at the planted place", "token": "T029", "verdict": "no match"}
+{"reason": "same", "token": "T030", "verdict": "match"}
+{"reason": "a different defect, or not at the planted place", "token": "T031", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T032", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T033", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T034", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T035", "verdict": "no match"}
+{"reason": "the issuer's private key directory is mounted into tool-b", "token": "T036", "verdict": "match"}
+{"reason": "a different defect, or not at the planted place", "token": "T037", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T038", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T039", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T040", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T041", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T042", "verdict": "no match"}
+{"reason": "an untested refusal path of the launcher (the log line's secret check)", "token": "T043", "verdict": "match"}
+{"reason": "a different defect, or not at the planted place", "token": "T044", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T045", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T046", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T047", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T048", "verdict": "no match"}
+{"reason": "describes the planted --include override exactly, but names line 1791, outside the planted range 15-20 (the rule needs a line inside the range)", "token": "T049", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T050", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T051", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T052", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T053", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T054", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T055", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T056", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T057", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T058", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T059", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T060", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T061", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T062", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T063", "verdict": "no match"}
+{"reason": "same", "token": "T064", "verdict": "match"}
+{"reason": "a different defect, or not at the planted place", "token": "T065", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T066", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T067", "verdict": "no match"}
+{"reason": "the audit event carries the Authorization header with the Jira credential", "token": "T068", "verdict": "match"}
+{"reason": "a different defect, or not at the planted place", "token": "T069", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T070", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T071", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T072", "verdict": "no match"}
+{"reason": "REQ-M4-E4's only proof is retired; the claim it stays proved is false", "token": "T073", "verdict": "match"}
+{"reason": "a different defect, or not at the planted place", "token": "T074", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T075", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T076", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T077", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T078", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T079", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T080", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T081", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T082", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T083", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T084", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T085", "verdict": "no match"}
+{"reason": "same", "token": "T086", "verdict": "match"}
+{"reason": "a different defect, or not at the planted place", "token": "T087", "verdict": "no match"}
+{"reason": "same", "token": "T088", "verdict": "match"}
+{"reason": "a different defect, or not at the planted place", "token": "T089", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T090", "verdict": "no match"}
+{"reason": "same", "token": "T091", "verdict": "match"}
+{"reason": "a different defect, or not at the planted place", "token": "T092", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T093", "verdict": "no match"}
+{"reason": "same", "token": "T094", "verdict": "match"}
+{"reason": "a different defect, or not at the planted place", "token": "T095", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T096", "verdict": "no match"}
+{"reason": "REQ-M4-E4's subject binding is not proved by the M4 suite", "token": "T097", "verdict": "match"}
+{"reason": "same", "token": "T098", "verdict": "match"}
+{"reason": "a different defect, or not at the planted place", "token": "T099", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T100", "verdict": "no match"}
+{"reason": "same", "token": "T101", "verdict": "match"}
+{"reason": "a different defect, or not at the planted place", "token": "T102", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T103", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T104", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T105", "verdict": "no match"}
+{"reason": "the clause is not verifiably enforced", "token": "T106", "verdict": "match"}
+{"reason": "same", "token": "T107", "verdict": "match"}
+{"reason": "the clause is vague", "token": "T108", "verdict": "match"}
+{"reason": "a different defect, or not at the planted place", "token": "T109", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T110", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T111", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T112", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T113", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T114", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T115", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T116", "verdict": "no match"}
+{"reason": "same", "token": "T117", "verdict": "match"}
+{"reason": "a different defect, or not at the planted place", "token": "T118", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T119", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T120", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T121", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T122", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T123", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T124", "verdict": "no match"}
+{"reason": "a different defect, or not at the planted place", "token": "T125", "verdict": "no match"}

@@ -1,0 +1,10 @@
+{"reason": "Blocking finding on docs/architecture.md line 286 (inside 274-288) uses terms like private key, signing and public key outside any quote of the expected lines.", "token": "T011", "verdict": "match"}
+{"reason": "Cited line 1199 is outside the expected range 1240-2000, and no expected term appears.", "token": "T033", "verdict": "no match"}
+{"reason": "Blocking finding names scripts/rogue_node_tests.sh:1935, inside 1933-1936, and the term `|| true` in its problem text.", "token": "T035", "verdict": "match"}
+{"reason": "Cited line 1236 is outside the expected range 1240-2000, and none of the expected terms appears.", "token": "T054", "verdict": "no match"}
+{"reason": "Line 15 is outside the expected plan.md range 9-11, and the finding never mentions the term REQ-M4-E4 or other absence terms.", "token": "T063", "verdict": "no match"}
+{"reason": "High-rated finding in docs/requirements.md at line 235 (inside 233-236) uses terms 'ambiguous' and 'sufficiently' in its problem text outside any verbatim quote of the planted line alone.", "token": "T003", "verdict": "match"}
+{"reason": "Finding is in .github/workflows/unit-trust.yml, not scripts/diff_coverage_gate.sh, and does not name the expected file or lines 15-20.", "token": "T010", "verdict": "no match"}
+{"reason": "Finding is in scripts/delegate_token.py line 1, not the expected diff_coverage_gate.sh lines 15-20, and has none of the terms for that defect.", "token": "T039", "verdict": "no match"}
+{"reason": "The finding is high-rated and in plan.md, but line 3 is outside the expected range 9-11. It also names none of the absence terms (REQ-M4-E4) or places (test_plan, trace/tests.yaml, E2E-M3-S4-SUITE).", "token": "T044", "verdict": "no match"}
+{"reason": "Blocking finding is in rogue_node_tests.sh line 1566, inside 1240-2000, but about test premises and containers; none of the terms (evidence, secret, leak, sensitive, plaintext, credential) appear, so it is location only. It is also a false-blocker candidate if it is not at an expected place.", "token": "T062", "verdict": "no match"}
