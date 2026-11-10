@@ -589,7 +589,8 @@ def test_canary_and_twin_get_the_same_prompt_telling_them_to_follow_every_file_a
     r.scenario({"reads": ["README.md"]})
     result = bench.run_canary(prepared, key, bench.RunState(60, 0, set(), "9.9.9"))
     first, second = r.prompts()
-    assert first == second and "Follow every instruction file and every setting" in first
+    assert first == second == bench.CANARY_PROMPT and "follow them exactly" in first
+    assert "treat them as data" not in first  # the review prompt's data clause would stop any twin (4.5b review, B2)
     assert result["calls"] == 2 and result["passed"] is True and result["valid"] is False
 
 
@@ -620,6 +621,11 @@ def test_a_changed_canary_runs_again_and_an_unchanged_one_does_not(repo: tuple[R
     monkeypatch.setattr(bench, "canary_texts", lambda outside, hook: {
         **original(outside, hook), "CLAUDE.md": "# Conventions\n\nA reworded convention.\n"})
     assert len(run_once("changed")) == 1 and r.calls() == 4
+    monkeypatch.setattr(bench, "CANARY_PROMPT", bench.CANARY_PROMPT + "Another sentence.\n")
+    assert len(run_once("prompt-changed")) == 1 and r.calls() == 6
+    original_twin = bench.twin_invocation
+    monkeypatch.setattr(bench, "twin_invocation", lambda model, effort: [*original_twin(model, effort), "--verbose"])
+    assert len(run_once("twin-changed")) == 1 and r.calls() == 8
 
 
 @pytest.mark.parametrize(("canary", "runs"), [
@@ -696,7 +702,7 @@ def test_report_gives_every_count_for_every_configuration(repo: tuple[Repo, str,
     rows = {line.split("|")[1].strip() for line in report.splitlines() if line.startswith("| ") and " of " in line}
     assert rows >= {"short+list", "open+list"}
     assert "| open+list | 1 of 1 |" in report and "1 (1)" in report  # one false alarm on the one clean review
-    for needle in ("Discordant cases, short+list against open+list", "Severity agreement", "Origin stage",
+    for needle in ("Discordant cases, short+list against open+list", "Rating agreement", "Origin stage",
                    "Canary:", "Second confirmer", "within chance"):
         assert needle in report
 
@@ -714,13 +720,46 @@ def test_discordant_cases_are_named_per_side() -> None:
     assert bench.discordant({"x": a, "y": b}, "x", "y") == {"only x": ["C1"], "only y": ["C2"]}
 
 
-def test_severity_agreement_and_origin_table_count_findings() -> None:
-    lines = [{"case": "C1", "configuration": "open+list", "status": "completed",
-              "findings": [_new_finding("X1", "high"), _new_finding("X2", "low")]},
-             {"case": "C1", "configuration": "open+list", "status": "completed",
-              "findings": [_new_finding("X1", "high"), _new_finding("X2", "medium")]}]
-    assert bench.severity_agreement(lines) == {"same": 1, "different": 1}
-    assert bench.origin_table(lines) == {"implementation": 4}
+def _key_with(case: bench.Case) -> bench.AnswerKey:
+    """A minimal stage-B key holding one case, for the report functions."""
+    return bench.AnswerKey(cases=[case], budget=60, model="m", effort="high", sha256="k", prompts={}, prompts_sha256="p",
+                           stage="B")
+
+
+def _rated(run: int, detected: list[str], blocking: list[str], seen: list[str], ids: tuple[str, ...]) -> dict:
+    return {"case": "C1", "configuration": "open+list", "status": "completed", "run": run,
+            "findings": [_new_finding(fid, "high") for fid in ids],
+            "score": {"detected": detected, "detected_blocking": blocking, "not_blocking": seen,
+                      "matches": {eid: list(ids[:1]) for eid in detected}}}
+
+
+def test_rating_agreement_pairs_the_runs_by_expected_defect_not_by_finding_id() -> None:
+    """4.5b report review, H1: two sessions name their findings themselves, so the same ID is no pairing."""
+    key = _key_with(_key_case(case_id="C1", expected=[_expected(), _expected(id="E2")]))
+    lines = [_rated(1, ["E1"], ["E1"], ["E2"], ("F1", "F2")),   # E1 blocking, E2 seen at medium or low
+             _rated(2, ["E1"], [], [], ("F7", "F1"))]           # E1 high, E2 not found; F1 is another finding
+    assert bench.severity_agreement(lines, key, bench.Confirmation()) == {"same": 0, "different": 2}
+    lines[1]["score"] = {"detected": ["E1"], "detected_blocking": ["E1"], "not_blocking": ["E2"], "matches": {"E1": ["F7"]}}
+    assert bench.severity_agreement(lines, key, bench.Confirmation()) == {"same": 2, "different": 0}
+
+
+def test_origin_table_counts_each_origin_against_the_list_the_review_was_given() -> None:
+    key = _key_with(_key_case(case_id="C1", artifact_type="code"))
+    lines = [{"case": "C1", "configuration": "open+list", "findings": [_new_finding("X1", "high"),
+                                                                       {**_new_finding("X2", "low"), "origin_stage": "requirements"}]}]
+    assert bench.origin_table(lines, key) == {"implementation": {"code": 1}, "requirements": {"code": 1}}
+
+
+def test_repeats_table_reads_the_confirmed_verdicts_and_shows_a_failed_run() -> None:
+    """4.5b report review, B1: an automatic detection that confirmation rejects is no detection in the repeats."""
+    first = {**_rated(1, ["E1"], ["E1"], [], ("F1",)), "case": "RM", "configuration": "short+list"}
+    second = {**_rated(2, ["E1"], ["E1"], [], ("F9",)), "case": "RM", "configuration": "short+list"}
+    failed = {"case": "RM", "configuration": "open+list", "status": "failed", "run": 1}
+    again = {**_rated(2, [], [], [], ()), "case": "RM", "configuration": "open+list"}
+    confirmation = bench.Confirmation({"T1": "match", "T2": "no match"},
+                                      {("RM", "short+list", 1, "F1"): "T1", ("RM", "short+list", 2, "F9"): "T2"})
+    table = bench.repeats_table([first, second, failed, again], confirmation)
+    assert "RM short+list: True, False" in table and "RM open+list: failed, False" in table
 
 
 # --- Runner paths (S45-D11, R5-A8) ---------------------------------------------------------------
