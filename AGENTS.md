@@ -161,8 +161,8 @@ Allowed links only: `REQ → ARCH` (architecture `Satisfies:`), `ARCH → DD` (D
 ## Slice workflow
 
 Every change follows this workflow, scaled to its size: a small fix still gets a plan (it may be a
-few lines), tests first, an independent review and the close-out, but not every section of the
-template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>/`, starts from
+few lines) and its review, tests first when it changes behaviour, the final review and the
+close-out, but not every section of the template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>/`, starts from
 `docs/slices/_template/`, and gets a row in the [slice index](docs/slices/README.md).
 
 A slice passes seven stages, in this order. The plan's stage table says for each whether it applies;
@@ -176,7 +176,7 @@ limit (the [review loop](#poc-scope-and-proportion)).
 | Discovery | `plan.md` and `test_plan.md` | plan review, list `plan-and-test-plan` | `make docs-check`, `make lint` | the plan review has no blocking or high finding open, and the user merges the plan PR |
 | Requirements | new or changed `REQ` items in `docs/requirements.md` and their entries in `trace/tests.yaml` | requirements review, list `requirements` | `make qa-trace`, `make docs-check` | the review has no blocking or high finding open |
 | Architecture and interfaces | `ARCH` sections and the state inventory of `docs/architecture.md`, and `security/invariants.yaml` | architecture review, list `architecture-and-interfaces` | `make qa-trace`, `make qa-deploy` | the review has no blocking or high finding open |
-| Tests first | unit and E2E tests from the reviewed test plan, and their `docs/test_spec.md` entries | tests-first review, lists `unit-tests` and `e2e-tests` | `make tooling-test`, `make test-lint`, `make unit-guard-check`, `make docs-check` | each new test fails on the base code for the reason it exists, and the review has no blocking or high finding open |
+| Tests first | unit and E2E tests from the reviewed test plan, and their `docs/test_spec.md` entries | tests-first review, lists `unit-tests` and `e2e-tests` | `make tooling-test`, `make test-lint`, `make unit-guard-check`, `make docs-check`: the new tests fail as planned, every other test and check passes | each new test fails on the base code for the reason it exists, and the review has no blocking or high finding open |
 | Implementation | the code and configuration the plan approved, with what it retires removed | implementation review, list `code` | every gate of [Quality gates](#quality-gates), the full E2E suite on a clean stack, `make qa-evidence` | every gate's CI job passes on the PR, and the review has no blocking or high finding open |
 | Final review | the record of the unit `final` | final review, 4.1's final mode, no list | the decision brief, `scripts/review_brief.py` | no blocking or high finding open |
 | Handoff | the PR body: the decision brief, the review answers, every discovered issue with its disposition | the user's approval | the CI result of the PR's head commit | the user merges |
@@ -273,15 +273,17 @@ All of the following, in the same change:
   issue it belongs to; findings fixed or rejected in the PR, and notes outside the threat model, are
   not issues ("Few exceptions"). Close the issues the change finishes (`Closes #N` in the PR body);
 - open the PR body with the decision brief that `scripts/review_brief.py` builds from the attempt logs
-  and review records of the units in the PR (each unit's last verdict and severity counts; every
+  and review records of the units in the PR, built once CI has finished on the PR's head (CI runs
+  on pull requests, so the brief is pasted after the PR is opened, and built again after a later
+  push) (each unit's last verdict and severity counts; every
   `owner:` answer, decision concern, `cannot determine` answer and finding still disputed; every
   blocking or high finding answered `rejected`, with its reason; the origin stage against the stage
   that found each finding; the CI result of the PR's head commit). The user reads the plans and
   records where the brief points;
 - put the implementation review's answers to the test-plan questions, every discovered issue with
   its disposition (see [PoC scope and proportion](#poc-scope-and-proportion)) and each issue's link in
-  the PR body. The issue is the home of its status; the PR body is a snapshot and is not updated
-  later.
+  the PR body. The issue is the home of its status; the PR body is a snapshot at handoff, and is not
+  updated after the user's merge.
 
 ### Independent review
 - **Reviewer.** Never the author: a fresh headless Claude session confined to a frozen copy of the
@@ -384,7 +386,7 @@ never replaces it.
 | Documentation | `make docs-check` | CI | every harness test and every static test in `trace/tests.yaml` has a `docs/test_spec.md` heading and vice versa; relative links and `#anchors` in live docs resolve; every tracked image in `docs/` is referenced and every `.puml` has its `.svg`; every slice bundle is in the slice index; `TEST_ONLY=` examples name real tests; every review record the launcher writes holds exactly the Prompt, Evidence and Report blocks its attempt log names, a recheck's answers are unchanged since it read them, and every finding of a released report has an answer its severity and kind allow (`scripts/check_review_records.py`) |
 | QA tooling tests | `make tooling-test` | CI | `tests/tools/` (pytest) and `tests/shell/` pass; one of them runs `ruff check services scripts` (ruff's default rules, without `ruff_changed_files.toml`), so the whole tree stays clean |
 | E2E outcome lint | `make test-lint` | CI | no outcome guard in `scripts/rogue_node_tests.sh` accepts several outcomes (`assert_file_any`, broad error regexes, `!= 200`), swallows failure (`\|\| true`), checks only a non-zero exit, or is a test of negative greps only; a multi-outcome guard needs `# test-lint: alternate: <reason>` |
-| Changed-files lint | `make lint` | CI, PRs only (own job) | in every file the PR adds, modifies or renames, no ruff or shellcheck finding that is new or worse than at the merge-base (a finding is keyed by file, rule and enclosing function, or line text, and compared by count and value, so existing violations stay and a pure rename is not new): ruff's default rules, complexity C901 ≤ 10, at most 12 branches, 5 arguments and 50 statements per function (PLR0912, PLR0913, PLR0915), naming (N) without exceptions, security (S, except `assert` in `tests/`); the limit, naming, F401 and F841 rules ignore `noqa`; the configuration `ruff_changed_files.toml` is read from the merge-base, so a change cannot loosen it; every added `.py` file, shell script (by extension or shebang), YAML, TOML, Dockerfile or Rego file starts with a purpose comment (tool directives do not count), and every added Markdown file with a `#` title and a paragraph (coding rule 8; other formats are left to the review); a missing base or tool fails |
+| Changed-files lint | `make lint` | CI, PRs only (own job) | in every file the PR adds, modifies or renames, no ruff or shellcheck finding that is new or worse than at the merge-base (a finding is keyed by file, rule and enclosing function, or line text, and compared by count and value, so existing violations stay and a pure rename is not new): ruff's default rules, complexity C901 ≤ 10, at most 12 branches, 5 arguments and 50 statements per function (PLR0912, PLR0913, PLR0915), naming (N) without exceptions, security (S, except `assert` in `tests/`); the limit, naming, F401 and F841 rules ignore `noqa`; the configuration `ruff_changed_files.toml` is read from the merge-base, so a change cannot loosen it; every added `.py` file, shell script (by extension or shebang), YAML, TOML, Dockerfile or Rego file starts with a purpose comment (tool directives do not count), and every added Markdown file with a `#` title and a paragraph, after a leading YAML front-matter block if it has one, as a skill file needs (coding rule 8; other formats are left to the review); a missing base or tool fails |
 | Deployment register | `make qa-deploy` | CI (without image inspection; the `e2e` job runs it with image users inspected) | every service's image, user, networks, ports, mounts, secret env names and privileges match `security/invariants.yaml`; every protected asset reaches only its holders, except unexpired known violations of open OPLs; register holders equal the `REQ-SEC` `Holders:` lines; non-root except the grandfathered baseline until 2027-01-31 |
 | Unit guard integrity | `make unit-guard-check` | CI | every unit test has premise, exercise, outcome guards |
 | Unit trust bundle | `make unit-trust` | CI | total line coverage ≥ 85%; branch coverage ≥ 75% on `services/capability-issuer/app.py` and `services/tool-b/server.py`; unit traceability check; invariant, negative-control, hybrid-critical suites; invariant flake check ×5 |
@@ -410,7 +412,8 @@ Standards that are **not** gated yet (follow them for new and changed code):
    PKCS#8 PEM), so the evidence secret check finds them by shape. Secrets created by others (SPIRE
    key stores, join tokens, Jira tokens) keep their format.
 8. Every new file starts with a comment that says what the file is for: in Python the module
-   docstring; in Markdown a `#` title followed by a paragraph that says what the document is for;
+   docstring; in Markdown a `#` title followed by a paragraph that says what the document is for
+   (after its YAML front matter, in a skill file);
    in every other format with comments (shell, YAML, TOML, Dockerfile, Rego, patches, text and
    others) a first comment or line after any shebang or YAML document marker. Only formats without
    comment syntax (JSON, JSONL) and binary files are exempt. Names say what a file, function or

@@ -434,6 +434,19 @@ def github_repo(repo: Path) -> tuple[str, str] | None:
     return (match.group(1), match.group(2)) if match else None
 
 
+CI_READ_ERRORS = (OSError, ValueError, KeyError, AttributeError, urllib.error.URLError)
+
+
+def ci_runs_and_jobs(owner_repo: tuple[str, str], commit: str, fetch: Fetch) -> tuple[list[Any], dict[Any, list[Any]]]:
+    """The workflow runs whose head is the commit, and each run's jobs, from the public API without a token; the
+    launcher's evidence and the decision brief (`scripts/review_brief.py`) read CI through this one function. Raises
+    one of `CI_READ_ERRORS` when the API cannot be read."""
+    base = f"https://api.github.com/repos/{owner_repo[0]}/{owner_repo[1]}/actions/runs"
+    runs = [r for r in fetch(f"{base}?head_sha={commit}&per_page=50").get("workflow_runs", [])
+            if r.get("head_sha") == commit]
+    return runs, {r["id"]: fetch(f"{base}/{r['id']}/jobs?per_page=100").get("jobs", []) for r in runs}
+
+
 def ci_evidence(evidence: Evidence, repo: Path, commit: str, fetch: Fetch) -> None:
     """(c) every job of the workflow runs whose head is the reviewed commit, with its status and conclusion."""
     owner_repo = github_repo(repo)
@@ -441,12 +454,9 @@ def ci_evidence(evidence: Evidence, repo: Path, commit: str, fetch: Fetch) -> No
         evidence.add(f"failed: {CI_COMMAND}: the origin remote is not a GitHub repository")
         evidence.status["ci"] = "failed"
         return
-    base = f"https://api.github.com/repos/{owner_repo[0]}/{owner_repo[1]}/actions/runs"
     try:
-        runs = [r for r in fetch(f"{base}?head_sha={commit}&per_page=50").get("workflow_runs", [])
-                if r.get("head_sha") == commit]
-        jobs = {r["id"]: fetch(f"{base}/{r['id']}/jobs?per_page=100").get("jobs", []) for r in runs}
-    except (OSError, ValueError, KeyError, AttributeError, urllib.error.URLError) as exc:
+        runs, jobs = ci_runs_and_jobs(owner_repo, commit, fetch)
+    except CI_READ_ERRORS as exc:
         evidence.add(f"failed: {CI_COMMAND}: {type(exc).__name__}")
         evidence.status["ci"] = "failed"
         return

@@ -26,6 +26,10 @@ REVIEW_QUESTIONS = ("which wrong failure would still pass it", "a key, socket or
                     "start with a comment that says what the file is for")
 TEMPLATES = ROOT / "docs" / "slices" / "_template"
 SKILL = ROOT / ".claude" / "skills" / "grill-me" / "SKILL.md"
+# S46-D1: the lists each stage's review takes; the final review takes none, and handoff is the user's approval.
+STAGE_LISTS = {"Discovery": ["plan-and-test-plan"], "Requirements": ["requirements"],
+               "Architecture and interfaces": ["architecture-and-interfaces"], "Tests first": ["unit-tests", "e2e-tests"],
+               "Implementation": ["code"], "Final review": [], "Handoff": []}
 DISCOVERY_EXIT = "| the plan review has no blocking or high finding open, and the user merges the plan PR |"
 
 
@@ -65,8 +69,10 @@ def stage_table_problems(agents: str) -> list[str]:
     problems = [] if [r[0] for r in rows] == STAGES else [f"stages are {[r[0] for r in rows]}"]
     for row in rows:
         problems += [f"{row[0]}: an empty cell" for cell in row if not cell]
-        named = re.findall(r"`([a-z-]+)`", row[2])
+        named = re.findall(r"`([a-z0-9-]+)`", row[2])
         problems += [f"{row[0]}: no list {name}" for name in named if name not in LISTS]
+        if row[0] in STAGE_LISTS and sorted(named) != sorted(STAGE_LISTS[row[0]]):
+            problems.append(f"{row[0]}: its review takes {named}, not S46-D1's {STAGE_LISTS[row[0]]}")
         if not named and "final mode" not in row[2] and "approval" not in row[2]:
             problems.append(f"{row[0]}: its review names no list, final mode or approval")
     return problems
@@ -82,7 +88,8 @@ def test_agents_md_states_the_seven_stages_with_every_cell_filled() -> None:
     (lambda t: t.replace("list `code`", "list `kode`", 1), "no list kode"),
     (lambda t: t.replace("final review, 4.1's final mode, no list", "the final review", 1), "names no list"),
     (lambda t: t.replace(HEADER, "| Stage | Output | Review | Checks | Exit |", 1), "no stage table"),
-], ids=["stage-missing", "empty-cell", "unknown-list", "review-without-list-or-mode", "no-table"])
+    (lambda t: t.replace("list `requirements`", "list `code`", 1), "not S46-D1's"),
+], ids=["stage-missing", "empty-cell", "unknown-list", "review-without-list-or-mode", "no-table", "lists-swapped"])
 def test_the_stage_table_check_fails_on_each_kind_of_violation(edit: Any, problem: str) -> None:
     text = edit((ROOT / "AGENTS.md").read_text())
     assert any(problem in p for p in stage_table_problems(text)), stage_table_problems(text)
@@ -129,7 +136,8 @@ def test_the_test_plan_template_names_each_stage_list_and_the_required_review_qu
     ("`architecture-and-interfaces`", "`architecture`", "no list architecture-and-interfaces"),
     (REVIEW_QUESTIONS[0], "which failure", "no review question"),
     (REVIEW_QUESTIONS[1], "a secret reachable", "no review question"),
-], ids=["list-missing", "tests-question-missing", "keys-question-missing"])
+    (REVIEW_QUESTIONS[2], "say what it is", "no review question"),
+], ids=["list-missing", "tests-question-missing", "keys-question-missing", "names-question-missing"])
 def test_the_test_plan_template_check_fails_on_each_missing_part(old: str, new: str, problem: str) -> None:
     text = (TEMPLATES / "test_plan.md").read_text().replace(old, new)
     assert any(problem in p for p in review_plan_problems(text))
@@ -173,8 +181,15 @@ def step_references(paths: list[Path]) -> list[str]:
             for n, line in enumerate(p.read_text().split("\n"), 1) if STEP_REFERENCE.search(line)]
 
 
+def rule_documents() -> list[Path]:
+    """The live documents, the stage lists and the skills: every text that states or carries a rule."""
+    return sorted({*docs.live_docs(ROOT), *(ROOT / "docs" / "review_checklists").glob("*.md"),
+                   *(ROOT / ".claude" / "skills").rglob("*.md")})
+
+
 def test_no_live_document_refers_to_the_old_step_numbers() -> None:
-    assert step_references(docs.live_docs(ROOT)) == []
+    assert SKILL in rule_documents() and ROOT / "docs" / "review_checklists" / "code.md" in rule_documents()
+    assert step_references(rule_documents()) == []
 
 
 def test_a_planted_step_reference_fails(tmp_path: Path) -> None:

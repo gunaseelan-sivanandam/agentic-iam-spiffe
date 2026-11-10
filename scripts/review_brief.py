@@ -25,7 +25,6 @@ import importlib.util
 import json
 import subprocess
 import sys
-import urllib.error
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -168,10 +167,29 @@ def _found_by(unit: Unit, attempt: Attempt) -> str:
     return ", ".join(sorted(stages)) if stages else unit.name
 
 
-def _unit_row(unit: Unit, brief: Brief, open_before: int) -> str:
+def last_verdicts(unit: Unit) -> str:
+    """The verdict of each reviewer of the unit's last round with a released report, by its label when the round had
+    several reviewers (several reviewers in one round count as one round)."""
     reported = unit.reported()
-    last = (reported[-1].end or {}).get("verdict", "—") if reported else "no completed attempt"
-    counts = Counter(f["severity"] for a in reported for f in a.report.get("findings", []))  # type: ignore[union-attr]
+    if not reported:
+        return "no completed attempt"
+    last_round = max(a.start["round"] for a in reported)
+    verdicts = {a.start["reviewer"]: (a.end or {}).get("verdict", "—") for a in reported if a.start["round"] == last_round}
+    return next(iter(verdicts.values())) if len(verdicts) == 1 else ", ".join(f"{r}: {v}" for r, v in sorted(verdicts.items()))
+
+
+def finding_counts(unit: Unit) -> Counter[str]:
+    """Distinct findings by their latest severity: a re-raised finding keeps its ID and counts once."""
+    latest: dict[tuple[str, str], str] = {}
+    for attempt in unit.reported():
+        for finding in attempt.report.get("findings", []):  # type: ignore[union-attr]
+            latest[(attempt.start["reviewer"], finding["id"])] = finding["severity"]
+    return Counter(latest.values())
+
+
+def _unit_row(unit: Unit, brief: Brief, open_before: int) -> str:
+    last = last_verdicts(unit)
+    counts = finding_counts(unit)
     rounds = max((a.start["round"] for a in unit.attempts), default=0)
     opened = len(brief.owner) + len(brief.concerns) + len(brief.undetermined) + len(brief.disputed) - open_before
     cells = [unit.label, str(last), str(rounds), *(str(counts.get(s, 0)) for s in SEVERITIES),
@@ -227,12 +245,11 @@ def ci_line(repo: Path, head: str, fetch: Fetch) -> str:
     owner_repo = inputs.github_repo(repo)
     if owner_repo is None:
         return f"CI of `{head[:12]}`: cannot be read: the origin remote is not a GitHub repository."
-    api = f"https://api.github.com/repos/{owner_repo[0]}/{owner_repo[1]}/actions/runs"
     try:
-        runs = [r for r in fetch(f"{api}?head_sha={head}&per_page=50").get("workflow_runs", []) if r.get("head_sha") == head]
-        jobs = [j for r in runs for j in fetch(f"{api}/{r['id']}/jobs?per_page=100").get("jobs", [])]
-    except (OSError, ValueError, KeyError, AttributeError, urllib.error.URLError) as exc:
+        runs, by_run = inputs.ci_runs_and_jobs(owner_repo, head, fetch)
+    except inputs.CI_READ_ERRORS as exc:
         return f"CI of `{head[:12]}`: cannot be read ({type(exc).__name__}); not a pass."
+    jobs = [job for run in runs for job in by_run[run["id"]]]
     if not runs or not jobs:
         return f"CI of `{head[:12]}`: no run{' with jobs' if runs else ''} for this commit; not a pass."
     running = sorted(j.get("name", "?") for j in jobs if j.get("status") != "completed")
@@ -253,14 +270,15 @@ def render(brief: Brief, ci: str, head: str, merge_base: str) -> str:
     lines = ["## Decision brief", "",
              f"Built by `scripts/review_brief.py` from the review units this PR adds (head `{head[:12]}`, merge-base "
              f"`{merge_base[:12]}`). The plans and records are worth reading where this brief points.", "",
-             "| Unit | Last verdict | Rounds | Blocking | High | Medium | Low | Open |",
+             "| Unit | Last verdict | Rounds | Blocking | High | Medium | Low | Open |",  # findings counted once each
              "| --- | --- | --- | --- | --- | --- | --- | --- |", *brief.rows, ""]
     lines += _items("Answered `owner:`", brief.owner) + _items("Decision concerns", brief.concerns)
     lines += _items("`cannot determine` in a recheck", brief.undetermined)
     lines += _items("Still disputed after a recheck", brief.disputed)
     lines += _items("Blocking and high findings answered `rejected`", brief.rejected)
     found_by = sorted({f for _o, f in brief.origins})
-    lines += ["**Where findings started** (origin stage against the review that found them)", ""]
+    lines += ["**Where findings started** (origin stage of each finding, against the review that found it: its "
+              "`--stage` lists, or its unit when it had none)", ""]
     if brief.origins:
         lines += ["| Origin | " + " | ".join(found_by) + " |", "| --- |" + " --- |" * len(found_by)]
         for origin in sorted({o for o, _f in brief.origins}):

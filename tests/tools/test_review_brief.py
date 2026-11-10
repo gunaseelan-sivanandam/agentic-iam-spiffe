@@ -7,6 +7,7 @@ The brief is built from attempt logs and records that the launcher writes in its
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -35,7 +36,7 @@ def _brief(fx: base.Fixture) -> str:
     return brief_module.build(fx.work, "origin/poc/base", "HEAD", _no_ci)
 
 
-def _two_rounds(fx: base.Fixture) -> None:
+def _two_rounds(fx: base.Fixture, last_answer: str = "rejected: it still does not happen") -> None:
     """Round 1 with five findings and their answers; a recheck that re-raises one and cannot settle another; the
     answers to the recheck."""
     findings = [base._finding("X1", severity="medium"), base._finding("X2", severity="medium"),
@@ -50,13 +51,13 @@ def _two_rounds(fx: base.Fixture) -> None:
         base._accounted("X1", "re-raised"), base._accounted("X2"), base._accounted("X3"),
         base._accounted("X4", "cannot determine", note="NOTE ON X4"), base._accounted("X5")]))
     assert base._run(fx, round_no=2, commit=commit) == 0
-    base._answers(fx, "unit1/c1/r2/A/1", "| X1 | medium | rejected: it still does not happen |")
+    base._answers(fx, "unit1/c1/r2/A/1", f"| X1 | medium | {last_answer} |")
 
 
 def test_the_brief_lists_every_item_the_owner_must_see(fx: base.Fixture) -> None:
     _two_rounds(fx)
     text = _brief(fx)
-    assert "| `demo` `unit1` | no | 2 | 0 | 2 | 3 | 1 | 4 for the owner |" in text  # X1, X2 and the re-raised X1
+    assert "| `demo` `unit1` | no | 2 | 0 | 2 | 2 | 1 | 4 for the owner |" in text  # the re-raised X1 counts once
     owner = text.split("**Answered `owner:`**", 1)[1].split("**Decision concerns**", 1)[0]
     assert "X2 (medium): owner: docs/slices/demo/decisions.md" in owner and "X3" not in owner
     assert "X3 (low): owner:" in text.split("**Decision concerns**", 1)[1].split("**`cannot", 1)[0]
@@ -66,6 +67,35 @@ def test_the_brief_lists_every_item_the_owner_must_see(fx: base.Fixture) -> None
     rejected = text.split("answered `rejected`**", 1)[1].split("**Where", 1)[0]
     assert "X5 (high): rejected: already covered by tests/test_x.py" in rejected and "X1" not in rejected
     assert "| discovery | 1 |" in text and "| tests first | 1 |" in text and "| implementation | 4 |" in text
+
+
+def test_a_re_raised_finding_answered_with_a_fix_is_not_disputed(fx: base.Fixture) -> None:
+    _two_rounds(fx, last_answer="fixed: scripts/review_me.py: guarded now")
+    disputed = _brief(fx).split("**Still disputed after a recheck**", 1)[1].split("**Blocking", 1)[0]
+    assert disputed.strip() == "None."
+
+
+def test_each_reviewer_of_the_last_round_has_its_verdict_shown(fx: base.Fixture) -> None:
+    """4.6 review, F2: several reviewers in one round count as one round; the brief shows each one's verdict."""
+    fx.scenario(base._reply(verdict="no"), base._reply(verdict="yes"))
+    assert base._run(fx, labels=("A", "B")) == 0
+    base._commit_all(fx.work, "two reviewers, no findings")
+    row = next(line for line in _brief(fx).split("\n") if line.startswith("| `demo` `unit1`"))
+    assert "A: " in row and "B: " in row and "no" in row and "yes" in row
+
+
+def test_a_completed_attempt_whose_record_lost_its_report_fails_when_the_record_check_skips_it(fx: base.Fixture) -> None:
+    """4.6 review, F1: attempts logged before slice 4.3 carry no `record_blocks`, so the record check skips them; the
+    brief itself fails when such an attempt's record holds no Report block."""
+    base._recheck(fx, "| X1 | high | fixed: scripts/review_me.py: guarded |")
+    log = fx.work / base.LOG
+    entries = [json.loads(line) for line in log.read_text().splitlines() if line.strip()]
+    log.write_text("".join(json.dumps({k: v for k, v in e.items() if k != "record_blocks"}) + "\n" for e in entries))
+    record = fx.work / base.RECORD
+    record.write_text(record.read_text().replace("#### Report\n", "#### Not the report\n", 1))
+    base._commit_all(fx.work, "an attempt from before 4.3 whose record lost its report")
+    with pytest.raises(brief_module.BriefError, match="completed, but its record holds no Report block"):
+        _brief(fx)
 
 
 def test_a_unit_with_nothing_open_says_so(fx: base.Fixture) -> None:
