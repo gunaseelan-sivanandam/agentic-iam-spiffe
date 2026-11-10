@@ -115,6 +115,19 @@ def test_a_unit_never_reviewed_and_a_missing_final_unit_are_shown(fx: base.Fixtu
     assert "| not reviewed: no completed attempt |" in text and "No unit `final`" in text
 
 
+def test_a_pr_with_a_final_unit_gets_no_missing_final_line(fx: base.Fixture) -> None:
+    """Final review, FR-9: the branch a final PR takes."""
+    assert base._run(fx, unit="final", record="docs/slices/demo/review_final.md") == 0
+    base._commit_all(fx.work, "the final review")
+    text = _brief(fx)
+    assert "| `demo` `final` |" in text and "No unit `final`" not in text
+
+
+def test_a_base_git_cannot_resolve_is_refused(fx: base.Fixture) -> None:
+    with pytest.raises(brief_module.BriefError, match="git merge-base failed"):
+        brief_module.build(fx.work, "origin/no-such-branch", "HEAD", _no_ci)
+
+
 def test_a_finding_without_an_answer_fails_instead_of_a_brief_that_omits_it(fx: base.Fixture) -> None:
     base._first_round(fx, base._finding("X1", severity="medium"))
     base._commit_all(fx.work, "the review, not answered")

@@ -66,6 +66,8 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Last verification
 | Check | Date | Result |
 | --- | --- | --- |
+| Full E2E suite, clean stack, `make e2e` on `poc/slice-4-implementation` (`11667c5`) | 2026-11-10 | 120/120 passed; 1 warning (M5-T55 env-gated skip); `make qa-evidence` PASSED (validated 119, skipped 1) |
+| `make qa-quality` (and qa-trace in `--mode pr --base origin/poc/agentic-sdlc`), `make lint`, `make tooling-test` on `poc/slice-4-implementation` | 2026-11-10 | PASSED; gap gate: 0 new gaps; 764 pytest (with a scratch shellcheck), 9 shell |
 | Full E2E suite, clean stack, `make e2e` on `poc/slice-3-changed-files-lint` (`89c9cbe`; slice 2 at `642b840` gave the same) | 2026-11-08 | 120/120 passed; 1 warning (M5-T55 env-gated skip); `make qa-deploy` (image users inspected) and `make qa-evidence` PASSED after it |
 | `make lint` and `make qa-quality` on slice 3 against `origin/poc/agentic-sdlc`; `make tooling-test` | 2026-11-08 | lint and qa-quality PASSED; tooling tests pass locally except the 9 shell cases, which need `shellcheck` and run in the PR's CI |
 | Full E2E suite, clean stack, `make e2e` on `poc/slice-1-rules` (`7ab71c5`) | 2026-11-07 | 120/120 passed; 1 warning (M5-T55 env-gated skip) |
@@ -81,7 +83,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `poc/slice-4-plans` | agentic-sdlc-poc slice 4: the plans of its six sub-issues (#38–#43) | Plan reviews running; then one plan PR for the owner |
+| `poc/slice-4-implementation` | agentic-sdlc-poc slice 4: the six sub-issues (#38–#43), on the plans merged with PR #48 | Implemented and reviewed, local; one final PR into `poc/agentic-sdlc` when the owner pushes |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
@@ -99,7 +101,11 @@ Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
 ## Open delivery problems
 Full entries, root causes and lessons in [`docs/delivery_problem_log.md`](delivery_problem_log.md).
 - **DPL-010** Slice 2's reviews accepted answers on the author's word, and closed questions let gaps
-  through (preventive actions pending in slice 4, issue #33). DPL-008 closed on 2026-11-04.
+  through; its preventive actions are on the slice 4 branch, closing it when slice 4 merges.
+- **DPL-011** Slice 2's launcher and the secret check broke on slice 4's parallel plan reviews; fixed with
+  PR #48 and on the slice 4 branch, closing it when slice 4 merges.
+- **DPL-012** Slice 4's implementation run made claims and checks that did not hold; all fixed on the slice
+  4 branch, closing it when slice 4 merges. DPL-008 closed on 2026-11-04.
 
 ## Known gaps and debt
 - `M5-T55` (live Jira upstream) only runs with `JIRA_MCP_UPSTREAM_MODE=live`; default runs skip it.

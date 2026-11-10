@@ -199,7 +199,8 @@ limit (the [review loop](#poc-scope-and-proportion)).
   ownership, an API, CI history) records the probe and its result under environment facts; never
   assume it. A rule the slice does not follow is one line under "Rule deviations": the rule, the
   deviation, the user's words with the link, and the expiry.
-- The plan review of both files runs before the user sees them. The user approves the plan by
+- The plan review of both files runs before the user sees them. The plan PR's body opens with the
+  decision brief, built by `scripts/review_brief.py` as at handoff. The user approves the plan by
   merging the plan PR; implement only from the plan as merged on the integration branch (see
   [Git rules](#git-rules)). On a branch that changes the rulebook (this file, `tests/unit/AGENTS.md`)
   or the slice templates, the author works by the base branch's version until the change merges.
@@ -273,17 +274,15 @@ All of the following, in the same change:
   issue it belongs to; findings fixed or rejected in the PR, and notes outside the threat model, are
   not issues ("Few exceptions"). Close the issues the change finishes (`Closes #N` in the PR body);
 - open the PR body with the decision brief that `scripts/review_brief.py` builds from the attempt logs
-  and review records of the units in the PR, built once CI has finished on the PR's head (CI runs
-  on pull requests, so the brief is pasted after the PR is opened, and built again after a later
-  push) (each unit's last verdict and severity counts; every
+  and review records of the units in the PR (each unit's last verdict and severity counts; every
   `owner:` answer, decision concern, `cannot determine` answer and finding still disputed; every
   blocking or high finding answered `rejected`, with its reason; the origin stage against the stage
   that found each finding; the CI result of the PR's head commit). The user reads the plans and
   records where the brief points;
 - put the implementation review's answers to the test-plan questions, every discovered issue with
   its disposition (see [PoC scope and proportion](#poc-scope-and-proportion)) and each issue's link in
-  the PR body. The issue is the home of its status; the PR body is a snapshot at handoff, and is not
-  updated after the user's merge.
+  the PR body. The issue is the home of its status; the PR body is a snapshot and is not updated
+  later.
 
 ### Independent review
 - **Reviewer.** Never the author: a fresh headless Claude session confined to a frozen copy of the

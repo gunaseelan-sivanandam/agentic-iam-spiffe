@@ -1240,11 +1240,14 @@ def load_recheck(repo: Path, record_text: str | None, start: dict[str, Any], end
 
 
 def final_records(repo: Path, commit: str, record: str, diff_base: str, withheld: list[str]) -> tuple[str, ...]:
-    """The review records the final review reads (S41-D4): those in its own bundle and those the change touches."""
+    """The review records the final review reads (S41-D4): every record of its own bundle and of every bundle the
+    change touches, also records merged before the change, such as the plan reviews of a slice whose sub-issues shared
+    one plan PR (S46-D3; final review of slice 4, FR-3)."""
     merge_base = git(repo, "merge-base", diff_base, commit).strip()
-    bundle = str(Path(record).parent)
-    candidates = set(git(repo, "ls-tree", "-r", "--name-only", commit, "--", bundle).splitlines())
-    candidates |= set(git(repo, "diff", "--name-only", "--diff-filter=AMR", merge_base, commit, "--", "docs/slices").splitlines())
+    changed = git(repo, "diff", "--name-only", "--diff-filter=AMR", merge_base, commit, "--", "docs/slices").splitlines()
+    bundles = {str(Path(record).parent)} | {"/".join(p.split("/")[:3]) for p in changed if p.count("/") >= 3}
+    candidates = {p for bundle in sorted(bundles)
+                  for p in git(repo, "ls-tree", "-r", "--name-only", commit, "--", bundle).splitlines()}
     return tuple(sorted(p for p in candidates if p not in withheld and _is_record(p)))
 
 

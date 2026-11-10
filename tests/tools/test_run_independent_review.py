@@ -893,6 +893,21 @@ def test_final_prompt_names_the_other_units_records_and_never_gets_a_checklist(f
     assert "## Stage checklist" not in prompt and "A STAGE QUESTION" not in prompt
 
 
+def test_final_review_reads_the_merged_plan_reviews_of_the_bundles_the_change_touches(fx: Fixture) -> None:
+    """Final review of slice 4, FR-3: sub-issues' plan reviews merge with the plan PR, before the change."""
+    _write(fx.work, "docs/slices/sub/plan_review.md", "# a plan review merged with the plan PR\n")
+    _write(fx.work, "docs/slices/untouched/plan_review.md", "# a bundle the change does not touch\n")
+    _commit_all(fx.work, "plans merged")
+    _git(fx.work, "push", "-q", "-f", "origin", "HEAD:poc/base")
+    _write(fx.work, "docs/slices/sub/review_attempts.jsonl", '{"event": "start"}\n')
+    _write(fx.work, "docs/slices/demo/review_final.md", "# final\n")
+    _write(fx.work, REVIEWED, "print('the sub-issue')\n")
+    commit = _commit_all(fx.work, "the sub-issue's implementation")
+    assert _run(fx, unit="final", record="docs/slices/demo/review_final.md", commit=commit) == 0
+    mandate = _section(_prompt(fx), "Mandate")
+    assert "- docs/slices/sub/plan_review.md" in mandate and "untouched" not in mandate
+
+
 # --- Recheck inputs ---
 
 

@@ -355,13 +355,13 @@ Why review did not catch it:
   - How the CLI reports a failed Read was probed on 2026-11-08 (CLI 2.1.319: an error result with the
     matching call ID).
   - By the owner's decision, the untested refusal paths stay as they are in this PR.
-- Preventive (pending, slice 4, issue #33):
-  - every stage's prompt opens with an open mandate, and specific questions are a minimum;
+- Preventive (implemented on the slice 4 branch, issue #33):
+  - every stage's prompt opens with an open mandate, and specific questions are a minimum (4.1);
   - every stage gets the evidence (coverage, tool-computed lists of what is missing), not the
-    author's conclusions;
-  - a recheck opens the changed code and tests for each answer it accepts, and says what it read;
-  - an open final review;
-  - a check of review records against the attempt log (slice 6 candidate).
+    author's conclusions (4.2);
+  - a recheck opens the changed code and tests for each answer it accepts, and says what it read (4.1);
+  - an open final review (4.1, 4.6);
+  - a check of review records against the attempt log (4.3, in `make docs-check`).
 
 ### Lesson
 A question decides what an agent looks at. Give every stage the open mandate and the evidence, and
@@ -370,7 +370,8 @@ make rechecks verify the fix rather than trust the answer.
 
 ## DPL-011: Slice 2's launcher and the secret check broke on slice 4's parallel plan reviews
 
-- Status: Open (fixes and their tests are in slice 4's plan PR; closed when it merges)
+- Status: Open until slice 4's final PR merges: its fixes merged with slice 4's plan PR (#48), and its last
+  preventive action, the `<token>` note of S41-D1, is in the slice 4 branch's launcher (`CREDENTIAL_NOTE`)
 - Introduced: slice 2 (`5a5aba7`, PR #35), which wrote report paths from the unit name, added R5-A4's
   rule on other tools and applied the evidence secret check to review reports
 - Found: 2026-11-08, by the author, when slice 4's six plan reviews ran in parallel through the
@@ -415,3 +416,50 @@ Why review did not catch it:
 ### Lesson
 Try a tool the way its next user will run it: in parallel, with the same names, on its own prose.
 
+## DPL-012: Slice 4's implementation run made claims and checks that did not hold
+
+- Status: Open until slice 4's final PR merges; every miss below was found and fixed on the slice 4 branch
+- Introduced: slice 4's implementation run (`poc/slice-4-implementation`, 2026-11-09 to 2026-11-10)
+- Found: by the run's own reviews (4.4's implementation review, 4.5b's report review, the final review) and by
+  its dry slice ([decision page](slices/agentic-sdlc-poc/slice_4_decisions.md), discovered issues 9, 12 and 13)
+
+### What happened
+- 4.4's self-review said the benchmark's dry run built every prompt with the lists. That dry run ran while the
+  key named no lists commit, so its +list prompts held none, and the dry run did not refuse as a run does.
+- The canary was built on the review prompt, whose data clause no twin could pass. The author blamed the plan's
+  validity rule (S45-D9), loosened the runner's gate, and ran 51 reviews before the cause was found; a canary on its
+  own prompt was valid at once.
+- The benchmark report said RM-6 was detected twice: the runner's repeat line read automatic scores, while the
+  counts read confirmed verdicts; the rating agreement paired two runs' findings by IDs each session chose itself.
+- The author's blinded verdicts applied the match rule's absence clause to one RM-6 finding and not to two others
+  that met it equally.
+- `README.md` still called the workflow "four-phase" after 4.6 rewrote it; 4.6's step-reference test looked only
+  for "step N", and its review relied on that test.
+- Three rule edits were not recorded as the author's decisions, and one plan decision (the brief on plan PRs,
+  S46-D13) had no rule text.
+
+### Root causes
+Why it happened:
+- RC1: claims in self-reviews and reports were written from the intended state, not from the output of the check
+  that shows it.
+- RC2: when an approved rule looked impossible, the author changed the mechanism around it before looking for the
+  author's own choice that made it so.
+- RC3: a data source added late (the confirmed verdicts) was not carried into every function that reports on the
+  same results.
+- RC4: a check for stale wording was written for the planned phrase only.
+
+Why review did not catch it earlier:
+- RC5: each miss was caught by the next review that looked at the claim itself, not by the author's self-review.
+
+### Actions
+- Corrective: the dry run refuses as a run does; the canary has its own prompt and the gate requires a valid
+  canary again; the repeats and the rating agreement read the confirmed verdicts and pair runs by defect; RM-6's
+  two findings were re-judged by the absence clause, said openly in the report; `README.md` is current; the
+  rule edits are recorded on the decision page, and the plan-PR brief has its rule.
+- Preventive: each fix has a test that fails without it (the dry run's refusal, the canary gate and prompt, the
+  repeats, the rating pairing, the brief's final and unreviewed units, the merged plan reviews in the final review's
+  history); the step-reference test also looks for "four-phase".
+
+### Lesson
+Write a claim from the check's output, not from the plan. When an approved rule seems impossible, look first for
+the author's own choice that makes it so.

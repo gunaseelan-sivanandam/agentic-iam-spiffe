@@ -7,7 +7,7 @@ file current during the run and says in it what was decided on the owner's behal
 checklists, the benchmark counts, every decision concern, every parked unit, every process-growth proposal and
 every discovered issue with its disposition.
 
-Last updated: 2026-11-09, 4.1 to 4.3 reviewed; 4.5a in review (round 1 answered).
+Last updated: 2026-11-10: every sub-issue implemented and reviewed, the benchmark run and its report reviewed, the dry slice and the final review run.
 
 ## Goal (the owner's, 2026-11-09)
 
@@ -90,8 +90,95 @@ Parked units, decision concerns and growth proposals collect below as the run go
 | 4.3 | Implemented (`89b8f2b` to the round-2 fixes) | Ended after round 2. Round 1: attempt 1 failed the schema check (issue 6); attempt 2 not approvable: 2 blocking, 1 high, 3 medium, 2 low. Round 2: approvable; all 8 answers accepted; 2 new low findings, fixed |
 | 4.5a | Implemented (benchmark identity, configurations, cases, scoring, blinding, canary, report) | Ended after round 2. Round 1: not approvable: 3 blocking, 3 high, 4 medium, 6 low. Round 2: attempt 1 failed the read check (issue 7); attempt 2 approvable, all 16 answers accepted; 1 new high, 2 medium, 1 low: the high and the mediums fixed, the low rejected |
 | 4.4 | Implemented (`1750c8d`: six lists, the research record, `--stage`), then revised from the critique | Critique (S44-D10): Opus not approvable, 1 blocking, 5 high, 6 medium, 2 low; Sonnet's attempt 1 failed the read check (issue 8), attempt 2 approvable, 5 medium, 3 low. All 22 answered: 20 fixed, 1 high to the owner (decision concern 4), 1 low rejected. Implementation review, round 1: approvable (the blocking fix C-1 not re-raised); 1 high, 4 medium, 3 low; 7 fixed, 1 low rejected; ended |
-| 4.5b | Ran within 57 of 60 calls; report in [`benchmark_report.md`](../poc-4-5-benchmark/benchmark_report.md): `open+list` 7 of 11, `short+list` 6, `open-B+list` 6, both rechecks 1 of 1; 27 of 125 findings confirmed, the second confirmer agreeing on 9 of 10; the third canary valid and passed | Report review ended after round 2. Round 1: not approvable; 2 blocking, 1 high, 3 medium, 4 low; all fixed. Round 2: attempt 1 failed the read check (issue 14); attempt 2 approvable, all 10 answers accepted, no new finding |
-| 4.6 | Implemented on the branch: the seven-stage table and the rules moved into it, the templates, `scripts/review_brief.py`, the grill-me skill in the repository, the front-matter rule of the lint gate | Implementation review next |
+| 4.5b | Ran within 57 of 60 calls; report in [`benchmark_report.md`](../poc-4-5-benchmark/benchmark_report.md): `open+list` 7 of 11, `short+list` 6, `open-B+list` 6, both rechecks 1 of 1; 29 of 125 findings confirmed (two re-judged after unblinding, FR-1), the second confirmer agreeing on 9 of 10; the third canary valid and passed | Report review ended after round 2. Round 1: not approvable; 2 blocking, 1 high, 3 medium, 4 low; all fixed. Round 2: attempt 1 failed the read check (issue 14); attempt 2 approvable, all 10 answers accepted, no new finding |
+| 4.6 | Implemented: the seven-stage table and the rules moved into it, the templates, `scripts/review_brief.py`, the grill-me skill in the repository, the front-matter rule of the lint gate | Ended after round 1: approvable; 1 high, 5 medium, 4 low and a simpler alternative; 9 fixed, F4 and F5 to the owner (decision 4, decision concern 7) |
+
+## Decisions and their proof
+
+Every decision of the six plans, where it is implemented, and what proves it: a named tooling test, a review
+record, or, for a rule that only the rulebook states, "rule text only" with its section of `AGENTS.md`. Every
+retirement item is done: the launcher refuses to rebuild prompts logged before 4.1, 4.2 and 4.4; stage A's run path
+of the benchmark is gone (stage A's results and prompts stay); the four-step workflow text is replaced by the stages;
+the plan template's grill-me summary is replaced by the decisions table.
+
+The stage checklists are in [`docs/review_checklists/`](../../review_checklists/): plan and test plan (12
+questions), requirements (9), architecture and interfaces (10), unit tests (10), E2E tests (11), code (12).
+
+| Decision | Implemented in | Proved by |
+| --- | --- | --- |
+| S41-D1 | the launcher's `build_prompt` | `test_prompt_sections_come_in_the_fixed_order_and_empty_ones_say_so`, `test_task_text_appears_only_under_claims_to_verify`, `test_command_line_has_no_option_that_changes_the_sections` |
+| S41-D2 | the benchmark's configurations | `test_only_the_full_configuration_reaches_the_launcher`, `test_configurations_differ_only_in_the_mandate_and_carry_the_same_list_and_rules` |
+| S41-D3 | `review_mode` | `test_mode_follows_the_round` |
+| S41-D4 | `MANDATES` | `test_every_mode_holds_its_mandate_verbatim`, `test_final_prompt_names_the_other_units_records_and_never_gets_a_checklist` |
+| S41-D5 | recheck inputs | `test_recheck_prompt_holds_its_earlier_report_and_only_its_answers_section`, `test_recheck_without_its_inputs_is_refused_before_any_call` |
+| S41-D6 | `REPORT_SCHEMA`; `AGENTS.md`, Review findings | `test_findings_of_each_severity_kind_and_origin_stage_are_accepted`, `test_schema_offered_to_the_cli_matches_the_launcher_rules` |
+| S41-D7 | the answers table; `AGENTS.md`, Review loop | `test_answers_table_with_every_answer_word_is_accepted`, `test_answers_that_do_not_answer_the_earlier_report_are_refused_before_any_call` |
+| S41-D8 | `Accounting`, the read check | `test_recheck_that_does_not_account_for_every_answer_fails`, `test_fixed_file_that_was_not_read_fails_even_when_a_path_under_review_was` |
+| S41-D9 | the end entry | `test_end_entry_counts_each_severity_with_zeros` |
+| S41-D10 | rule text: `AGENTS.md`, Review findings ("a secret written into logs, evidence or any published record") | `test_output_section_holds_the_reporting_bounds_and_the_credential_note_verbatim` |
+| S41-D11 | rule text: `AGENTS.md`, Independent review, Modes and prompts ("never makes a file list the scope") | rule text only |
+| S41-D12 | rule text: `AGENTS.md`, Review findings, Review loop, Plan review, Report sections | rule text only; the mislabelled-blocker sentence is an author decision (4.1) |
+| S41-D13 | the benchmark's stage-A reading | `test_report_of_stage_a_gives_its_tables_unchanged` |
+| S41-D14 | the launcher's mandates stay 4.1's | the benchmark report; the owner chooses (decision 2) |
+| S41-D15 | the output section | `test_output_section_holds_the_reporting_bounds_and_the_credential_note_verbatim` |
+| S41-D16 | `origin_stage` in the schema, the brief's origin table | `test_findings_of_each_severity_kind_and_origin_stage_are_accepted`, `test_the_brief_lists_every_item_the_owner_must_see` |
+| S42-D1 | `changed_files` | `test_files_come_from_the_diff_and_deleted_files_are_listed_apart`, `test_path_hints_come_first_and_never_narrow_the_list` |
+| S42-D2 | the paths section, the empty-review rule | `test_paths_section_says_to_open_every_file_and_the_end_entry_lists_those_not_read`, `test_review_that_opened_none_of_the_hint_files_fails_even_when_it_opened_other_listed_files` |
+| S42-D3 | `upstream_items` | `test_upstream_names_the_governing_plan_links_edited_sections_and_other_bundles` |
+| S42-D4 | `UPSTREAM_QUESTION` | `test_every_prompt_holds_the_upstream_question` |
+| S42-D5 | `compute_evidence` | `test_uncovered_changed_branch_is_listed_with_the_subprocess_note_and_a_service_gate_line`, `test_trace_gap_among_the_upstream_items_is_marked_new_or_existing`, `test_ci_results_show_the_reviewed_commits_jobs_and_never_a_pass_for_a_running_job` |
+| S42-D6 | evidence accounting | `test_report_must_account_for_every_evidence_entry`, `test_flagged_evidence_entry_naming_no_finding_of_the_report_fails` |
+| S42-D7 | failed evidence commands | `test_coverage_that_cannot_run_is_shown_as_failed`, `test_trace_model_that_cannot_run_is_shown_as_failed`, `test_unreadable_ci_api_is_shown_as_failed` |
+| S42-D8 | `evidence_env`, `sanitise` | `test_evidence_commands_see_only_path_lang_and_a_scratch_home`, `test_evidence_still_holding_a_local_path_is_refused_before_any_call` |
+| S42-D9 | the Evidence block and its hash | `test_start_entry_holds_the_hash_of_the_evidence_text_in_the_prompt` |
+| S42-D10 | `diff_base` required | `test_diff_base_is_required_and_every_prompt_names_the_change` |
+| S42-D11 | the benchmark's file lists | `test_lists_come_from_the_runners_fixed_commit_not_the_cases` and the dry run (46 prompts) |
+| S43-D1 | the launcher writes the blocks | `test_completed_attempt_leaves_prompt_evidence_and_report_blocks_that_the_check_accepts` |
+| S43-D2 | `check_prompt` | `test_secret_or_local_path_in_the_prompt_is_refused_before_anything_is_written` |
+| S43-D3 | `scripts/check_review_records.py` | `test_one_changed_character_in_a_block_fails`, `test_answers_changed_after_the_recheck_read_them_fail` |
+| S43-D4 | allowed answers | `test_each_allowed_answer_passes`, `test_each_answer_the_rules_do_not_allow_fails` |
+| S43-D5 | `record_blocks` | `test_attempts_logged_before_this_slice_are_not_checked`; 4.1's and 4.2's records are among them (final review, FR-8) |
+| S43-D6 | `load_recheck` | `test_recheck_reads_the_earlier_report_from_the_record_with_the_released_file_deleted` |
+| S43-D7 | no change: stays with #21 | nothing to prove |
+| S43-D8 | rule text: `AGENTS.md`, Independent review ("which replaces the author's hand check") | rule text only |
+| S44-D1 | `research.md` sources | `test_the_research_record_has_a_section_for_every_planned_source` |
+| S44-D2 | `research.md` | `test_every_question_the_research_record_names_exists`, the critique and review records |
+| S44-D3 | the six lists | `test_every_list_has_the_agreed_form_and_cites_researched_sources`, `test_the_form_check_fails_on_each_kind_of_violation` |
+| S44-D4 | Blocks sections; `AGENTS.md`, Review findings | `test_every_list_has_the_agreed_form_and_cites_researched_sources` |
+| S44-D5 | the two questions | `test_the_two_questions_for_what_is_missing_sit_where_the_misses_happen` |
+| S44-D6 | `docs/review_checklists/`; `AGENTS.md`, Start here | `test_exactly_the_six_artifact_types_have_a_list` |
+| S44-D7 | `stage_lists` | `test_a_stage_gets_the_base_commits_list_even_when_the_change_rewrites_it`, `test_a_stage_the_base_cannot_give_is_refused_before_any_call` |
+| S44-D8 | rule text: `AGENTS.md`, Stage checklists ("The author reads the stage's list before writing that stage's artifact") | `test_the_code_list_repeats_no_coding_rule` |
+| S44-D9 | the DPL mapping | `test_every_dpl_entry_is_mapped`, `test_every_question_the_research_record_names_exists` |
+| S44-D10 | the critique unit | `docs/slices/poc-4-4-stage-checklists/review_critique.md` |
+| S44-D11 | rule text: `AGENTS.md`, Stage checklists ("the author proposes the list item or the wording in the PR") | rule text only |
+| S44-D12 | `lists_commit` | `test_lists_come_from_the_runners_fixed_commit_not_the_cases` |
+| S44-D13 | `research.md`, Review prompt | `test_each_draft_mandate_sentence_has_a_source_and_names_its_failure_mode`, `test_the_benchmarks_draft_mandates_are_the_research_drafts` |
+| S45-D1 | `BUDGETS` | `test_stage_b_stops_at_sixty_calls_counting_retries_and_the_canary`; 57 of 60 used |
+| S45-D2 | the result identity | `test_result_records_its_full_identity_and_the_report_reads_one_stage` |
+| S45-D3 | `CONFIGURATIONS` | `test_configurations_differ_only_in_the_mandate_and_carry_the_same_list_and_rules` |
+| S45-D4 | `score`, the match rule | the scoring tests of `tests/tools/test_run_review_benchmark.py` |
+| S45-D5 | the answer key's 17 cases | `test_the_dpl_010_case_holds_the_launcher_and_its_tests_and_not_its_answer`; the dry run |
+| S45-D6 | `--repeat`, `check_repeats` | `test_a_repeat_runs_the_two_setups_again_and_the_counts_use_the_first_run`; the results |
+| S45-D7 | `export_confirmation`, `second_confirmation` | `test_blinded_export_hides_the_configuration_and_shuffles_and_the_report_joins_back`, `test_second_confirmer_sees_a_seeded_sample_without_configurations_and_its_call_counts` |
+| S45-D8 | `report_stage_b`; `benchmark_report.md` | `test_report_gives_every_count_for_every_configuration` |
+| S45-D9 | the canary and its gate | `test_canary_is_valid_only_when_the_twin_followed_the_file_and_the_hook`, `test_cases_run_only_after_a_valid_and_passed_canary`, `test_cli_version_other_than_the_canarys_is_refused`; a valid canary in the results |
+| S45-D10 | the key's model, `SECOND_MODEL` | `test_result_records_its_full_identity_and_the_report_reads_one_stage` |
+| S45-D11 | the runner's tests | `test_dry_run_prepares_every_case_and_calls_no_reviewer`, `test_launcher_reads_each_report_shape`, `test_stream_lines_that_are_not_json_are_skipped` |
+| S46-D1 | `AGENTS.md`'s stage table | `test_agents_md_states_the_seven_stages_with_every_cell_filled` |
+| S46-D2 | rule text: `AGENTS.md`, Discovery, first bullet | rule text only |
+| S46-D3 | rule text: `AGENTS.md`, Discovery, last bullet | rule text only |
+| S46-D4 | rule text: `AGENTS.md`, Requirements, and architecture and interfaces | rule text only |
+| S46-D5 | rule text: `AGENTS.md`, Final review; the launcher's final mode | `test_final_prompt_names_the_other_units_records_and_never_gets_a_checklist`, `test_final_review_reads_the_merged_plan_reviews_of_the_bundles_the_change_touches` |
+| S46-D6 | rule text: `AGENTS.md`, Review loop ("Only the user waives a blocker that is still disputed") | rule text only |
+| S46-D7 | rule text: `AGENTS.md`, Review loop (earlier escalation) | rule text only |
+| S46-D8 | rule text: `AGENTS.md`, Tests first | rule text only |
+| S46-D9 | rule text: `AGENTS.md`, Handoff | rule text only |
+| S46-D10 | `AGENTS.md`, Start here; `docs/STATUS.md` | rule text only |
+| S46-D11 | the templates | `test_the_plan_template_carries_the_stages_the_source_column_and_rule_deviations`, `test_the_test_plan_template_names_each_stage_list_and_the_required_review_questions`, `test_a_bundle_made_from_the_templates_passes_the_header_and_link_checks` |
+| S46-D12 | the stages | `test_no_live_document_refers_to_the_old_step_numbers` |
+| S46-D13 | `scripts/review_brief.py`; `AGENTS.md`, Discovery and Handoff | `tests/tools/test_review_brief.py` |
+| S46-D14 | `.claude/skills/grill-me/SKILL.md`, the lint gate's front-matter rule | `test_the_grill_me_skill_keeps_its_front_matter_then_has_a_title_and_paragraph`, the front-matter cases of `tests/tools/test_lint_changed_files.py` |
 
 ## Decided by the author during the run
 
@@ -144,6 +231,10 @@ a decision concern below instead.
 | 4.6 | `scripts/review_brief.py` takes the review units a PR adds from the attempts logged since the merge-base, and names the review that found a finding by its `--stage` lists, or by its unit when it had none | The units of a PR are the ones its commits logged; slice 4's reviews ran without lists, so the unit is the only name they have |
 | 4.6 | The step-reference check uses the plan's probe pattern, "step 1" to "step 4" | The delivery problem log's history says "steps 3–4" of a milestone; rewriting history entries would make them false |
 | 4.5b | The repeats (S45-D6, at most two cases) went to the discordant cases of short+list and open+list in this order: cases where both first reviews completed, then the others in the key's order; so FS-2 and RM-6 | The rule was written after the first runs, with the three discordant cases known, and it chose the two that favoured `open+list` and left out FS-1, the one that favoured `short+list`, whose `open+list` review was withheld by the publication check and may have been a detection; the report says so (report review, M1) |
+| 4.1 | `AGENTS.md`'s Review loop says a finding labelled blocking that does not meet the blocking criteria "is answered at the severity it does meet" instead of "is not fixed by default" | S41-D12 retires "not fixed by default" with the severity rules (S41-D6) and asks the implementation to check every "blocking" sentence against them; this sentence was one of them, not named in S41-D12's list (final review, FR-7) |
+| 4.3 | 4.1's and 4.2's implementation records were built by a script before 4.3 existed, so `make docs-check` does not check them, as S43-D5 leaves slices 2 and 3 and slice 4's plan reviews unchecked | The record check reads only records the launcher wrote; S43-D5's list did not name these two (final review, FR-8); the brief checks their answers |
+| 4.6 | The plan template has a "Threat model" section | The plan review judges against "the threat model the plan states" (`AGENTS.md`, Plan review) and plan question P11 asks for it, but S46-D11's list did not name the section; found by the dry slice (final review, FR-7) |
+| 4.6 | The handoff rule keeps S46-D9's and S46-D13's words: the brief is pasted at the top of the PR body, which is a snapshot and is not updated later | 4.6's review (F3) had the author rewrite it to "built once CI has finished … and built again after a later push", which changed agreed decisions without the owner; reverted, and the question goes to the owner (decision concern 10; final review, FR-7) |
 | 4.2 | `invocation_from_entry` refuses entries logged by 4.1's launcher with a clear message, as it refuses earlier ones | 4.2 retires 4.1's prompt layout (the file list from `--path`, empty upstream and evidence sections); its plan did not say so (review round 1, R1-4) |
 
 ## Decisions made
@@ -183,7 +274,8 @@ a decision concern below instead.
 | 6 | Decision concern, withdrawn | 4.5 | S45-D9's valid canary seemed impossible: two twins declined the planted `CLAUDE.md`. The cause was the canary prompt, built by the author from the review prompt (report review, B2); with its own prompt the third canary was valid and passed | Nothing to decide |
 | 7 | Decision concern | 4.6 | S46-D1 and S46-D5 give every slice a plan PR the user merges, a plan review, an implementation review and a final review, so a one-line fix costs three review units and two merges (about USD 6 to 9 at the plan's estimates) unless the plan records a rule deviation with the user's words (4.6 review, F5) | For a small fix: one PR holding the plan and the change, with the plan review and the implementation review as its units, and the final review allowed as "none, with a reason" when the implementation review ran at high effort with the open mandate. Until the user decides, small fixes follow the stages as written |
 | 8 | Decision concern | 4.4 | The benchmark's misses RM-3 (requirements without proof) and RM-4 (a gate inside another CI job) were found by every review, each citing the list question that asks it (R5, C10), and rated medium or low, which the rule does not count as a detection. The lists' "Blocks at this stage" sections do not name these cases, so the reviewers' severities follow the rules | Make an unanswered R5 (a requirement without proof) and C10 (a check not run as its own required job) blocking at their stages, in the lists' Blocks sections; or leave the severities to the reviewer |
-| 9 | Growth proposal | 4.5 | The reviewer's report has no field for the checklist question behind a finding, so the owner's addition (each benchmark finding names the question that prompted it) could only be met from the findings' own text (4 of 27) and the author's mapping. Failure it would catch: a list question that never leads to a finding, unseen. Cost: one optional field in the report schema and its test. Simpler alternative: the author's mapping, as now | Add an optional `question` field (for example `C10`) to the report schema and the benchmark's report |
+| 10 | Decision concern | 4.6 | S46-D9 and S46-D13: the brief opens the PR body, which is a snapshot not updated later; CI runs on pull requests, so a brief pasted when the PR is opened always says "no run for this commit; not a pass" (4.6 review, F3) | Allow one edit of the PR body: paste the brief once CI has finished on the PR's head, and again after a later push |
+| 9 | Growth proposal | 4.5 | The reviewer's report has no field for the checklist question behind a finding, so the owner's addition (each benchmark finding names the question that prompted it) could only be met from the findings' own text (4 of 29) and the author's mapping. Failure it would catch: a list question that never leads to a finding, unseen. Cost: one optional field in the report schema and its test. Simpler alternative: the author's mapping, as now | Add an optional `question` field (for example `C10`) to the report schema and the benchmark's report |
 | 5 | Growth proposal | 4.1 | S41-D8's read check failed four whole reviews because `opened` named a file the reviewer had not read with the Read tool (issues 5, 7, 8 and 14), each a full session lost. Failure it would still catch: a recheck that never read a file a `fixed:` answer names. Cost: a few lines in the launcher. Simpler alternative: keep the check and rerun, as now | The launcher drops from `opened` the files the attempt did not read and records them, and fails the attempt only when a file a `fixed:` answer names was not read |
 
 No unit is parked.
@@ -202,7 +294,7 @@ No unit is parked.
 | 8 | The 4.4 critique's Sonnet reviewer (attempt 1) named a file under `opened` for EV7 that it had not read; the launcher failed it. The third such failure | 4.4 critique | Rerun as attempt 2, which completed; growth proposal 5 in the table above |
 | 9 | The author's self-review for 4.4 said the benchmark's dry run built every prompt with the lists; that dry run ran while the key's `lists_commit` was empty, so the +list prompts held no list, and the dry run, unlike a run, did not refuse it | 4.4 implementation review, F3 | Fixed: the dry run refuses as a run does; the dry run with `04f8df4` was checked to put each list in its prompts. A false claim caught by the review before merge |
 | 10 | The grill-me skill in the owner's user folder has two lines cut off mid-sentence (they end in `>`) and does not ask which keys, sockets and secrets a slice touches, although `AGENTS.md` said it always does | 4.6, by the author when moving it in | Fixed in the repository copy; the user-level copy is the owner's |
-| 11 | The owner's addition, that each benchmark finding names the checklist question that prompted it, was not built into 4.5a: the report schema has no such field. The benchmark report gives the question from the finding's own text where it cites one (4 of 27 confirmed detections) and the author's mapping otherwise, marked as such | 4.5b, by the author when writing the report | Recorded; growth proposal 9 |
+| 11 | The owner's addition, that each benchmark finding names the checklist question that prompted it, was not built into 4.5a: the report schema has no such field. The benchmark report gives the question from the finding's own text where it cites one (4 of 29 confirmed detections) and the author's mapping otherwise, marked as such | 4.5b, by the author when writing the report | Recorded; growth proposal 9 |
 | 12 | The canary was built on the review prompt, whose data clause made a valid twin impossible; the author blamed S45-D9 and loosened the gate before fixing the prompt | 4.5b report review, B2 | Fixed: the canary's own prompt, a valid canary, the gate restored |
 | 13 | The runner's repeat line read automatic scores, so the report said RM-6 was detected twice | 4.5b report review, B1 | Fixed: the repeats and the rating agreement read the confirmed verdicts |
 | 14 | The 4.5b report recheck (round 2, attempt 1) named a file under `opened` for EV4 that it had not read; the launcher failed it. The fourth such failure | 4.5b report review round 2 | Rerun as attempt 2; growth proposal 5 |
@@ -233,7 +325,7 @@ ran every check it could without Docker. What the next user would trip on, with 
 | 15 | The brief over the integration branch mixes in every unit of the unmerged slice 4 | Ends when slice 4 merges |
 | 16 | The order of handoff edits around the implementation review is unclear | Open, low |
 | 17 | `README.md` still said "a four-phase slice workflow", which 4.6's step-reference test missed; its `make qa-quality` comment listed 4 of 6 targets | Fixed, and the step-reference test now looks for "four-phase" |
-| 18 | Whether a document made stale by an unmerged slice is a delivery miss yet | Open: answered by the final review of the slice |
+| 18 | Whether a document made stale by an unmerged slice is a delivery miss yet | Answered by the final review (FR-6): yes, logged as DPL-012 |
 
 ## How the owner can check the work
 

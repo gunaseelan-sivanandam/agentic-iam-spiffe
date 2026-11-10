@@ -20,7 +20,10 @@ detection with the checklist question behind it, and the misses. The runner's ow
 
 ## Counts
 
-Detections are the author's blinded verdicts (S45-D7) on 125 exported findings: 27 match. Cost and minutes include
+Detections are the author's blinded verdicts (S45-D7) on 125 exported findings: 29 match. Two of them, T008 and T047
+(RM-6, `open+list`, its repeat), were first judged no match and changed after unblinding, at the final review's
+challenge (FR-1): both meet the match rule's absence clause (an untested path of the launcher, named anywhere in the
+finding) exactly as T043, which was accepted blind. The first-run counts do not change; the repeat does. Cost and minutes include
 the failed reviews.
 
 | Configuration | Detected (of 11 defect cases) | 95% interval | By a blocking finding | False alarms (no-defect reviews) | False blockers (all completed reviews) | Unread files | Failed | Cost USD per detection |
@@ -34,10 +37,11 @@ the failed reviews.
 - **Discordant cases,** `short+list` against `open+list`: only `short+list` FS-1; only `open+list` FS-2 and RM-6.
   `open+list` against `open-B+list`: only `open+list` PB-3 and RM-6; only `open-B+list` FS-1.
 - **Repeats** (S45-D6, by confirmed verdicts): FS-2 `open+list` detected twice, `short+list` missed then detected;
-  RM-6 `open+list` detected then missed, `short+list` failed then missed. The repeat rule (discordant cases where both
+  RM-6 `open+list` detected twice (its second detection is one of the two re-judged findings above), `short+list`
+  failed then missed. The repeat rule (discordant cases where both
   first reviews completed first, then the others in the key's order) was written after the first runs, with the
   three discordant cases known; it chose FS-2 and RM-6, the two that favoured `open+list`, and left out FS-1, the one
-  that favoured `short+list`. The repeats moved both cases toward agreement.
+  that favoured `short+list`. FS-2's repeats moved toward agreement; RM-6's kept the difference.
 - **Rating agreement** where a case and configuration ran twice and both runs completed, by expected defect: the two
   runs rated it the same once and differently twice (detected or not, and at which severity).
 - **Failed reviews count as misses** (4.5a): RM-6 `short+list` and PB-3 `open-B+list` read none of the files under
@@ -94,7 +98,7 @@ the question, so most findings cite none (discovered issue 11).
 | --- | --- | --- | --- |
 | RM-1 (issuer key reaches services that need only the public key) | code | all three | none numbered; the code list's Blocks entry "an asset reaching a non-holder" *(author)* |
 | RM-2 (token values in E2E evidence) | e2e-tests | all three | E5, cited by one finding |
-| RM-6 (refusal paths untested) | code | `open+list` (its repeat missed) | C8 *(author)*; the unit-test list's U6 asks it directly, but the case got the code list |
+| RM-6 (refusal paths untested) | code | `open+list`, in both runs | C8 *(author)*; the unit-test list's U6 asks it directly, but the case got the code list |
 | PB-1 (a requirement no test could verify) | requirements | all three | R1 *(author)*; one finding cites R6 for its second point |
 | PB-2 (a design gives the signing key to a non-holder) | architecture-and-interfaces | all three | A2 *(author)* |
 | PB-3 (a test plan retires a requirement's only proof) | plan-and-test-plan | `short+list`, `open+list` | P2 *(author)* |
@@ -147,7 +151,7 @@ Discordant cases, open+list against open-B+list: `{"only open+list": ["PB-3", "R
 Rating agreement where a case ran twice, by expected defect: `{"same": 1, "different": 2}`
 Origin stage of the findings against the list of the review that found them: `{"architecture and interfaces": {"architecture-and-interfaces": 11, "code": 13, "e2e-tests": 1, "requirements": 1}, "discovery": {"code": 1, "plan-and-test-plan": 13}, "implementation": {"code": 94, "e2e-tests": 15, "plan-and-test-plan": 16, "requirements": 15}, "requirements": {"code": 1, "e2e-tests": 1, "plan-and-test-plan": 10, "requirements": 27}, "tests first": {"code": 30, "e2e-tests": 32, "plan-and-test-plan": 23, "requirements": 1}, "unknown": {"architecture-and-interfaces": 1}}`
 Canary: `[{"cli_version": "2.1.321 (Claude Code)", "valid": false, "passed": true, "twin_ran_hook": true}, {"cli_version": "2.1.321 (Claude Code)", "valid": false, "passed": true, "twin_ran_hook": true}, {"cli_version": "2.1.321 (Claude Code)", "valid": true, "passed": true, "twin_ran_hook": true}]`. A canary is valid when its twin, without the launcher's flags, followed the planted CLAUDE.md and ran the planted hook (S45-D9); one whose twin ran only the hook shows that the flags keep settings out, not that they keep instruction files out.
-Repeats (detected in run 1, run 2): FS-2 open+list: True, True; FS-2 short+list: False, True; RM-6 open+list: True, False; RM-6 short+list: failed, False
+Repeats (detected in run 1, run 2): FS-2 open+list: True, True; FS-2 short+list: False, True; RM-6 open+list: True, True; RM-6 short+list: failed, False
 Second confirmer: agrees with the author on 9 of 10 sampled findings.
 
 What these sizes can show: with about 15 cases and one run each, a difference of two or three cases between two configurations is within chance; the intervals say how wide each count's uncertainty is. Both setups carry the stage lists, so the counts do not measure the lists' own effect. The owner decides from the counts; no rule decides.

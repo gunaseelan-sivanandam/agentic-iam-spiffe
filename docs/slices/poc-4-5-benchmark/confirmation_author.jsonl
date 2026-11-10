@@ -5,7 +5,7 @@
 {"reason": "a different defect, or not at the planted place", "token": "T005", "verdict": "no match"}
 {"reason": "a different defect, or not at the planted place", "token": "T006", "verdict": "no match"}
 {"reason": "same", "token": "T007", "verdict": "match"}
-{"reason": "a different defect, or not at the planted place", "token": "T008", "verdict": "no match"}
+{"reason": "meets the absence clause: names an untested path ('no test') of run_independent_review.py, as T043 does; re-judged after unblinding, at the final review's challenge (FR-1)", "token": "T008", "verdict": "match"}
 {"reason": "a different defect, or not at the planted place", "token": "T009", "verdict": "no match"}
 {"reason": "a different defect, or not at the planted place", "token": "T010", "verdict": "no match"}
 {"reason": "the signing key pair reaches tool-b at the planted ARCH-015 line", "token": "T011", "verdict": "match"}
@@ -44,7 +44,7 @@
 {"reason": "a different defect, or not at the planted place", "token": "T044", "verdict": "no match"}
 {"reason": "a different defect, or not at the planted place", "token": "T045", "verdict": "no match"}
 {"reason": "a different defect, or not at the planted place", "token": "T046", "verdict": "no match"}
-{"reason": "a different defect, or not at the planted place", "token": "T047", "verdict": "no match"}
+{"reason": "meets the absence clause: names an untested path ('no test') of run_independent_review.py, as T043 does; re-judged after unblinding, at the final review's challenge (FR-1)", "token": "T047", "verdict": "match"}
 {"reason": "a different defect, or not at the planted place", "token": "T048", "verdict": "no match"}
 {"reason": "describes the planted --include override exactly, but names line 1791, outside the planted range 15-20 (the rule needs a line inside the range)", "token": "T049", "verdict": "no match"}
 {"reason": "a different defect, or not at the planted place", "token": "T050", "verdict": "no match"}

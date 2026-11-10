@@ -182,10 +182,14 @@ def step_references(paths: list[Path]) -> list[str]:
             for n, line in enumerate(p.read_text().split("\n"), 1) if STEP_REFERENCE.search(line)]
 
 
+# The problem logs record what happened, quoting old wording where a miss was about it (DPL-012); they state no rule.
+LOGS = {ROOT / "docs" / "delivery_problem_log.md", ROOT / "docs" / "open_problem_log.md"}
+
+
 def rule_documents() -> list[Path]:
     """The live documents, the stage lists and the skills: every text that states or carries a rule."""
     return sorted({*docs.live_docs(ROOT), *(ROOT / "docs" / "review_checklists").glob("*.md"),
-                   *(ROOT / ".claude" / "skills").rglob("*.md")})
+                   *(ROOT / ".claude" / "skills").rglob("*.md")} - LOGS)
 
 
 def test_no_live_document_refers_to_the_old_step_numbers() -> None:
