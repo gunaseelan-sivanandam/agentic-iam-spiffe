@@ -299,6 +299,7 @@ No unit is parked.
 | 12 | The canary was built on the review prompt, whose data clause made a valid twin impossible; the author blamed S45-D9 and loosened the gate before fixing the prompt | 4.5b report review, B2 | Fixed: the canary's own prompt, a valid canary, the gate restored |
 | 13 | The runner's repeat line read automatic scores, so the report said RM-6 was detected twice | 4.5b report review, B1 | Fixed: the repeats and the rating agreement read the confirmed verdicts |
 | 14 | The 4.5b report recheck (round 2, attempt 1) named a file under `opened` for EV4 that it had not read; the launcher failed it. The fourth such failure | 4.5b report review round 2 | Rerun as attempt 2; growth proposal 5 |
+| 15 | The benchmark never gave a reviewer the `unit-tests` list, nor the tests-first pair of `unit-tests` and `e2e-tests`: the author's artifact types (4.5a) gave no case a unit-test change, and each case one list | The owner's question, 2026-11-11 | Recorded in the [benchmark report](../poc-4-5-benchmark/benchmark_report.md) ("By stage list"). Measuring it needs one or two unit-test cases, which changes S45-D5's cases and the 60-call budget (3 calls left): the owner's decision |
 
 ## The dry slice
 

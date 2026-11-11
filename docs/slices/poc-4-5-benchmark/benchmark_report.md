@@ -106,6 +106,25 @@ the question, so most findings cite none (discovered issue 11).
 | FS-2 (a bare sleep where the harness polls) | plan-and-test-plan | `open+list`, `open-B+list`; `short+list` in its repeat | none of the plan list (findings cite P8 and P10 for side points); the E2E list's E4 asks it, but the case got the plan list |
 | RC-1 (a false `fixed:` answer) | e2e-tests | `recheck-A`, `recheck-B` | E1 *(author)* |
 
+## By stage list
+
+Each case got one stage list, the one for its artifact type (S44-D12), and every configuration carried it. First
+runs, by confirmed verdicts:
+
+| List | Cases | Outcome |
+| --- | --- | --- |
+| `requirements` | PB-1, RM-3 | PB-1 detected by all three setups; RM-3 missed by all three, each review citing R5 at medium |
+| `architecture-and-interfaces` | PB-2, FS-1 | PB-2 by all three; FS-1 by `short+list` and `open-B+list` (`open+list` withheld) |
+| `e2e-tests` | RM-2, RC-1, DC-1 | RM-2 by all three; RC-1 by both recheck wordings; no false alarm on the decoy DC-1 |
+| `code` | RM-1, RM-4, RM-5, RM-6 | RM-1 by all three; RM-6 by `open+list`; RM-4 missed (C10 cited at medium or low); RM-5 missed (one exact description at a wrong line) |
+| `plan-and-test-plan` | PB-3, FS-2, CL-1, CL-2, CL-3 | PB-3 by `short+list` and `open+list` (`open-B+list` failed); FS-2 by `open+list` and `open-B+list`, and by `short+list` in its repeat; alarms on CL-1 and CL-2, none on CL-3 |
+| `unit-tests` | none | not measured |
+
+The `unit-tests` list was never given to a reviewer, and neither was the tests-first pairing of `unit-tests` with
+`e2e-tests` that `AGENTS.md` names: no case of the key is a unit-test change, and each case got a single list. With
+two to five cases a list, the table shows whether a list's questions led reviewers to its cases' defects, not how
+good a list is.
+
 ## The misses
 
 No configuration detected RM-3, RM-4 or RM-5:
