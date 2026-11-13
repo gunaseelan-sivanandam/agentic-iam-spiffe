@@ -64,10 +64,17 @@ ORIGIN_STAGES = ("discovery", "requirements", "architecture and interfaces", "te
                  "unknown")
 FINDING_FIELDS = {"id": str, "kind": str, "severity": str, "origin_stage": str, "file": str, "line": int,
                   "problem": str, "evidence": str, "failure_scenario": str}
+# Owner-approved growth (2026-11-13, slice 4 decision page): a finding may name the stage-checklist question that
+# prompted it, as the list's name and the question's number, for example `code:10`.
+QUESTION_PATTERN = r"^[a-z0-9-]+:[1-9][0-9]?$"
+OPTIONAL_FINDING_FIELDS = {"question": str}
 # S41-D8, S42-D6: how a report accounts for an author's answer, and for an evidence entry.
 ANSWER_STATUSES = ("accepted", "re-raised", "cannot determine")
 EVIDENCE_STATUSES = ("explained", "flagged")
 ACCOUNTED_FIELDS = {"item": str, "status": str, "note": str, "opened": list}
+# Owner-approved growth (2026-11-13): files a reviewer only searched (Grep, Glob) go here, so `opened` stays a claim
+# the launcher can check.
+OPTIONAL_ACCOUNTED_FIELDS = {"searched": list}
 ANSWER_WORDS = ("fixed", "deferred", "rejected", "owner")
 FINAL_UNIT = "final"
 PR_COMMENT_URL = re.compile(
@@ -98,9 +105,11 @@ CREDENTIAL_NOTE = ("Write `<token>` for any credential value, even a made-up exa
               "withholds a report that holds one.")
 ABSENCE_RULE = "A finding about something missing states \"X has no Y; searched A, B, C\"."
 # S41-D8 counts a file as opened only when the stream shows a Read of it; the prompt says so (first live recheck).
-OPENED_RULE = ("`opened` lists the files you read with the Read tool for that item; a Grep or Glob match does not open "
-               "a file. The launcher fails a report whose `opened` names a file it did not Read, and a recheck that did "
-               "not Read every file a `fixed:` answer names.")
+OPENED_RULE = ("`opened` lists the files you read with the Read tool for that item; a file you only searched with Grep "
+               "or Glob goes under `searched`. The launcher fails a report whose `opened` names a file it did not Read, "
+               "and a recheck that did not Read every file a `fixed:` answer names or a `rejected:` answer cites.")
+QUESTION_RULE = ("When a question of the stage checklist prompted a finding, name it in `question` as the list's name "
+                 "and the question's number, for example `code:10`; leave `question` out otherwise.")
 GATE_RULE = "do not report what a passing gate already checks; do report defects in the gates themselves"
 CLAIMS_SECTION = "Claims to verify"
 SECTIONS = ("role", "mandate", "rules", "checklist", "upstream", "evidence", "paths", "claims", "earlier_report",
@@ -124,6 +133,7 @@ REPORT_SCHEMA = {
                     "problem": _STRING,
                     "evidence": _STRING,
                     "failure_scenario": _STRING,
+                    "question": {"type": "string", "pattern": QUESTION_PATTERN},
                 },
                 "required": list(FINDING_FIELDS),
                 "additionalProperties": False,
@@ -138,6 +148,7 @@ REPORT_SCHEMA = {
                     "status": {"type": "string", "enum": [*ANSWER_STATUSES, *EVIDENCE_STATUSES]},
                     "note": _STRING,
                     "opened": {"type": "array", "items": _STRING},
+                    "searched": {"type": "array", "items": _STRING},
                 },
                 "required": list(ACCOUNTED_FIELDS),
                 "additionalProperties": False,
@@ -459,7 +470,8 @@ def _output_section() -> str:
         "## Output\n\n"
         "Answer only through the structured output.\n\n"
         "- `findings`: every finding with `id`, `kind`, `severity`, `origin_stage`, `file`, `line` (0 when no line "
-        "applies), `problem`, `evidence` and `failure_scenario`. A finding you re-raise keeps its earlier ID.\n"
+        "applies), `problem`, `evidence` and `failure_scenario`, and `question` where a question of the stage "
+        f"checklist prompted it. A finding you re-raise keeps its earlier ID. {QUESTION_RULE}\n"
         "- `kind`: `defect`; `simpler_alternative` (a mechanism that could be removed or simplified within the "
         "agreed decisions); or `decision_concern` (an agreed decision that itself seems to cause a problem; it "
         "goes to the owner).\n"
@@ -472,7 +484,7 @@ def _output_section() -> str:
         f"- `origin_stage`: the stage where the problem arose: {', '.join(f'`{s}`' for s in ORIGIN_STAGES)}.\n"
         "- `accounted`: one entry for every item this prompt asks you to account for (each answer of the author "
         "in a recheck, each evidence entry), with `item` (the finding ID or the evidence entry), `status`, `note` "
-        f"and `opened`. {OPENED_RULE} For an answer, `status` is `accepted`, `re-raised` (the "
+        f"and `opened`, and `searched` where you only searched a file. {OPENED_RULE} For an answer, `status` is `accepted`, `re-raised` (the "
         "finding is also in `findings`, with the same ID) or `cannot determine` (the note says why; it goes to "
         "the owner). For an evidence entry, `status` is `explained` (the note says why it is fine) or `flagged` "
         "(the note names the ID of the finding it raised). An empty list when the prompt lists no items.\n"
@@ -727,9 +739,12 @@ def _typed_problems(value: dict[str, Any], fields: dict[str, type]) -> list[str]
 
 
 def _finding_problems(finding: Any) -> list[str]:
-    if not isinstance(finding, dict) or set(finding) != set(FINDING_FIELDS):
+    if not isinstance(finding, dict) or not set(FINDING_FIELDS) <= set(finding) <= {*FINDING_FIELDS, *OPTIONAL_FINDING_FIELDS}:
         return ["fields differ from the schema"]
     problems = _typed_problems(finding, FINDING_FIELDS)
+    if "question" in finding and not (isinstance(finding["question"], str)
+                                      and re.match(QUESTION_PATTERN, finding["question"])):
+        problems.append("question is not a list name and a question number, such as code:10")
     for name, allowed in (("kind", FINDING_KINDS), ("severity", SEVERITIES), ("origin_stage", ORIGIN_STAGES)):
         if finding[name] not in allowed:
             problems.append(f"unknown {name}")
@@ -742,13 +757,16 @@ def _finding_problems(finding: Any) -> list[str]:
 
 def _accounted_problems(entry: Any, finding_ids: set[Any]) -> list[str]:
     """S41-D8, S41-D15, S42-D6: the shape of one accounted entry, and the finding it must point to."""
-    if not isinstance(entry, dict) or set(entry) != set(ACCOUNTED_FIELDS):
+    if not isinstance(entry, dict) or not set(ACCOUNTED_FIELDS) <= set(entry) <= {*ACCOUNTED_FIELDS, *OPTIONAL_ACCOUNTED_FIELDS}:
         return ["fields differ from the schema"]
     problems = _typed_problems(entry, ACCOUNTED_FIELDS)
     if problems:
         return problems
     if not all(isinstance(path, str) for path in entry["opened"]):
         problems.append("opened holds a value that is not a path")
+    if "searched" in entry and not (isinstance(entry["searched"], list)
+                                    and all(isinstance(path, str) for path in entry["searched"])):
+        problems.append("searched is not a list of paths")
     status, note = entry["status"], entry["note"]
     if status not in (*ANSWER_STATUSES, *EVIDENCE_STATUSES):
         problems.append("unknown status")
@@ -764,7 +782,8 @@ def _accounted_problems(entry: Any, finding_ids: set[Any]) -> list[str]:
 @dataclass(frozen=True)
 class Accounting:
     """What a report must account for (S41-D8): the items the prompt lists, each with the statuses it may take,
-    and the files the attempt must have read because a `fixed:` answer names them."""
+    and the files the attempt must have read because a `fixed:` answer names them or a `rejected:` answer cites them
+    (owner-approved growth, 2026-11-13: an accepted rejection rests on what it cites)."""
 
     items: dict[str, tuple[str, ...]] = field(default_factory=dict)
     must_read: tuple[str, ...] = ()
@@ -784,7 +803,7 @@ def accounting_problems(report: dict[str, Any], accounting: Accounting, paths_re
             rel = relative_to_copy(path, copy_root)
             if rel is None or rel not in read:
                 problems.append(f"{entry['item']} names an opened file the attempt did not read")
-    problems += [f"{path} is named in a fixed: answer and was not read" for path in accounting.must_read
+    problems += [f"{path} is named in a fixed: or rejected: answer and was not read" for path in accounting.must_read
                  if path not in read]
     return problems
 
@@ -1122,6 +1141,15 @@ def fixed_paths(answer: str) -> list[str]:
     return [os.path.normpath(re.sub(r":\d+(?:-\d+)?$", "", p)) for p in paths if p and " " not in p]
 
 
+CITED_PATH = re.compile(r"(?<![\w./-])((?:[\w.-]+/)+[\w.-]+\.\w+)(?:::[\w\[\]-]+)?(?::\d+(?:-\d+)?)?")
+
+
+def cited_paths(answer: str, exists: Any) -> list[str]:
+    """The repository files a `rejected:` answer cites (`tests/x.py::test_y`, `docs/a.md:12`): each path that exists
+    in the copy; a path it names that the copy does not hold, such as a retired file, is left out."""
+    return [p for p in dict.fromkeys(os.path.normpath(m.group(1)) for m in CITED_PATH.finditer(answer)) if exists(p)]
+
+
 def answer_word(answer: str) -> str | None:
     """The first word of an answer (S41-D7), or None when it is not one of the four."""
     word = answer.split(":", 1)[0].strip()
@@ -1179,7 +1207,8 @@ def _row_against_finding(row: AnswerRow, finding: dict[str, Any]) -> list[str]:
 
 
 def check_answers(rows: list[AnswerRow], exists: Any, away: set[str]) -> tuple[str, ...]:
-    """Refuse an answers section the recheck cannot verify (S41-D7, S41-D8); return the files it must read."""
+    """Refuse an answers section the recheck cannot verify (S41-D7, S41-D8); return the files it must read: those a
+    `fixed:` answer names and those a `rejected:` answer cites."""
     if not rows:
         raise ReviewRefusedError("the answers section holds no answer rows")
     must_read: list[str] = []
@@ -1194,6 +1223,8 @@ def check_answers(rows: list[AnswerRow], exists: Any, away: set[str]) -> tuple[s
         must_read += [p for p in paths if p not in away]
         if any(p in away for p in paths):
             must_read.append(f"{INPUTS_DIR}/change.diff")
+        if answer_word(row.answer) == "rejected":
+            must_read += [p for p in cited_paths(row.answer, exists) if p not in away]
     return tuple(dict.fromkeys(must_read))
 
 
@@ -1680,6 +1711,9 @@ def invocation_from_entry(entry: dict[str, Any], repo: Path, prompt_file: Path, 
         if field_name not in entry:
             raise ValueError(f"this entry was logged before slice {slice_id}: its prompt layout is retired, so its "
                              "prompt cannot be rebuilt; its input hashes still identify what it reviewed")
+    if entry.get("schema_sha256") != sha256_text(SCHEMA_JSON):
+        raise ValueError("this entry was logged with an earlier report schema: its prompt cannot be rebuilt; its "
+                         "input hashes still identify what it reviewed")
     record, mode = _entry_record(entry), entry["mode"]
     withheld = list(entry["withheld_sha256"])
     if mode == "recheck" and recheck is None:

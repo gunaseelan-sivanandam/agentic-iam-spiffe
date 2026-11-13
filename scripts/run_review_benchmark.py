@@ -1320,6 +1320,18 @@ def repeats_table(lines: list[dict[str, Any]], confirmation: Confirmation) -> st
         f"{case} {name}: {v.get(1)}, {v[2]}" for (case, name), v in sorted(repeated.items()))
 
 
+def question_line(lines: list[dict[str, Any]]) -> str:
+    """How many findings name the stage-checklist question that prompted them, by the optional `question` field
+    (owner-approved growth, 2026-11-13); reviews run before the field existed name none."""
+    findings = [f for line in lines if line.get("status") == "completed" for f in line.get("findings", [])]
+    named: dict[str, int] = {}
+    for finding in findings:
+        if finding.get("question"):
+            named[finding["question"]] = named.get(finding["question"], 0) + 1
+    listed = ", ".join(f"{q} {n}" for q, n in sorted(named.items())) or "none"
+    return f"Findings that name their checklist question: {sum(named.values())} of {len(findings)} ({listed})."
+
+
 def agreement(repo: Path) -> str:
     author, second = read_verdicts(repo, "author"), read_verdicts(repo, "second")
     shared = sorted(set(author) & set(second))
@@ -1367,7 +1379,7 @@ def report_stage_b(repo: Path, key: AnswerKey) -> str:
         f"Origin stage of the findings against the list of the review that found them: `{json.dumps(origin_table(lines, key), sort_keys=True)}`",
         f"Canary: `{json.dumps(canaries)}`. A canary is valid when its twin, without the launcher's flags, followed the "
         "planted CLAUDE.md and ran the planted hook (S45-D9); one whose twin ran only the hook shows that the flags "
-        "keep settings out, not that they keep instruction files out.", repeats_table(lines, confirmation), agreement(repo), "", SIZE_NOTE, "",
+        "keep settings out, not that they keep instruction files out.", repeats_table(lines, confirmation), question_line(lines), agreement(repo), "", SIZE_NOTE, "",
         "Per-review rows: the automatic first pass, before confirmation; the counts above are confirmed.", "",
         *report_rows(lines), "", COLUMN_NOTE])
 

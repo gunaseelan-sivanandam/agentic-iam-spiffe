@@ -472,7 +472,7 @@ def test_recheck_that_fails_the_read_check_is_a_miss_and_not_retried(repo: tuple
         "verdict": "yes"}}})
     assert _run(r) == 0
     line = next(line for line in r.results() if line.get("case") == "RC")
-    assert line["status"] == "failed" and line["tries"] == 1 and "AGENTS.md is named in a fixed: answer" in line["reason"]
+    assert line["status"] == "failed" and line["tries"] == 1 and "AGENTS.md is named in a fixed: or rejected: answer" in line["reason"]
     assert line["effort"] == "medium" and r.calls() == 1
 
 
@@ -730,6 +730,16 @@ def _rated(run: int, detected: list[str], blocking: list[str], seen: list[str], 
             "findings": [_new_finding(fid, "high") for fid in ids],
             "score": {"detected": detected, "detected_blocking": blocking, "not_blocking": seen,
                       "matches": {eid: list(ids[:1]) for eid in detected}}}
+
+
+def test_the_report_counts_findings_that_name_their_checklist_question() -> None:
+    """Owner-approved growth (2026-11-13): the optional `question` field of a finding."""
+    lines = [{"status": "completed", "findings": [{**_new_finding("X1", "high"), "question": "code:10"},
+                                                   {**_new_finding("X2", "low"), "question": "code:10"},
+                                                   _new_finding("X3", "high")]},
+             {"status": "failed", "findings": [{**_new_finding("X4", "high"), "question": "code:2"}]}]
+    assert bench.question_line(lines) == "Findings that name their checklist question: 2 of 3 (code:10 2)."
+    assert bench.question_line([]) == "Findings that name their checklist question: 0 of 0 (none)."
 
 
 def test_rating_agreement_pairs_the_runs_by_expected_defect_not_by_finding_id() -> None:

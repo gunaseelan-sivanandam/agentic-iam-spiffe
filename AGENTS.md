@@ -311,8 +311,9 @@ All of the following, in the same change:
   and no task text removes or reorders a section, and the task text reaches the reviewer as claims to
   verify. A recheck gets the reviewer's own earlier report and the author's answers to it (only that
   section of the record, never the whole record); it lists every answer under `accounted` with the
-  files it opened for it, and the launcher fails it when it leaves an answer out, names a file it did
-  not read, or did not read a file that a `fixed:` answer names. Whoever writes a task text never
+  files it opened for it (a file it only searched goes under `searched`), and the launcher fails it
+  when it leaves an answer out, names an opened file it did not read, or did not read a file that a
+  `fixed:` answer names or a `rejected:` answer cites. Whoever writes a task text never
   makes a file list the scope, never says "only check X", and never asks a closed recheck question.
 - **What the reviewer receives.** The launcher computes the review's inputs; the author does not
   choose or summarise them. The files under review come from the diff between the merge-base and
@@ -331,7 +332,8 @@ All of the following, in the same change:
   <type>` reads the list from the base commit, so a change cannot rewrite the list it is reviewed
   against; the tests-first stage takes `unit-tests` and `e2e-tests`; the final review takes none.
   When the base has lists, a review without `--stage` is refused. The author reads the stage's list
-  before writing that stage's artifact. The research behind the lists, with each source quoted, is
+  before writing that stage's artifact. A finding names the list question that prompted it, where one
+  did (`question`, for example `code:10`). The research behind the lists, with each source quoted, is
   [`research.md`](docs/slices/poc-4-4-stage-checklists/research.md) of slice 4.4. When an open review
   finds a class of defect a list lacks, or a mandate wording that misled a reviewer, the author
   proposes the list item or the wording in the PR, and the user approves it.

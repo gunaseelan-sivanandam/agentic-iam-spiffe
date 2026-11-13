@@ -827,7 +827,8 @@ def test_output_section_holds_the_reporting_bounds_and_the_credential_note_verba
             in output)
     assert f'"{launcher.CLAIMS_SECTION}"' in output and launcher.CLAIMS_SECTION == "Claims to verify"
     assert launcher.CREDENTIAL_NOTE in output and "`<token>`" in launcher.CREDENTIAL_NOTE
-    assert launcher.OPENED_RULE in output and "a Grep or Glob match does not open a file" in launcher.OPENED_RULE
+    assert launcher.OPENED_RULE in output and "only searched with Grep or Glob goes under `searched`" in launcher.OPENED_RULE
+    assert launcher.QUESTION_RULE in output and "`code:10`" in launcher.QUESTION_RULE
 
 
 def test_command_line_has_no_option_that_changes_the_sections(fx: Fixture) -> None:
@@ -1082,7 +1083,70 @@ def test_fixed_file_that_was_not_read_fails_even_when_a_path_under_review_was(fx
     commit = _recheck(fx, "| X1 | high | fixed: scripts/fix.py: guarded |")
     fx.scenario(_reply(accounted=[_accounted("X1")]))
     assert _run(fx, round_no=2, commit=commit) == 1
-    assert "scripts/fix.py is named in a fixed: answer and was not read" in _ends(fx)[-1]["reason"]
+    assert "scripts/fix.py is named in a fixed: or rejected: answer and was not read" in _ends(fx)[-1]["reason"]
+
+
+# --- Owner-approved growth of 2026-11-13: rejections read, searched files, checklist questions ---------------------
+
+
+@pytest.mark.parametrize(("answer", "reads", "fails"), [
+    ("rejected: already covered by `scripts/cover.py::test_x`", [REVIEWED], True),
+    ("rejected: already covered by `scripts/cover.py::test_x`", [REVIEWED, "scripts/cover.py"], False),
+    ("rejected: see docs/retired/gone.md:3, which no longer exists", [REVIEWED], False),
+    ("rejected: the scenario does not happen", [REVIEWED], False),
+], ids=["cited-file-not-read", "cited-file-read", "cited-path-not-in-the-copy", "no-file-cited"])
+def test_a_rejection_counts_only_when_the_files_it_cites_were_read(fx: Fixture, answer: str, reads: list[str],
+                                                                    fails: bool) -> None:
+    """Decision concern 1, resolved by the owner (2026-11-13): an accepted rejection rests on what it cites."""
+    _write(fx.work, "scripts/cover.py", "def test_x():\n    pass\n")
+    fx.commit = _commit_all(fx.work, "a covering test")
+    commit = _recheck(fx, f"| X1 | high | {answer} |")
+    fx.scenario(_reply(accounted=[_accounted("X1")], reads=reads))
+    status = _run(fx, round_no=2, commit=commit)
+    reason = _ends(fx)[-1].get("reason", "")
+    assert (status, "scripts/cover.py is named in a fixed: or rejected: answer and was not read" in reason) == (
+        (1, True) if fails else (0, False))
+
+
+def test_cited_paths_keep_only_files_the_copy_holds() -> None:
+    held = {"tests/tools/test_a.py", "docs/b.md"}
+    answer = "rejected: `tests/tools/test_a.py::test_one`, docs/b.md:12-14 and docs/gone.md; see AGENTS.md"
+    assert launcher.cited_paths(answer, held.__contains__) == ["tests/tools/test_a.py", "docs/b.md"]
+
+
+@pytest.mark.parametrize(("where", "status"), [("searched", 0), ("opened", 1)])
+def test_a_searched_file_need_not_be_read_but_an_opened_one_must(fx: Fixture, where: str, status: int) -> None:
+    """The reviewer can report a Grep honestly under `searched`; `opened` stays a checked claim."""
+    commit = _recheck(fx, "| X1 | high | rejected: the scenario does not happen |")
+    entry = ({**_accounted("X1"), "searched": ["docs/not_read.md"]} if where == "searched"
+             else _accounted("X1", opened=(REVIEWED, "docs/not_read.md")))
+    fx.scenario(_reply(accounted=[entry]))
+    assert _run(fx, round_no=2, commit=commit) == status
+    assert ("X1 names an opened file the attempt did not read" in _ends(fx)[-1].get("reason", "")) is (status == 1)
+
+
+@pytest.mark.parametrize(("question", "problem"), [
+    ("code:10", None), ("e2e-tests:5", None), ("C10", "question is not"), ("code:0", "question is not"),
+    ("code:", "question is not"), (10, "question is not"),
+], ids=["list-and-number", "list-with-a-digit", "letter-only", "number-zero", "no-number", "not-a-string"])
+def test_a_finding_may_name_the_checklist_question_that_prompted_it(question: object, problem: str | None) -> None:
+    report = {"findings": [{**_finding("X1"), "question": question}], "accounted": [], "verdict": "no"}
+    problems = launcher.validate_report(report)
+    assert (problems == []) if problem is None else any(problem in p for p in problems), problems
+
+
+def test_the_schema_offers_the_question_and_searched_fields_as_optional() -> None:
+    finding = launcher.REPORT_SCHEMA["properties"]["findings"]["items"]
+    accounted = launcher.REPORT_SCHEMA["properties"]["accounted"]["items"]
+    assert "question" in finding["properties"] and "question" not in finding["required"]
+    assert "searched" in accounted["properties"] and "searched" not in accounted["required"]
+
+
+def test_an_entry_logged_with_an_earlier_schema_is_not_rebuilt(fx: Fixture) -> None:
+    assert _run(fx) == 0
+    old = {**fx.log()[0], "schema_sha256": "0" * 64}
+    with pytest.raises(ValueError, match="logged with an earlier report schema"):
+        launcher.invocation_from_entry(old, fx.work, fx.prompt, diff_base=old["base_commit"], given=_given(fx))
 
 
 def test_re_raised_finding_keeps_its_id(fx: Fixture) -> None:

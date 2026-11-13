@@ -28,6 +28,10 @@ is first); every heading carries its date.
 - 4.6 (#43): `AGENTS.md`'s slice workflow has seven stages, each with its review, list, checks and exit; the
   templates carry the stage table, decision sources and rule deviations; `scripts/review_brief.py` builds a PR's
   decision brief; the grill-me skill lives in `.claude/skills/grill-me/`.
+- Growth the owner approved on 2026-11-13: a recheck must read every file a `rejected:` answer cites, as for a
+  `fixed:` answer; a reviewer lists files it only searched under `searched`; a finding may name the checklist question
+  that prompted it (`question`), which the benchmark report counts. Its review is the unit `growth` of
+  `docs/slices/agentic-sdlc-poc/`; the final review predates it.
 - Reviews: every sub-issue's implementation review ended with no blocking or high finding open (records in each
   bundle); 4.4 had a two-model critique; a dry slice from a clean session recorded 18 trip points, in the decision
   page. The final review of the slice is the unit `final` of `docs/slices/agentic-sdlc-poc/`.

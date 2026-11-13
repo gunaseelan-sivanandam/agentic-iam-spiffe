@@ -140,6 +140,32 @@ So for two of the three misses the list's question led every review to the defec
 high. Whether a list question's answer should carry a severity floor is a
 question for the owner, not something this benchmark decided.
 
+## Why fewer than 80% of the defects were detected
+
+The owner asked why every initial setup stayed below 80% (2026-11-11). No plan set a detection target; against
+80%, the shortfall has three causes, and only one is that reviewers did not find the defect. First runs, by
+confirmed verdicts; "seen" is a match rated medium or low, or at the place without a term:
+
+| Setup | Detected | Seen at any severity | Seen, leaving out failed or withheld reviews |
+| --- | --- | --- | --- |
+| `short+list` | 6 of 11 (55%) | 9 of 11 (82%) | 9 of 10 (90%) |
+| `open+list` | 7 of 11 (64%) | 9 of 11 (82%) | 9 of 10 (90%) |
+| `open-B+list` | 6 of 11 (55%) | 8 of 11 (73%) | 8 of 10 (80%) |
+
+1. **Seen but rated below high (5 misses).** RM-3 and RM-4 were seen by every review, each citing the list question
+   that asks it (R5, C10), at medium or low; FS-2 under `short+list` too. The rule counts only blocking and high
+   findings, and the lists' Blocks sections do not name these cases (decision concern 8). Making R5 and C10 blocking
+   would give `open+list` 9 of 11 and the other two 8 of 11.
+2. **Review mechanics, counted as misses (3).** RM-6 under `short+list` and PB-3 under `open-B+list` read none of the
+   files under review (the empty-review rule); FS-1 under `open+list` was withheld by the publication check.
+3. **Not found (4).** RM-5 by every setup (one exact description at a wrong line), and RM-6 under `open-B+list`.
+
+The planted cases were found (each setup 4 of 5, its one miss a failed or withheld review or a below-high rating);
+the shortfall is in the historical misses (2 or 3 of 6), which were chosen because earlier reviews missed them. Three
+of those are the misses the PoC's first outcome names: DPL-004 (RM-3) and DPL-005 (RM-4) are now seen but not
+flagged, and DPL-010 (RM-6) is caught by one setup of three. With 11 cases, 7 detections give an interval of 31%
+to 89%, so these counts can neither confirm nor rule out 80%.
+
 ## For the owner's choice
 
 - **Default setup:** `short+list` or `open+list`; the counts do not separate them.

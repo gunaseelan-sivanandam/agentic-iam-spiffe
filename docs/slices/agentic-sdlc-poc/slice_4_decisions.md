@@ -114,7 +114,7 @@ questions), requirements (9), architecture and interfaces (10), unit tests (10),
 | S41-D5 | recheck inputs | `test_recheck_prompt_holds_its_earlier_report_and_only_its_answers_section`, `test_recheck_without_its_inputs_is_refused_before_any_call` |
 | S41-D6 | `REPORT_SCHEMA`; `AGENTS.md`, Review findings | `test_findings_of_each_severity_kind_and_origin_stage_are_accepted`, `test_schema_offered_to_the_cli_matches_the_launcher_rules` |
 | S41-D7 | the answers table; `AGENTS.md`, Review loop | `test_answers_table_with_every_answer_word_is_accepted`, `test_answers_that_do_not_answer_the_earlier_report_are_refused_before_any_call` |
-| S41-D8 | `Accounting`, the read check | `test_recheck_that_does_not_account_for_every_answer_fails`, `test_fixed_file_that_was_not_read_fails_even_when_a_path_under_review_was` |
+| S41-D8 | `Accounting`, the read check; widened by the owner's growth of 2026-11-13 to the files a `rejected:` answer cites, with `searched` for files only searched | `test_recheck_that_does_not_account_for_every_answer_fails`, `test_fixed_file_that_was_not_read_fails_even_when_a_path_under_review_was`, `test_a_rejection_counts_only_when_the_files_it_cites_were_read`, `test_a_searched_file_need_not_be_read_but_an_opened_one_must` |
 | S41-D9 | the end entry | `test_end_entry_counts_each_severity_with_zeros` |
 | S41-D10 | rule text: `AGENTS.md`, Review findings ("a secret written into logs, evidence or any published record") | `test_output_section_holds_the_reporting_bounds_and_the_credential_note_verbatim` |
 | S41-D11 | rule text: `AGENTS.md`, Independent review, Modes and prompts ("never makes a file list the scope") | rule text only |
@@ -238,6 +238,16 @@ a decision concern below instead.
 | 4.6 | The handoff rule keeps S46-D9's and S46-D13's words: the brief is pasted at the top of the PR body, which is a snapshot and is not updated later | 4.6's review (F3) had the author rewrite it to "built once CI has finished … and built again after a later push", which changed agreed decisions without the owner; reverted, and the question goes to the owner (decision concern 10; final review, FR-7) |
 | 4.2 | `invocation_from_entry` refuses entries logged by 4.1's launcher with a clear message, as it refuses earlier ones | 4.2 retires 4.1's prompt layout (the file list from `--path`, empty upstream and evidence sections); its plan did not say so (review round 1, R1-4) |
 
+## Why the benchmark detected fewer than 80%
+
+Detected: `short+list` 6, `open+list` 7, `open-B+list` 6 of 11 defect cases. Seen at any severity: 9, 9 and 8; 9 of
+10, 9 of 10 and 8 of 10 when failed or withheld reviews are left out. The misses: 5 seen but rated below high (RM-3
+and RM-4 by every setup, each citing its list question; decision concern 8), 3 lost to review mechanics (two empty
+reviews, one withheld report), and 4 not found (RM-5 everywhere, RM-6 once). The planted cases were found; the
+historical misses DPL-004 and DPL-005 are now seen but not flagged, and DPL-010 is caught by one setup of three. The
+full analysis is in the [benchmark report](../poc-4-5-benchmark/benchmark_report.md), section "Why fewer than 80% of
+the defects were detected".
+
 ## Decisions made
 
 | When | Decision | The owner's words |
@@ -254,6 +264,8 @@ a decision concern below instead.
 | 2026-11-09 | Plans merged (PR #48) | merged by the owner |
 | 2026-11-09 | This file as the owner's one page; planted defects as the owner's own check | "Yes" |
 | 2026-11-09 | The goal above: work without stopping, review once at the end; checklist question per benchmark finding; 4.1's mandate wording kept until the owner chooses; a dry slice at the end instead of a real cycle after 4.3 | "save the revised goal" |
+| 2026-11-13 | Add the unit-test decision (5) and the analysis of the benchmark's detections below 80% to this page | "yes, add both to the page and implement your gorwth proposal as well" |
+| 2026-11-13 | Growth: proposal 5 replaced by two stricter changes, a rejection is checked against the files it cites and a `searched` list for files only searched; both implemented with proposal 9, the checklist question on each finding | "yes, replace it and implement both with proposal 9" |
 
 ## Decisions to make
 
@@ -263,12 +275,13 @@ a decision concern below instead.
 | 2 | Default review setup and mandate wordings (initial, recheck, final) | At the end | From the [benchmark's counts](../poc-4-5-benchmark/benchmark_report.md): detections `short+list` 6, `open+list` 7, `open-B+list` 6 of 11; false alarms 2, 2 and 4; rechecks both 1 of 1 | Keep `open+list` and 4.1's wordings: no setup is shown better, and the draft raised the most false alarms; the counts are within chance, so this is a default, not a finding |
 | 3 | Recreate the hidden issues under the owner's account if GitHub has not answered | At the end, or about 2026-11-23 if the owner is around | Recreate the open ones; keep waiting | Recreate the open ones |
 | 4 | Remove your personal copy of the grill-me skill. A personal skill takes precedence over a project skill of the same name, so while it exists, discovery runs the old text, which cuts off two sentences and never asks the assets question, instead of the repository's (4.6 review, F4) | Before the next slice's discovery | Remove it; rename one of them | Remove it: the repository copy is the reviewed one |
+| 5 | Measure the `unit-tests` list, which no benchmark case used, nor the tests-first pair with `e2e-tests` (discovered issue 15) | Before relying on the list, or in slice 8 | Add one or two unit-test cases now (about 6 calls; S45-D5's cases and the 60-call budget change, 3 calls are left); or measure it in slice 8 | Slice 8, which measures the lists' own effect against reviews without them |
 
 ## Parked units, decision concerns and growth proposals
 
 | # | Kind | Part | Item | The author's recommendation |
 | --- | --- | --- | --- | --- |
-| 1 | Decision concern | 4.1 | S41-D8 makes a recheck read only the files a `fixed:` answer names. A `rejected:` answer that rests on a file ("already covered by `tests/…::test_x`") can be accepted without opening it, though the recheck mandate says to open "the tests that cover them" (4.1 review round 1, R1-5) | Extend the read check to every repository path any answer names; it is a few lines on data the launcher already has. Implemented as written until the owner decides |
+| 1 | Decision concern, resolved | 4.1 | S41-D8 made a recheck read only the files a `fixed:` answer names, so a `rejected:` answer resting on a file could be accepted without opening it (4.1 review round 1, R1-5) | Resolved by the owner on 2026-11-13: the launcher now also requires every file a `rejected:` answer cites to be read |
 | 2 | Decision concern | 4.3 | S43-D3 fails a record whose answers changed after a recheck read them, and S43-D4 settles a rejected blocking or high finding only by the next round's acceptance or an `owner:` link. Read narrowly, a rejection the recheck re-raised could never be decided by the owner without editing answers the recheck read, and `make docs-check` would stay red (4.3 review round 1, R1-3). The check is also red between the answers commit and the recheck, by design | Keep the implemented reading: a later round's `owner:` answer to the same finding ID settles it. Confirm, or choose another way to record the owner's decision |
 | 3 | Decision concern | 4.5 | S45-D7 makes the author the blinded confirmer, so the blinding rests on the author not looking: the token map and the results with their configurations sit in the same folder as the export (4.5a review round 1, L4) | Keep: under the honest-mistake threat model the author confirms before opening the results again, and the Sonnet sample measures agreement. The alternative, the owner confirming, costs the owner's time |
 | 4 | Decision concern | 4.5 | S45-D5 has one recheck case, RC-1, whose answer is a false `fixed:`. It measures whether a recheck wording accepts a false fix, not whether it re-raises answers that hold (a correct rejection, a correct fix), so a wording that re-raises everything would score best (4.4 critique, C-2) | Before choosing the recheck wording, run a second recheck case with a correct rejection on both wordings: 2 more runs within the 60. Until then the report says what the recheck comparison cannot show |
@@ -276,8 +289,8 @@ a decision concern below instead.
 | 7 | Decision concern | 4.6 | S46-D1 and S46-D5 give every slice a plan PR the user merges, a plan review, an implementation review and a final review, so a one-line fix costs three review units and two merges (about USD 6 to 9 at the plan's estimates) unless the plan records a rule deviation with the user's words (4.6 review, F5) | For a small fix: one PR holding the plan and the change, with the plan review and the implementation review as its units, and the final review allowed as "none, with a reason" when the implementation review ran at high effort with the open mandate. Until the user decides, small fixes follow the stages as written |
 | 8 | Decision concern | 4.4 | The benchmark's misses RM-3 (requirements without proof) and RM-4 (a gate inside another CI job) were found by every review, each citing the list question that asks it (R5, C10), and rated medium or low, which the rule does not count as a detection. The lists' "Blocks at this stage" sections do not name these cases, so the reviewers' severities follow the rules | Make an unanswered R5 (a requirement without proof) and C10 (a check not run as its own required job) blocking at their stages, in the lists' Blocks sections; or leave the severities to the reviewer |
 | 10 | Decision concern | 4.6 | S46-D9 and S46-D13: the brief opens the PR body, which is a snapshot not updated later; CI runs on pull requests, so a brief pasted when the PR is opened always says "no run for this commit; not a pass" (4.6 review, F3) | Allow one edit of the PR body: paste the brief once CI has finished on the PR's head, and again after a later push |
-| 9 | Growth proposal | 4.5 | The reviewer's report has no field for the checklist question behind a finding, so the owner's addition (each benchmark finding names the question that prompted it) could only be met from the findings' own text (4 of 29) and the author's mapping. Failure it would catch: a list question that never leads to a finding, unseen. Cost: one optional field in the report schema and its test. Simpler alternative: the author's mapping, as now | Add an optional `question` field (for example `C10`) to the report schema and the benchmark's report |
-| 5 | Growth proposal | 4.1 | S41-D8's read check failed four whole reviews because `opened` named a file the reviewer had not read with the Read tool (issues 5, 7, 8 and 14), each a full session lost. Failure it would still catch: a recheck that never read a file a `fixed:` answer names. Cost: a few lines in the launcher. Simpler alternative: keep the check and rerun, as now | The launcher drops from `opened` the files the attempt did not read and records them, and fails the attempt only when a file a `fixed:` answer names was not read |
+| 9 | Growth, approved and implemented | 4.5 | A finding may name the checklist question that prompted it (`question`, for example `code:10`); the benchmark report counts the findings that do. Approved by the owner on 2026-11-13 | Done: the launcher's schema and output section, `AGENTS.md` (Stage checklists), the benchmark report; the benchmark's runs predate the field |
+| 5 | Growth, replaced and implemented | 4.1 | The first proposal, to drop unread files from `opened` instead of failing, was withdrawn: of the four failed reviews it would have passed one whose five acceptances rested on files the reviewer never read. In its place, approved by the owner on 2026-11-13: a recheck must read every file a `rejected:` answer cites, as it must for a `fixed:` answer; and a reviewer lists files it only searched under `searched`, so `opened` stays a claim the launcher checks | Done: the launcher's schema, output section and answer checks, `AGENTS.md` (Modes and prompts) |
 
 No unit is parked.
 
