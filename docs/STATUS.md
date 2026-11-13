@@ -19,8 +19,8 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
      round 2; the owner's growth of 2026-11-13 (rejections read like fixes, a `searched` list, the checklist
      question on findings) is implemented and reviewed (unit `growth`); the owner's decisions of 2026-11-13 on
      decision concerns 2, 3, 4, 7, 8 and 10 are implemented (small slices, the decision page, a second recheck
-     case, a severity measurement that came out worse, so nothing is adopted) and in review (unit
-     `owner-decisions`, round 2 next). Then the owner's open decisions on the decision page, the push and the
+     case, a severity measurement that came out worse, so nothing is adopted) and reviewed (unit
+     `owner-decisions`, ended after round 2). Then the owner's open decisions on the decision page, the push and the
      final PR.
      Progress and the owner's decisions: [`slice_4_decisions.md`](slices/agentic-sdlc-poc/slice_4_decisions.md);
      Next, before slice 5: a slice of author prompts and their benchmark (owner, 2026-11-09: "let's

@@ -365,8 +365,62 @@ ran every check it could without Docker. What the next user would trip on, with 
 
 ## Review outcome
 
-At handoff, the output of `python3 scripts/review_brief.py --base origin/poc/agentic-sdlc` and, for each test-plan
-question, the IDs of the implementation reviews' findings that answer it, or "no finding", go here.
+### Decision brief
+
+Built by `scripts/review_brief.py` from the review units this PR adds (head `e266c154e1ef`, merge-base `3347754ef038`). The plans and records are worth reading where this brief points.
+
+| Unit | Last verdict | Rounds | Blocking | High | Medium | Low | Open |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `agentic-sdlc-poc` `final` | yes | 2 | 0 | 2 | 5 | 3 | nothing open |
+| `agentic-sdlc-poc` `growth` | yes | 2 | 0 | 1 | 5 | 2 | nothing open |
+| `agentic-sdlc-poc` `owner-decisions` | yes | 2 | 1 | 2 | 5 | 0 | 2 for the owner |
+| `poc-4-1-review-prompts` `implementation` | yes | 2 | 0 | 2 | 6 | 5 | 1 for the owner |
+| `poc-4-2-review-inputs` `implementation` | yes | 2 | 0 | 3 | 4 | 4 | nothing open |
+| `poc-4-3-review-records` `implementation` | yes | 2 | 2 | 1 | 3 | 4 | 1 for the owner |
+| `poc-4-4-stage-checklists` `critique` | A: no, B: yes | 1 | 1 | 5 | 10 | 6 | 1 for the owner |
+| `poc-4-4-stage-checklists` `implementation` | yes | 1 | 0 | 1 | 4 | 3 | nothing open |
+| `poc-4-5-benchmark` `mechanics` | yes | 2 | 3 | 4 | 6 | 7 | 1 for the owner |
+| `poc-4-5-benchmark` `report` | yes | 2 | 2 | 1 | 3 | 4 | nothing open |
+| `poc-4-6-stage-rules` `implementation` | yes | 1 | 0 | 1 | 5 | 5 | 2 for the owner |
+
+**Answered `owner:`**
+
+- `agentic-sdlc-poc` `owner-decisions` F2 (high): owner: docs/slices/agentic-sdlc-poc/slice_4_decisions.md (decision 7 under "Decisions to make"): adding a list item needs the owner's approval (`AGENTS.md`, Stage checklists), and the list holds its 12 questions; the proposal is a Blocks bullet in `docs/review_checklists/plan-and-test-plan.md` for a plan that claims a small slice while a condition does not hold. Until the owner decides, the open mandate and `AGENTS.md` (Small slices, which the reviewer receives) are the only check
+- `poc-4-6-stage-rules` `implementation` F4 (medium): owner: docs/slices/agentic-sdlc-poc/slice_4_decisions.md: decision 4 under "Decisions to make" asks the owner to remove the personal copy, which takes precedence over the repository's while it exists; removing a file from the owner's own folder is the owner's to do
+
+**Decision concerns**
+
+- `agentic-sdlc-poc` `owner-decisions` F6 (medium): owner: docs/slices/agentic-sdlc-poc/slice_4_decisions.md (decision concern 11): the raise from 60 to 85 under the DC8 approval is put to the owner, recommendation confirm. Meanwhile the hard stop is lowered to the 76 calls used (`scripts/run_review_benchmark.py` `BUDGETS`, its test in `tests/tools/test_run_review_benchmark.py`), so no further stage-B call runs without a new decision; the Decisions-made DC4 row now says RC-2 ran as calls 60 and 61 after a canary for CLI 2.1.323; the report's Calls line and the author-decision budget row agree
+- `poc-4-1-review-prompts` `implementation` R1-5 (medium): owner: docs/slices/agentic-sdlc-poc/slice_4_decisions.md (decision concern 1): S41-D8 limits the read check to files a `fixed:` answer names; extending it to every path any answer names changes an approved decision, so it is implemented as written and put to the owner with the recommendation to extend it
+- `poc-4-3-review-records` `implementation` R1-3 (high): owner: docs/slices/agentic-sdlc-poc/slice_4_decisions.md (decision concern 2): implemented within S43-D4's words, so a later round's `owner:` answer to the same finding ID (a re-raised finding keeps its ID) settles a rejected blocking or high finding without editing answers a recheck read; tests `test_rejected_finding_that_the_next_round_re_raises_still_fails` and `test_a_later_owner_answer_to_the_re_raised_finding_settles_the_rejection`. The owner confirms this reading or chooses another; the red check between the answers commit and the recheck stays, as the plan accepts
+- `poc-4-4-stage-checklists` `critique` C-2 (high): owner: docs/slices/agentic-sdlc-poc/slice_4_decisions.md: decision concern 4. S45-D5 fixes one recheck case, a false `fixed:`; the benchmark report will say that the recheck comparison measures only the acceptance of a false fix, not the re-raising of answers that hold. Recommendation: before choosing the recheck wording, run a second recheck case with a correct rejection (2 more runs, within the 60)
+- `poc-4-5-benchmark` `mechanics` L4 (low): owner: docs/slices/agentic-sdlc-poc/slice_4_decisions.md (decision concern 3): S45-D7 makes the author the confirmer; recommended to keep it, with the Sonnet sample measuring agreement
+- `poc-4-6-stage-rules` `implementation` F5 (medium): owner: docs/slices/agentic-sdlc-poc/slice_4_decisions.md: decision concern 7, with a recommendation for small fixes. The opening sentence of the slice workflow now agrees with the stages (a plan and its review, tests first when the fix changes behaviour, the final review and the close-out; AGENTS.md)
+
+**`cannot determine` in a recheck**
+
+None.
+
+**Still disputed after a recheck**
+
+None.
+
+**Blocking and high findings answered `rejected`**
+
+None.
+
+**Where findings started** (origin stage of each finding, against the review that found it: its `--stage` lists, or its unit when it had none)
+
+| Origin | critique | final | growth | implementation | mechanics | owner-decisions | report |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| architecture and interfaces | 0 | 0 | 0 | 3 | 2 | 1 | 0 |
+| discovery | 5 | 0 | 0 | 8 | 0 | 0 | 0 |
+| implementation | 14 | 9 | 7 | 32 | 14 | 6 | 9 |
+| tests first | 3 | 1 | 1 | 10 | 4 | 1 | 1 |
+
+**The test-plan questions.** Slice 4's implementation reviews ran before the rule that they answer the three
+test-plan questions as findings (2026-11-13), so no finding is mapped to a question here; every finding is in its
+unit's record.
 
 ## How the owner can check the work
 

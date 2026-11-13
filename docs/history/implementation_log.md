@@ -34,6 +34,8 @@ is first); every heading carries its date.
   answers the test-plan questions as findings; condition 4 counts the change, not the bundle or the handoff files;
   the confirmation's two departures from the plan are recorded; the report holds the clusters' severities; a test of
   the severity file's refusal. Decision 7, decision concern 11 and growth proposal 12 go to the owner.
+  Round 2: attempt 1 failed the read check again; attempt 2 approvable, all 8 answers accepted, no new finding; the
+  review ended after round 2.
 - Validation, local: `make tooling-test` 800 passed and 9 shell tests (with a scratch shellcheck); `ruff check
   services scripts` clean; `make lint` against `origin/poc/agentic-sdlc` passed (0 new or worsened findings);
   `make docs-check` passed on the commit, in a clone without this review's record, which fails it in the working
