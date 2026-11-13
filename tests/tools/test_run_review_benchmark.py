@@ -638,6 +638,30 @@ def test_measurement_export_mixes_the_two_setups_first_runs_under_fresh_tokens(r
     assert (r.root / bench.EXPORT_FILE).read_text() == "the stage's first export\n"
 
 
+def test_report_confirms_the_measured_setup_and_its_baseline_by_the_second_exports_verdicts(
+        repo: tuple[Repo, str, str]) -> None:
+    r, base, commit = repo
+    measurement = {"configuration": SEV, "baseline_configuration": "open+list"}
+    r.key([_case("C1", base, commit, configurations=["open+list", SEV]),
+           _case("CL", base, commit, kind="clean", configurations=["open+list", SEV])], severity_measurement=measurement)
+    r.canary_passed()
+    r.scenario(_reply([_new_finding("X1", "high")]))
+    assert _run(r) == 0
+    report = bench.report_stage_b(r.root, bench.load_key(r.root))
+    assert f"Decision concern 8's measurement, {SEV} against open+list: not yet confirmed." in report
+    assert bench.main(["--export-measurement", "--configuration", "open+list", "--configuration", SEV], repo=r.root) == 0
+    private = [json.loads(line) for line in (r.root / bench.MEASURE_KEY_FILE).read_text().splitlines()]
+    # the blind confirmer upholds only the measured setup's finding on C1
+    verdicts = [{"token": p["token"], "verdict": "match" if p["configuration"] == SEV and p["case"] == "C1" else "no match",
+                 "expected_id": None, "reason": "r"} for p in private]
+    _write(r.root, str(bench.VERDICT_FILES["measurement"]), "".join(json.dumps(v) + "\n" for v in verdicts))
+    _write(r.root, str(bench.VERDICT_FILES["author"]), json.dumps({"token": "T999", "verdict": "no match"}) + "\n")
+    report = bench.report_stage_b(r.root, bench.load_key(r.root))
+    assert f"| {SEV} | 1 of 1 | C1 | 0 | CL 1 | 0 | 0 |" in report
+    assert "| open+list | 0 of 1 |  | 0 | CL 1 | 0 | 0 |" in report
+    assert _report_row(report, SEV)[1] == "1 of 1"  # the main table confirms the measured setup by the same verdicts
+
+
 # --- Stage A compatibility and rescoring ---------------------------------------------------------
 
 

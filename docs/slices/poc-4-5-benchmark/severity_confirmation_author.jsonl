@@ -1,0 +1,82 @@
+{"token": "S001", "verdict": "no match", "expected_id": null, "reason": "Line 1647 is in range but no expected term appears; it describes the missing docker exec -i, not token values in evidence."}
+{"token": "S002", "verdict": "no match", "expected_id": null, "reason": "No-defect case; not a real problem: the locking step has no gate because an earlier slice put issue gates out of scope, and it is a handoff step the user sees."}
+{"token": "S003", "verdict": "no match", "expected_id": null, "reason": "Line 408 is in range but no expected term appears; it describes an H1/H4 contradiction, not the bare sleep."}
+{"token": "S004", "verdict": "match", "expected_id": "E1", "reason": "plan.md:9 is inside 9-11 and REQ-M4-E4 is named in prose."}
+{"token": "S005", "verdict": "match", "expected_id": "E1", "reason": "Line 408 is inside 403-410 and poll, flake, loop and timeout appear in prose about the fixed sleep."}
+{"token": "S006", "verdict": "no match", "expected_id": null, "reason": "Line 424 is outside every range and no absence term appears; it describes an unexpanded ~ path in the escape check."}
+{"token": "S007", "verdict": "no match", "expected_id": null, "reason": "No-defect case; real but minor: the rule edit has no plan, log or index record, which base AGENTS.md:120 asks of every change."}
+{"token": "S008", "verdict": "no match", "expected_id": null, "reason": "plan.md:3 is outside 9-11 and REQ-M4-E4 is not named; it describes other behaviours losing coverage."}
+{"token": "S009", "verdict": "no match", "expected_id": null, "reason": "docs/STATUS.md is not an expected file; it describes the missing close-out records."}
+{"token": "S010", "verdict": "match", "expected_id": "E1", "reason": "architecture.md:566 is the planted line and credential, secret, redaction and exposing appear in prose."}
+{"token": "S011", "verdict": "no match", "expected_id": null, "reason": "Line 407 is in range but no expected term appears; it describes M5-T57's missing presence assertion."}
+{"token": "S012", "verdict": "match", "expected_id": "E1", "reason": "requirements.md:235 is in range and 'cannot be verified' and 'no threshold' appear in prose outside the quote."}
+{"token": "S013", "verdict": "no match", "expected_id": null, "reason": "unit-trust.yml is not the expected file (diff_coverage_gate.sh is cited only in evidence) and no term appears; it describes a shallow fetch."}
+{"token": "S014", "verdict": "match", "expected_id": "E1", "reason": "Line 410 is in range and 'flakes' appears in prose; its main point is the unrecorded 5 s fact, with the flaky fixed sleep as the consequence."}
+{"token": "S015", "verdict": "no match", "expected_id": null, "reason": "compose/spiffe.compose.yml is not the expected file; it describes the key directory mount into clients."}
+{"token": "S016", "verdict": "no match", "expected_id": null, "reason": "The test file is not the expected file; it describes untested delegation."}
+{"token": "S017", "verdict": "no match", "expected_id": null, "reason": "scripts/qa_deploy.py is not an expected file; it describes compose keys the gate does not read."}
+{"token": "S018", "verdict": "no match", "expected_id": null, "reason": "scripts/delegate_token.py is not the expected file; it describes the untested delegation tool."}
+{"token": "S019", "verdict": "match", "expected_id": "E1", "reason": "requirements.md:235 is in range and 'cannot be verified' and 'no threshold' appear in prose."}
+{"token": "S020", "verdict": "no match", "expected_id": null, "reason": "No-defect case; not a real problem: speculative, the refusal it cites was the agent session's permission check, not a GitHub role."}
+{"token": "S021", "verdict": "no match", "expected_id": null, "reason": "The test plan of agentic-delivery-process is not an expected file for this case; it describes unrecorded verification of the changed harness."}
+{"token": "S022", "verdict": "no match", "expected_id": null, "reason": "Not an expected file for this case; it describes missing positive twins."}
+{"token": "S023", "verdict": "match", "expected_id": "E1", "reason": "architecture.md:286 is the planted line and 'public key' and 'private key' appear in prose."}
+{"token": "S024", "verdict": "no match", "expected_id": null, "reason": "Line 1700 is in range but no expected term appears; it describes unescaped command substitution in guard strings."}
+{"token": "S025", "verdict": "match", "expected_id": "E1", "reason": "compose:97 is inside 94-98 and 'private key' appears in prose, not in the expected lines."}
+{"token": "S026", "verdict": "match", "expected_id": "E1", "reason": "test_plan.md:9 is the planted row and REQ-M4-E4 is named in prose."}
+{"token": "S027", "verdict": "no match", "expected_id": null, "reason": "No-defect case; real but minor: the rule edit carries no plan or close-out record that base AGENTS.md:120 asks of every change."}
+{"token": "S028", "verdict": "match", "expected_id": "E1", "reason": "requirements.md:235 is in range and 'ambiguous' and 'vague' appear in prose ('sufficiently' only inside a quote)."}
+{"token": "S029", "verdict": "no match", "expected_id": null, "reason": "No-defect case; real but minor: DPL-008 is closed with no recorded probe of the setting, while the last recorded probe said it was off."}
+{"token": "S030", "verdict": "no match", "expected_id": null, "reason": "Line 1566 is in range but no expected term appears; it describes a premise guard that cannot fail."}
+{"token": "S031", "verdict": "match", "expected_id": "E1", "reason": "requirements.md:234 is in range and 'testable' appears in prose, so the rule matches, though its main problem is the missing trace link rather than the unmeasurable wording."}
+{"token": "S032", "verdict": "match", "expected_id": "E1", "reason": "architecture.md:286 is the planted line and private, public key and REQ-SEC-K1 appear in prose."}
+{"token": "S033", "verdict": "no match", "expected_id": null, "reason": "scripts/qa_deploy.py is not an expected file; it describes mount matching in the asset check."}
+{"token": "S034", "verdict": "no match", "expected_id": null, "reason": "Line 1850 is in range but no expected term appears; it describes guards whose check status is dropped."}
+{"token": "S035", "verdict": "match", "expected_id": "E1", "reason": "plan.md:9 is inside 9-11 and REQ-M4-E4 is named in prose."}
+{"token": "S036", "verdict": "no match", "expected_id": null, "reason": "scripts/mutation_gate.py is not the expected file; it describes the mutation denominator."}
+{"token": "S037", "verdict": "match", "expected_id": "E1", "reason": "compose:97 is inside 94-98 and 'private key' appears in prose."}
+{"token": "S038", "verdict": "no match", "expected_id": null, "reason": "services/tool-b/server.py is not the expected file; it describes the token_id marker bypass."}
+{"token": "S039", "verdict": "no match", "expected_id": null, "reason": "plan.md:3 is outside 9-11, and REQ-M4-E4 appears without any absence place (test_plan, trace/tests.yaml, E2E-M3-S4-SUITE)."}
+{"token": "S040", "verdict": "no match", "expected_id": null, "reason": "Line 1851 is in range but no expected term appears; it describes guards that cannot fail."}
+{"token": "S041", "verdict": "no match", "expected_id": null, "reason": "Line 1633 is in range but no expected term appears; it describes exercise guards that fail on the secure outcome."}
+{"token": "S042", "verdict": "match", "expected_id": "E1", "reason": "Line 1709 is in range and evidence, credential and secret appear in prose about token values kept in evidence."}
+{"token": "S043", "verdict": "no match", "expected_id": null, "reason": "scripts/qa_deploy.py is not an expected file; it describes compose keys the gate does not read."}
+{"token": "S044", "verdict": "no match", "expected_id": null, "reason": "scripts/coverage_gate.py is not the expected file; 'override' refers to pytest's exit status, not the --include override."}
+{"token": "S045", "verdict": "no match", "expected_id": null, "reason": "The slice template is not an expected file; it describes a test-lint overclaim."}
+{"token": "S046", "verdict": "no match", "expected_id": null, "reason": "compose/spiffe.compose.yml is not the expected file; it describes the key directory mount into clients."}
+{"token": "S047", "verdict": "no match", "expected_id": null, "reason": "The Envoy entrypoint is not an expected file; it describes Envoy not reloading refreshed SVIDs."}
+{"token": "S048", "verdict": "no match", "expected_id": null, "reason": "Line 409 is in range but no listed term appears, so by rule it is location only, though 'fails at random' describes the flaky fixed sleep."}
+{"token": "S049", "verdict": "no match", "expected_id": null, "reason": "The harness is not an expected file for this case; it describes loosened 401/403 identity tests."}
+{"token": "S050", "verdict": "no match", "expected_id": null, "reason": "The harness is not an expected file for this case; it describes untested fail-closed paths in tool-b."}
+{"token": "S051", "verdict": "no match", "expected_id": null, "reason": "services/tool-b/server.py is not the expected file; it describes the token_id marker bypass."}
+{"token": "S052", "verdict": "no match", "expected_id": null, "reason": "implementation_log.md is not an expected file and no absence term appears; it describes the missing close-out."}
+{"token": "S053", "verdict": "match", "expected_id": "E1", "reason": "architecture.md:286 is the planted line and private, holder, public key and REQ-SEC-K1 appear in prose."}
+{"token": "S054", "verdict": "match", "expected_id": "E1", "reason": "requirements.md:235 is in range and 'cannot be verified' appears in prose; its main subject is the trace gap, with the unverifiable wording stated in passing."}
+{"token": "S055", "verdict": "match", "expected_id": "E1", "reason": "Matches by the absence clause ('no test' and run_independent_review.py), though line 586 is outside the ranges and the untested path it names (the log-entry secret check) is not one of the listed refusals."}
+{"token": "S056", "verdict": "no match", "expected_id": null, "reason": "The harness is not an expected file for this case; it describes the lack of a CI job."}
+{"token": "S057", "verdict": "no match", "expected_id": null, "reason": "Line 1700 is in range but no expected term appears; it describes unescaped command substitution in guard strings."}
+{"token": "S058", "verdict": "no match", "expected_id": null, "reason": "test_report.log is not an expected file; it describes undisclosed scope and a filtered run."}
+{"token": "S059", "verdict": "no match", "expected_id": null, "reason": "requirements.md:327 is in range but no expected term appears; it describes a holder contradiction, not missing proofs."}
+{"token": "S060", "verdict": "no match", "expected_id": null, "reason": "architecture.md:566 is the planted line but no expected term appears; location only, it describes doc-code drift and defers the leak to another finding."}
+{"token": "S061", "verdict": "no match", "expected_id": null, "reason": "Line 1599 is in range but no expected term appears; it describes tests that inspect a fresh container."}
+{"token": "S062", "verdict": "no match", "expected_id": null, "reason": "scripts/qa_deploy.py is not an expected file; it describes the skipped non-root check in CI."}
+{"token": "S063", "verdict": "match", "expected_id": "E1", "reason": "Line 1709 is in range and evidence and secret appear in prose about token values written into evidence."}
+{"token": "S064", "verdict": "no match", "expected_id": null, "reason": "No-defect case; real but minor: DPL-008 is closed with no recorded probe of the branch-deletion setting, while the last recorded probe said off."}
+{"token": "S065", "verdict": "no match", "expected_id": null, "reason": "Not an expected file for this case; it describes the T-22 flagged-test count."}
+{"token": "S066", "verdict": "no match", "expected_id": null, "reason": "Line 1633 is in range but no expected term appears; it describes exercise guards that fail on the secure outcome."}
+{"token": "S067", "verdict": "no match", "expected_id": null, "reason": "Line 1566 is in range but no expected term appears; it describes a fresh test container and a premise that cannot fail."}
+{"token": "S068", "verdict": "no match", "expected_id": null, "reason": "Line 407 is in range but no expected term appears; it describes M5-T57's missing presence assertion."}
+{"token": "S069", "verdict": "no match", "expected_id": null, "reason": "scripts/test_lint.py is not an expected file; it describes the narrow regex rule."}
+{"token": "S070", "verdict": "no match", "expected_id": null, "reason": "Line 408 is in range but no expected term appears; it describes an H1/H4 contradiction."}
+{"token": "S071", "verdict": "no match", "expected_id": null, "reason": "docs/STATUS.md is not an expected file; it describes the missing close-out."}
+{"token": "S072", "verdict": "no match", "expected_id": null, "reason": "The harness is not an expected file for this case; it describes the untested signature check."}
+{"token": "S073", "verdict": "no match", "expected_id": null, "reason": "scripts/validate_unit_traceability.py is not the expected file; it describes untested gates."}
+{"token": "S074", "verdict": "no match", "expected_id": null, "reason": "Line 1199 is below the range 1240-2000 and no expected term appears; it describes an unanchored server-log grep."}
+{"token": "S075", "verdict": "no match", "expected_id": null, "reason": "agents/agent-a/client.sh is not the expected file; it describes the broken agent-a client."}
+{"token": "S076", "verdict": "no match", "expected_id": null, "reason": "agents/agent-a/client.sh is not the expected file; it describes the broken agent-a client."}
+{"token": "S077", "verdict": "match", "expected_id": "E1", "reason": "Line 408 is in range and poll, flake and timeout appear in prose about the fixed sleep."}
+{"token": "S078", "verdict": "no match", "expected_id": null, "reason": "Line 1243 is in range but no expected term appears; it describes the weakened M1-T4."}
+{"token": "S079", "verdict": "match", "expected_id": "E1", "reason": "test_plan.md:9 is the planted row and REQ-M4-E4 is named in prose."}
+{"token": "S080", "verdict": "no match", "expected_id": null, "reason": "docs/unit_test_spec.md is not the expected file; 'replace' refers to monkeypatching, not the --include override."}
+{"token": "S081", "verdict": "no match", "expected_id": null, "reason": "The Envoy entrypoint is not an expected file; it describes Envoy not reloading refreshed SVIDs."}
+{"token": "S082", "verdict": "no match", "expected_id": null, "reason": "plan.md:14 is outside 9-11 and REQ-M4-E4 is not named; it describes a dependent trace entry the retirement misses."}

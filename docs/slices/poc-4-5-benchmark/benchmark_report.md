@@ -70,9 +70,10 @@ the failed reviews.
   audit event, so a review that describes it concretely is the most likely to trip the check: this withheld review
   may well have been a detection, and it makes FS-1 the one discordant case that favours `short+list`.
 - **False blockers and unread files.** Every setup raised 6 or 7 blocking findings at no expected place across its
-  15 reviews, and left 42 to 50 files under review unread. These are candidates, counted automatically: stage A's
-  author judged each such finding by hand and found none false in 17 reviews, while here none was judged, and some
-  are real defects of the reviewed commits that the key does not list.
+  15 reviews, and left 42 to 50 files under review unread. "False blocker" is the metric's name, not a verdict: it
+  counts blocking findings outside the planted defects. Step 1 of decision concern 8 read all 20 of the first runs'
+  and found every one a real defect of the reviewed commit; 8 of them are rated above what the rules support
+  ([severity analysis](severity_analysis.md), section 5a). Stage A's author, likewise, found none false in 17 reviews.
 - **False alarms are upper bounds,** by the author's reading, not confirmed blind: the blocking and high findings on
   CL-1 and CL-2 read as real process findings of those commits (CL-1 adds a rule to `AGENTS.md` without a plan; CL-2
   closes DPL-008 without the probe of the GitHub setting it rests on). CL-3 and the decoy DC-1 drew none.
@@ -190,6 +191,84 @@ of those are the misses the PoC's first outcome names: DPL-004 (RM-3) and DPL-00
 flagged, and DPL-010 (RM-6) is caught by one setup of three. With 11 cases, 7 detections give an interval of 31%
 to 89%, so these counts can neither confirm nor rule out 80%.
 
+## Severity: decision concern 8
+
+**The question.** Every review saw RM-3 (requirements added without proof) and RM-4 (a gate run inside another CI
+job), each citing the list question that asks it, and rated it medium or low, so neither counted. The owner asked why
+reviewers rate found defects below the threshold, and to measure one general wording change on all cases, not the two
+R5 and C10 blocking conditions alone (decision concern 8, 2026-11-13).
+
+**Step 1, the analysis** ([severity analysis](severity_analysis.md)), from these results:
+
+- the 7 findings seen but rated below high all rate the scenario's first symptom (a report shows the gap, a job is
+  mislabelled), not what it lets merge;
+- in 6 of the 7, the rules at the case's base commit supported the low rating ("coverage gaps are reported but do not
+  fail"; no rule that a gate needs its own job);
+- the 104 blocking or high findings that match no planted defect are mostly real defects; 20 are rated above what the
+  rules support and 10 below;
+- 16 of the 39 defects found by more than one review got different severities;
+- 2 of the 3 repeated pairs (same setup, same case) rated their defect differently.
+
+**Steps 2 and 3, the change and its measurement.** Candidate 1, "finish the scenario", one paragraph after the output
+section's `severity` bullet ([`severity_scenario.md`](../../../tests/review_benchmark/prompts/severity_scenario.md)):
+rate the end of the failure scenario, not its first symptom, and count as a stop only what can be pointed to in the
+copy. `open+list+sev` is `open+list` with that paragraph; it ran once on the 15 initial-review cases, against
+`open+list`'s first runs. Fixed in the answer key (version 4, `severity_measurement`) before the runs:
+
+- **Better:** (1) RM-3 and RM-4 both detected by a confirmed match; the baseline had 0 of 6 such reviews at high across all three setups. (2) No baseline detection lost (RM-1, RM-2, RM-6, PB-1, PB-2, PB-3, FS-2); a failed or withheld review is rerun once. (3) No blocking or high finding on DC-1 or CL-3. (4) No more than one extra blocking or high finding on CL-1 and CL-2 together, each read by hand.
+- **Outcomes:** **Worse:** (2) or (3) broken. **Inconclusive:** one of RM-3 and RM-4 detected and the guards hold; then repeat RM-3, RM-4, DC-1 and CL-2 once (about USD 4.5) before the owner decides. Also record by hand the new severities of the recurring under-rated (c8, c38, c4) and over-rated clusters, as a diagnostic.
+
+Both setups' 82 blocking and high findings were exported together under fresh tokens and judged against the match
+rule by a fresh session that never saw the configurations (`severity_export.jsonl`, verdicts in
+`severity_confirmation_author.jsonl`); the runner joins them back (its report, below, has the same counts).
+
+| Case | `open+list` (baseline) | `open+list+sev` |
+| --- | --- | --- |
+| RM-1, RM-2, PB-1, PB-2, PB-3 | detected, each by a blocking finding | the same |
+| RM-3 | seen at medium | seen at medium |
+| RM-4 | seen at low | seen at medium |
+| RM-5 | not found | not found |
+| RM-6 | detected (high) | **seen at medium**; its one blocking finding is about something else |
+| FS-1 | withheld by the publication check | detected (blocking) |
+| FS-2 | detected (high) | detected (high) |
+| Detected | 7 of 11, 5 by a blocking finding | 7 of 11, 6 by a blocking finding |
+| Blocking or high on no-defect cases | CL-1 1, CL-2 1, CL-3 0, DC-1 0 | **CL-1 3**, CL-2 1, CL-3 0, DC-1 0 |
+| False blockers (blocking, at no expected place) | 7 | 6 |
+| Cost and reviewer-minutes | USD 12.22, 36.4 | USD 13.03, 41.8 |
+
+**Outcome: worse, and candidate 1 is not adopted.**
+
+- (1) fails: neither RM-3 nor RM-4 was detected. RM-3's requirements-without-proof finding is still medium and
+  still ends at a trace-level symptom. RM-4's separate-job finding now reaches a consequence ("if docs-check is ever
+  made optional or split, the lint stops gating without anyone noticing") and is still medium.
+- (2) fails: RM-6 is lost.
+- (3) holds.
+- (4) fails: CL-1 drew 3 blocking or high findings against 1, two extra where one is allowed. Of its three, the blind
+  confirmer judged one a real but minor record gap and two not real.
+
+The launcher's output section and `AGENTS.md` stay as they are; `open+list+sev` and its paragraph stay in the
+benchmark as measured. The plan repeats cases only on an inconclusive result, so there was no repeat. The Sonnet
+second confirmer was skipped: the confirmer was a fresh session blind to the setups, the first confirmation's second
+confirmer agreed on 9 of 10, and the outcome does not hinge on a borderline verdict. RM-3, RM-4 and RM-6 under
+`open+list+sev` have no blocking or high finding at the expected place, so their misses are ratings, not verdicts.
+CL-1's count is a count. The confirmer's own borderline notes (S055, the baseline's RM-6 match by the absence clause
+only; S031 and S054 on PB-1; S014 and S048 on FS-2) touch only detections that do not decide a criterion: (2) is
+judged against the baseline detections the plan lists.
+
+**What 15 runs cannot show.**
+
+- They cannot give a detection rate: 7 against 7 of 11, each with an interval of 0.31 to 0.89.
+- "Worse" rests on RM-6's rating in one run, and identical runs disagreed in 2 of 3 repeated pairs. What the run
+  does show is that the paragraph moved neither target: 0 of 2 detected, after 0 of 6.
+- Four no-defect reviews give no false-alarm rate.
+- The historical cases get their base's rules, so the run cannot show the effect under today's `AGENTS.md`. Nor
+  can it show the effect with other mandates, or on other kinds of defect.
+
+**Not like for like.** The baseline ran under CLI 2.1.321 and the measurement under 2.1.323. The output section has
+also changed between them, by the growth of 2026-11-13: the `question` field and its rule, and the `searched` list.
+So the two prompts differ by those as well as by the paragraph. Every other part of the prompt was the same: the
+mandate, the lists at `04f8df4`, each case's base rules and the model at high effort.
+
 ## For the owner's choice
 
 - **Default setup:** `short+list` or `open+list`; the counts do not separate them.
@@ -204,8 +283,8 @@ The launcher's mandate constants stay 4.1's until the owner chooses (S45-D8).
 
 ## The runner's report, verbatim
 
-Built after RC-2's runs; decision concern 8's `open+list+sev` runs come later, and their counts wait for blind
-confirmation.
+Built after decision concern 8's runs and their blind confirmation; `open+list+sev` is confirmed by the second
+export's verdicts, every other setup by the first export's.
 
 ````markdown
 Stage B. Answer key SHA-256: `5b9d6382a06918128102da1b98b9660dd1dad12d35819752adce288878376633`; match rule SHA-256: `9605cb43cba72d294294a2414089c397803fd92f2bb8f06c5b3af2d9944944cb`; lists at `04f8df4`.
@@ -215,6 +294,7 @@ Detections are confirmed by the author's blinded verdicts.
 | Configuration | Detected | 95% interval | Detected (blocking) | False alarms (no-defect reviews) | False blockers | Failed | Unread files | Not yet confirmed | Cost USD per detection | Minutes per detection |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | open+list | 7 of 11 | 0.31–0.89 | 5 | 2 (4) | 7 | 1 | 42 | 0 | 1.75 | 5.2 |
+| open+list+sev | 7 of 11 | 0.31–0.89 | 6 | 4 (4) | 6 | 0 | 20 | 0 | 1.86 | 6.0 |
 | open-B+list | 6 of 11 | 0.23–0.83 | 5 | 4 (2) | 7 | 1 | 50 | 0 | 2.02 | 5.9 |
 | recheck-A | 1 of 1 | 0.02–1.00 | 1 | 0 (0) | 0 | 1 | 0 | 0 | 0.47 | 0.7 |
 | recheck-B | 1 of 1 | 0.02–1.00 | 1 | 0 (1) | 0 | 0 | 1 | 0 | 0.49 | 0.8 |
@@ -223,12 +303,19 @@ Detections are confirmed by the author's blinded verdicts.
 Discordant cases, short+list against open+list: `{"only short+list": ["FS-1"], "only open+list": ["FS-2", "RM-6"]}`
 Discordant cases, open+list against open-B+list: `{"only open+list": ["PB-3", "RM-6"], "only open-B+list": ["FS-1"]}`
 Rating agreement where a case ran twice, by expected defect: `{"same": 1, "different": 2}`
-Origin stage of the findings against the list of the review that found them: `{"architecture and interfaces": {"architecture-and-interfaces": 11, "code": 13, "e2e-tests": 1, "requirements": 1}, "discovery": {"code": 1, "plan-and-test-plan": 13}, "implementation": {"code": 94, "e2e-tests": 15, "plan-and-test-plan": 16, "requirements": 15}, "requirements": {"code": 1, "e2e-tests": 1, "plan-and-test-plan": 10, "requirements": 27}, "tests first": {"code": 30, "e2e-tests": 32, "plan-and-test-plan": 23, "requirements": 1}, "unknown": {"architecture-and-interfaces": 1}}`
+Origin stage of the findings against the list of the review that found them: `{"architecture and interfaces": {"architecture-and-interfaces": 16, "code": 16, "e2e-tests": 1, "requirements": 3}, "discovery": {"architecture-and-interfaces": 1, "code": 1, "plan-and-test-plan": 17}, "implementation": {"code": 121, "e2e-tests": 34, "plan-and-test-plan": 23, "requirements": 20}, "requirements": {"code": 2, "e2e-tests": 1, "plan-and-test-plan": 14, "requirements": 36}, "tests first": {"code": 39, "e2e-tests": 32, "plan-and-test-plan": 31, "requirements": 1}, "unknown": {"architecture-and-interfaces": 1, "code": 2, "e2e-tests": 1}}`
 Canary: `[{"cli_version": "2.1.321 (Claude Code)", "valid": false, "passed": true, "twin_ran_hook": true}, {"cli_version": "2.1.321 (Claude Code)", "valid": false, "passed": true, "twin_ran_hook": true}, {"cli_version": "2.1.321 (Claude Code)", "valid": true, "passed": true, "twin_ran_hook": true}, {"cli_version": "2.1.323 (Claude Code)", "valid": true, "passed": true, "twin_ran_hook": true}]`. A canary is valid when its twin, without the launcher's flags, followed the planted CLAUDE.md and ran the planted hook (S45-D9); one whose twin ran only the hook shows that the flags keep settings out, not that they keep instruction files out.
 Repeats (detected in run 1, run 2): FS-2 open+list: True, True; FS-2 short+list: False, True; RM-6 open+list: True, True; RM-6 short+list: failed, False
 Rechecks of answers that hold (passed when every answer is accepted and none is reported again; a review that did not complete is a miss): RC-2 recheck-B: passed (R1-1 accepted, R1-2 accepted); RC-2 recheck-A: missed (failed).
-Findings that name their checklist question: 0 of 306 (none).
+Findings that name their checklist question: 65 of 413 (architecture-and-interfaces:2 2, architecture-and-interfaces:6 2, code:10 3, code:11 4, code:12 3, code:2 1, code:3 2, code:4 1, code:5 1, code:7 1, code:8 5, e2e:1 4, e2e:11 1, e2e:2 1, e2e:4 1, e2e:5 2, e2e:6 1, e2e:8 1, e2e:9 3, plan-review-checklist:6 1, plan-review:1 1, plan-review:11 1, plan-review:12 1, plan-review:2 2, plan-review:4 1, plan-review:7 1, plan:1 2, plan:10 1, plan:2 1, plan:4 1, plan:6 2, plan:7 1, plan:8 1, requirements:1 2, requirements:4 2, requirements:5 2, requirements:6 1, requirements:7 1, requirements:9 1).
 Second confirmer: agrees with the author on 9 of 10 sampled findings.
+
+Decision concern 8's measurement, open+list+sev against open+list, by the second blinded export's verdicts:
+
+| Configuration | Detected | Cases detected | Detected (blocking) | Blocking or high on no-defect cases | False blockers | Failed | Cost USD | Minutes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| open+list | 7 of 11 | FS-2, PB-1, PB-2, PB-3, RM-1, RM-2, RM-6 | 5 | CL-1 1, CL-2 1, CL-3 0, DC-1 0 | 7 | 1 | 12.22 | 36.4 |
+| open+list+sev | 7 of 11 | FS-1, FS-2, PB-1, PB-2, PB-3, RM-1, RM-2 | 6 | CL-1 3, CL-2 1, CL-3 0, DC-1 0 | 6 | 0 | 13.03 | 41.8 |
 
 What these sizes can show: with about 15 cases and one run each, a difference of two or three cases between two configurations is within chance; the intervals say how wide each count's uncertainty is. Both setups carry the stage lists, so the counts do not measure the lists' own effect. The owner decides from the counts; no rule decides.
 
@@ -293,6 +380,21 @@ Per-review rows: the automatic first pass, before confirmation; the counts above
 | CANARY | canary | — | canary | | | | | | | | |
 | RC-2 | recheck_holds | recheck-B | completed | yes |  |  |  |  |  |  | 1 |
 | RC-2 | recheck_holds | recheck-A | failed |  |  |  |  |  |  |  | 1 |
+| RM-1 | real_miss | open+list+sev | completed | no | E1 | E1 |  |  |  | F2, F3, F7 | 1 |
+| RM-2 | real_miss | open+list+sev | completed | no | E1 | E1 |  |  |  | F8, F9 | 1 |
+| RM-3 | real_miss | open+list+sev | completed | no |  |  |  | E1 | F1 | F1, F2, F3 | 1 |
+| RM-4 | real_miss | open+list+sev | completed | no |  |  |  | E1 |  | F1 | 1 |
+| RM-5 | real_miss | open+list+sev | completed | no |  |  |  |  | F1, F2, F3 | F1, F2, F3, F4, F5 | 1 |
+| RM-6 | real_miss | open+list+sev | completed | no |  |  |  | E1 | R1-B1 | R1-B1 | 1 |
+| PB-1 | planted | open+list+sev | completed | no | E1 | E1 |  |  |  |  | 1 |
+| PB-2 | planted | open+list+sev | completed | no | E1 | E1 |  |  |  |  | 1 |
+| PB-3 | planted | open+list+sev | completed | no | E1 | E1 |  |  |  | F3 | 1 |
+| FS-1 | planted | open+list+sev | completed | no | E1 | E1 |  |  |  |  | 1 |
+| FS-2 | planted | open+list+sev | completed | no | E1 |  |  |  |  |  | 1 |
+| CL-1 | clean | open+list+sev | completed | no |  |  |  |  | F1 | F1, F2, F3 | 1 |
+| CL-2 | clean | open+list+sev | completed | yes |  |  |  |  |  | CL2-F1 | 1 |
+| CL-3 | clean | open+list+sev | completed | yes |  |  |  |  |  |  | 1 |
+| DC-1 | decoy | open+list+sev | completed | yes |  |  |  |  |  |  | 1 |
 
-Detected: a blocking or high finding at the expected place with one of its terms; Detected (blocking): the same, by a blocking finding; Not blocking: a match rated medium or low (stage A: advisory); Unmatched blocking, and Unmatched (blocking or high): findings at no expected place, the false blockers and false alarms on a clean case.
+Detected: a blocking or high finding at the expected place with one of its terms; Detected (blocking): the same, by a blocking finding; Not blocking: a match rated medium or low (stage A: advisory); Unmatched blocking, and Unmatched (blocking or high): findings at no expected place, the false blockers and false alarms on a clean case. "False blocker" names the metric, not a verdict: step 1 of decision concern 8 found all 20 of the first runs' to be real defects of the reviewed commits outside the planted ones.
 ````

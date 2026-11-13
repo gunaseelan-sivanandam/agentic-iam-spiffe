@@ -65,7 +65,9 @@ EXPORT_KEY_FILE = BENCH_OUT / "confirmation_key.jsonl"
 # Decision concern 8, step 3: the measurement's own blinded export, so the stage's first export stays as it is.
 MEASURE_EXPORT_FILE = BENCH_OUT / "severity_export.jsonl"
 MEASURE_KEY_FILE = BENCH_OUT / "severity_export_key.jsonl"
-VERDICT_FILES = {"author": BENCH_OUT / "confirmation_author.jsonl", "second": BENCH_OUT / "confirmation_second.jsonl"}
+VERDICT_FILES = {"author": BENCH_OUT / "confirmation_author.jsonl", "second": BENCH_OUT / "confirmation_second.jsonl",
+                 # decision concern 8: a fresh session's blind verdicts on the measurement's export
+                 "measurement": BENCH_OUT / "severity_confirmation_author.jsonl"}
 RESCORE_FILE = BENCH_OUT / "benchmark_rescore_A.jsonl"
 SAMPLE_FILE = BENCH_OUT / "confirmation_sample.jsonl"
 SECOND_MODEL = "claude-sonnet-5-5"  # S45-D10: Sonnet only as the second confirmer
@@ -164,6 +166,7 @@ class AnswerKey:
     match_rule_sha256: str = ""
     lists_commit: str = ""
     earlier: tuple[str, ...] = ()  # earlier versions of this key whose results it keeps (`earlier_key_sha256`)
+    measurement: dict[str, Any] = field(default_factory=dict)  # decision concern 8 (`severity_measurement`)
 
 
 def of_key(key: AnswerKey, line: dict[str, Any]) -> bool:
@@ -184,7 +187,8 @@ def parse_key(raw: bytes, prompts: dict[str, str]) -> AnswerKey:
     return AnswerKey([_case(c) for c in data["cases"]], int(data["budget"]), data["model"], data.get("effort", "high"),
                      launcher.sha256_bytes(raw), prompts, sha256_text("".join(prompts[n] for n in sorted(prompts))),
                      str(data.get("stage", "A")), data.get("match_rule", ""), data.get("match_rule_sha256", ""),
-                     str(data.get("lists_commit", "")), tuple(data.get("earlier_key_sha256", [])))
+                     str(data.get("lists_commit", "")), tuple(data.get("earlier_key_sha256", [])),
+                     data.get("severity_measurement", {}))
 
 
 def load_key(repo: Path, key_file: Path = KEY_FILE) -> AnswerKey:
@@ -1149,8 +1153,8 @@ def read_verdicts(repo: Path, who: str) -> dict[str, str]:
     return {r["token"]: r["verdict"] for r in rows}
 
 
-def read_tokens(repo: Path) -> dict[tuple[str, str, int, str], str]:
-    path = repo / EXPORT_KEY_FILE
+def read_tokens(repo: Path, key_file: Path = EXPORT_KEY_FILE) -> dict[tuple[str, str, int, str], str]:
+    path = repo / key_file
     if not path.exists():
         return {}
     rows = (json.loads(t) for t in path.read_text(encoding="utf-8").splitlines() if t.strip())
@@ -1244,7 +1248,9 @@ def decide(short: dict[str, int], checklist: dict[str, int]) -> str:
 COLUMN_NOTE = ("Detected: a blocking or high finding at the expected place with one of its terms; Detected (blocking): "
                "the same, by a blocking finding; Not blocking: a match rated medium or low (stage A: advisory); "
                "Unmatched blocking, and Unmatched (blocking or high): findings at no expected place, the false blockers "
-               "and false alarms on a clean case.")
+               "and false alarms on a clean case. \"False blocker\" names the metric, not a verdict: step 1 of decision "
+               "concern 8 found all 20 of the first runs' to be real defects of the reviewed commits outside the planted "
+               "ones.")
 
 
 def report_rows(lines: list[dict[str, Any]]) -> list[str]:
@@ -1463,6 +1469,32 @@ def holds_line(lines: list[dict[str, Any]], key: AnswerKey) -> list[str]:
             "that did not complete is a miss): " + ("; ".join(outcomes) or "none run") + "."]
 
 
+def measurement_rows(lines: list[dict[str, Any]], key: AnswerKey, measured: Confirmation) -> list[str]:
+    """Decision concern 8: the measured setup against its baseline's first runs, both by the second blinded export's
+    verdicts (the two setups mixed, so the baseline is re-confirmed), with each setup's detected cases and its blocking
+    or high findings on each no-defect case. The criteria fixed before the runs are the key's `severity_measurement`."""
+    if not key.measurement:
+        return []
+    names = [key.measurement["baseline_configuration"], key.measurement["configuration"]]
+    title = f"Decision concern 8's measurement, {names[1]} against {names[0]}"
+    if not measured.verdicts:
+        return [f"{title}: not yet confirmed."]
+    counts = configuration_counts([line for line in lines if line.get("configuration") in names], key, measured)
+    kinds = {c.case_id: c.kind for c in key.cases}
+    rows = [f"{title}, by the second blinded export's verdicts:", "",
+            "| Configuration | Detected | Cases detected | Detected (blocking) | Blocking or high on no-defect cases | "
+            "False blockers | Failed | Cost USD | Minutes |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+    for name in names:
+        c = counts.get(name, ConfigurationCounts())
+        alarms = ", ".join(f"{line['case']} {len(line.get('score', {}).get('unmatched_detections', []))}" for line in lines
+                           if line.get("configuration") == name and line.get("run", 1) == 1
+                           and kinds.get(line["case"]) in ("clean", "decoy"))
+        rows.append(f"| {name} | {c.detected} of {c.defects} | {', '.join(sorted(k for k, v in c.per_case.items() if v))} | "
+                    f"{c.detected_blocking} | {alarms} | {c.false_blockers} | {c.failed} | {c.cost_usd:.2f} | "
+                    f"{c.duration_ms / 60000:.1f} |")
+    return rows
+
+
 def agreement(repo: Path) -> str:
     author, second = read_verdicts(repo, "author"), read_verdicts(repo, "second")
     shared = sorted(set(author) & set(second))
@@ -1496,7 +1528,11 @@ def report_stage_b(repo: Path, key: AnswerKey) -> str:
     check_match_rule(key)
     lines = load_results(repo, key)
     confirmation = Confirmation(read_verdicts(repo, "author"), read_tokens(repo))
-    counts = configuration_counts(lines, key, confirmation)
+    measured = Confirmation(read_verdicts(repo, "measurement"), read_tokens(repo, MEASURE_KEY_FILE))
+    sev = key.measurement.get("configuration")
+    # The measured setup's reviews came after the first export, so the second export's verdicts confirm them.
+    counts = {**configuration_counts([line for line in lines if line.get("configuration") != sev], key, confirmation),
+              **configuration_counts([line for line in lines if sev and line.get("configuration") == sev], key, measured)}
     canaries = [{**{k: c.get(k) for k in ("cli_version", "valid", "passed")}, "twin_ran_hook": settings_shown(c)}
                 for c in lines if c.get("kind") == "canary"]
     return "\n".join([
@@ -1511,7 +1547,8 @@ def report_stage_b(repo: Path, key: AnswerKey) -> str:
         f"Canary: `{json.dumps(canaries)}`. A canary is valid when its twin, without the launcher's flags, followed the "
         "planted CLAUDE.md and ran the planted hook (S45-D9); one whose twin ran only the hook shows that the flags "
         "keep settings out, not that they keep instruction files out.", repeats_table(lines, confirmation),
-        *holds_line(lines, key), question_line(lines), agreement(repo), "", SIZE_NOTE, "",
+        *holds_line(lines, key), question_line(lines), agreement(repo), "", *measurement_rows(lines, key, measured),
+        "", SIZE_NOTE, "",
         "Per-review rows: the automatic first pass, before confirmation; the counts above are confirmed.", "",
         *report_rows(lines), "", COLUMN_NOTE])
 
