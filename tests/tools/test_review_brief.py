@@ -1,7 +1,8 @@
 """Tooling tests for `scripts/review_brief.py`, the decision brief of a PR (slice 4.6, S46-D13).
 
 The brief is built from attempt logs and records that the launcher writes in its throwaway repository (with the fake
-`claude`), so it reads records exactly as the launcher writes them. The CI line is tested with fake API answers.
+`claude`), so it reads records exactly as the launcher writes them. It holds no CI result (owner, 2026-11-13, decision
+concern 10 of slice 4): the user sees the PR's required checks on the PR page.
 """
 
 from __future__ import annotations
@@ -9,8 +10,8 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+import urllib.request
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -23,17 +24,11 @@ brief_module = importlib.util.module_from_spec(_spec)
 sys.modules.setdefault("review_brief", brief_module)
 _spec.loader.exec_module(brief_module)
 fx = base.fx
-NO_RUNS: dict[str, Any] = {"workflow_runs": []}
-
-
-def _no_ci(_url: str) -> Any:
-    return NO_RUNS
 
 
 def _brief(fx: base.Fixture) -> str:
     base._git(fx.work, "fetch", "-q", "origin")
-    base._git(fx.work, "remote", "set-url", "origin", "https://github.com/example/demo.git")
-    return brief_module.build(fx.work, "origin/poc/base", "HEAD", _no_ci)
+    return brief_module.build(fx.work, "origin/poc/base", "HEAD")
 
 
 def _two_rounds(fx: base.Fixture, last_answer: str = "rejected: it still does not happen") -> None:
@@ -125,7 +120,7 @@ def test_a_pr_with_a_final_unit_gets_no_missing_final_line(fx: base.Fixture) -> 
 
 def test_a_base_git_cannot_resolve_is_refused(fx: base.Fixture) -> None:
     with pytest.raises(brief_module.BriefError, match="git merge-base failed"):
-        brief_module.build(fx.work, "origin/no-such-branch", "HEAD", _no_ci)
+        brief_module.build(fx.work, "origin/no-such-branch", "HEAD")
 
 
 def test_a_finding_without_an_answer_fails_instead_of_a_brief_that_omits_it(fx: base.Fixture) -> None:
@@ -149,44 +144,20 @@ def test_main_writes_no_brief_and_fails_when_the_records_are_incomplete(fx: base
     base._first_round(fx, base._finding("X1", severity="medium"))
     base._commit_all(fx.work, "the review, not answered")
     base._git(fx.work, "fetch", "-q", "origin")
-    assert brief_module.main(["--base", "origin/poc/base"], repo=fx.work, fetch=_no_ci) == 1
+    assert brief_module.main(["--base", "origin/poc/base"], repo=fx.work) == 1
     out = capsys.readouterr()
     assert "## Decision brief" not in out.out and "FAILED" in out.err
 
 
-def _api(runs: list[dict[str, Any]], jobs: list[dict[str, Any]]) -> Any:
-    def fetch(url: str) -> Any:
-        return {"jobs": jobs} if "/jobs" in url else {"workflow_runs": runs}
-    return fetch
+def test_the_brief_holds_no_ci_result_and_reads_no_network(fx: base.Fixture, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Decision concern 10 of slice 4 (owner, 2026-11-13): the brief goes to the slice's decision page without the CI
+    result of the head commit, which the user sees on the PR page; so it never calls the GitHub API."""
+    base._recheck(fx, "| X1 | high | fixed: scripts/review_me.py: guarded |")
 
+    def no_network(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("the brief opened a URL")
 
-def _broken(_url: str) -> Any:
-    raise OSError("network down")
-
-
-HEAD = "a" * 40
-RUN = {"id": 7, "head_sha": HEAD}
-
-
-@pytest.mark.parametrize(("fetch", "expected"), [
-    (_api([RUN], [{"name": "qa-trace", "status": "completed", "conclusion": "success"}] * 2), "passed, all 2 jobs."),
-    (_api([RUN], [{"name": "e2e", "status": "in_progress"}, {"name": "lint", "status": "completed",
-                                                              "conclusion": "success"}]), "still running: e2e; not a pass yet."),
-    (_api([RUN], [{"name": "e2e", "status": "completed", "conclusion": "failure"}]), "not passed: e2e (failure)."),
-    (_api([RUN], [{"name": "e2e", "status": "completed", "conclusion": "skipped"}]), "not passed: e2e (skipped)."),
-    (_api([], []), "no run for this commit; not a pass."),
-    (_api([RUN], []), "no run with jobs for this commit; not a pass."),
-    (_api([{"id": 8, "head_sha": "b" * 40}], []), "no run for this commit; not a pass."),
-    (_broken, "cannot be read (OSError); not a pass."),
-], ids=["all-passed", "running", "failed", "skipped", "no-run", "run-without-jobs", "other-commit", "unreadable"])
-def test_the_ci_line_shows_a_pass_only_when_every_job_succeeded(tmp_path: Path, fetch: Any, expected: str) -> None:
-    base._git(tmp_path, "init", "-q")
-    base._git(tmp_path, "remote", "add", "origin", "https://github.com/example/demo.git")
-    line = brief_module.ci_line(tmp_path, HEAD, fetch)
-    assert line.endswith(expected), line
-    assert ("passed, all" in line) is (expected.startswith("passed"))
-
-
-def test_the_ci_line_of_a_repository_without_a_github_remote_is_not_a_pass(tmp_path: Path) -> None:
-    base._git(tmp_path, "init", "-q")
-    assert "cannot be read" in brief_module.ci_line(tmp_path, HEAD, _api([RUN], []))
+    monkeypatch.setattr(urllib.request, "urlopen", no_network)
+    text = _brief(fx)
+    assert text.startswith("### Decision brief") and "| `demo` `unit1` |" in text
+    assert "CI of" not in text and "not a pass" not in text

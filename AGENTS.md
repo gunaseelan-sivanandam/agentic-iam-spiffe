@@ -18,7 +18,7 @@ the repo in the same change — do not leave them disagreeing.
 | How is it built, which runtime state exists? | [`docs/architecture.md`](docs/architecture.md) | authoritative |
 | What is the trust model, on one page? | [`docs/architecture.md` — Security model summary](docs/architecture.md#security-model-summary) | summary of the ARCH sections |
 | Which test proves which requirement? | [`trace/tests.yaml`](trace/tests.yaml) | authoritative |
-| How do I run a review, and where do its records live? | [Independent review](#independent-review): `scripts/run_independent_review.py`; each bundle's `review_attempts.jsonl` (attempt log) and `plan_review.md` or `review_<unit>.md` (review record); `scripts/review_brief.py` for the PR's decision brief | how-to |
+| How do I run a review, and where do its records live? | [Independent review](#independent-review): `scripts/run_independent_review.py`; each bundle's `review_attempts.jsonl` (attempt log) and `plan_review.md` or `review_<unit>.md` (review record); `scripts/review_brief.py` for the decision brief on the slice's decision page | how-to |
 | What must each stage's review ask at least? | [`docs/review_checklists/`](docs/review_checklists/) | authoritative, read by the review launcher from the base branch |
 | What does each E2E or static test do, in plain English? | [`docs/test_spec.md`](docs/test_spec.md) | hand-written spec |
 | Unit-test requirement matrix (M4 trust gates) | [`docs/unit_test_spec.md`](docs/unit_test_spec.md) | authoritative, read by `make traceability-check` |
@@ -26,6 +26,7 @@ the repo in the same change — do not leave them disagreeing.
 | Which delivery mistakes were made, and what changed because of them? | [`docs/delivery_problem_log.md`](docs/delivery_problem_log.md) | authoritative |
 | Who may hold which key, socket or secret; what each service may be | [`security/invariants.yaml`](security/invariants.yaml) with the `REQ-SEC` requirements | authoritative, checked by `make qa-deploy` |
 | What is planned or waiting (proposed slices, actions only the user can take)? | [GitHub issues](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues), labels `slice` and `user-action` | tracking; a slice's decisions move into its `plan.md`, because reviewers read the repository, not issues |
+| What does a slice need from the user (its goal, decisions, discovered issues, review outcome)? | the slice's decision page `docs/slices/<slice-id>/decisions.md`, from [`docs/slices/_template/decisions.md`](docs/slices/_template/decisions.md) | the user's one page per slice; the PR body links it |
 | How was a past slice designed? | [`docs/slices/`](docs/slices/README.md) | frozen records |
 | What happened, when? | [`docs/history/`](docs/history/) | history |
 | Retired documents | `docs/archive/`, `docs/slices/archive/` | archive, do not follow |
@@ -57,8 +58,8 @@ them.
 - **Few exceptions.** Fix rather than except. Do not open an OPL, exception entry or plan note for a
   finding outside the threat model; such a finding is low, and one line in the review report is
   enough. Every exception must fit on one line and have an expiry.
-- **Discovered issues.** Every issue found during the work is preserved and reported in the final
-  handoff (the PR body) with its disposition and any tracking reference, whether it is
+- **Discovered issues.** Every issue found during the work is preserved and reported at handoff on
+  the slice's decision page with its disposition and any tracking reference, whether it is
   pre-existing, introduced by the change, unrelated, or outside the threat model. Reporting an issue
   neither makes it blocking nor authorizes fixing it; an issue outside the threat model needs no
   OPL.
@@ -161,9 +162,12 @@ Allowed links only: `REQ → ARCH` (architecture `Satisfies:`), `ARCH → DD` (D
 ## Slice workflow
 
 Every change follows this workflow, scaled to its size: a small fix still gets a plan (it may be a
-few lines) and its review, tests first when it changes behaviour, the final review and the
-close-out, but not every section of the template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>/`, starts from
-`docs/slices/_template/`, and gets a row in the [slice index](docs/slices/README.md).
+few lines) and its review, tests first when it changes behaviour, and the close-out, but not every
+section of the template needs more than "none". A [small slice](#small-slices) runs as one PR
+without a final review; every other slice also gets the final review. A slice bundle lives in
+`docs/slices/<slice-id>/`, starts from `docs/slices/_template/`, and gets a row in the
+[slice index](docs/slices/README.md). Its decision page, `decisions.md`, is the user's one page for
+the slice: everything that needs the user is there, and the PR body links it.
 
 A slice passes seven stages, in this order. The plan's stage table says for each whether it applies;
 a stage that does not apply is marked "none, with a reason". Each review is an
@@ -173,13 +177,35 @@ limit (the [review loop](#poc-scope-and-proportion)).
 
 | Stage | Produces | Review | Checks | Exit |
 | --- | --- | --- | --- | --- |
-| Discovery | `plan.md` and `test_plan.md` | plan review, list `plan-and-test-plan` | `make docs-check`, `make lint` | the plan review has no blocking or high finding open, and the user merges the plan PR |
+| Discovery | `plan.md`, `test_plan.md` and the decision page `decisions.md` | plan review, list `plan-and-test-plan` | `make docs-check`, `make lint` | the plan review has no blocking or high finding open, and the user merges the plan PR; a small slice's plan stays in its one PR |
 | Requirements | new or changed `REQ` items in `docs/requirements.md` and their entries in `trace/tests.yaml` | requirements review, list `requirements` | `make qa-trace`, `make docs-check` | the review has no blocking or high finding open |
 | Architecture and interfaces | `ARCH` sections and the state inventory of `docs/architecture.md`, and `security/invariants.yaml` | architecture review, list `architecture-and-interfaces` | `make qa-trace`, `make qa-deploy` | the review has no blocking or high finding open |
 | Tests first | unit and E2E tests from the reviewed test plan, and their `docs/test_spec.md` entries | tests-first review, lists `unit-tests` and `e2e-tests` | `make tooling-test`, `make test-lint`, `make unit-guard-check`, `make docs-check`: the new tests fail as planned, every other test and check passes | each new test fails on the base code for the reason it exists, and the review has no blocking or high finding open |
 | Implementation | the code and configuration the plan approved, with what it retires removed | implementation review, list `code` | every gate of [Quality gates](#quality-gates), the full E2E suite on a clean stack, `make qa-evidence` | every gate's CI job passes on the PR, and the review has no blocking or high finding open |
-| Final review | the record of the unit `final` | final review, 4.1's final mode, no list | the decision brief, `scripts/review_brief.py` | no blocking or high finding open |
-| Handoff | the PR body: the decision brief, the review answers, every discovered issue with its disposition | the user's approval | the CI result of the PR's head commit | the user merges |
+| Final review | the record of the unit `final`; none for a small slice | final review, 4.1's final mode, no list | the decision brief, `scripts/review_brief.py` | no blocking or high finding open |
+| Handoff | the decision page: the decision brief, the implementation review's answers to the test-plan questions, every discovered issue with its disposition; the PR body: the goal, what changed, a link to the page | the user's approval | the PR's required CI checks, which the user sees on the PR page | the user merges |
+
+### Small slices
+
+A slice is **small** when all four hold:
+1. it adds or changes no requirement, architecture section, deployment-register entry
+   (`security/invariants.yaml`) or `trace/tests.yaml` entry, so no approved behaviour changes;
+2. it does not touch what checks everyone else: tests (`tests/**`), the E2E harness
+   (`scripts/rogue_node_tests.sh`), gates and QA tooling, CI (`.github/`), the rulebook (`AGENTS.md`,
+   `tests/unit/AGENTS.md`), the review checklists, the slice templates, the review launcher or the
+   brief;
+3. it touches no security decision path: capability-issuer, tool-b and the other verifiers, OPA
+   policies, Envoy or SPIRE configuration, compose files;
+4. it changes at most about 50 lines in at most 5 files.
+
+A README sentence, a broken link, a typo or the `varambu` CLI's help text is small; a new E2E test, a
+gate threshold or any capability-issuer change is not. A small slice is one PR that holds its short
+plan, test plan and decision page (a few lines each) and the change. Its review units are the plan
+review and the implementation review; its stage table marks requirements, architecture and
+interfaces and tests first "none" (conditions 1 and 2) and the final review "none, small slice"; the
+user merges once. The plan says why each condition holds, and the plan review checks the claim. If a
+condition breaks during the work, the slice goes back to the full seven stages. No tool checks the
+conditions; one is added only if a review ever accepts a wrong "small" claim.
 
 ### Discovery
 
@@ -195,19 +221,23 @@ limit (the [review loop](#poc-scope-and-proportion)).
 - Write `plan.md` (the stage table, decisions with their sources, requirements to add or change,
   hidden-state decisions, assets and holders, environment facts, rulebook changes, rule deviations,
   scope, out-of-scope, retirement) and `test_plan.md` (unit and E2E tests derived from the
-  decisions, and each stage's list). A decision that depends on a fact outside the repository (file
-  ownership, an API, CI history) records the probe and its result under environment facts; never
-  assume it. A rule the slice does not follow is one line under "Rule deviations": the rule, the
-  deviation, the user's words with the link, and the expiry.
-- The plan review of both files runs before the user sees them. The plan PR's body opens with the
-  decision brief, built by `scripts/review_brief.py` as at handoff. The user approves the plan by
-  merging the plan PR; implement only from the plan as merged on the integration branch (see
-  [Git rules](#git-rules)). On a branch that changes the rulebook (this file, `tests/unit/AGENTS.md`)
-  or the slice templates, the author works by the base branch's version until the change merges.
+  decisions, and each stage's list), and start `decisions.md` from its template (the user's goal in
+  the user's words, the decisions made and those to make). A decision that depends on a fact outside
+  the repository (file ownership, an API, CI history) records the probe and its result under
+  environment facts; never assume it. A rule the slice does not follow is one line under "Rule
+  deviations": the rule, the deviation, the user's words with the link, and the expiry.
+- The plan review of both files runs before the user sees them. The plan PR's body states the goal
+  and what the plan changes in a few lines and links the decision page, which holds the decision
+  brief, built by `scripts/review_brief.py` as at handoff. The user approves the plan by merging the
+  plan PR; implement only from the plan as merged on the integration branch (see
+  [Git rules](#git-rules)). A small slice implements from its plan in the same PR once the plan
+  review has no blocking or high finding open, and the user approves both by merging that PR. On a
+  branch that changes the rulebook (this file, `tests/unit/AGENTS.md`) or the slice templates, the
+  author works by the base branch's version until the change merges.
 - When the user chooses it for a slice, a slice may hold several sub-issues. They share one plan PR,
-  which the user approves once, and one final PR with a section per sub-issue. Each sub-issue keeps
-  its own review units (plan, implementation) with their own round limits, and the slice has one
-  final review unit.
+  which the user approves once, one decision page, and one final PR with a section per sub-issue.
+  Each sub-issue keeps its own review units (plan, implementation) with their own round limits, and
+  the slice has one final review unit.
 
 ### Requirements, and architecture and interfaces
 
@@ -254,10 +284,10 @@ limit (the [review loop](#poc-scope-and-proportion)).
 
 ### Final review
 
-- One unit `final` per slice, run in 4.1's final mode: the open question "What did everyone before
-  you miss?", including any tracked document the change made false, with all the evidence and no
-  question list. Its finding history is the other units' review records, which are in its copy. Its
-  later rounds are rechecks.
+- One unit `final` per slice (a small slice has none), run in 4.1's final mode: the open question
+  "What did everyone before you miss?", including any tracked document the change made false, with
+  all the evidence and no question list. Its finding history is the other units' review records,
+  which are in its copy. Its later rounds are rechecks.
 
 ### Handoff
 
@@ -273,16 +303,18 @@ All of the following, in the same change:
   with "Needed before: <point>" and whose conversation is locked right away, or into a comment on the
   issue it belongs to; findings fixed or rejected in the PR, and notes outside the threat model, are
   not issues ("Few exceptions"). Close the issues the change finishes (`Closes #N` in the PR body);
-- open the PR body with the decision brief that `scripts/review_brief.py` builds from the attempt logs
-  and review records of the units in the PR (each unit's last verdict and severity counts; every
-  `owner:` answer, decision concern, `cannot determine` answer and finding still disputed; every
-  blocking or high finding answered `rejected`, with its reason; the origin stage against the stage
-  that found each finding; the CI result of the PR's head commit). The user reads the plans and
-  records where the brief points;
+- paste into the decision page's review outcome section the decision brief that
+  `scripts/review_brief.py` builds from the attempt logs and review records of the units in the PR
+  (each unit's last verdict and severity counts; every `owner:` answer, decision concern,
+  `cannot determine` answer and finding still disputed; every blocking or high finding answered
+  `rejected`, with its reason; the origin stage against the stage that found each finding). The user
+  reads the plans and records where the brief points;
 - put the implementation review's answers to the test-plan questions, every discovered issue with
-  its disposition (see [PoC scope and proportion](#poc-scope-and-proportion)) and each issue's link in
-  the PR body. The issue is the home of its status; the PR body is a snapshot and is not updated
-  later.
+  its disposition (see [PoC scope and proportion](#poc-scope-and-proportion)) and each issue's link on
+  the decision page. The issue is the home of its status; the decision page records it at handoff and,
+  like the rest of the bundle, is not updated after the merge;
+- write the PR body: the goal and what changed in a few lines, and a link to the decision page, which
+  holds everything that needs the user. The user sees the PR's required CI checks on the PR page.
 
 ### Independent review
 - **Reviewer.** Never the author: a fresh headless Claude session confined to a frozen copy of the
@@ -336,7 +368,7 @@ All of the following, in the same change:
   did (`question`, for example `code:10`). The research behind the lists, with each source quoted, is
   [`research.md`](docs/slices/poc-4-4-stage-checklists/research.md) of slice 4.4. When an open review
   finds a class of defect a list lacks, or a mandate wording that misled a reviewer, the author
-  proposes the list item or the wording in the PR, and the user approves it.
+  proposes the list item or the wording on the slice's decision page, and the user approves it.
 - **Models and usage limits.** Agents use Claude models. Codex is used only for scoped
   implementation, and only while Claude's 5-hour or weekly usage is above 70%. Reviews run on
   Claude; when a usage limit is reached, work pauses until it resets. The default reviewer model is
@@ -355,8 +387,9 @@ All of the following, in the same change:
 - **Implementation review** (implementation). The reviewer answers the questions in the test-plan template
   (`docs/slices/_template/test_plan.md`: which wrong failure would still pass each new or changed
   test, whether a key, socket or secret now reaches a service outside its holders, and whether each
-  new file's purpose comment and names say what it does) in the PR body. A "yes" to the first two
-  blocks, under the same review loop; findings on purpose comments and names are medium.
+  new file's purpose comment and names say what it does) in its report; the author copies the answers
+  to the slice's decision page. A "yes" to the first two blocks, under the same review loop; findings
+  on purpose comments and names are medium.
 - **Fixes stay within the agreed decisions** (the plan's decisions, or the request, and this file).
   Before answering a finding with a new mechanism, the author names the upstream choice that causes
   it and weighs changing that choice; removing or changing a mechanism is preferred over adding one.

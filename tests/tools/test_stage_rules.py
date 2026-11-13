@@ -1,6 +1,7 @@
 """Tooling tests for slice 4.6's stage rules (test plan of poc-4-6-stage-rules): `AGENTS.md`'s table of the seven
 stages, the slice templates that carry it into every new slice, the grill-me skill kept in the repository, and no live
-document left pointing at the old step numbers.
+document left pointing at the old step numbers. The owner's decisions of 2026-11-13 (slice 4's decision page, decision
+concerns 7 and 10) add the plan template's small-slice part and the decision-page template.
 
 Each check reads this repository's own files and has negative cases on planted text.
 """
@@ -31,7 +32,12 @@ SKILL = ROOT / ".claude" / "skills" / "grill-me" / "SKILL.md"
 STAGE_LISTS = {"Discovery": ["plan-and-test-plan"], "Requirements": ["requirements"],
                "Architecture and interfaces": ["architecture-and-interfaces"], "Tests first": ["unit-tests", "e2e-tests"],
                "Implementation": ["code"], "Final review": [], "Handoff": []}
-DISCOVERY_EXIT = "| the plan review has no blocking or high finding open, and the user merges the plan PR |"
+DISCOVERY_EXIT = ("| the plan review has no blocking or high finding open, and the user merges the plan PR; a small "
+                  "slice's plan stays in its one PR |")
+# Decision concern 10 of slice 4 (owner, 2026-11-13): the sections of every slice's decision page.
+DECISION_PAGE_SECTIONS = ("Goal", "What the slice builds", "Decisions made", "Decisions to make", "Decision concerns",
+                          "Discovered issues", "Implementation review: the test-plan questions", "Review outcome",
+                          "How the user can check the work")
 
 
 def _load(name: str) -> Any:
@@ -100,13 +106,21 @@ def test_the_stage_table_check_fails_on_each_kind_of_violation(edit: Any, proble
 
 
 def plan_template_problems(text: str) -> list[str]:
-    """Why the plan template does not carry the stage table, the decision-source column and the deviations section."""
+    """Why the plan template does not carry the stage table, the decision-source column, the deviations section and
+    the small-slice part that names `AGENTS.md`'s conditions (decision concern 7 of slice 4)."""
     problems = [f"no stage {stage}" for stage in STAGES if f"\n| {stage} |" not in text]
     if "| ID | Decision | Source |" not in text:
         problems.append("no Source column in the decisions table")
     if "\n## Rule deviations\n" not in text:
         problems.append("no Rule deviations section")
+    if "\n## Small slice\n" not in text or "AGENTS.md#small-slices" not in text:
+        problems.append("no Small slice section naming AGENTS.md's conditions")
     return problems
+
+
+def decision_page_problems(text: str) -> list[str]:
+    """Why the decision-page template lacks a section the owner's resolution of decision concern 10 lists."""
+    return [f"no section {name}" for name in DECISION_PAGE_SECTIONS if f"\n## {name}\n" not in text]
 
 
 def review_plan_problems(text: str) -> list[str]:
@@ -123,7 +137,10 @@ def test_the_plan_template_carries_the_stages_the_source_column_and_rule_deviati
     ("\n| Tests first |", "\n| Tests |", "no stage Tests first"),
     ("| ID | Decision | Source |", "| ID | Decision |", "no Source column"),
     ("\n## Rule deviations\n", "\n## Deviations\n", "no Rule deviations"),
-], ids=["stage-missing", "no-source-column", "no-deviations-section"])
+    ("\n## Small slice\n", "\n## Size\n", "no Small slice section"),
+    ("AGENTS.md#small-slices", "AGENTS.md#slice-workflow", "no Small slice section"),
+], ids=["stage-missing", "no-source-column", "no-deviations-section", "no-small-slice-section",
+        "small-slice-without-conditions"])
 def test_the_plan_template_check_fails_on_each_missing_part(old: str, new: str, problem: str) -> None:
     text = (TEMPLATES / "plan.md").read_text().replace(old, new)
     assert any(problem in p for p in plan_template_problems(text))
@@ -144,11 +161,21 @@ def test_the_test_plan_template_check_fails_on_each_missing_part(old: str, new: 
     assert any(problem in p for p in review_plan_problems(text))
 
 
+def test_the_decision_page_template_has_every_section_the_owner_asked_for() -> None:
+    assert decision_page_problems((TEMPLATES / "decisions.md").read_text()) == []
+
+
+@pytest.mark.parametrize("section", ["Discovered issues", "Review outcome"])
+def test_the_decision_page_check_fails_on_a_missing_section(section: str) -> None:
+    text = (TEMPLATES / "decisions.md").read_text().replace(f"\n## {section}\n", "\n## Notes\n")
+    assert decision_page_problems(text) == [f"no section {section}"]
+
+
 def test_a_bundle_made_from_the_templates_passes_the_header_and_link_checks() -> None:
     """The templates, copied into a bundle `docs/slices/sample/` with their placeholder filled, pass the lint gate's
     header check and resolve every relative link from there."""
     bundle = ROOT / "docs" / "slices" / "sample"
-    for name in ("plan.md", "test_plan.md"):
+    for name in ("plan.md", "test_plan.md", "decisions.md"):
         text = (TEMPLATES / name).read_text().replace("<slice-id>", "sample")
         assert lint.header_problem(f"docs/slices/sample/{name}", text) is None
         links = [t for t in docs.LINK_RE.findall(text) if not re.match(r"^[a-z][a-z0-9+.-]*:", t)]

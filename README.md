@@ -225,8 +225,10 @@ architecture and interfaces → tests first → implementation → final review 
 handoff), each with its review and its stage checklist in
 [docs/review_checklists/](docs/review_checklists/), to keep requirements,
 architecture, code, and documentation in step. The rules, ID scheme, and quality gates are defined in
-[AGENTS.md](AGENTS.md), the repository rulebook. Slice bundles and their index
-are in [docs/slices/](docs/slices/README.md).
+[AGENTS.md](AGENTS.md), the repository rulebook. A small slice, such as a typo or a
+broken link, runs as one PR without a final review. Each slice has a decision page in
+its bundle that holds everything the user must decide or check. Slice bundles and
+their index are in [docs/slices/](docs/slices/README.md).
 
 ---
 

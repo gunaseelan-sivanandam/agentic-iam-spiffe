@@ -1,19 +1,20 @@
-"""The decision brief that opens a plan PR or a final PR (agentic-sdlc-poc slice 4.6, S46-D13).
+"""The decision brief of the review units a PR adds (agentic-sdlc-poc slice 4.6, S46-D13).
 
 It reads the attempt logs and review records of the review units a PR adds (the attempts logged since the merge-base
-with the base branch) and writes Markdown for the top of the PR body:
+with the base branch) and writes Markdown for the review outcome section of the slice's decision page
+(`docs/slices/<slice-id>/decisions.md`, from `docs/slices/_template/decisions.md`):
 
 - each unit's last verdict and its findings by severity;
 - every finding answered `owner:`, every decision concern, every recheck answer marked `cannot determine`, and every
   finding still disputed after its recheck;
 - the blocking and high findings answered `rejected`, with their reasons;
-- the origin stage of each finding against the review that found it (S41-D16);
-- the CI result of the head commit, from the public GitHub API without a token. When it cannot be read, when there is
-  no run, or while a job is still running, the brief says so and never shows a pass.
+- the origin stage of each finding against the review that found it (S41-D16).
 
-It writes no brief, and fails, when a record does not hold what its attempt log says (`scripts/check_review_records.py`)
-or when a released report has a finding without an answer, so the brief cannot omit what the records hold. It reads the
-working tree, so it runs on a clean checkout of the PR's head.
+It holds no CI result: the user sees the PR's required checks on the PR page (owner, 2026-11-13, decision concern 10
+of slice 4). It writes no brief, and fails, when a record does not hold what its attempt log says
+(`scripts/check_review_records.py`) or when a released report has a finding without an answer, so the brief cannot
+omit what the records hold. It reads the working tree and the local Git history only, so it runs on a clean checkout of
+the PR's head.
 
 Usage: python3 scripts/review_brief.py --base origin/poc/agentic-sdlc [--head HEAD]
 """
@@ -26,7 +27,6 @@ import json
 import subprocess
 import sys
 from collections import Counter
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -34,7 +34,6 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 LOG_NAME = "review_attempts.jsonl"
 SEVERITIES = ("blocking", "high", "medium", "low")
-Fetch = Callable[[str], Any]
 
 
 def _load(name: str) -> Any:
@@ -50,7 +49,6 @@ def _load(name: str) -> Any:
 checker = _load("check_review_records")
 launcher = checker.launcher
 records = checker.records
-inputs = launcher._INPUTS
 
 
 class BriefError(Exception):
@@ -242,41 +240,19 @@ def summarise(units: list[Unit]) -> Brief:
     return brief
 
 
-def ci_line(repo: Path, head: str, fetch: Fetch) -> str:
-    """The CI result of the head commit. Only a run whose every job completed with success is a pass."""
-    owner_repo = inputs.github_repo(repo)
-    if owner_repo is None:
-        return f"CI of `{head[:12]}`: cannot be read: the origin remote is not a GitHub repository."
-    try:
-        runs, by_run = inputs.ci_runs_and_jobs(owner_repo, head, fetch)
-    except inputs.CI_READ_ERRORS as exc:
-        return f"CI of `{head[:12]}`: cannot be read ({type(exc).__name__}); not a pass."
-    jobs = [job for run in runs for job in by_run[run["id"]]]
-    if not runs or not jobs:
-        return f"CI of `{head[:12]}`: no run{' with jobs' if runs else ''} for this commit; not a pass."
-    running = sorted(j.get("name", "?") for j in jobs if j.get("status") != "completed")
-    failed = sorted(f"{j.get('name', '?')} ({j.get('conclusion')})" for j in jobs
-                    if j.get("status") == "completed" and j.get("conclusion") != "success")
-    if running:
-        return f"CI of `{head[:12]}`: still running: {', '.join(running)}; not a pass yet."
-    if failed:
-        return f"CI of `{head[:12]}`: not passed: {', '.join(failed)}."
-    return f"CI of `{head[:12]}`: passed, all {len(jobs)} jobs."
-
-
 def _items(title: str, items: list[str]) -> list[str]:
     return [f"**{title}**", "", *([f"- {item}" for item in items] or ["None."]), ""]
 
 
-def render(brief: Brief, ci: str, head: str, merge_base: str) -> str:
-    lines = ["## Decision brief", "",
+def render(brief: Brief, head: str, merge_base: str) -> str:
+    lines = ["### Decision brief", "",  # under the decision page's own "Review outcome" heading
              f"Built by `scripts/review_brief.py` from the review units this PR adds (head `{head[:12]}`, merge-base "
              f"`{merge_base[:12]}`). The plans and records are worth reading where this brief points.", "",
              "| Unit | Last verdict | Rounds | Blocking | High | Medium | Low | Open |",  # findings counted once each
              "| --- | --- | --- | --- | --- | --- | --- | --- |", *brief.rows, ""]
     if not brief.final:
-        lines += ["No unit `final` among the review units this PR adds: a plan PR has none, a final PR needs one "
-                  "(`AGENTS.md`, slice workflow).", ""]
+        lines += ["No unit `final` among the review units this PR adds: a plan PR and a small slice's PR have none, a "
+                  "final PR needs one (`AGENTS.md`, slice workflow).", ""]
     lines += _items("Answered `owner:`", brief.owner) + _items("Decision concerns", brief.concerns)
     lines += _items("`cannot determine` in a recheck", brief.undetermined)
     lines += _items("Still disputed after a recheck", brief.disputed)
@@ -290,10 +266,10 @@ def render(brief: Brief, ci: str, head: str, merge_base: str) -> str:
             lines.append(f"| {origin} | " + " | ".join(str(brief.origins.get((origin, f), 0)) for f in found_by) + " |")
     else:
         lines.append("No findings.")
-    return "\n".join([*lines, "", ci, ""])
+    return "\n".join([*lines, ""])
 
 
-def build(repo: Path, base: str, head: str, fetch: Fetch) -> str:
+def build(repo: Path, base: str, head: str) -> str:
     merge_base = git(repo, "merge-base", base, head).strip()
     head_sha = git(repo, "rev-parse", head).strip()
     logs = changed_logs(repo, merge_base, head_sha)
@@ -301,16 +277,16 @@ def build(repo: Path, base: str, head: str, fetch: Fetch) -> str:
     problems = integrity_problems(repo, logs, units)
     if problems:
         raise BriefError("the records cannot give a complete brief:\n" + "\n".join(f"  - {p}" for p in problems))
-    return render(summarise(units), ci_line(repo, head_sha, fetch), head_sha, merge_base)
+    return render(summarise(units), head_sha, merge_base)
 
 
-def main(argv: list[str] | None = None, repo: Path = ROOT, fetch: Fetch = inputs.fetch_json) -> int:
+def main(argv: list[str] | None = None, repo: Path = ROOT) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--base", required=True, help="the base branch ref, for example origin/poc/agentic-sdlc")
     parser.add_argument("--head", default="HEAD")
     args = parser.parse_args(argv)
     try:
-        print(build(repo, args.base, args.head, fetch))
+        print(build(repo, args.base, args.head))
     except BriefError as error:
         print(f"[review-brief] FAILED: {error}", file=sys.stderr)
         return 1

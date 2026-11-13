@@ -59,7 +59,7 @@ Every negative test has a twin. A `probe@` value is observed before any change; 
 
 ## Independent review at the implementation PR
 A reviewer that is not the author ([AGENTS.md — Independent review](../../../AGENTS.md#independent-review))
-answers in the PR body:
+answers in its report, and the author copies the answers to the slice's decision page (`decisions.md`):
 1. *Tests:* for each new or changed test, which wrong failure would still pass it (service down,
    another status, the right status with another reason, another component answering, a missing
    value or empty file read as success)? Does its assertion match the expected-outcome row?

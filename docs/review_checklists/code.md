@@ -14,7 +14,7 @@ The minimum questions for reviewing code, scripts and configuration that tools d
 8. Does each new or changed check or gate fail on the case it exists to catch, shown by a test? [S:google-looking-for]
 9. Does the change leave the code healthier: dead code, stale paths and duplicate mechanisms removed? [S:google-standard]
 10. Does every new check run as its own required CI job, named after it? [S:owner]
-11. Does every statement the change adds to or leaves in a document (STATUS, the logs, the rulebook, the slice index, a review record, the PR body) still hold for the copy? [S:google-looking-for]
+11. Does every statement the change adds to or leaves in a document (STATUS, the logs, the rulebook, the slice index, a review record, the slice's decision page) still hold for the copy? [S:google-looking-for]
 12. Does the change loosen, skip or except an existing check (a lower threshold, an exception or gap entry, a lint marker, a removed negative control), and does each say why and until when? [S:fowler-nondeterminism]
 
 ## Blocks at this stage

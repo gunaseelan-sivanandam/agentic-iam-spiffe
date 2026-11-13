@@ -17,8 +17,23 @@ Each stage of `AGENTS.md`'s slice workflow applies, or is "none, with a reason".
 | Architecture and interfaces | yes, or none: <reason> | `architecture-and-interfaces` |
 | Tests first | yes, or none: <reason> | `unit-tests`, `e2e-tests` |
 | Implementation | yes, or none: <reason> | `code` |
-| Final review | yes | final mode, no list |
+| Final review | yes, or none, small slice | final mode, no list |
 | Handoff | yes | the user's approval |
+
+## Small slice
+- Small: yes or no. Yes only when all four conditions of `AGENTS.md` (slice workflow,
+  [small slices](../../../AGENTS.md#small-slices)) hold; say for each why it holds:
+  1. no requirement, architecture section, `security/invariants.yaml` entry or `trace/tests.yaml`
+     entry is added or changed:
+  2. no test, E2E harness, gate or QA tooling, CI, rulebook, review checklist, slice template, review
+     launcher or brief is touched:
+  3. no security decision path is touched (capability-issuer, tool-b and the other verifiers, OPA
+     policies, Envoy or SPIRE configuration, compose files):
+  4. at most about 50 changed lines in at most 5 files: <lines> lines in <files> files.
+- A small slice is one PR with this plan, its test plan, its decision page and the change; the stage
+  table marks Requirements, Architecture and interfaces and Tests first "none" (conditions 1 and 2)
+  and the Final review "none, small slice". If a condition breaks during the work, the slice returns
+  to the full stages.
 
 ## Decisions
 

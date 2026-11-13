@@ -1,10 +1,12 @@
 # Slice Bundles
 
 A slice bundle is the review record for one milestone or security-relevant change: the agreed design,
-requirement and architecture changes, hidden-state decisions, and the UT/E2E proof plan.
+requirement and architecture changes, hidden-state decisions, the UT/E2E proof plan, and the user's
+decision page, which holds everything that needs the user and which the PR body links.
 The workflow that produces and closes a bundle is defined in [`AGENTS.md`](../../AGENTS.md#slice-workflow).
 
-- New bundle: copy [`_template/`](_template/) to `docs/slices/<slice-id>/` (`plan.md` + `test_plan.md`).
+- New bundle: copy [`_template/`](_template/) to `docs/slices/<slice-id>/` (`plan.md`, `test_plan.md`
+  and `decisions.md`).
 - Once a slice is implemented its bundle is a **frozen record**. Do not edit it to match later
   reality; record later changes in a new slice or in `docs/history/implementation_log.md`.
 - Add a row to the index below when a bundle is created, and update its status when it closes.
