@@ -1,0 +1,77 @@
+Recheck case RC-2 of the review benchmark, stage B (slice 4.5, decision concern 4, the owner's decision of 2026-11-13):
+a test-lint change that flags `|| :` like `|| true`, with the tests that fix the earlier report's R1-2. Both answers to
+that report hold: R1-1's rejection checks out in the files it cites, and R1-2's fix is in the file it names.
+
+diff --git a/AGENTS.md b/AGENTS.md
+index 0d9c07c..24a171f 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -215,7 +215,7 @@ never replaces it.
+ | Trace model | `make qa-trace` | CI, every push/PR | zero structural failures; on a PR (`--mode pr --base <base>`), no coverage gap the PR adds compared with its merge-base unless `accepted_gaps` in `trace/tests.yaml` lists it with a reason and an unexpired date (an expired or stale entry fails); a merge-base that cannot be resolved or read fails. On `main` (`--mode push`) gaps are reported |
+ | Documentation | `make docs-check` | CI | every harness test and every static test in `trace/tests.yaml` has a `docs/test_spec.md` heading and vice versa; relative links and `#anchors` in live docs resolve; every tracked image in `docs/` is referenced and every `.puml` has its `.svg`; every slice bundle is in the slice index; `TEST_ONLY=` examples name real tests |
+ | QA tooling tests | `make tooling-test` | CI | `tests/tools/` (pytest) and `tests/shell/` pass |
+-| E2E outcome lint | `make test-lint` | CI | no outcome guard in `scripts/rogue_node_tests.sh` accepts several outcomes (`assert_file_any`, broad error regexes, `!= 200`), swallows failure (`\|\| true`), checks only a non-zero exit, or is a test of negative greps only; a multi-outcome guard needs `# test-lint: alternate: <reason>` |
++| E2E outcome lint | `make test-lint` | CI | no outcome guard in `scripts/rogue_node_tests.sh` accepts several outcomes (`assert_file_any`, broad error regexes, `!= 200`), swallows failure (`\|\| true` or `\|\| :`), checks only a non-zero exit, or is a test of negative greps only; a multi-outcome guard needs `# test-lint: alternate: <reason>` |
+ | Deployment register | `make qa-deploy` | CI (without image inspection; the `e2e` job runs it with image users inspected) | every service's image, user, networks, ports, mounts, secret env names and privileges match `security/invariants.yaml`; every protected asset reaches only its holders, except unexpired known violations of open OPLs; register holders equal the `REQ-SEC` `Holders:` lines; non-root except the grandfathered baseline until 2027-01-31 |
+ | Unit guard integrity | `make unit-guard-check` | CI | every unit test has premise, exercise, outcome guards |
+ | Unit trust bundle | `make unit-trust` | CI | total line coverage ≥ 85%; branch coverage ≥ 75% on `services/capability-issuer/app.py` and `services/tool-b/server.py`; unit traceability check; invariant, negative-control, hybrid-critical suites; invariant flake check ×5 |
+diff --git a/scripts/test_lint.py b/scripts/test_lint.py
+index 80023e1..867ab6a 100644
+--- a/scripts/test_lint.py
++++ b/scripts/test_lint.py
+@@ -27,6 +27,8 @@ REGEX_GROUP_RE = re.compile(r"'\(?([^'()]*\|[^'()]*)\)?'")
+ EXIT_NONZERO_RE = re.compile(r'-ne 0\b|!= \\?"?0\\?"?(?=\s|\])')
+ NOT_200_RE = re.compile(r'!= \\?"?200|-ne 200\b')
+ POSITIVE_CHECK_RE = re.compile(r"(?<!! )\b(grep|text_matches|assert_\w+|jq -e)\b")
++# `|| true` or `|| :` (the null command), spaced or not, turns a failed command into a pass.
++OR_TRUE_RE = re.compile(r"\|\|\s*(?:true|:)(?![\w:-])")
+ MULTI_OUTCOME_RULES = {"any-of", "broad-regex"}
+ 
+ 
+@@ -132,8 +134,8 @@ def _broad_regexes(command: str) -> list[str]:
+ def check_command(command: str) -> list[tuple[str, str]]:
+     """Return (rule, detail) for each loose pattern in one outcome guard command."""
+     problems: list[tuple[str, str]] = []
+-    if "|| true" in _strip_substitutions(command):
+-        problems.append(("or-true", "`|| true` makes the guard pass on failure"))
++    if OR_TRUE_RE.search(_strip_substitutions(command)):
++        problems.append(("or-true", "`|| true` or `|| :` makes the guard pass on failure"))
+     if EXIT_NONZERO_RE.search(command) and not POSITIVE_CHECK_RE.search(command):
+         problems.append(("exit-code-only", "a non-zero exit alone does not say why it failed"))
+     if "assert_file_any" in command:
+diff --git a/tests/tools/test_test_lint.py b/tests/tools/test_test_lint.py
+index 3fad27c..334ff8c 100644
+--- a/tests/tools/test_test_lint.py
++++ b/tests/tools/test_test_lint.py
+@@ -46,6 +46,9 @@ def _rules(text: str) -> list[str]:
+     ("guard", "rule"),
+     [
+         ('"grep -q ok \\"$f\\" || true"', "or-true"),
++        ('"grep -q ok \\"$f\\" ||true"', "or-true"),
++        ('"grep -q ok \\"$f\\" || :"', "or-true"),
++        ('"grep -q ok \\"$f\\" ||:"', "or-true"),
+         ('"[ \\"\\$(cat \\"$EVDIR/rc.txt\\")\\" != \\"0\\" ]"', "exit-code-only"),
+         ('"rc=\\$(cat \\"$EVDIR/rc.txt\\"); [ \\"\\$rc\\" -ne 0 ]"', "exit-code-only"),
+         ('"assert_file_any \\"$EVDIR/status.txt\\" \\"401\\" \\"403\\""', "any-of"),
+@@ -79,11 +82,21 @@ def test_or_true_inside_command_substitution_passes() -> None:
+     assert _rules(_harness(guard)) == []
+ 
+ 
++def test_or_colon_inside_command_substitution_passes() -> None:
++    guard = '"s=\\"\\$(cat \\"$EVDIR/status.txt\\" 2>/dev/null || :)\\"; [ \\"\\$s\\" = \\"403\\" ]"'
++    assert _rules(_harness(guard)) == []
++
++
+ def test_or_true_in_exercise_plumbing_passes() -> None:
+     extra = '  exercise_guard "call" "curl -sS http://x >\\"$EVDIR/out\\" || true"\n'
+     assert _rules(_harness('"grep -Fq ok \\"$EVDIR/out\\""', extra)) == []
+ 
+ 
++def test_or_colon_in_exercise_plumbing_passes() -> None:
++    extra = '  exercise_guard "capture" "grep -F x \\"$EVDIR/log\\" >\\"$EVDIR/events\\" || :"\n'
++    assert _rules(_harness('"grep -Fq ok \\"$EVDIR/events\\""', extra)) == []
++
++
+ def test_exit_code_with_exact_message_passes() -> None:
+     guard = "\"[ \\\"\\$(cat \\\"$EVDIR/rc.txt\\\")\\\" = \\\"28\\\" ] && grep -Fq 'Connection timed out' \\\"$f\\\"\""
+     assert _rules(_harness(guard)) == []

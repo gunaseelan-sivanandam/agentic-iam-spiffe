@@ -1,0 +1,29 @@
+{
+  "accounted": [],
+  "findings": [
+    {
+      "evidence": "scripts/test_lint.py:31 now matches `|| :` with or without the space (OR_TRUE_RE), and scripts/rogue_node_tests.sh ends four of its log-capture commands with `|| :`, at lines 3069, 3118, 3419 and 3560.",
+      "failure_scenario": "The change merges and the test-lint job fails on every push until the four commands are rewritten; `# test-lint: alternate:` cannot silence it, because the marker exempts only the multi-outcome rules.",
+      "file": "scripts/rogue_node_tests.sh",
+      "id": "R1-1",
+      "kind": "defect",
+      "line": 3069,
+      "origin_stage": "implementation",
+      "problem": "The or-true rule now flags `|| :`, which the harness itself uses, so `make test-lint` and test_current_harness_is_clean fail on the current harness.",
+      "severity": "high"
+    },
+    {
+      "evidence": "test_each_loose_pattern_is_flagged holds one or-true case, a guard ending in `|| true` (tests/tools/test_test_lint.py:48), and test_or_true_inside_command_substitution_passes covers only `|| true`.",
+      "failure_scenario": "A later edit narrows OR_TRUE_RE back to `|| true`; every tooling test still passes, and an outcome guard ending in `|| :` swallows its failure without a lint finding.",
+      "file": "tests/tools/test_test_lint.py",
+      "id": "R1-2",
+      "kind": "defect",
+      "line": 48,
+      "origin_stage": "tests first",
+      "problem": "The new `|| :` form of the or-true rule has no test that shows the lint failing on it, nor one that shows `|| :` inside a command substitution still passing, as `|| true` does. tests/tools/test_test_lint.py has no `|| :` case; searched tests/tools/test_test_lint.py, tests/shell/.",
+      "question": "code:8",
+      "severity": "blocking"
+    }
+  ],
+  "verdict": "no"
+}

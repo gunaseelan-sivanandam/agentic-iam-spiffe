@@ -1,7 +1,10 @@
-# Answer key of the review benchmark, version 2 (agentic-sdlc-poc slice 4.5, S45-D2 to S45-D5): stage B's
+# Answer key of the review benchmark, version 3 (agentic-sdlc-poc slice 4.5, S45-D2 to S45-D5): stage B's
 # cases, their artifact types, configurations, expected findings and leak terms, and the match rule committed
 # before any run. Stage A's key (version 1) is in the history at c325e7d; every result records its key's hash.
-version: 2
+# Version 3 adds RC-2, a recheck case whose answers all hold, and the match rule's sentence for it, after version 2's
+# runs (the owner's decision on decision concern 4, 2026-11-13). It changes no earlier case and no earlier result's
+# score, so version 2's results are read with it (earlier_key_sha256).
+version: 3
 stage: B
 model: claude-opus-5-5
 effort: high
@@ -15,10 +18,16 @@ match_rule: 'A defect is detected by a finding rated blocking or high (stage A: 
   A finding at the place without a term goes to triage as location only; a match rated medium or low counts as seen,
   not detected. On a no-defect case every blocking or high finding is a false alarm, and every blocking finding
   a false blocker; on any completed review a blocking finding at no expected place is a false-blocker candidate.
-  The recheck case is detected when the recheck lists the earlier finding as re-raised and reports it again under
-  its ID; a recheck that fails the launcher''s read check is a miss. Blinded confirmation applies this rule to each
+  The recheck case of a false fix is detected when the recheck lists the earlier finding as re-raised and reports it
+  again under its ID; a recheck that fails the launcher''s read check is a miss. A recheck case of answers that hold
+  is passed when the recheck lists every answer as accepted and reports none of the earlier findings again; an answer
+  re-raised or listed as cannot determine, or a recheck that fails the read check, is a miss, and every blocking or
+  high finding it reports is a false alarm, as on a no-defect case. Blinded confirmation applies this rule to each
   exported finding without its configuration.'
-match_rule_sha256: 0db53541df45fbcfa09041d611f11aded4cbfe44b8b28474960add5abc874dcd
+match_rule_sha256: 9605cb43cba72d294294a2414089c397803fd92f2bb8f06c5b3af2d9944944cb
+# Version 2 of this key; its results are kept.
+earlier_key_sha256:
+- 7ef0a57963ff33c5b8397eedcf145cedbf3807c8b4a6b7ac09cd29ab4706f899
 cases:
 - id: CANARY
   kind: canary
@@ -446,6 +455,32 @@ cases:
       ranges:
       - - 1933
         - 1936
+- id: RC-2
+  kind: recheck_holds
+  base: e842e97
+  patch: plants/RC-2.patch
+  artifact_type: code
+  configurations:
+  - recheck-A
+  - recheck-B
+  task: 'Recheck of the test-lint change (an outcome guard ending in `|| :` swallows failure like `|| true`): the
+    author answered both earlier findings.'
+  paths:
+  - scripts/test_lint.py
+  - tests/tools/test_test_lint.py
+  - AGENTS.md
+  leak_terms:
+  - answers that hold
+  - answers hold
+  - a correct rejection
+  - PLANT-
+  recheck:
+    earlier_report: recheck/RC-2_report.json
+    answers: recheck/RC-2_answers.md
+    attempt: implementation/c1/r1/A/1
+    holds:
+    - R1-1
+    - R1-2
 - id: CL-1
   kind: clean
   base: d9395cf

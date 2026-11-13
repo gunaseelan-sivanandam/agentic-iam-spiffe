@@ -214,13 +214,14 @@ def test_leak_term_only_in_a_configurations_prompt_refuses_the_case(repo: tuple[
     assert [(line["case"], line["status"]) for line in r.results() if line["case"] != "CANARY"] == [("C1", "refused")]
 
 
+@pytest.mark.parametrize("kind", ["planted", "recheck_holds"])
 def test_plant_whose_copy_holds_its_marker_is_refused_and_the_patch_is_applied(repo: tuple[Repo, str, str],
-                                                                               tmp_path: Path) -> None:
+                                                                               tmp_path: Path, kind: str) -> None:
     r, base, commit = repo
     patch = _git(r.root, "diff", base, commit, "--", REVIEWED).replace("print('change')",
                                                                        "print('change')  # Planted defect")
     _write(r.root, "tests/review_benchmark/plants/P.patch", patch + "\n")
-    case = _case("P1", base, "", kind="planted", patch="plants/P.patch")
+    case = _case("P1", base, "", kind=kind, patch="plants/P.patch")
     case.pop("commit")
     prepared, key = _prepared(repo, tmp_path, case)
     assert "Planted defect" in (prepared.copy_root / REVIEWED).read_text()  # the planted-patch path applied the patch
@@ -474,6 +475,111 @@ def test_recheck_that_fails_the_read_check_is_a_miss_and_not_retried(repo: tuple
     line = next(line for line in r.results() if line.get("case") == "RC")
     assert line["status"] == "failed" and line["tries"] == 1 and "AGENTS.md is named in a fixed: or rejected: answer" in line["reason"]
     assert line["effort"] == "medium" and r.calls() == 1
+
+
+# --- A recheck case whose answers hold (decision concern 4, the owner, 2026-11-13) ---------------
+
+
+def _holds_inputs(r: Repo) -> dict:
+    """An earlier report of two findings, one answered by a rejection that cites a file, one by a fix."""
+    report = {"accounted": [], "findings": [_new_finding("R1-1", "high"), _new_finding("R1-2", "blocking", line=3)],
+              "verdict": "no"}
+    _write(r.root, "tests/review_benchmark/recheck/holds_report.json", json.dumps(report, indent=2, sort_keys=True) + "\n")
+    _write(r.root, "tests/review_benchmark/recheck/holds_answers.md",
+           "#### Answers to implementation/c1/r1/A/1\n\n| ID | Severity | Answer |\n| --- | --- | --- |\n"
+           "| R1-1 | high | rejected: AGENTS.md says the call may fail |\n"
+           f"| R1-2 | blocking | fixed: {REVIEWED}: the call now fails closed |\n")
+    return {"earlier_report": "recheck/holds_report.json", "answers": "recheck/holds_answers.md",
+            "attempt": "implementation/c1/r1/A/1", "holds": ["R1-1", "R1-2"]}
+
+
+def _holds_case(r: Repo, base: str, commit: str) -> dict:
+    return _case("RH", base, commit, kind="recheck_holds", configurations=["recheck-A", "recheck-B"],
+                 recheck=_holds_inputs(r), expected=[])
+
+
+def _accounted(r1: str, r2: str, opened: tuple[str, ...] = ("AGENTS.md", REVIEWED)) -> list[dict]:
+    return [{"item": item, "status": status, "note": "n", "opened": list(opened)}
+            for item, status in (("R1-1", r1), ("R1-2", r2))]
+
+
+@pytest.mark.parametrize(("accounted", "findings", "passed"), [
+    (_accounted("accepted", "accepted"), [], True),
+    (_accounted("accepted", "accepted"), [_new_finding("N1", "high")], True),  # a new finding is a false alarm, not a re-raise
+    (_accounted("accepted", "re-raised"), [_new_finding("R1-2", "medium")], False),
+    (_accounted("re-raised", "accepted"), [_new_finding("R1-1", "high")], False),
+    (_accounted("cannot determine", "accepted"), [], False),
+    (_accounted("accepted", "accepted"), [_new_finding("R1-2", "low")], False),  # reported again under its ID
+])
+def test_a_recheck_of_answers_that_hold_passes_only_when_it_accepts_every_answer(accounted: list, findings: list,
+                                                                                passed: bool) -> None:
+    case = _key_case(kind="recheck_holds", expected=[], recheck={"holds": ["R1-1", "R1-2"]})
+    result = bench.score_holds(case, {"findings": findings, "accounted": accounted})
+    assert result["passed"] is passed and result["detected"] == []
+    assert result["unmatched_detections"] == [f["id"] for f in findings if f["severity"] in ("blocking", "high")]
+
+
+@pytest.mark.parametrize(("r2", "findings", "outcome", "alarms"), [
+    ("accepted", [], "RH recheck-A: passed (R1-1 accepted, R1-2 accepted)", "0 (1)"),
+    ("re-raised", [_new_finding("R1-2", "high")], "RH recheck-A: missed (R1-1 accepted, R1-2 reported again)", "1 (1)"),
+])
+def test_a_recheck_of_answers_that_hold_is_reported_as_passed_or_missed(repo: tuple[Repo, str, str], r2: str,
+                                                                       findings: list, outcome: str, alarms: str) -> None:
+    r, base, commit = repo
+    r.key([_holds_case(r, base, commit)])
+    r.canary_passed()
+    r.scenario({"reads": ["AGENTS.md", REVIEWED], "result": {"structured_output": {
+        "findings": findings, "accounted": _accounted("accepted", r2), "verdict": "yes"}}})
+    assert _run(r) == 0 and r.calls() == 2
+    line = next(line for line in r.results() if line.get("configuration") == "recheck-A")
+    assert line["status"] == "completed" and line["effort"] == "medium"
+    report = bench.report_stage_b(r.root, bench.load_key(r.root))
+    assert outcome in report
+    row = _report_row(report, "recheck-A")
+    assert row[1] == "0 of 0" and row[_header(report).index("False alarms (no-defect reviews)")] == alarms
+
+
+def test_a_recheck_of_answers_that_hold_that_fails_the_read_check_is_a_miss(repo: tuple[Repo, str, str]) -> None:
+    r, base, commit = repo
+    r.key([_holds_case(r, base, commit)])
+    r.canary_passed()
+    # it accepts both answers, but never reads AGENTS.md, which the rejection cites
+    r.scenario({"reads": [REVIEWED], "result": {"structured_output": {
+        "findings": [], "accounted": _accounted("accepted", "accepted", (REVIEWED,)), "verdict": "yes"}}})
+    assert _run(r) == 0
+    line = next(line for line in r.results() if line.get("configuration") == "recheck-A")
+    assert line["status"] == "failed" and line["tries"] == 1 and "AGENTS.md is named in a fixed: or rejected: answer" in line["reason"]
+    report = bench.report_stage_b(r.root, bench.load_key(r.root))
+    assert "RH recheck-A: missed (failed)" in report
+    assert _report_row(report, "recheck-A")[_header(report).index("Failed")] == "1"
+
+
+def test_case_option_runs_only_the_named_case_and_refuses_an_unknown_one(repo: tuple[Repo, str, str]) -> None:
+    r, base, commit = repo
+    r.key([_case("C1", base, commit), _case("C2", base, commit, configurations=["open+list"])])
+    r.canary_passed()
+    assert _run(r, "--case", "NOPE") == 2 and r.calls() == 0
+    assert bench.main(["--dry-run", "--case", "NOPE"], repo=r.root) == 2
+    assert _run(r, "--case", "C2") == 0 and r.calls() == 1
+    assert [(line["case"], line["configuration"]) for line in r.results() if line.get("configuration")] == [("C2", "open+list")]
+
+
+def test_results_of_an_earlier_key_the_key_names_are_kept_and_others_refused(repo: tuple[Repo, str, str]) -> None:
+    r, base, commit = repo
+    r.key([_case("C1", base, commit)])
+    r.canary_passed()
+    r.scenario(_reply([_new_finding("X1", "high")]))
+    assert _run(r) == 0 and r.calls() == 2
+    before = bench.report_stage_b(r.root, bench.load_key(r.root))
+    earlier = bench.load_key(r.root).sha256
+    r.key([_case("C1", base, commit), _case("C2", base, commit, configurations=["open+list"])])
+    assert bench.main(["--report", "--stage", "B"], repo=r.root) == 2  # another key's results are refused
+    r.key([_case("C1", base, commit), _case("C2", base, commit, configurations=["open+list"])],
+          earlier_key_sha256=[earlier])
+    after = bench.report_stage_b(r.root, bench.load_key(r.root))
+    rows = [line for line in before.splitlines() if line.startswith("| ")]
+    assert rows == [line for line in after.splitlines() if line.startswith("| ")]
+    assert _run(r) == 0 and r.calls() == 3  # C1 is done under the earlier key; only C2 runs
 
 
 # --- Stage A compatibility and rescoring ---------------------------------------------------------

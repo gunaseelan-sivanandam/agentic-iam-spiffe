@@ -8,7 +8,9 @@ detection with the checklist question behind it, and the misses. The runner's ow
 ## What ran
 
 - **Key and rule:** answer key `7ef0a579…` (version 2, 17 cases), match rule `0db53541…`, committed before any run;
-  stage lists at `04f8df4` (after 4.4's critique and implementation review).
+  stage lists at `04f8df4` (after 4.4's critique and implementation review). Version 3 (`ed4b5e0a…`, match rule
+  `9605cb43…`) adds RC-2, a recheck case whose answers hold (decision concern 4), with its rule, before its runs; it
+  reads version 2's results unchanged, and the runner's report below is built with it.
 - **Reviewer:** Opus (`claude-opus-5-5`), initial reviews at high effort, rechecks at medium, CLI 2.1.321; Sonnet
   (`claude-sonnet-5-5`) only as the second confirmer.
 - **Calls:** 57 of the 60 allowed: 6 for three canary pairs (see below), 45 first runs, 4 repeats, 2
@@ -180,7 +182,7 @@ The launcher's mandate constants stay 4.1's until the owner chooses (S45-D8).
 ## The runner's report, verbatim
 
 ````markdown
-Stage B. Answer key SHA-256: `7ef0a57963ff33c5b8397eedcf145cedbf3807c8b4a6b7ac09cd29ab4706f899`; match rule SHA-256: `0db53541df45fbcfa09041d611f11aded4cbfe44b8b28474960add5abc874dcd`; lists at `04f8df4`.
+Stage B. Answer key SHA-256: `ed4b5e0a2cb25819cfe7a691fc50faacc8cfb3f39e9dd46754156305192dcbbf`; match rule SHA-256: `9605cb43cba72d294294a2414089c397803fd92f2bb8f06c5b3af2d9944944cb`; lists at `04f8df4`.
 
 Detections are confirmed by the author's blinded verdicts.
 
@@ -198,6 +200,7 @@ Rating agreement where a case ran twice, by expected defect: `{"same": 1, "diffe
 Origin stage of the findings against the list of the review that found them: `{"architecture and interfaces": {"architecture-and-interfaces": 11, "code": 13, "e2e-tests": 1, "requirements": 1}, "discovery": {"code": 1, "plan-and-test-plan": 13}, "implementation": {"code": 94, "e2e-tests": 15, "plan-and-test-plan": 16, "requirements": 15}, "requirements": {"code": 1, "e2e-tests": 1, "plan-and-test-plan": 10, "requirements": 27}, "tests first": {"code": 30, "e2e-tests": 32, "plan-and-test-plan": 23, "requirements": 1}, "unknown": {"architecture-and-interfaces": 1}}`
 Canary: `[{"cli_version": "2.1.321 (Claude Code)", "valid": false, "passed": true, "twin_ran_hook": true}, {"cli_version": "2.1.321 (Claude Code)", "valid": false, "passed": true, "twin_ran_hook": true}, {"cli_version": "2.1.321 (Claude Code)", "valid": true, "passed": true, "twin_ran_hook": true}]`. A canary is valid when its twin, without the launcher's flags, followed the planted CLAUDE.md and ran the planted hook (S45-D9); one whose twin ran only the hook shows that the flags keep settings out, not that they keep instruction files out.
 Repeats (detected in run 1, run 2): FS-2 open+list: True, True; FS-2 short+list: False, True; RM-6 open+list: True, True; RM-6 short+list: failed, False
+Rechecks of answers that hold (passed when every answer is accepted and none is reported again; a review that did not complete is a miss): none run.
 Findings that name their checklist question: 0 of 306 (none).
 Second confirmer: agrees with the author on 9 of 10 sampled findings.
 

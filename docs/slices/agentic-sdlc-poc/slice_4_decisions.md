@@ -160,7 +160,7 @@ questions), requirements (9), architecture and interfaces (10), unit tests (10),
 | S45-D2 | the result identity | `test_result_records_its_full_identity_and_the_report_reads_one_stage` |
 | S45-D3 | `CONFIGURATIONS` | `test_configurations_differ_only_in_the_mandate_and_carry_the_same_list_and_rules` |
 | S45-D4 | `score`, the match rule | the scoring tests of `tests/tools/test_run_review_benchmark.py` |
-| S45-D5 | the answer key's 17 cases | `test_the_dpl_010_case_holds_the_launcher_and_its_tests_and_not_its_answer`; the dry run |
+| S45-D5 | the answer key's 18 cases: RC-2, a recheck case whose answers hold, added for decision concern 4 | `test_the_dpl_010_case_holds_the_launcher_and_its_tests_and_not_its_answer`, `test_a_recheck_of_answers_that_hold_passes_only_when_it_accepts_every_answer`; the dry run |
 | S45-D6 | `--repeat`, `check_repeats` | `test_a_repeat_runs_the_two_setups_again_and_the_counts_use_the_first_run`; the results |
 | S45-D7 | `export_confirmation`, `second_confirmation` | `test_blinded_export_hides_the_configuration_and_shuffles_and_the_report_joins_back`, `test_second_confirmer_sees_a_seeded_sample_without_configurations_and_its_call_counts` |
 | S45-D8 | `report_stage_b`; `benchmark_report.md` | `test_report_gives_every_count_for_every_configuration` |
