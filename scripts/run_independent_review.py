@@ -1141,13 +1141,17 @@ def fixed_paths(answer: str) -> list[str]:
     return [os.path.normpath(re.sub(r":\d+(?:-\d+)?$", "", p)) for p in paths if p and " " not in p]
 
 
-CITED_PATH = re.compile(r"(?<![\w./-])((?:[\w.-]+/)+[\w.-]+\.\w+)(?:::[\w\[\]-]+)?(?::\d+(?:-\d+)?)?")
+CITED_PATH = re.compile(r"(?<![\w./-])((?:[\w.-]+/)*[\w.-]+)(?:::[\w\[\]-]+)?(?::\d+(?:-\d+)?)?")
 
 
-def cited_paths(answer: str, exists: Any) -> list[str]:
-    """The repository files a `rejected:` answer cites (`tests/x.py::test_y`, `docs/a.md:12`): each path that exists
-    in the copy; a path it names that the copy does not hold, such as a retired file, is left out."""
-    return [p for p in dict.fromkeys(os.path.normpath(m.group(1)) for m in CITED_PATH.finditer(answer)) if exists(p)]
+def cited_paths(answer: str, exists: Any) -> tuple[list[str], list[str]]:
+    """The repository files a `rejected:` answer cites (`tests/x.py::test_y`, `docs/a.md:12`, `AGENTS.md`,
+    `Makefile`): every word or path that names a file of the copy; and, apart, the paths with a directory part that
+    name no file of the copy (a typo, or a test never written), which the launcher refuses as it refuses a `fixed:`
+    answer naming a missing file. A plain word that names no file is prose."""
+    tokens = dict.fromkeys(os.path.normpath(m.group(1).rstrip(".")) for m in CITED_PATH.finditer(answer))
+    held = [p for p in tokens if exists(p)]
+    return held, [p for p in tokens if "/" in p and p not in held]
 
 
 def answer_word(answer: str) -> str | None:
@@ -1224,8 +1228,19 @@ def check_answers(rows: list[AnswerRow], exists: Any, away: set[str]) -> tuple[s
         if any(p in away for p in paths):
             must_read.append(f"{INPUTS_DIR}/change.diff")
         if answer_word(row.answer) == "rejected":
-            must_read += [p for p in cited_paths(row.answer, exists) if p not in away]
+            must_read += _rejection_reads(row, exists, away)
     return tuple(dict.fromkeys(must_read))
+
+
+def _rejection_reads(row: AnswerRow, exists: Any, away: set[str]) -> list[str]:
+    """The files a recheck must read for a `rejected:` answer; a cited path the copy does not hold is refused, and a
+    cited file the change deletes is read through the change's diff."""
+    held, missing = cited_paths(row.answer, exists)
+    missing_not_away = [p for p in missing if p not in away]
+    if missing_not_away:
+        raise ReviewRefusedError(f"rejected answer to {row.finding} cites a path that is not in the copy: "
+                                 f"{missing_not_away[0]}")
+    return held + ([f"{INPUTS_DIR}/change.diff"] if any(p in away for p in missing) else [])
 
 
 @dataclass(frozen=True)

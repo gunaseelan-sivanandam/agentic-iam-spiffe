@@ -93,6 +93,7 @@ Parked units, decision concerns and growth proposals collect below as the run go
 | 4.5b | Ran within 57 of 60 calls; report in [`benchmark_report.md`](../poc-4-5-benchmark/benchmark_report.md): `open+list` 7 of 11, `short+list` 6, `open-B+list` 6, both rechecks 1 of 1; 29 of 125 findings confirmed (two re-judged after unblinding, FR-1), the second confirmer agreeing on 9 of 10; the third canary valid and passed | Report review ended after round 2. Round 1: not approvable; 2 blocking, 1 high, 3 medium, 4 low; all fixed. Round 2: attempt 1 failed the read check (issue 14); attempt 2 approvable, all 10 answers accepted, no new finding |
 | 4.6 | Implemented: the seven-stage table and the rules moved into it, the templates, `scripts/review_brief.py`, the grill-me skill in the repository, the front-matter rule of the lint gate | Ended after round 1: approvable; 1 high, 5 medium, 4 low and a simpler alternative; 9 fixed, F4 and F5 to the owner (decision 4, decision concern 7) |
 | Final review | Unit `final` of this bundle, with the owner's open question ([record](review_final.md)) | Ended after round 2. Round 1: approvable, no blocker; 2 high, 5 medium, 2 low, all fixed. Round 2: approvable; all 9 answers accepted; 1 new low, fixed |
+| Growth (2026-11-13) | Rejections read like fixes, a `searched` list, the checklist question on findings ([record](review_growth.md)) | Round 1: approvable; 1 high, 5 medium, 1 low; 6 fixed, the low rejected; round 2 next |
 
 ## Decisions and their proof
 

@@ -1092,9 +1092,8 @@ def test_fixed_file_that_was_not_read_fails_even_when_a_path_under_review_was(fx
 @pytest.mark.parametrize(("answer", "reads", "fails"), [
     ("rejected: already covered by `scripts/cover.py::test_x`", [REVIEWED], True),
     ("rejected: already covered by `scripts/cover.py::test_x`", [REVIEWED, "scripts/cover.py"], False),
-    ("rejected: see docs/retired/gone.md:3, which no longer exists", [REVIEWED], False),
     ("rejected: the scenario does not happen", [REVIEWED], False),
-], ids=["cited-file-not-read", "cited-file-read", "cited-path-not-in-the-copy", "no-file-cited"])
+], ids=["cited-file-not-read", "cited-file-read", "no-file-cited"])
 def test_a_rejection_counts_only_when_the_files_it_cites_were_read(fx: Fixture, answer: str, reads: list[str],
                                                                     fails: bool) -> None:
     """Decision concern 1, resolved by the owner (2026-11-13): an accepted rejection rests on what it cites."""
@@ -1108,10 +1107,29 @@ def test_a_rejection_counts_only_when_the_files_it_cites_were_read(fx: Fixture, 
         (1, True) if fails else (0, False))
 
 
-def test_cited_paths_keep_only_files_the_copy_holds() -> None:
-    held = {"tests/tools/test_a.py", "docs/b.md"}
-    answer = "rejected: `tests/tools/test_a.py::test_one`, docs/b.md:12-14 and docs/gone.md; see AGENTS.md"
-    assert launcher.cited_paths(answer, held.__contains__) == ["tests/tools/test_a.py", "docs/b.md"]
+def test_cited_paths_find_files_with_and_without_a_directory_and_name_missing_paths() -> None:
+    """Growth review, G1-1 and G1-2: a root-level file counts, and a cited path the copy lacks is named."""
+    held = {"tests/tools/test_a.py", "docs/b.md", "AGENTS.md", "Makefile"}
+    answer = ("rejected: `tests/tools/test_a.py::test_one`, docs/b.md:12-14, AGENTS.md (PoC scope), the Makefile, "
+              "and docs/gone.md; e.g. outside the threat model.")
+    assert launcher.cited_paths(answer, held.__contains__) == (
+        ["tests/tools/test_a.py", "docs/b.md", "AGENTS.md", "Makefile"], ["docs/gone.md"])
+
+
+def test_a_rejection_citing_a_root_level_file_must_read_it(fx: Fixture) -> None:
+    commit = _recheck(fx, "| X1 | high | rejected: outside the threat model, see AGENTS.md (PoC scope) |")
+    fx.scenario(_reply(accounted=[_accounted("X1")]))
+    assert _run(fx, round_no=2, commit=commit) == 1
+    assert "AGENTS.md is named in a fixed: or rejected: answer and was not read" in _ends(fx)[-1]["reason"]
+
+
+def test_a_rejection_citing_a_path_the_copy_lacks_is_refused_before_any_call(fx: Fixture,
+                                                                             capsys: pytest.CaptureFixture[str]) -> None:
+    commit = _recheck(fx, "| X1 | high | rejected: covered by tests/tools/test_never_written.py::test_x |")
+    calls = len(fx.calls())
+    assert _run(fx, round_no=2, commit=commit) == 2
+    assert "cites a path that is not in the copy: tests/tools/test_never_written.py" in capsys.readouterr().err
+    assert len(fx.calls()) == calls
 
 
 @pytest.mark.parametrize(("where", "status"), [("searched", 0), ("opened", 1)])
@@ -1133,6 +1151,13 @@ def test_a_finding_may_name_the_checklist_question_that_prompted_it(question: ob
     report = {"findings": [{**_finding("X1"), "question": question}], "accounted": [], "verdict": "no"}
     problems = launcher.validate_report(report)
     assert (problems == []) if problem is None else any(problem in p for p in problems), problems
+
+
+@pytest.mark.parametrize("searched", ["docs/x.md", ["docs/x.md", 3]], ids=["a-string", "a-list-with-a-number"])
+def test_a_searched_field_that_is_not_a_list_of_paths_fails(searched: object) -> None:
+    """Growth review, G1-6."""
+    report = {"findings": [], "accounted": [{**_accounted("EV1", "explained"), "searched": searched}], "verdict": "yes"}
+    assert any("searched is not a list of paths" in p for p in launcher.validate_report(report))
 
 
 def test_the_schema_offers_the_question_and_searched_fields_as_optional() -> None:

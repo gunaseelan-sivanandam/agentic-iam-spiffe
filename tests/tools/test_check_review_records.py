@@ -195,7 +195,7 @@ def test_one_changed_character_in_a_block_fails(fx: base.Fixture, block: str) ->
 
 def test_report_block_under_another_attempts_heading_fails(fx: base.Fixture) -> None:
     _completed(fx, base._finding("X1"))
-    base._answers(fx, "unit1/c1/r1/A/1", "| X1 | high | rejected: style; owner: docs/x.md |")
+    base._answers(fx, "unit1/c1/r1/A/1", "| X1 | high | rejected: style; owner: https://example.org/decision |")
     fx.scenario(base._reply(accounted=[base._accounted("X1"), base._accounted("EV1", "explained")]))
     assert base._run(fx, round_no=2, commit=base._git(fx.work, "rev-parse", "HEAD")) == 0
     text = _record(fx).read_text()

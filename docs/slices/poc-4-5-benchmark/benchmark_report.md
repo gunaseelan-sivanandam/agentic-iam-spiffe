@@ -91,8 +91,9 @@ confirmed that a Read that fails is marked as an error and never counts as read.
 ## Each confirmed detection and the checklist question behind it
 
 Where the finding's own text cites a question of its stage list, that is given; otherwise the question that asks
-about the defect, by the author's mapping after the fact, is marked *(author)*. The reviewer schema has no field for
-the question, so most findings cite none (discovered issue 11).
+about the defect, by the author's mapping after the fact, is marked *(author)*. When these reviews ran, the reviewer
+schema had no field for the question, so most findings cite none (discovered issue 11); the optional `question` field
+came after them (growth approved on 2026-11-13), and the runner's report counts it: 0 of these runs' findings.
 
 | Case | List given | Configurations that detected it | Question |
 | --- | --- | --- | --- |
@@ -197,6 +198,7 @@ Rating agreement where a case ran twice, by expected defect: `{"same": 1, "diffe
 Origin stage of the findings against the list of the review that found them: `{"architecture and interfaces": {"architecture-and-interfaces": 11, "code": 13, "e2e-tests": 1, "requirements": 1}, "discovery": {"code": 1, "plan-and-test-plan": 13}, "implementation": {"code": 94, "e2e-tests": 15, "plan-and-test-plan": 16, "requirements": 15}, "requirements": {"code": 1, "e2e-tests": 1, "plan-and-test-plan": 10, "requirements": 27}, "tests first": {"code": 30, "e2e-tests": 32, "plan-and-test-plan": 23, "requirements": 1}, "unknown": {"architecture-and-interfaces": 1}}`
 Canary: `[{"cli_version": "2.1.321 (Claude Code)", "valid": false, "passed": true, "twin_ran_hook": true}, {"cli_version": "2.1.321 (Claude Code)", "valid": false, "passed": true, "twin_ran_hook": true}, {"cli_version": "2.1.321 (Claude Code)", "valid": true, "passed": true, "twin_ran_hook": true}]`. A canary is valid when its twin, without the launcher's flags, followed the planted CLAUDE.md and ran the planted hook (S45-D9); one whose twin ran only the hook shows that the flags keep settings out, not that they keep instruction files out.
 Repeats (detected in run 1, run 2): FS-2 open+list: True, True; FS-2 short+list: False, True; RM-6 open+list: True, True; RM-6 short+list: failed, False
+Findings that name their checklist question: 0 of 306 (none).
 Second confirmer: agrees with the author on 9 of 10 sampled findings.
 
 What these sizes can show: with about 15 cases and one run each, a difference of two or three cases between two configurations is within chance; the intervals say how wide each count's uncertainty is. Both setups carry the stage lists, so the counts do not measure the lists' own effect. The owner decides from the counts; no rule decides.

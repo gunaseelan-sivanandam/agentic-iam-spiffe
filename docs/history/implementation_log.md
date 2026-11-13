@@ -5,6 +5,22 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-11-13 Slice agentic-sdlc-poc 4: the owner's growth to the review launcher
+
+- Branch `poc/slice-4-implementation`, after the final review; approved by the owner on 2026-11-13 ("yes, replace it
+  and implement both with proposal 9"; [decision page](../slices/agentic-sdlc-poc/slice_4_decisions.md)).
+- `scripts/run_independent_review.py`: a recheck must read every file a `rejected:` answer cites, as for a `fixed:`
+  answer, with or without a directory part (`AGENTS.md`, `Makefile`), and a cited path the copy does not hold is
+  refused before any call; a reviewer lists files it only searched under `searched`, so `opened` stays a checked
+  claim; a finding may name the checklist question that prompted it (`question`, for example `code:10`). An entry
+  logged with the earlier report schema is refused for a rebuild. `scripts/run_review_benchmark.py`: the report counts
+  the findings that name their question (0 for the stage-B runs, which predate the field).
+- Decision concern 1 is resolved; the decision page records why the first proposal was withdrawn (DPL-012).
+- Review: unit `growth` of `docs/slices/agentic-sdlc-poc/` ([record](../slices/agentic-sdlc-poc/review_growth.md)).
+- Validation, local: `make tooling-test` 786 passed (with a scratch shellcheck); `make qa-quality` and the trace gate
+  in PR mode passed (0 new gaps); `make lint` passed. Not run: the E2E suite (no service, harness or compose file
+  changed since the 2026-11-10 run) and CI (the branch is not pushed).
+
 ## 2026-11-10 Slice agentic-sdlc-poc 4: review prompts, inputs, records, stage checklists, benchmark, stage rules
 
 - Branch `poc/slice-4-implementation`, from `poc/agentic-sdlc` at `3347754` (plan PR #48), local until the owner
@@ -28,10 +44,6 @@ is first); every heading carries its date.
 - 4.6 (#43): `AGENTS.md`'s slice workflow has seven stages, each with its review, list, checks and exit; the
   templates carry the stage table, decision sources and rule deviations; `scripts/review_brief.py` builds a PR's
   decision brief; the grill-me skill lives in `.claude/skills/grill-me/`.
-- Growth the owner approved on 2026-11-13: a recheck must read every file a `rejected:` answer cites, as for a
-  `fixed:` answer; a reviewer lists files it only searched under `searched`; a finding may name the checklist question
-  that prompted it (`question`), which the benchmark report counts. Its review is the unit `growth` of
-  `docs/slices/agentic-sdlc-poc/`; the final review predates it.
 - Reviews: every sub-issue's implementation review ended with no blocking or high finding open (records in each
   bundle); 4.4 had a two-model critique; a dry slice from a clean session recorded 18 trip points, in the decision
   page. The final review of the slice is the unit `final` of `docs/slices/agentic-sdlc-poc/`.

@@ -46,7 +46,7 @@ def _two_rounds(fx: base.Fixture, last_answer: str = "rejected: it still does no
                            "| X2 | medium | owner: docs/slices/demo/decisions.md |",
                            "| X3 | low | owner: docs/slices/demo/decisions.md |",
                            "| X4 | high | fixed: scripts/review_me.py: guarded |",
-                           "| X5 | high | rejected: already covered by tests/test_x.py |", findings=tuple(findings))
+                           "| X5 | high | rejected: already covered by scripts/review_me.py |", findings=tuple(findings))
     fx.scenario(base._reply([base._finding("X1", severity="medium")], verdict="no", accounted=[
         base._accounted("X1", "re-raised"), base._accounted("X2"), base._accounted("X3"),
         base._accounted("X4", "cannot determine", note="NOTE ON X4"), base._accounted("X5")]))
@@ -65,7 +65,7 @@ def test_the_brief_lists_every_item_the_owner_must_see(fx: base.Fixture) -> None
     disputed = text.split("**Still disputed after a recheck**", 1)[1].split("**Blocking", 1)[0]
     assert "X1: re-raised by the recheck, answered again: rejected: it still does not happen" in disputed
     rejected = text.split("answered `rejected`**", 1)[1].split("**Where", 1)[0]
-    assert "X5 (high): rejected: already covered by tests/test_x.py" in rejected and "X1" not in rejected
+    assert "X5 (high): rejected: already covered by scripts/review_me.py" in rejected and "X1" not in rejected
     assert "| discovery | 1 |" in text and "| tests first | 1 |" in text and "| implementation | 4 |" in text
 
 
