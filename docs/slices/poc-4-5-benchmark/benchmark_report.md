@@ -20,7 +20,9 @@ detection with the checklist question behind it, and the misses. The runner's ow
   S45-D1 allows. On 2026-11-13 the budget was raised to 85, for a canary pair under CLI 2.1.323, RC-2's two runs
   and decision concern 8's measurement: the owner approved that measurement beyond the 60 calls ("complete it and
   do not wait for my approval"); see the decision page. The canary pair under 2.1.323 and RC-2's two runs brought
-  the count to 61.
+  the count to 61, and the measurement's 15 runs, with no retry, to 76. Its second confirmer and repeat did not run,
+  and the hard stop is now 76, the calls used, so no further stage-B call runs without a new decision (decision
+  concern 11 on the decision page).
 - **Configurations:** `short+list` (stage A's short prompt without its retired kinds sentence), `open+list` (4.1's
   mandate, the launcher's today), `open-B+list` (4.4's drafted initial mandate), `recheck-A` (4.1's recheck mandate)
   and `recheck-B` (4.4's drafted recheck mandate). Every configuration carries its case's stage list.
@@ -247,13 +249,37 @@ rule by a fresh session that never saw the configurations (`severity_export.json
   confirmer judged one a real but minor record gap and two not real.
 
 The launcher's output section and `AGENTS.md` stay as they are; `open+list+sev` and its paragraph stay in the
-benchmark as measured. The plan repeats cases only on an inconclusive result, so there was no repeat. The Sonnet
-second confirmer was skipped: the confirmer was a fresh session blind to the setups, the first confirmation's second
-confirmer agreed on 9 of 10, and the outcome does not hinge on a borderline verdict. RM-3, RM-4 and RM-6 under
-`open+list+sev` have no blocking or high finding at the expected place, so their misses are ratings, not verdicts.
-CL-1's count is a count. The confirmer's own borderline notes (S055, the baseline's RM-6 match by the absence clause
-only; S031 and S054 on PB-1; S014 and S048 on FS-2) touch only detections that do not decide a criterion: (2) is
-judged against the baseline detections the plan lists.
+benchmark as measured. The plan repeats cases only on an inconclusive result, so there was no repeat. The
+confirmation departed from the plan twice, both recorded among the author's decisions on the decision page: a fresh
+session the author started, which never saw the configurations, confirmed instead of the author (the verdict file
+keeps the role name `author` in its name), and the Sonnet second confirmer was skipped, because not adopting rests on
+counts no verdict changes ((1) fails with no blocking or high finding of `open+list+sev` at RM-3's or RM-4's expected
+places, and (4) counts CL-1's and CL-2's blocking or high findings) and only "worse" rather than "not better" rests on
+one verdict, RM-6's blocking finding judged not a match. The confirmer's own borderline notes (S055, the baseline's
+RM-6 match by the absence clause only; S031 and S054 on PB-1; S014 and S048 on FS-2) touch only detections that do
+not decide a criterion: (2) is judged against the baseline detections the plan lists.
+
+**The diagnostic the plan asked for: the recurring mis-rated clusters.** Each cluster of the
+[analysis](severity_analysis.md) (section 5b, and the expected moves of section 8), with its severity in
+`open+list`'s first run and in `open+list+sev`, read by hand from the results (B, H, M: blocking, high, medium).
+
+| Cluster | Case | Supported (analysis) | `open+list` | `open+list+sev` |
+| --- | --- | --- | --- | --- |
+| c4: identity tests loosened to accept 401 | RM-1 | B (under) | H (F4) | M (F4) |
+| c8: M2.5-T1 and T3 fail when the boundary works; T2 never runs its script | RM-2 | B (under) | H (F5; T2 not reported) | B (F6); T2 H (F7) |
+| c38: expiry, missing-token and bad-request requirements lose their only proof | PB-3 | B (under) | H (F4) | H (F3) |
+| c37: REQ-M2-R10/R11's proof and the only positive twin removed | PB-3 | B (under) | H (F3) | not reported (F3 names T2 only in passing) |
+| c12: qa-deploy is not default deny | RM-3 | H (over) | B (F1) | B (F1) |
+| c14: holder lists contradict (the Docker-socket holders) | RM-3 | H (over) | B (F2) | not reported |
+| c19: the template overclaims what the lint rejects | RM-4 | H (over) | B (F2) | not reported |
+| c36: the new requirement has no proof entry, which the gap gate fails | PB-1 | H (over) | B (F2) | H (F2) |
+| c41: H4 contradicts H1 | FS-2 | H (over) | B (F1) | B (F4) |
+| c47: the new rule has no test or review question | CL-1 | L–M (over) | not reported | B (F1) |
+
+Two clusters moved toward the supported severity (c8, c36), two away from it (c4 down to medium, and c47, a new
+over-rated blocker on a no-defect case, which with c48, an unprobed permission rated medium before and high now, makes
+CL-1's two extra findings), three stayed and three were not reported: the paragraph moved ratings both ways, not
+consistently toward the supported severity.
 
 **What 15 runs cannot show.**
 

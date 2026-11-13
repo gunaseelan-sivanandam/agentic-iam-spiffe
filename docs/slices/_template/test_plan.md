@@ -59,7 +59,8 @@ Every negative test has a twin. A `probe@` value is observed before any change; 
 
 ## Independent review at the implementation PR
 A reviewer that is not the author ([AGENTS.md — Independent review](../../../AGENTS.md#independent-review))
-answers in its report, and the author copies the answers to the slice's decision page (`decisions.md`):
+answers the questions below as findings in its report; the slice's decision page (`decisions.md`) lists,
+for each question, the IDs of the findings that answer it, or "no finding":
 1. *Tests:* for each new or changed test, which wrong failure would still pass it (service down,
    another status, the right status with another reason, another component answering, a missing
    value or empty file read as success)? Does its assertion match the expected-outcome row?
@@ -70,6 +71,7 @@ answers in its report, and the author copies the answers to the slice's decision
    ([AGENTS.md, coding rule 8](../../../AGENTS.md#coding-rules)), and do its names say what each part
    does?
 
-A "yes" to question 1 or 2 is blocking, under [AGENTS.md — PoC scope and proportion](../../../AGENTS.md#poc-scope-and-proportion).
-Every other finding takes the severity scale of the same section (blocking, high, medium, low);
-findings on question 3 are medium: the author fixes them, or defers them with a tracking issue.
+A "yes" to question 1 or 2 is a blocking finding, under [AGENTS.md — PoC scope and proportion](../../../AGENTS.md#poc-scope-and-proportion).
+A purpose comment or name that does not say what it does (question 3) is a medium finding: the author
+fixes it, or defers it with a tracking issue. Every other finding takes the severity scale of the same
+section (blocking, high, medium, low).

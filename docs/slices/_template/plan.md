@@ -29,7 +29,9 @@ Each stage of `AGENTS.md`'s slice workflow applies, or is "none, with a reason".
      launcher or brief is touched:
   3. no security decision path is touched (capability-issuer, tool-b and the other verifiers, OPA
      policies, Envoy or SPIRE configuration, compose files):
-  4. at most about 50 changed lines in at most 5 files: <lines> lines in <files> files.
+  4. at most about 50 changed lines in at most 5 files, counting the change itself, not this bundle
+     (`docs/slices/<slice-id>/`) or the handoff files (`docs/history/implementation_log.md`,
+     `docs/STATUS.md`, `docs/slices/README.md`): <lines> lines in <files> files.
 - A small slice is one PR with this plan, its test plan, its decision page and the change; the stage
   table marks Requirements, Architecture and interfaces and Tests first "none" (conditions 1 and 2)
   and the Final review "none, small slice". If a condition breaks during the work, the slice returns

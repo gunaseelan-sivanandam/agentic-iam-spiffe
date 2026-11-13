@@ -47,11 +47,12 @@ outside the threat model ([`AGENTS.md`, PoC scope and proportion](../../../AGENT
 
 ## Implementation review: the test-plan questions
 
-The implementation review's answers to the three questions of `test_plan.md`, copied from its report:
+The implementation review answers the three questions of `test_plan.md` as findings in its report.
+For each question, the IDs of the findings that answer it, or "no finding":
 
-1. *Tests:*
-2. *Keys:*
-3. *Names and headers:*
+1. *Tests:* <finding IDs, or no finding>
+2. *Keys:* <finding IDs, or no finding>
+3. *Names and headers:* <finding IDs, or no finding>
 
 ## Review outcome
 

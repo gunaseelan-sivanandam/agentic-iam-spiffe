@@ -14,10 +14,14 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 - **Open PoC work, in "needed before" order:**
   1. now: slice 4 ([#33](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/33), sub-issues #38–#43), implemented on
      the branch `poc/slice-4-implementation` for one final PR: 4.1 to 4.6 implemented and reviewed; 4.5b's
-     benchmark ran (57 of 60 calls, [report](slices/poc-4-5-benchmark/benchmark_report.md)); one dry slice ran;
-     the final review ended after round 2; the owner's growth of 2026-11-13 (rejections read like fixes, a
-     `searched` list, the checklist question on findings) is implemented and reviewed (unit `growth`); the
-     owner's push and the final PR are next.
+     benchmark ran (57 of 60 calls, then 76 under a budget raised to 85, now stopped at 76;
+     [report](slices/poc-4-5-benchmark/benchmark_report.md)); one dry slice ran; the final review ended after
+     round 2; the owner's growth of 2026-11-13 (rejections read like fixes, a `searched` list, the checklist
+     question on findings) is implemented and reviewed (unit `growth`); the owner's decisions of 2026-11-13 on
+     decision concerns 2, 3, 4, 7, 8 and 10 are implemented (small slices, the decision page, a second recheck
+     case, a severity measurement that came out worse, so nothing is adopted) and in review (unit
+     `owner-decisions`, round 2 next). Then the owner's open decisions on the decision page, the push and the
+     final PR.
      Progress and the owner's decisions: [`slice_4_decisions.md`](slices/agentic-sdlc-poc/slice_4_decisions.md);
      Next, before slice 5: a slice of author prompts and their benchmark (owner, 2026-11-09: "let's
      continue this slice for just review, after this let's run a new slice of author prompts and
@@ -85,7 +89,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `poc/slice-4-implementation` | agentic-sdlc-poc slice 4: the six sub-issues (#38–#43), on the plans merged with PR #48 | Implemented and reviewed, local; one final PR into `poc/agentic-sdlc` when the owner pushes |
+| `poc/slice-4-implementation` | agentic-sdlc-poc slice 4: the six sub-issues (#38–#43), on the plans merged with PR #48 | Implemented and reviewed, local; the owner's decisions of 2026-11-13 implemented, their review at round 2; one final PR into `poc/agentic-sdlc` when the owner pushes |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).

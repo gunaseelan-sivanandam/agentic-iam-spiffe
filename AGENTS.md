@@ -183,7 +183,7 @@ limit (the [review loop](#poc-scope-and-proportion)).
 | Tests first | unit and E2E tests from the reviewed test plan, and their `docs/test_spec.md` entries | tests-first review, lists `unit-tests` and `e2e-tests` | `make tooling-test`, `make test-lint`, `make unit-guard-check`, `make docs-check`: the new tests fail as planned, every other test and check passes | each new test fails on the base code for the reason it exists, and the review has no blocking or high finding open |
 | Implementation | the code and configuration the plan approved, with what it retires removed | implementation review, list `code` | every gate of [Quality gates](#quality-gates), the full E2E suite on a clean stack, `make qa-evidence` | every gate's CI job passes on the PR, and the review has no blocking or high finding open |
 | Final review | the record of the unit `final`; none for a small slice | final review, 4.1's final mode, no list | the decision brief, `scripts/review_brief.py` | no blocking or high finding open |
-| Handoff | the decision page: the decision brief, the implementation review's answers to the test-plan questions, every discovered issue with its disposition; the PR body: the goal, what changed, a link to the page | the user's approval | the PR's required CI checks, which the user sees on the PR page | the user merges |
+| Handoff | the decision page: the decision brief, the implementation review's findings on the test-plan questions, every discovered issue with its disposition; the PR body: the goal, what changed, a link to the page | the user's approval | the PR's required CI checks, which the user sees on the PR page | the user merges |
 
 ### Small slices
 
@@ -196,7 +196,9 @@ A slice is **small** when all four hold:
    brief;
 3. it touches no security decision path: capability-issuer, tool-b and the other verifiers, OPA
    policies, Envoy or SPIRE configuration, compose files;
-4. it changes at most about 50 lines in at most 5 files.
+4. it changes at most about 50 lines in at most 5 files, counting the change itself, not the slice's
+   own bundle (`docs/slices/<slice-id>/`) or the handoff files (`docs/history/implementation_log.md`,
+   `docs/STATUS.md`, `docs/slices/README.md`).
 
 A README sentence, a broken link, a typo or the `varambu` CLI's help text is small; a new E2E test, a
 gate threshold or any capability-issuer change is not. A small slice is one PR that holds its short
@@ -309,10 +311,11 @@ All of the following, in the same change:
   `cannot determine` answer and finding still disputed; every blocking or high finding answered
   `rejected`, with its reason; the origin stage against the stage that found each finding). The user
   reads the plans and records where the brief points;
-- put the implementation review's answers to the test-plan questions, every discovered issue with
-  its disposition (see [PoC scope and proportion](#poc-scope-and-proportion)) and each issue's link on
-  the decision page. The issue is the home of its status; the decision page records it at handoff and,
-  like the rest of the bundle, is not updated after the merge;
+- put on the decision page, for each test-plan question, the IDs of the implementation review's
+  findings that answer it (or "no finding"), every discovered issue with its disposition (see
+  [PoC scope and proportion](#poc-scope-and-proportion)) and each issue's link. The issue is the home
+  of its status; the decision page records it at handoff and, like the rest of the bundle, is not
+  updated after the merge;
 - write the PR body: the goal and what changed in a few lines, and a link to the decision page, which
   holds everything that needs the user. The user sees the PR's required CI checks on the PR page.
 
@@ -387,9 +390,10 @@ All of the following, in the same change:
 - **Implementation review** (implementation). The reviewer answers the questions in the test-plan template
   (`docs/slices/_template/test_plan.md`: which wrong failure would still pass each new or changed
   test, whether a key, socket or secret now reaches a service outside its holders, and whether each
-  new file's purpose comment and names say what it does) in its report; the author copies the answers
-  to the slice's decision page. A "yes" to the first two blocks, under the same review loop; findings
-  on purpose comments and names are medium.
+  new file's purpose comment and names say what it does) as findings in its report: a "yes" to the
+  first or the second question is a blocking finding, under the same review loop, and a purpose
+  comment or name that does not say what it does is a medium finding. The slice's decision page lists,
+  for each question, the IDs of the findings that answer it, or "no finding".
 - **Fixes stay within the agreed decisions** (the plan's decisions, or the request, and this file).
   Before answering a finding with a new mechanism, the author names the upstream choice that causes
   it and weighs changing that choice; removing or changing a mechanism is preferred over adding one.

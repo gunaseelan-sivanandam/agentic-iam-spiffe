@@ -5,6 +5,42 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-11-13 Slice agentic-sdlc-poc 4: the owner's decisions on the decision concerns
+
+- Branch `poc/slice-4-implementation`, commits `44a040c` to `ea4e100` and the commit with the fixes to their review:
+  the owner's decisions of 2026-11-13 on decision concerns 2, 3, 4, 7, 8 and 10, in the owner's words on the
+  [decision page](../slices/agentic-sdlc-poc/slice_4_decisions.md). Decision concerns 2 and 3 keep what was built.
+- Small slices (decision concern 7): `AGENTS.md` (Slice workflow, Small slices, Discovery, Final review) defines a
+  small slice by four conditions and runs it as one PR whose review units are the plan review and the implementation
+  review, with no final review; the plan template's Small slice part asks why each condition holds.
+- The decision page (decision concern 10): every slice starts `decisions.md` from `docs/slices/_template/`; it holds
+  the decision brief, the implementation review's findings on the test-plan questions and every discovered issue,
+  and the PR body states the goal and what changed and links it. `scripts/review_brief.py` no longer reads or prints
+  a CI result.
+- RC-2 (decision concern 4): a recheck case whose answers hold (a correct rejection beside a correct fix), answer key
+  version 3. On both recheck wordings: `recheck-B` accepted both answers, `recheck-A` failed the launcher's read check.
+- The budget: stage B's 60 calls raised to 85 for the canary, RC-2 and the measurement (key version 4); 76 spent. The
+  runner's hard stop is now 76, so no further stage-B call runs without a new decision (decision concern 11).
+- A canary per CLI version: the CLI updated itself from 2.1.321 to 2.1.323 mid-benchmark; a canary now counts as done
+  only for its own CLI version, and a new pair under 2.1.323 is valid and passed.
+- Severity (decision concern 8): the [analysis](../slices/poc-4-5-benchmark/severity_analysis.md) found that reviewers
+  rate a failure scenario's first symptom, often under base rules that support the low rating. Its candidate "finish
+  the scenario" ran as `open+list+sev` on the 15 initial-review cases and was judged blind against criteria fixed
+  before the runs: worse (RM-3 and RM-4 still medium, RM-6 lost, two extra blocking or high findings on CL-1), so
+  nothing is adopted. The launcher's output section and `AGENTS.md` stay as they were; decision 6 asks the owner what
+  to do instead.
+- Review: unit `owner-decisions` of `docs/slices/agentic-sdlc-poc/`, round 1: attempt 1 failed the read check
+  (discovered issue 21); attempt 2 not approvable, 1 blocking, 2 high, 5 medium. The fixes: the implementation review
+  answers the test-plan questions as findings; condition 4 counts the change, not the bundle or the handoff files;
+  the confirmation's two departures from the plan are recorded; the report holds the clusters' severities; a test of
+  the severity file's refusal. Decision 7, decision concern 11 and growth proposal 12 go to the owner.
+- Validation, local: `make tooling-test` 800 passed and 9 shell tests (with a scratch shellcheck); `ruff check
+  services scripts` clean; `make lint` against `origin/poc/agentic-sdlc` passed (0 new or worsened findings);
+  `make docs-check` passed on the commit, in a clone without this review's record, which fails it in the working
+  tree until its answers are written. Not run: the E2E suite (`git diff --stat 2da4333 HEAD` lists only rulebook,
+  document, template, review-tooling and test files, no service, harness or compose file) and CI (the branch is not
+  pushed).
+
 ## 2026-11-13 Slice agentic-sdlc-poc 4: the owner's growth to the review launcher
 
 - Branch `poc/slice-4-implementation`, after the final review; approved by the owner on 2026-11-13 ("yes, replace it

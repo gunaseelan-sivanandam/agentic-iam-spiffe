@@ -14,7 +14,7 @@ both with the stage checklist of the case's artifact type, and two wordings of t
 
 Usage (from the repository root):
     python3 scripts/run_review_benchmark.py --dry-run                       # leak search only, no reviewer call
-    python3 scripts/run_review_benchmark.py --run [--budget N]              # stage B, at most 85 reviewer calls
+    python3 scripts/run_review_benchmark.py --run [--budget N]              # stage B, at most 76 reviewer calls (spent)
     python3 scripts/run_review_benchmark.py --run --case <case>             # only the named cases (or --dry-run)
     python3 scripts/run_review_benchmark.py --run --configuration <name>    # only the named configurations
     python3 scripts/run_review_benchmark.py --report --stage B [--stage A]  # one stage, or two compared
@@ -56,9 +56,11 @@ RESULTS = {"A": Path("docs/slices/agentic-sdlc-poc/benchmark_results.jsonl"),
            "B": Path("docs/slices/poc-4-5-benchmark/benchmark_results_B.jsonl")}
 # S45-D1: reviewer calls per stage, counting the canary, failed attempts and retries. Stage B's 60 were raised to 85
 # on 2026-11-13: the owner approved decision concern 8's measurement beyond the 60 ("complete it and do not wait for
-# my approval"); it needs a canary for CLI 2.1.323, which RC-2's two runs share. 57 used, the canary 2, RC-2 2, the
-# measurement 15 and one retry, a second confirmer 2 and a conditional repeat of 4: 83.
-BUDGETS = {"A": 26, "B": 85}
+# my approval"); it needs a canary for CLI 2.1.323, which RC-2's two runs share. 76 were used (57 before, the canary 2,
+# RC-2 2, the measurement 15), and the hard stop is lowered to them, so no further stage-B call runs without a new
+# decision (decision page, decision concern 11). The key keeps `budget: 85`, which identifies version 4's results;
+# `run_benchmark` refuses a key budget above this one, so every stage-B run is refused before any call.
+BUDGETS = {"A": 26, "B": 76}
 BENCH_OUT = Path("docs/slices/poc-4-5-benchmark")
 EXPORT_FILE = BENCH_OUT / "confirmation_export.jsonl"
 EXPORT_KEY_FILE = BENCH_OUT / "confirmation_key.jsonl"

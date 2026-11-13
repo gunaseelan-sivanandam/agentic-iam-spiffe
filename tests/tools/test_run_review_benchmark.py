@@ -301,7 +301,7 @@ def test_a_changed_template_runs_again_and_does_not_count_the_earlier_result_as_
 def test_stage_b_stops_at_its_budget_counting_retries_and_the_canary(repo: tuple[Repo, str, str]) -> None:
     r, base, commit = repo
     limit = bench.BUDGETS["B"]
-    assert limit == 85  # raised from 60 on 2026-11-13 (decision concerns 4 and 8)
+    assert limit == 76  # raised from 60 to 85 on 2026-11-13 (decision concerns 4 and 8), then lowered to the 76 used
     r.key([_case(f"C{i}", base, commit) for i in range(limit // 2 + 1)], budget=limit)  # more calls than the budget
     r.canary_passed()  # 2 calls already used
     r.scenario({"result": {"is_error": True}, "exit": 1}, {})
@@ -615,6 +615,19 @@ def test_configuration_option_runs_only_the_named_configuration(repo: tuple[Repo
     assert _run(r, "--configuration", SEV) == 0 and r.calls() == 1
     assert [line["configuration"] for line in r.results() if line.get("configuration")] == [SEV]
     assert "SEVERITY PARAGRAPH TEXT." in r.prompts()[0]
+
+
+def test_a_severity_file_without_its_paragraph_heading_is_refused_before_any_call(repo: tuple[Repo, str, str]) -> None:
+    r, base, commit = repo
+    r.key([_case("C1", base, commit, configurations=[SEV])])
+    _write(r.root, "tests/review_benchmark/prompts/severity_scenario.md",
+           "# Severity paragraph\n\nWhat it is for.\n\nSEVERITY PARAGRAPH TEXT.\n")  # no `## Paragraph` heading
+    r.canary_passed()
+    with pytest.raises(bench.BenchmarkRefusedError, match="needs tests/review_benchmark/prompts/severity_scenario.md "
+                                                          "with a `## Paragraph` heading"):
+        bench.severity_note(bench.load_key(r.root), SEV)
+    assert _run(r, "--configuration", SEV) == 2
+    assert r.calls() == 0 and not [line for line in r.results() if line.get("configuration")]
 
 
 def test_measurement_export_mixes_the_two_setups_first_runs_under_fresh_tokens(repo: tuple[Repo, str, str]) -> None:
