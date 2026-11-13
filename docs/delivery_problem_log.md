@@ -437,6 +437,13 @@ Try a tool the way its next user will run it: in parallel, with the same names, 
   for "step N", and its review relied on that test.
 - Three rule edits were not recorded as the author's decisions, and one plan decision (the brief on plan PRs,
   S46-D13) had no rule text.
+- The benchmark never gave a reviewer the `unit-tests` list, nor the tests-first pair with `e2e-tests`: the author
+  gave no case a unit-test change, and neither the author nor any review checked that every list had a case. The
+  owner found it by asking (2026-11-11).
+- The author proposed to stop failing a review whose `opened` names a file it did not read (growth proposal 5),
+  saying the rule had cost four review sessions, without checking what each failure guarded. One of the four had
+  accepted five answers on files it never read; the proposal would have passed it. The owner's question stopped it
+  (2026-11-13), and a stricter change replaced it.
 
 ### Root causes
 Why it happened:
@@ -447,12 +454,17 @@ Why it happened:
 - RC3: a data source added late (the confirmed verdicts) was not carried into every function that reports on the
   same results.
 - RC4: a check for stale wording was written for the planned phrase only.
+- RC6: the benchmark's cases were chosen per past miss and per plant, not checked against what the benchmark was
+  meant to measure (every stage list).
+- RC7: a proposal to loosen a check was argued from the cost of its failures, not from what each failure caught.
 
 Why review did not catch it earlier:
 - RC5: each miss was caught by the next review that looked at the claim itself, not by the author's self-review.
 
 ### Actions
-- Corrective: the dry run refuses as a run does; the canary has its own prompt and the gate requires a valid
+- Corrective: the unit-test gap is recorded in the benchmark report, and measuring it is the owner's decision 5; the
+  loosening was withdrawn, and the owner approved instead that rejections are read like fixes and that searched files
+  have their own list (2026-11-13). The dry run refuses as a run does; the canary has its own prompt and the gate requires a valid
   canary again; the repeats and the rating agreement read the confirmed verdicts and pair runs by defect; RM-6's
   two findings were re-judged by the absence clause, said openly in the report; `README.md` is current; the
   rule edits are recorded on the decision page, and the plan-PR brief has its rule.
@@ -462,4 +474,4 @@ Why review did not catch it earlier:
 
 ### Lesson
 Write a claim from the check's output, not from the plan. When an approved rule seems impossible, look first for
-the author's own choice that makes it so.
+the author's own choice that makes it so. Before loosening a check, look at what each of its failures caught.
