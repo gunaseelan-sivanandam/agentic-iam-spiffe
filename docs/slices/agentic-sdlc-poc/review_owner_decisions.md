@@ -394,3 +394,252 @@ No trace gap among the upstream items (python3 scripts/validate_traceability.py 
 | F6 | medium | owner: docs/slices/agentic-sdlc-poc/slice_4_decisions.md (decision concern 11): the raise from 60 to 85 under the DC8 approval is put to the owner, recommendation confirm. Meanwhile the hard stop is lowered to the 76 calls used (`scripts/run_review_benchmark.py` `BUDGETS`, its test in `tests/tools/test_run_review_benchmark.py`), so no further stage-B call runs without a new decision; the Decisions-made DC4 row now says RC-2 ran as calls 60 and 61 after a canary for CLI 2.1.323; the report's Calls line and the author-decision budget row agree |
 | F7 | medium | fixed: docs/slices/poc-4-5-benchmark/benchmark_report.md: the pre-registered diagnostic is recorded: a table of the ten clusters' severities in the baseline and under `open+list+sev` (c8 and c36 moved toward the supported severity; c4 dropped to medium; c47 became a new blocker; c38, c12 and c41 stayed; c37, c14 and c19 were not reported), with one line on what it shows |
 | F8 | medium | fixed: tests/tools/test_run_review_benchmark.py: a test gives `severity_note` a severity file without a `## Paragraph` heading and asserts the refusal; with the guard removed it fails |
+
+## Round 2
+
+### Attempt owner-decisions/c1/r2/A/1
+
+Reviewer `A`: `claude-opus-5-5`, effort medium, mode recheck, commit `0e8fd72e12e3`, base `3347754ef038`.
+
+Status: failed (the report does not account for what it was given: F4 names an opened file the attempt did not read; F6 names an opened file the attempt did not read; F8 names an opened file the attempt did not read; docs/STATUS.md is named in a fixed: or rejected: answer and was not read; tests/tools/test_run_review_benchmark.py is named in a fixed: or rejected: answer and was not read).
+
+#### Prompt
+
+```markdown
+# Recheck of the owner's decisions on slice 4's decision concerns, round 2
+
+The intent is unchanged from round 1: the owner's decisions of 2026-11-13 on decision concerns 2, 3, 4, 7, 8 and 10
+(small slices; a decision page per slice holding the brief without CI, the review answers and the discovered issues;
+a second recheck case whose answers hold; the severity analysis and measurement, not adopted). Round 1's report and
+the author's answers are below; the fixes are what the reviewed commit adds after `ea4e100`. Among them: the
+test-plan questions are answered as findings; condition 4 says what it counts; the implementation log and STATUS are
+current; the measurement's confirmation and the skipped second confirmer are recorded as author decisions; the
+stage-B hard stop is lowered to the 76 calls used; the pre-registered cluster diagnostic is recorded; the severity
+note's refusal has a test. Two findings went to the owner on the decision page.
+```
+
+#### Evidence
+
+```text
+Each numbered entry must be listed under `accounted`.
+
+EV1: tests failing at this commit (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json): tests/tools/test_lint_changed_files.py::test_new_script_that_passes_shellcheck_passes, tests/tools/test_lint_changed_files.py::test_new_script_with_a_shellcheck_finding_fails[scripts/bad.sh], tests/tools/test_lint_changed_files.py::test_new_script_with_a_shellcheck_finding_fails[scripts/bad-no-extension], tests/tools/test_lint_changed_files.py::test_modified_shell_script_fails_only_on_a_new_finding[existing-finding-stays], tests/tools/test_lint_changed_files.py::test_modified_shell_script_fails_only_on_a_new_finding[new-finding-fails], tests/tools/test_lint_changed_files.py::test_renamed_shell_script_with_unchanged_findings_passes, tests/tools/test_lint_changed_files.py::test_new_file_with_a_purpose_comment_passes[scripts/new.sh-#!/usr/bin/env, tests/tools/test_lint_changed_files.py::test_new_file_without_a_purpose_comment_fails[shell], tests/tools/test_lint_changed_files.py::test_new_file_without_a_purpose_comment_fails[shell-directive-only]
+EV2: scripts/check_docs.py: changed lines not run: 215; branches not taken: 214->215 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV3: scripts/check_review_records.py: changed lines not run: 43, 203-206, 210; branches not taken: 42->43, 204->205, 204->206, 209->210 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV4: scripts/review_brief.py: changed lines not run: 42, 293, 297; branches not taken: 41->42, 225->220, 296->297 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV5: scripts/review_inputs.py: changed lines not run: 286; branches not taken: 285->286 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV6: scripts/review_records.py: changed lines not run: none; branches not taken: 189->191, 228->230 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV7: scripts/run_independent_review.py: changed lines not run: 177, 931, 989-990; branches not taken: 930->931, 1474->1476 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV8: scripts/run_review_benchmark.py: changed lines not run: 342, 389, 699, 943, 1226, 1614-1615; branches not taken: 341->342, 345->344, 388->389, 480->484, 698->699, 868->865, 874->868, 941->943, 992->995, 1207->1205, 1613->1614 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV9: no CI run for this commit (GET https://api.github.com/repos/<owner>/<repo>/actions/runs?head_sha=<commit> (no token))
+
+Every changed line and branch run by the tooling tests: scripts/lint_changed_files.py.
+A script the tooling tests run only as a subprocess shows as not run here, because coverage is measured in-process (issue #44).
+No trace gap among the upstream items (python3 scripts/validate_traceability.py --mode pr --base <merge-base> --report-json <scratch>/trace.json --design-report-json <scratch>/design.json).
+```
+
+
+### Attempt owner-decisions/c1/r2/A/2
+
+Reviewer `A`: `claude-opus-5-5`, effort medium, mode recheck, commit `0e8fd72e12e3`, base `3347754ef038`.
+
+Status: completed; approvable within the threat model: yes.
+
+#### Prompt
+
+```markdown
+# Recheck of the owner's decisions on slice 4's decision concerns, round 2
+
+The intent is unchanged from round 1: the owner's decisions of 2026-11-13 on decision concerns 2, 3, 4, 7, 8 and 10
+(small slices; a decision page per slice holding the brief without CI, the review answers and the discovered issues;
+a second recheck case whose answers hold; the severity analysis and measurement, not adopted). Round 1's report and
+the author's answers are below; the fixes are what the reviewed commit adds after `ea4e100`. Among them: the
+test-plan questions are answered as findings; condition 4 says what it counts; the implementation log and STATUS are
+current; the measurement's confirmation and the skipped second confirmer are recorded as author decisions; the
+stage-B hard stop is lowered to the 76 calls used; the pre-registered cluster diagnostic is recorded; the severity
+note's refusal has a test. Two findings went to the owner on the decision page.
+```
+
+#### Evidence
+
+```text
+Each numbered entry must be listed under `accounted`.
+
+EV1: tests failing at this commit (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json): tests/tools/test_lint_changed_files.py::test_new_script_that_passes_shellcheck_passes, tests/tools/test_lint_changed_files.py::test_new_script_with_a_shellcheck_finding_fails[scripts/bad.sh], tests/tools/test_lint_changed_files.py::test_new_script_with_a_shellcheck_finding_fails[scripts/bad-no-extension], tests/tools/test_lint_changed_files.py::test_modified_shell_script_fails_only_on_a_new_finding[existing-finding-stays], tests/tools/test_lint_changed_files.py::test_modified_shell_script_fails_only_on_a_new_finding[new-finding-fails], tests/tools/test_lint_changed_files.py::test_renamed_shell_script_with_unchanged_findings_passes, tests/tools/test_lint_changed_files.py::test_new_file_with_a_purpose_comment_passes[scripts/new.sh-#!/usr/bin/env, tests/tools/test_lint_changed_files.py::test_new_file_without_a_purpose_comment_fails[shell], tests/tools/test_lint_changed_files.py::test_new_file_without_a_purpose_comment_fails[shell-directive-only]
+EV2: scripts/check_docs.py: changed lines not run: 215; branches not taken: 214->215 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV3: scripts/check_review_records.py: changed lines not run: 43, 203-206, 210; branches not taken: 42->43, 204->205, 204->206, 209->210 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV4: scripts/review_brief.py: changed lines not run: 42, 293, 297; branches not taken: 41->42, 225->220, 296->297 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV5: scripts/review_inputs.py: changed lines not run: 286; branches not taken: 285->286 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV6: scripts/review_records.py: changed lines not run: none; branches not taken: 189->191, 228->230 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV7: scripts/run_independent_review.py: changed lines not run: 177, 931, 989-990; branches not taken: 930->931, 1474->1476 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV8: scripts/run_review_benchmark.py: changed lines not run: 342, 389, 699, 943, 1226, 1614-1615; branches not taken: 341->342, 345->344, 388->389, 480->484, 698->699, 868->865, 874->868, 941->943, 992->995, 1207->1205, 1613->1614 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV9: no CI run for this commit (GET https://api.github.com/repos/<owner>/<repo>/actions/runs?head_sha=<commit> (no token))
+
+Every changed line and branch run by the tooling tests: scripts/lint_changed_files.py.
+A script the tooling tests run only as a subprocess shows as not run here, because coverage is measured in-process (issue #44).
+No trace gap among the upstream items (python3 scripts/validate_traceability.py --mode pr --base <merge-base> --report-json <scratch>/trace.json --design-report-json <scratch>/design.json).
+```
+
+#### Report
+
+```json
+{
+  "accounted": [
+    {
+      "item": "F1",
+      "note": "AGENTS.md:390-396 now has the reviewer answer the three test-plan questions as findings in its report: a yes to question 1 or 2 is a blocking finding, and a bad purpose comment or name is a medium finding. The decision page lists the finding IDs, or \"no finding\". The Handoff row (186) and bullet (314-315) say the same, and so do test_plan.md:60-77 and decisions.md:48-55. The schema already has findings as the channel. I searched the rulebook, the templates, the lists, the scripts and the README for leftover \"in the PR body\" or \"copied from its report\" wording and found none. The contradiction is gone.",
+      "opened": [
+        "AGENTS.md",
+        "docs/slices/_template/test_plan.md",
+        "docs/slices/_template/decisions.md",
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+      ],
+      "searched": [
+        "docs/review_checklists/",
+        "scripts/",
+        "README.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "F2",
+      "note": "This went to the owner as decision 7 on the decision page (line 291), with options (a) a Blocks bullet, (b) a 13th question, (c) leave it to the open mandate. A list item needs the owner's approval (AGENTS.md, Stage checklists, 373-374), so routing it to the owner is the correct path. The interim gap is stated plainly.",
+      "opened": [
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+        "AGENTS.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "F3",
+      "note": "AGENTS.md:199-201 and plan.md:32-34 now say that condition 4 counts the change itself, not the slice bundle or the three handoff files. The rule can now be judged.",
+      "opened": [
+        "AGENTS.md",
+        "docs/slices/_template/plan.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "F4",
+      "note": "implementation_log.md:8-40 has a dated 2026-11-13 entry. It covers small slices, the decision page, RC-2, the budget (76 spent, hard stop 76), the severity measurement, the review and its fixes, the local validation, and what was not run (E2E) and why. STATUS.md:16-24 now says 57 of 60, then 76 under 85, now stopped at 76, and names the owner-decisions unit in review.",
+      "opened": [
+        "docs/history/implementation_log.md",
+        "docs/STATUS.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "F5",
+      "note": "Two new author-decision rows on the decision page (243-244) record the fresh-session confirmer and the skipped Sonnet second confirmer, with reasons. The reasons are checkable against the report's criteria table: (1) and (4) do not depend on match verdicts, and only RM-6's S006 does. benchmark_report.md:251-260 says the same and notes the file keeps the role name 'author'.",
+      "opened": [
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+        "docs/slices/poc-4-5-benchmark/benchmark_report.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "F6",
+      "note": "This went to the owner as decision concern 11 (line 307). Meanwhile BUDGETS['B'] is 76 (run_review_benchmark.py:63), and the key keeps budget 85. run_benchmark calls check_budget(key.budget), so 85 > 76 is refused before any call. The second-confirmation path refuses a spent budget (1129-1131). test_stage_b_stops_at_its_budget... asserts 76, and test_run_over_the_stage_budget... covers a key budget above the limit. The DC4 row (276) now records calls 58-61 under the raised budget, and the report's Calls line (18-25) agrees. Low, not raised: the S45-D1 proof row (160) still reads '60, raised to 85 ... 57 used' without the lowering to 76. It is not false, only incomplete.",
+      "opened": [
+        "scripts/run_review_benchmark.py",
+        "tests/tools/test_run_review_benchmark.py",
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+        "docs/slices/poc-4-5-benchmark/benchmark_report.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "F7",
+      "note": "benchmark_report.md:262-282 records the pre-registered diagnostic: ten clusters, their supported severity, and the severity under each setup, with the finding IDs, plus one line on what it shows (moves in both directions).",
+      "opened": [
+        "docs/slices/poc-4-5-benchmark/benchmark_report.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "F8",
+      "note": "test_a_severity_file_without_its_paragraph_heading_is_refused_before_any_call (test file 620-630) gives severity_note a file without '## Paragraph' and asserts the exact refusal message. It also asserts that --configuration exits 2 with zero calls. Line 439-441 is no longer in the evidence's unrun lines.",
+      "opened": [
+        "tests/tools/test_run_review_benchmark.py",
+        "scripts/run_review_benchmark.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "EV1",
+      "note": "These are the 9 shellcheck-dependent cases of test_lint_changed_files.py. They fail because the evidence environment has no shellcheck binary (discovered issue 1, also on the base). CI has shellcheck. This is the environment, not the change.",
+      "opened": [
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV2",
+      "note": "check_docs.py:215 is the fallback when importlib cannot build a spec for check_review_records.py, which exists. It fails closed by returning a problem.",
+      "opened": [
+        "scripts/check_docs.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV3",
+      "note": "check_review_records.py:43 is the loader's RuntimeError. 203-206 and 210 are main(), which docs-check bypasses by calling the function directly. The tests exercise the function.",
+      "opened": [
+        "scripts/check_review_records.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV4",
+      "note": "review_brief.py:42 is the loader's RuntimeError, 293 is main's success return, and 297 is the __main__ guard. Branch 225->220 is an accounted status other than the three handled (an explained or flagged evidence entry), which correctly adds nothing. None of these is a decision path.",
+      "opened": [
+        "scripts/review_brief.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV5",
+      "note": "review_inputs.py:286 returns early when the interpreter has no user site-packages directory. That is an environment branch of the scratch HOME setup.",
+      "opened": [
+        "scripts/review_inputs.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV6",
+      "note": "review_records.py 189->191 is a section without a status line, and 228->230 is a tail without a round heading. The lines run, and the untaken sides leave the text unchanged.",
+      "opened": [
+        "scripts/review_records.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV7",
+      "note": "177 is the loader's RuntimeError. 931 refuses a record write when the log has no record. 989-990 leaves a missing section to the record check, which reports it (docstring 981-982). These are defensive recovery paths.",
+      "opened": [
+        "scripts/run_independent_review.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV8",
+      "note": "342 skips an expected file missing from the copy. 389 is a case with no lists commit or artifact type. 943 skips a refusal already recorded. 1226 is the stage-A clean-case false-alarm count, a frozen scoring path. 1614-1615 are main. 699 (no sink) was read in the earlier round. The former 439 refusal is now tested (F8). None is an untested decision.",
+      "opened": [
+        "scripts/run_review_benchmark.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV9",
+      "note": "No CI run exists because the branch stays local until the owner pushes (decision page Goal). CI's verdict on the PR is what counts, so this is pending. I make no claim of a pass.",
+      "opened": [
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+      ],
+      "status": "explained"
+    }
+  ],
+  "findings": [],
+  "verdict": "yes"
+}
+```
+
