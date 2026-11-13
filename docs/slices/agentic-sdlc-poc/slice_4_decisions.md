@@ -93,7 +93,7 @@ Parked units, decision concerns and growth proposals collect below as the run go
 | 4.5b | Ran within 57 of 60 calls; report in [`benchmark_report.md`](../poc-4-5-benchmark/benchmark_report.md): `open+list` 7 of 11, `short+list` 6, `open-B+list` 6, both rechecks 1 of 1; 29 of 125 findings confirmed (two re-judged after unblinding, FR-1), the second confirmer agreeing on 9 of 10; the third canary valid and passed | Report review ended after round 2. Round 1: not approvable; 2 blocking, 1 high, 3 medium, 4 low; all fixed. Round 2: attempt 1 failed the read check (issue 14); attempt 2 approvable, all 10 answers accepted, no new finding |
 | 4.6 | Implemented: the seven-stage table and the rules moved into it, the templates, `scripts/review_brief.py`, the grill-me skill in the repository, the front-matter rule of the lint gate | Ended after round 1: approvable; 1 high, 5 medium, 4 low and a simpler alternative; 9 fixed, F4 and F5 to the owner (decision 4, decision concern 7) |
 | Final review | Unit `final` of this bundle, with the owner's open question ([record](review_final.md)) | Ended after round 2. Round 1: approvable, no blocker; 2 high, 5 medium, 2 low, all fixed. Round 2: approvable; all 9 answers accepted; 1 new low, fixed |
-| Growth (2026-11-13) | Rejections read like fixes, a `searched` list, the checklist question on findings ([record](review_growth.md)) | Round 1: approvable; 1 high, 5 medium, 1 low; 6 fixed, the low rejected; round 2 next |
+| Growth (2026-11-13) | Rejections read like fixes, a `searched` list, the checklist question on findings ([record](review_growth.md)) | Ended after round 2. Round 1: approvable; 1 high, 5 medium, 1 low; 6 fixed, the low rejected. Round 2: attempt 1 failed the read check (issue 17); attempt 2 approvable, all 7 answers accepted; 1 new low, fixed |
 
 ## Decisions and their proof
 
@@ -315,6 +315,7 @@ No unit is parked.
 | 14 | The 4.5b report recheck (round 2, attempt 1) named a file under `opened` for EV4 that it had not read; the launcher failed it. The fourth such failure | 4.5b report review round 2 | Rerun as attempt 2; growth proposal 5 |
 | 15 | The benchmark never gave a reviewer the `unit-tests` list, nor the tests-first pair of `unit-tests` and `e2e-tests`: the author's artifact types (4.5a) gave no case a unit-test change, and each case one list | The owner's question, 2026-11-11 | Recorded in the [benchmark report](../poc-4-5-benchmark/benchmark_report.md) ("By stage list"). Measuring it needs one or two unit-test cases, which changes S45-D5's cases and the 60-call budget (3 calls left): the owner's decision; logged in DPL-012 |
 | 16 | The author's growth proposal 5 would have stopped failing a review whose `opened` names a file it did not read, argued from the four sessions the rule cost; one of the four had accepted five answers on files it never read, which the proposal would have passed | The owner's question, 2026-11-13 | Withdrawn and replaced by stricter changes the owner approved; logged in DPL-012 |
+| 17 | The growth recheck (round 2, attempt 1), the first live review with `searched`, accepted the fix of G1-3 without reading the file the fix names (`benchmark_report.md`); the launcher failed it | Growth review round 2 | The strict check worked as the owner decided on 2026-11-13; rerun as attempt 2 |
 
 ## The dry slice
 

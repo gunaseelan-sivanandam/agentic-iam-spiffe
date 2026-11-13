@@ -1146,12 +1146,13 @@ CITED_PATH = re.compile(r"(?<![\w./-])((?:[\w.-]+/)*[\w.-]+)(?:::[\w\[\]-]+)?(?:
 
 def cited_paths(answer: str, exists: Any) -> tuple[list[str], list[str]]:
     """The repository files a `rejected:` answer cites (`tests/x.py::test_y`, `docs/a.md:12`, `AGENTS.md`,
-    `Makefile`): every word or path that names a file of the copy; and, apart, the paths with a directory part that
-    name no file of the copy (a typo, or a test never written), which the launcher refuses as it refuses a `fixed:`
+    `Makefile`): every word or path that names a file of the copy; and, apart, the paths with a directory part and a
+    file extension that name no file of the copy (a typo, or a test never written), which the launcher refuses as it refuses a `fixed:`
     answer naming a missing file. A plain word that names no file is prose."""
     tokens = dict.fromkeys(os.path.normpath(m.group(1).rstrip(".")) for m in CITED_PATH.finditer(answer))
     held = [p for p in tokens if exists(p)]
-    return held, [p for p in tokens if "/" in p and p not in held]
+    # A slash-joined word counts as a path only with a file extension, so prose such as `and/or` stays prose (G2-1).
+    return held, [p for p in tokens if "/" in p and re.search(r"\.[A-Za-z0-9]+$", p) and p not in held]
 
 
 def answer_word(answer: str) -> str | None:

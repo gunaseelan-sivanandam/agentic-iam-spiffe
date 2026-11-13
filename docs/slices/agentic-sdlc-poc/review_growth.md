@@ -240,3 +240,235 @@ No trace gap among the upstream items (python3 scripts/validate_traceability.py 
 | G1-5 | medium | fixed: docs/history/implementation_log.md: the growth has its own dated entry, 2026-11-13, with its own validation results and what was not run, and the bullet left in the 2026-11-10 entry is removed |
 | G1-6 | medium | fixed: tests/tools/test_run_independent_review.py: `test_a_searched_field_that_is_not_a_list_of_paths_fails` (a string, and a list holding a number) |
 | G1-7 | low | rejected: the schema checks the form, and a wrong list name or number is visible as given in the record and in the benchmark's count; checking it against the review's lists would carry the stage lists into report validation for a low finding. The final review's output section names `question` "where a question of the stage checklist prompted it", which never applies without a list |
+
+## Round 2
+
+### Attempt growth/c1/r2/A/1
+
+Reviewer `A`: `claude-opus-5-5`, effort medium, mode recheck, commit `a1677ec2418b`, base `3347754ef038`.
+
+Status: failed (the report does not account for what it was given: G1-3 names an opened file the attempt did not read; docs/slices/poc-4-5-benchmark/benchmark_report.md is named in a fixed: or rejected: answer and was not read).
+
+#### Prompt
+
+```markdown
+# Recheck of the owner-approved growth to slice 4's review launcher, round 2
+
+The intent is unchanged from round 1: the three additions the owner approved on 2026-11-13 (a recheck reads every
+file a `rejected:` answer cites, as for a `fixed:` answer; a `searched` list for files only searched; an optional
+`question` on each finding, counted by the benchmark report). Round 1's report and the author's answers are below;
+the fixes are what the reviewed commit adds after `a814271`. Among them: a cited path no longer needs a directory part,
+a cited path the copy lacks is refused before any call, the benchmark report and STATUS are current, and the growth
+has its own dated implementation-log entry.
+```
+
+#### Evidence
+
+```text
+Each numbered entry must be listed under `accounted`.
+
+EV1: scripts/run_independent_review.py: changed lines not run: 177, 925, 983-984; branches not taken: 924->925, 1467->1469 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV2: scripts/check_docs.py: changed lines not run: 215; branches not taken: 214->215 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV3: scripts/check_review_records.py: changed lines not run: 43, 203-206, 210; branches not taken: 42->43, 204->205, 204->206, 209->210 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV4: scripts/review_brief.py: changed lines not run: 43, 317, 321; branches not taken: 42->43, 227->222, 320->321 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV5: scripts/review_inputs.py: changed lines not run: 286; branches not taken: 285->286 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV6: scripts/review_records.py: changed lines not run: none; branches not taken: 189->191, 228->230 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV7: scripts/run_review_benchmark.py: changed lines not run: 313, 359, 634, 868, 1108, 1437-1438; branches not taken: 312->313, 316->315, 358->359, 438->442, 633->634, 801->798, 807->801, 866->868, 903->906, 1089->1087, 1250->1253, 1436->1437 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV8: no CI run for this commit (GET https://api.github.com/repos/<owner>/<repo>/actions/runs?head_sha=<commit> (no token))
+
+Every changed line and branch run by the tooling tests: scripts/lint_changed_files.py.
+A script the tooling tests run only as a subprocess shows as not run here, because coverage is measured in-process (issue #44).
+No trace gap among the upstream items (python3 scripts/validate_traceability.py --mode pr --base <merge-base> --report-json <scratch>/trace.json --design-report-json <scratch>/design.json).
+```
+
+
+### Attempt growth/c1/r2/A/2
+
+Reviewer `A`: `claude-opus-5-5`, effort medium, mode recheck, commit `a1677ec2418b`, base `3347754ef038`.
+
+Status: completed; approvable within the threat model: yes.
+
+#### Prompt
+
+```markdown
+# Recheck of the owner-approved growth to slice 4's review launcher, round 2
+
+The intent is unchanged from round 1: the three additions the owner approved on 2026-11-13 (a recheck reads every
+file a `rejected:` answer cites, as for a `fixed:` answer; a `searched` list for files only searched; an optional
+`question` on each finding, counted by the benchmark report). Round 1's report and the author's answers are below;
+the fixes are what the reviewed commit adds after `a814271`. Among them: a cited path no longer needs a directory part,
+a cited path the copy lacks is refused before any call, the benchmark report and STATUS are current, and the growth
+has its own dated implementation-log entry.
+```
+
+#### Evidence
+
+```text
+Each numbered entry must be listed under `accounted`.
+
+EV1: scripts/run_independent_review.py: changed lines not run: 177, 925, 983-984; branches not taken: 924->925, 1467->1469 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV2: scripts/check_docs.py: changed lines not run: 215; branches not taken: 214->215 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV3: scripts/check_review_records.py: changed lines not run: 43, 203-206, 210; branches not taken: 42->43, 204->205, 204->206, 209->210 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV4: scripts/review_brief.py: changed lines not run: 43, 317, 321; branches not taken: 42->43, 227->222, 320->321 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV5: scripts/review_inputs.py: changed lines not run: 286; branches not taken: 285->286 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV6: scripts/review_records.py: changed lines not run: none; branches not taken: 189->191, 228->230 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV7: scripts/run_review_benchmark.py: changed lines not run: 313, 359, 634, 868, 1108, 1437-1438; branches not taken: 312->313, 316->315, 358->359, 438->442, 633->634, 801->798, 807->801, 866->868, 903->906, 1089->1087, 1250->1253, 1436->1437 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV8: no CI run for this commit (GET https://api.github.com/repos/<owner>/<repo>/actions/runs?head_sha=<commit> (no token))
+
+Every changed line and branch run by the tooling tests: scripts/lint_changed_files.py.
+A script the tooling tests run only as a subprocess shows as not run here, because coverage is measured in-process (issue #44).
+No trace gap among the upstream items (python3 scripts/validate_traceability.py --mode pr --base <merge-base> --report-json <scratch>/trace.json --design-report-json <scratch>/design.json).
+```
+
+#### Report
+
+```json
+{
+  "accounted": [
+    {
+      "item": "G1-1",
+      "note": "CITED_PATH (line 1144) now allows zero directory parts, and `cited_paths` keeps every token that names a blob of the copy (`file_at` uses `git cat-file blob`, so directories do not count). `test_a_rejection_citing_a_root_level_file_must_read_it` fails a recheck that cites AGENTS.md without reading it. The cited-path unit test now holds AGENTS.md and Makefile and expects both, so it would fail if the regex dropped root files.",
+      "opened": [
+        "scripts/run_independent_review.py",
+        "tests/tools/test_run_independent_review.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "G1-2",
+      "note": "`_rejection_reads` (lines 1235-1243) refuses a cited path that has a directory part and that the copy lacks, unless the change deletes it; a deleted file is read through change.diff. `test_a_rejection_citing_a_path_the_copy_lacks_is_refused_before_any_call` checks exit 2, the message, and that no call was made. A side effect is that prose with a slash is also refused (G2-1, low).",
+      "opened": [
+        "scripts/run_independent_review.py",
+        "tests/tools/test_run_independent_review.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "G1-3",
+      "note": "benchmark_report.md:94-96 now says the schema had no question field when the runs happened and that the field came later (0 of these runs' findings). The verbatim runner block includes `Findings that name their checklist question: 0 of 306 (none).` at line 201, between Repeats and Second confirmer, which is where question_line puts it.",
+      "opened": [
+        "docs/slices/poc-4-5-benchmark/benchmark_report.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "G1-4",
+      "note": "STATUS.md:3 is dated 2026-11-13. Lines 18-20 record that the final review ended after round 2, that the growth (unit `growth`) is implemented and reviewed, and that the owner's push and the final PR are next.",
+      "opened": [
+        "docs/STATUS.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "G1-5",
+      "note": "implementation_log.md:8-22 is now a separate dated entry for 2026-11-13. It records what changed, its own validation (786 tooling tests, qa-quality, PR-mode trace, lint) and what was not run (E2E, CI), each with a reason. The bullet about the growth is gone from the 2026-11-10 entry (lines 24-55).",
+      "opened": [
+        "docs/history/implementation_log.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "G1-6",
+      "note": "`test_a_searched_field_that_is_not_a_list_of_paths_fails` sends a string and a list holding a number through validate_report and expects 'searched is not a list of paths' (line 769). Both halves of the condition are exercised.",
+      "opened": [
+        "tests/tools/test_run_independent_review.py",
+        "scripts/run_independent_review.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "G1-7",
+      "note": "This is a low finding, so the fix is the author's choice. The reason holds: the value is visible as written in the record and in the benchmark count. Checking it against the stage lists would bring the lists into report validation. The rejection cites no file of the copy.",
+      "opened": [
+        "scripts/run_independent_review.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "EV1",
+      "note": "Line 769 is no longer in the not-run list, because G1-6's test covers it. What remains is defensive slice-4 code: line 177 (module load), 925 (a log without a record) and 983-984 (recover). Branch 1467->1469 is the HOME-is-`/` case in local_paths, which depends on the environment. These are tracked in issue #45.",
+      "opened": [
+        "scripts/run_independent_review.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV2",
+      "note": "Line 215 is a defensive fail-closed message for when importlib cannot build a spec for a sibling script that always ships with it.",
+      "opened": [
+        "scripts/check_docs.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV3",
+      "note": "Line 43 is a defensive load failure. Lines 203-210 are main() and the __main__ guard, which run only as a subprocess (issue #44).",
+      "opened": [
+        "scripts/check_review_records.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV4",
+      "note": "Line 43 is a defensive load failure. Lines 317 and 321 are main's return and the __main__ guard, run only as a subprocess. Branch 227->222 is an explained or flagged entry falling through the loop, which is correct.",
+      "opened": [
+        "scripts/review_brief.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV5",
+      "note": "Line 286 runs on a machine with no user site-packages directory. It returns without linking anything, which is safe.",
+      "opened": [
+        "scripts/review_inputs.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV6",
+      "note": "Branch 189->191 is a section without a status line. Branch 228->230 is a tail whose previous line is not a round heading. Both are benign shapes of a record, and every changed line runs.",
+      "opened": [
+        "scripts/review_records.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV7",
+      "note": "These are slice-4.5 benchmark runner paths: CLI branches such as --sample-confirmation at 1437-1438, and refusal and fallback paths. The benchmark runs are finished, and the paths are tracked in issue #45. The growth's question_line is tested.",
+      "opened": [
+        "scripts/run_review_benchmark.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV8",
+      "note": "The branch is not pushed, and the implementation log says that CI was not run for this reason. No CI pass is claimed. The CI result belongs in the PR handoff after the push.",
+      "opened": [
+        "docs/history/implementation_log.md"
+      ],
+      "status": "explained"
+    }
+  ],
+  "findings": [
+    {
+      "evidence": "`CITED_PATH` (line 1144) matches `(?:[\\w.-]+/)*[\\w.-]+`, and `cited_paths` returns `[p for p in tokens if \"/\" in p and p not in held]` as missing (line 1154). `_rejection_reads` raises `ReviewRefusedError` on any of them (lines 1239-1242). No test covers prose with a slash; searched tests/tools/test_run_independent_review.py for `and/or` and for slash-joined words.",
+      "failure_scenario": "An author answers `rejected: the finding is outside the threat model and/or covered by AGENTS.md`. The launcher refuses the recheck before any call. The author has to work out that `and/or` was taken as a path and reword the answer.",
+      "file": "scripts/run_independent_review.py",
+      "id": "G2-1",
+      "kind": "defect",
+      "line": 1154,
+      "origin_stage": "implementation",
+      "problem": "The G1-2 fix treats any slash-joined word in a `rejected:` answer as a cited path. If the copy has no file at that path, the launcher refuses the recheck. Ordinary prose such as `and/or`, `fixed/rejected` or `S41-D7/S41-D8` therefore stops a recheck with \"cites a path that is not in the copy\". This fails closed: nothing is accepted that should not be, and the message names the token, so the author can reword the answer. It is friction, not a false green.",
+      "severity": "low"
+    }
+  ],
+  "verdict": "yes"
+}
+```
+
+
+#### Answers to growth/c1/r2/A/2
+
+| ID | Severity | Answer |
+| --- | --- | --- |
+| G2-1 | low | fixed: scripts/run_independent_review.py, tests/tools/test_run_independent_review.py: a slash-joined word counts as a missing cited path only when it ends in a file extension, so prose such as `and/or` or `S41-D7/S41-D8` stays prose; the cited-path test holds both |

@@ -1111,9 +1111,9 @@ def test_cited_paths_find_files_with_and_without_a_directory_and_name_missing_pa
     """Growth review, G1-1 and G1-2: a root-level file counts, and a cited path the copy lacks is named."""
     held = {"tests/tools/test_a.py", "docs/b.md", "AGENTS.md", "Makefile"}
     answer = ("rejected: `tests/tools/test_a.py::test_one`, docs/b.md:12-14, AGENTS.md (PoC scope), the Makefile, "
-              "and docs/gone.md; e.g. outside the threat model.")
+              "and docs/gone.md; e.g. outside the threat model and/or S41-D7/S41-D8.")
     assert launcher.cited_paths(answer, held.__contains__) == (
-        ["tests/tools/test_a.py", "docs/b.md", "AGENTS.md", "Makefile"], ["docs/gone.md"])
+        ["tests/tools/test_a.py", "docs/b.md", "AGENTS.md", "Makefile"], ["docs/gone.md"])  # and/or is prose (G2-1)
 
 
 def test_a_rejection_citing_a_root_level_file_must_read_it(fx: Fixture) -> None:
