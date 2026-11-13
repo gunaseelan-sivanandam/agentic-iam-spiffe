@@ -13,13 +13,14 @@ detection with the checklist question behind it, and the misses. The runner's ow
   reads version 2's results unchanged. Version 4 (`5b9d6382…`, same rule), before any of their runs, raises the budget,
   adds decision concern 8's configuration `open+list+sev` and fixes that measurement's criteria; the runner's report
   below is built with it.
-- **Reviewer:** Opus (`claude-opus-5-5`), initial reviews at high effort, rechecks at medium, CLI 2.1.321; Sonnet
-  (`claude-sonnet-5-5`) only as the second confirmer.
+- **Reviewer:** Opus (`claude-opus-5-5`), initial reviews at high effort, rechecks at medium, CLI 2.1.321 (RC-2 and
+  later runs: 2.1.323, after its own canary); Sonnet (`claude-sonnet-5-5`) only as the second confirmer.
 - **Calls:** 57 of the 60 allowed: 6 for three canary pairs (see below), 45 first runs, 4 repeats, 2
   second-confirmer sessions. The failed-Read probe and the planting of FS-1 and FS-2 ran outside the budget, as
   S45-D1 allows. On 2026-11-13 the budget was raised to 85, for a canary pair under CLI 2.1.323, RC-2's two runs
   and decision concern 8's measurement: the owner approved that measurement beyond the 60 calls ("complete it and
-  do not wait for my approval"); see the decision page.
+  do not wait for my approval"); see the decision page. The canary pair under 2.1.323 and RC-2's two runs brought
+  the count to 61.
 - **Configurations:** `short+list` (stage A's short prompt without its retired kinds sentence), `open+list` (4.1's
   mandate, the launcher's today), `open-B+list` (4.4's drafted initial mandate), `recheck-A` (4.1's recheck mandate)
   and `recheck-B` (4.4's drafted recheck mandate). Every configuration carries its case's stage list.
@@ -37,8 +38,21 @@ the failed reviews.
 | `short+list` | 6 | 0.23–0.83 | 6 | 2 (4 reviews) | 6 | 42 | 1 | 1.91 |
 | `open+list` | 7 | 0.31–0.89 | 5 | 2 (4 reviews) | 7 | 42 | 1 | 1.75 |
 | `open-B+list` | 6 | 0.23–0.83 | 5 | 4 (2 reviews) | 7 | 50 | 1 | 2.02 |
-| `recheck-A` | 1 of 1 | 0.02–1.00 | 1 | — | 0 | 0 | 0 | 0.19 |
-| `recheck-B` | 1 of 1 | 0.02–1.00 | 1 | — | 0 | 0 | 0 | 0.18 |
+| `recheck-A` | 1 of 1 | 0.02–1.00 | 1 | — (RC-2 failed) | 0 | 0 | 1 | 0.47 |
+| `recheck-B` | 1 of 1 | 0.02–1.00 | 1 | 0 (1 review) | 0 | 1 | 0 | 0.49 |
+
+- **The rechecks** (decision concern 4): RC-1's answer is a false `fixed:`, which a good recheck re-raises; RC-2's
+  two answers hold (a `rejected:` whose reason checks out in the files it cites, a `fixed:` whose tests are in the file
+  it names), and a good recheck accepts both and re-raises neither. Both wordings re-raised RC-1's false fix. On RC-2,
+  `recheck-B` accepted both answers, with notes that check each claim against the files, and raised no finding
+  (USD 0.31, 0.3 minutes); `recheck-A` failed the launcher's read check, so it counts as a miss: its `opened` for R1-1
+  names the harness, which the rejection cites and the review never read with the Read tool (USD 0.28, 0.3
+  minutes). How it judged the two answers is unknown: the launcher keeps no report of a failed attempt. It is the
+  failure that also stopped the first attempt of four of this slice's real rechecks (discovered issues 5, 7, 14 and
+  17 of the decision page), all under 4.1's wording, the launcher's. RC-2 ran under CLI 2.1.323 and RC-1 under
+  2.1.321, and RC-2's prompts carry the 2026-11-13 growth (a `searched` list; a rejection's cited files must be read),
+  which RC-1's did not. One run per wording cannot give a rate: a wording that re-raises everything would have failed
+  RC-2, and `recheck-B` did not, but whether `recheck-A`'s read-check miss is its wording or chance, one run cannot say.
 
 - **Discordant cases,** `short+list` against `open+list`: only `short+list` FS-1; only `open+list` FS-2 and RM-6.
   `open+list` against `open-B+list`: only `open+list` PB-3 and RM-6; only `open-B+list` FS-1.
@@ -79,8 +93,9 @@ tests-first (30) problems. The full table is in the runner's report below.
 With 11 defect cases and one run each, a difference of one or two cases between two configurations is within
 chance; the intervals overlap almost entirely. The counts show no setup clearly better: `open+list` detected one case
 more than the others, `short+list` detected more of its cases with a blocking finding, and the drafted `open-B+list`
-raised the most findings on the no-defect cases. The repeats were chosen after the first runs (see above), and the
-recheck case cannot show the opposite failure of a recheck, re-raising answers that hold (decision concern 4).
+raised the most findings on the no-defect cases. The repeats were chosen after the first runs (see above). The
+second recheck case, RC-2, tests the opposite failure of a recheck, re-raising answers that hold (decision concern 4),
+with one run per wording.
 Every configuration carries the lists, so the counts do not measure the lists' own effect.
 
 ## The canary
@@ -92,7 +107,9 @@ choice of prompt, not S45-D9 (4.5b report review, B2). The third pair got its ow
 instructions the session holds: its twin, without the launcher's flags, followed `CLAUDE.md` (CANARY-BRAVO) and ran
 the hook, and the confined reviewer followed neither. So the canary is valid and passes, as S45-D9 asks, for the CLI
 version the reviews ran under; the runner again requires that before any stage-B review. The failed-Read probe
-confirmed that a Read that fails is marked as an error and never counts as read.
+confirmed that a Read that fails is marked as an error and never counts as read. A fourth pair ran under CLI 2.1.323
+on 2026-11-13, before RC-2's runs and decision concern 8's: valid and passed (USD 0.25). The runner now counts a
+canary as done only for the CLI version it ran under.
 
 ## Each confirmed detection and the checklist question behind it
 
@@ -123,7 +140,7 @@ runs, by confirmed verdicts:
 | `requirements` | PB-1, RM-3 | PB-1 detected by all three setups; RM-3 missed by all three, each review citing R5 at medium |
 | `architecture-and-interfaces` | PB-2, FS-1 | PB-2 by all three; FS-1 by `short+list` and `open-B+list` (`open+list` withheld) |
 | `e2e-tests` | RM-2, RC-1, DC-1 | RM-2 by all three; RC-1 by both recheck wordings; no false alarm on the decoy DC-1 |
-| `code` | RM-1, RM-4, RM-5, RM-6 | RM-1 by all three; RM-6 by `open+list`; RM-4 missed (C10 cited at medium or low); RM-5 missed (one exact description at a wrong line) |
+| `code` | RM-1, RM-4, RM-5, RM-6, RC-2 | RM-1 by all three; RM-6 by `open+list`; RM-4 missed (C10 cited at medium or low); RM-5 missed (one exact description at a wrong line); RC-2, whose answers hold, passed by `recheck-B`, missed by `recheck-A` (the read check) |
 | `plan-and-test-plan` | PB-3, FS-2, CL-1, CL-2, CL-3 | PB-3 by `short+list` and `open+list` (`open-B+list` failed); FS-2 by `open+list` and `open-B+list`, and by `short+list` in its repeat; alarms on CL-1 and CL-2, none on CL-3 |
 | `unit-tests` | none | not measured |
 
@@ -178,12 +195,17 @@ to 89%, so these counts can neither confirm nor rule out 80%.
 - **Default setup:** `short+list` or `open+list`; the counts do not separate them.
 - **Initial mandate wording:** 4.1's (`open+list`) or the draft (`open-B+list`); 7 against 6 detections, 2 against
   4 false alarms, within chance.
-- **Recheck mandate wording:** 4.1's or the draft; both detected the false fix; neither was tested on answers that hold.
+- **Recheck mandate wording:** 4.1's or the draft. Both re-raised the false fix (RC-1). On answers that hold (RC-2)
+  the draft accepted both and 4.1's failed the read check; one run each, so this leans to the draft without showing
+  it better.
 - **Final mandate wording:** by reason; no case measures it (S45-D8).
 
 The launcher's mandate constants stay 4.1's until the owner chooses (S45-D8).
 
 ## The runner's report, verbatim
+
+Built after RC-2's runs; decision concern 8's `open+list+sev` runs come later, and their counts wait for blind
+confirmation.
 
 ````markdown
 Stage B. Answer key SHA-256: `5b9d6382a06918128102da1b98b9660dd1dad12d35819752adce288878376633`; match rule SHA-256: `9605cb43cba72d294294a2414089c397803fd92f2bb8f06c5b3af2d9944944cb`; lists at `04f8df4`.
@@ -194,17 +216,17 @@ Detections are confirmed by the author's blinded verdicts.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | open+list | 7 of 11 | 0.31–0.89 | 5 | 2 (4) | 7 | 1 | 42 | 0 | 1.75 | 5.2 |
 | open-B+list | 6 of 11 | 0.23–0.83 | 5 | 4 (2) | 7 | 1 | 50 | 0 | 2.02 | 5.9 |
-| recheck-A | 1 of 1 | 0.02–1.00 | 1 | 0 (0) | 0 | 0 | 0 | 0 | 0.19 | 0.4 |
-| recheck-B | 1 of 1 | 0.02–1.00 | 1 | 0 (0) | 0 | 0 | 0 | 0 | 0.18 | 0.4 |
+| recheck-A | 1 of 1 | 0.02–1.00 | 1 | 0 (0) | 0 | 1 | 0 | 0 | 0.47 | 0.7 |
+| recheck-B | 1 of 1 | 0.02–1.00 | 1 | 0 (1) | 0 | 0 | 1 | 0 | 0.49 | 0.8 |
 | short+list | 6 of 11 | 0.23–0.83 | 6 | 2 (4) | 6 | 1 | 42 | 0 | 1.91 | 5.5 |
 
 Discordant cases, short+list against open+list: `{"only short+list": ["FS-1"], "only open+list": ["FS-2", "RM-6"]}`
 Discordant cases, open+list against open-B+list: `{"only open+list": ["PB-3", "RM-6"], "only open-B+list": ["FS-1"]}`
 Rating agreement where a case ran twice, by expected defect: `{"same": 1, "different": 2}`
 Origin stage of the findings against the list of the review that found them: `{"architecture and interfaces": {"architecture-and-interfaces": 11, "code": 13, "e2e-tests": 1, "requirements": 1}, "discovery": {"code": 1, "plan-and-test-plan": 13}, "implementation": {"code": 94, "e2e-tests": 15, "plan-and-test-plan": 16, "requirements": 15}, "requirements": {"code": 1, "e2e-tests": 1, "plan-and-test-plan": 10, "requirements": 27}, "tests first": {"code": 30, "e2e-tests": 32, "plan-and-test-plan": 23, "requirements": 1}, "unknown": {"architecture-and-interfaces": 1}}`
-Canary: `[{"cli_version": "2.1.321 (Claude Code)", "valid": false, "passed": true, "twin_ran_hook": true}, {"cli_version": "2.1.321 (Claude Code)", "valid": false, "passed": true, "twin_ran_hook": true}, {"cli_version": "2.1.321 (Claude Code)", "valid": true, "passed": true, "twin_ran_hook": true}]`. A canary is valid when its twin, without the launcher's flags, followed the planted CLAUDE.md and ran the planted hook (S45-D9); one whose twin ran only the hook shows that the flags keep settings out, not that they keep instruction files out.
+Canary: `[{"cli_version": "2.1.321 (Claude Code)", "valid": false, "passed": true, "twin_ran_hook": true}, {"cli_version": "2.1.321 (Claude Code)", "valid": false, "passed": true, "twin_ran_hook": true}, {"cli_version": "2.1.321 (Claude Code)", "valid": true, "passed": true, "twin_ran_hook": true}, {"cli_version": "2.1.323 (Claude Code)", "valid": true, "passed": true, "twin_ran_hook": true}]`. A canary is valid when its twin, without the launcher's flags, followed the planted CLAUDE.md and ran the planted hook (S45-D9); one whose twin ran only the hook shows that the flags keep settings out, not that they keep instruction files out.
 Repeats (detected in run 1, run 2): FS-2 open+list: True, True; FS-2 short+list: False, True; RM-6 open+list: True, True; RM-6 short+list: failed, False
-Rechecks of answers that hold (passed when every answer is accepted and none is reported again; a review that did not complete is a miss): none run.
+Rechecks of answers that hold (passed when every answer is accepted and none is reported again; a review that did not complete is a miss): RC-2 recheck-B: passed (R1-1 accepted, R1-2 accepted); RC-2 recheck-A: missed (failed).
 Findings that name their checklist question: 0 of 306 (none).
 Second confirmer: agrees with the author on 9 of 10 sampled findings.
 
@@ -268,6 +290,9 @@ Per-review rows: the automatic first pass, before confirmation; the counts above
 | CONFIRM-0 | confirmation | — | completed | | | | | | | | |
 | CONFIRM-1 | confirmation | — | completed | | | | | | | | |
 | CANARY | canary | — | canary | | | | | | | | |
+| CANARY | canary | — | canary | | | | | | | | |
+| RC-2 | recheck_holds | recheck-B | completed | yes |  |  |  |  |  |  | 1 |
+| RC-2 | recheck_holds | recheck-A | failed |  |  |  |  |  |  |  | 1 |
 
 Detected: a blocking or high finding at the expected place with one of its terms; Detected (blocking): the same, by a blocking finding; Not blocking: a match rated medium or low (stage A: advisory); Unmatched blocking, and Unmatched (blocking or high): findings at no expected place, the false blockers and false alarms on a clean case.
 ````
