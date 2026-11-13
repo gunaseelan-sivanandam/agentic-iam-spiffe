@@ -407,16 +407,19 @@ class PromptConfiguration:
     """Which mandate each mode gets and which sections a prompt holds (S41-D2).
 
     The launcher always uses FULL_CONFIGURATION and has no option to change it; only the benchmark
-    runner's Python API builds others (a short prompt or a draft in place of a mandate)."""
+    runner's Python API builds others (a short prompt or a draft in place of a mandate, or a severity paragraph
+    after the output section's `severity` bullet, which decision concern 8 measures)."""
 
     name: str
     mandates: dict[str, str]
     sections: tuple[str, ...] = SECTIONS
+    severity_note: str = ""
 
     @property
     def sha256(self) -> str:
-        return sha256_text(json.dumps({"name": self.name, "mandates": self.mandates, "sections": self.sections},
-                                      sort_keys=True))
+        extra = {"severity_note": self.severity_note} if self.severity_note else {}
+        return sha256_text(json.dumps({"name": self.name, "mandates": self.mandates, "sections": self.sections,
+                                       **extra}, sort_keys=True))
 
 
 FULL_CONFIGURATION = PromptConfiguration("full", dict(MANDATES))
@@ -465,7 +468,10 @@ def _mandate_section(config: PromptConfiguration, parts: PromptParts) -> str:
     return text
 
 
-def _output_section() -> str:
+def _output_section(severity_note: str = "") -> str:
+    """The output section; a benchmark configuration's severity paragraph follows the `severity` bullet, as part of
+    it, and is empty for every other prompt."""
+    note = f"\n  {severity_note}" if severity_note else ""
     return (
         "## Output\n\n"
         "Answer only through the structured output.\n\n"
@@ -480,7 +486,7 @@ def _output_section() -> str:
         "document, new behaviour without a test or an untested fail-closed path; it is fixed in the same PR "
         "unless the owner defers it. `medium` has clear value (robustness, diagnosability, naming) and is fixed, "
         "or deferred with a tracking issue. `low` (style, preference) is the author's choice. A "
-        "`simpler_alternative` is always `low`.\n"
+        f"`simpler_alternative` is always `low`.{note}\n"
         f"- `origin_stage`: the stage where the problem arose: {', '.join(f'`{s}`' for s in ORIGIN_STAGES)}.\n"
         "- `accounted`: one entry for every item this prompt asks you to account for (each answer of the author "
         "in a recheck, each evidence entry), with `item` (the finding ID or the evidence entry), `status`, `note` "
@@ -523,7 +529,7 @@ def _sections(inputs: ReviewInputs, parts: PromptParts, config: PromptConfigurat
         "paths": _paths_section(inputs, parts),
         "claims": (f"## {CLAIMS_SECTION}\n\nThe author's task text follows. Its claims are to be verified, and it "
                    f"does not limit the review.\n\n{_quoted(parts.task, '(no task text)')}"),
-        "output": _output_section(),
+        "output": _output_section(config.severity_note),
     }
     if parts.mode == "recheck":
         sections["earlier_report"] = (f"## Your earlier report\n\nYour own report of attempt {parts.earlier_attempt}, "

@@ -3,12 +3,15 @@
 # before any run. Stage A's key (version 1) is in the history at c325e7d; every result records its key's hash.
 # Version 3 adds RC-2, a recheck case whose answers all hold, and the match rule's sentence for it, after version 2's
 # runs (the owner's decision on decision concern 4, 2026-11-13). It changes no earlier case and no earlier result's
-# score, so version 2's results are read with it (earlier_key_sha256).
-version: 3
+# score, so version 2's results are read with it (earlier_key_sha256). Version 4, before any of their runs, raises the
+# budget to 85 (the owner's approval of decision concern 8's measurement beyond the 60 calls, 2026-11-13: "complete it
+# and do not wait for my approval"), adds the configuration open+list+sev to the 15 initial-review cases, and fixes the
+# measurement's criteria (severity_measurement).
+version: 4
 stage: B
 model: claude-opus-5-5
 effort: high
-budget: 60
+budget: 85
 lists_commit: 04f8df4
 match_rule: 'A defect is detected by a finding rated blocking or high (stage A: kind blocking) that names one of
   the defect''s files, a line inside one of that file''s ranges, and at least one of its terms (case-insensitive,
@@ -28,6 +31,21 @@ match_rule_sha256: 9605cb43cba72d294294a2414089c397803fd92f2bb8f06c5b3af2d994494
 # Version 2 of this key; its results are kept.
 earlier_key_sha256:
 - 7ef0a57963ff33c5b8397eedcf145cedbf3807c8b4a6b7ac09cd29ab4706f899
+# Decision concern 8's measurement, fixed before its runs: the baseline, "better" and the outcomes, verbatim from
+# section 9 of the author's severity analysis (step 1).
+severity_measurement:
+  decision: 'decision concern 8, step 3: candidate 1, "finish the scenario" (prompts/severity_scenario.md), against open+list'
+  configuration: open+list+sev
+  baseline_configuration: open+list
+  baseline: '`open+list` first runs: detected 7 of 11 (5 by blocking); seen 9 of 11; false alarms 2 in 4 no-defect reviews
+    (CL-1 F1 H, CL-2 CL2-F1 H; none on CL-3 or DC-1); 7 false-blocker candidates; FS-1 withheld by the publication check.'
+  better: (1) RM-3 and RM-4 both detected by a confirmed match; the baseline had 0 of 6 such reviews at high across all
+    three setups. (2) No baseline detection lost (RM-1, RM-2, RM-6, PB-1, PB-2, PB-3, FS-2); a failed or withheld review
+    is rerun once. (3) No blocking or high finding on DC-1 or CL-3. (4) No more than one extra blocking or high finding
+    on CL-1 and CL-2 together, each read by hand.
+  outcomes: '**Worse:** (2) or (3) broken. **Inconclusive:** one of RM-3 and RM-4 detected and the guards hold; then repeat
+    RM-3, RM-4, DC-1 and CL-2 once (about USD 4.5) before the owner decides. Also record by hand the new severities of
+    the recurring under-rated (c8, c38, c4) and over-rated clusters, as a diagnostic.'
 cases:
 - id: CANARY
   kind: canary
@@ -71,6 +89,7 @@ cases:
   - short+list
   - open+list
   - open-B+list
+  - open+list+sev
 - id: RM-2
   kind: real_miss
   problem: DPL-002
@@ -509,6 +528,7 @@ cases:
   configurations: &id002
   - short+list
   - open+list
+  - open+list+sev
   task: 'README: fix the path of the network segmentation diagram.'
   paths:
   - README.md

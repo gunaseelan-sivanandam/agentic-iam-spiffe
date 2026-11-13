@@ -156,7 +156,7 @@ questions), requirements (9), architecture and interfaces (10), unit tests (10),
 | S44-D11 | rule text: `AGENTS.md`, Stage checklists ("the author proposes the list item or the wording in the PR") | rule text only |
 | S44-D12 | `lists_commit` | `test_lists_come_from_the_runners_fixed_commit_not_the_cases` |
 | S44-D13 | `research.md`, Review prompt | `test_each_draft_mandate_sentence_has_a_source_and_names_its_failure_mode`, `test_the_benchmarks_draft_mandates_are_the_research_drafts` |
-| S45-D1 | `BUDGETS` | `test_stage_b_stops_at_sixty_calls_counting_retries_and_the_canary`; 57 of 60 used |
+| S45-D1 | `BUDGETS` | `test_stage_b_stops_at_its_budget_counting_retries_and_the_canary`; 60, raised to 85 on 2026-11-13 (below); 57 used before the raise |
 | S45-D2 | the result identity | `test_result_records_its_full_identity_and_the_report_reads_one_stage` |
 | S45-D3 | `CONFIGURATIONS` | `test_configurations_differ_only_in_the_mandate_and_carry_the_same_list_and_rules` |
 | S45-D4 | `score`, the match rule | the scoring tests of `tests/tools/test_run_review_benchmark.py` |
@@ -238,6 +238,7 @@ a decision concern below instead.
 | 4.6 | The plan template has a "Threat model" section | The plan review judges against "the threat model the plan states" (`AGENTS.md`, Plan review) and plan question P11 asks for it, but S46-D11's list did not name the section; found by the dry slice (final review, FR-7) |
 | 4.6 | The handoff rule kept S46-D9's and S46-D13's words: the brief is pasted at the top of the PR body, which is a snapshot and is not updated later | 4.6's review (F3) had the author rewrite it to "built once CI has finished … and built again after a later push", which changed agreed decisions without the owner; reverted, and the question went to the owner (decision concern 10; final review, FR-7). Superseded by the owner's decision of 2026-11-13: the brief, without CI, goes on the slice's decision page |
 | 4.2 | `invocation_from_entry` refuses entries logged by 4.1's launcher with a clear message, as it refuses earlier ones | 4.2 retires 4.1's prompt layout (the file list from `--path`, empty upstream and evidence sections); its plan did not say so (review round 1, R1-4) |
+| 4.5 | Stage B's budget raised from 60 to 85 calls (`BUDGETS`, the key's `budget`): a canary pair for CLI 2.1.323, RC-2's two runs, decision concern 8's measurement (15 runs and one retry), a Sonnet second confirmer (2) and a conditional repeat (4), 83 in all; new spend capped at USD 20 | The owner approved the measurement beyond the 60 calls ("complete it and do not wait for my approval", 2026-11-13); it needs a canary for CLI 2.1.323, which RC-2's runs share |
 
 ## Why the benchmark detected fewer than 80%
 

@@ -10,12 +10,16 @@ detection with the checklist question behind it, and the misses. The runner's ow
 - **Key and rule:** answer key `7ef0a579…` (version 2, 17 cases), match rule `0db53541…`, committed before any run;
   stage lists at `04f8df4` (after 4.4's critique and implementation review). Version 3 (`ed4b5e0a…`, match rule
   `9605cb43…`) adds RC-2, a recheck case whose answers hold (decision concern 4), with its rule, before its runs; it
-  reads version 2's results unchanged, and the runner's report below is built with it.
+  reads version 2's results unchanged. Version 4 (`5b9d6382…`, same rule), before any of their runs, raises the budget,
+  adds decision concern 8's configuration `open+list+sev` and fixes that measurement's criteria; the runner's report
+  below is built with it.
 - **Reviewer:** Opus (`claude-opus-5-5`), initial reviews at high effort, rechecks at medium, CLI 2.1.321; Sonnet
   (`claude-sonnet-5-5`) only as the second confirmer.
 - **Calls:** 57 of the 60 allowed: 6 for three canary pairs (see below), 45 first runs, 4 repeats, 2
   second-confirmer sessions. The failed-Read probe and the planting of FS-1 and FS-2 ran outside the budget, as
-  S45-D1 allows.
+  S45-D1 allows. On 2026-11-13 the budget was raised to 85, for a canary pair under CLI 2.1.323, RC-2's two runs
+  and decision concern 8's measurement: the owner approved that measurement beyond the 60 calls ("complete it and
+  do not wait for my approval"); see the decision page.
 - **Configurations:** `short+list` (stage A's short prompt without its retired kinds sentence), `open+list` (4.1's
   mandate, the launcher's today), `open-B+list` (4.4's drafted initial mandate), `recheck-A` (4.1's recheck mandate)
   and `recheck-B` (4.4's drafted recheck mandate). Every configuration carries its case's stage list.
@@ -182,7 +186,7 @@ The launcher's mandate constants stay 4.1's until the owner chooses (S45-D8).
 ## The runner's report, verbatim
 
 ````markdown
-Stage B. Answer key SHA-256: `ed4b5e0a2cb25819cfe7a691fc50faacc8cfb3f39e9dd46754156305192dcbbf`; match rule SHA-256: `9605cb43cba72d294294a2414089c397803fd92f2bb8f06c5b3af2d9944944cb`; lists at `04f8df4`.
+Stage B. Answer key SHA-256: `5b9d6382a06918128102da1b98b9660dd1dad12d35819752adce288878376633`; match rule SHA-256: `9605cb43cba72d294294a2414089c397803fd92f2bb8f06c5b3af2d9944944cb`; lists at `04f8df4`.
 
 Detections are confirmed by the author's blinded verdicts.
 

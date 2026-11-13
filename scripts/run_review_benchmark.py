@@ -14,11 +14,13 @@ both with the stage checklist of the case's artifact type, and two wordings of t
 
 Usage (from the repository root):
     python3 scripts/run_review_benchmark.py --dry-run                       # leak search only, no reviewer call
-    python3 scripts/run_review_benchmark.py --run [--budget N]              # stage B, at most 60 reviewer calls
+    python3 scripts/run_review_benchmark.py --run [--budget N]              # stage B, at most 85 reviewer calls
     python3 scripts/run_review_benchmark.py --run --case <case>             # only the named cases (or --dry-run)
+    python3 scripts/run_review_benchmark.py --run --configuration <name>    # only the named configurations
     python3 scripts/run_review_benchmark.py --report --stage B [--stage A]  # one stage, or two compared
     python3 scripts/run_review_benchmark.py --rescore A                     # stage A's results under the new key
     python3 scripts/run_review_benchmark.py --export-confirmation           # blinded findings for confirmation
+    python3 scripts/run_review_benchmark.py --export-measurement --configuration A --configuration B  # two setups
     python3 scripts/run_review_benchmark.py --sample-confirmation           # ten of them for the second confirmer
     python3 scripts/run_review_benchmark.py --second-confirmation 0|1       # one Sonnet session on one half
     python3 scripts/run_review_benchmark.py --run --repeat <case>           # the two setups again on a case
@@ -52,10 +54,17 @@ STAGE_A_KEY_COMMIT = "c325e7d"  # the commit whose answer key stage A's results 
 STAGE_A_PROMPTS = ("short", "checklist")
 RESULTS = {"A": Path("docs/slices/agentic-sdlc-poc/benchmark_results.jsonl"),
            "B": Path("docs/slices/poc-4-5-benchmark/benchmark_results_B.jsonl")}
-BUDGETS = {"A": 26, "B": 60}  # S45-D1: reviewer calls per stage, counting the canary, failed attempts and retries
+# S45-D1: reviewer calls per stage, counting the canary, failed attempts and retries. Stage B's 60 were raised to 85
+# on 2026-11-13: the owner approved decision concern 8's measurement beyond the 60 ("complete it and do not wait for
+# my approval"); it needs a canary for CLI 2.1.323, which RC-2's two runs share. 57 used, the canary 2, RC-2 2, the
+# measurement 15 and one retry, a second confirmer 2 and a conditional repeat of 4: 83.
+BUDGETS = {"A": 26, "B": 85}
 BENCH_OUT = Path("docs/slices/poc-4-5-benchmark")
 EXPORT_FILE = BENCH_OUT / "confirmation_export.jsonl"
 EXPORT_KEY_FILE = BENCH_OUT / "confirmation_key.jsonl"
+# Decision concern 8, step 3: the measurement's own blinded export, so the stage's first export stays as it is.
+MEASURE_EXPORT_FILE = BENCH_OUT / "severity_export.jsonl"
+MEASURE_KEY_FILE = BENCH_OUT / "severity_export_key.jsonl"
 VERDICT_FILES = {"author": BENCH_OUT / "confirmation_author.jsonl", "second": BENCH_OUT / "confirmation_second.jsonl"}
 RESCORE_FILE = BENCH_OUT / "benchmark_rescore_A.jsonl"
 SAMPLE_FILE = BENCH_OUT / "confirmation_sample.jsonl"
@@ -83,6 +92,9 @@ CONFIGURATIONS: dict[str, dict[str, Any]] = {
     "open-B+list": {"mode": "initial", "mandate_file": "prompts/mandate_initial_b.md", "list": True},
     "recheck-A": {"mode": "recheck", "mandate_file": None, "list": True},
     "recheck-B": {"mode": "recheck", "mandate_file": "prompts/mandate_recheck_b.md", "list": True},
+    # Decision concern 8, step 3: `open+list` with a severity paragraph after the output section's `severity` bullet.
+    "open+list+sev": {"mode": "initial", "mandate_file": None, "list": True,
+                      "severity_file": "prompts/severity_scenario.md"},
     "canary": {"mode": "initial", "mandate_file": None, "list": False},
 }
 QUOTE_MIN = 8  # an expected line this long or longer, quoted verbatim in a finding, does not count as naming the defect
@@ -353,10 +365,11 @@ def case_inputs(prepared: PreparedCase) -> PreparedCase:
 # --- Configurations and prompts (S45-D2, S45-D3) ------------------------------------------------
 
 
-def configuration(name: str, mandates: dict[str, str]) -> Any:
+def configuration(name: str, mandates: dict[str, str], severity_note: str = "") -> Any:
     """A benchmark configuration (S41-D2): the launcher's mandates with some replaced, for example by a short prompt
-    or a research-based draft. Only this runner builds configurations other than the launcher's full one."""
-    return launcher.PromptConfiguration(name, {**launcher.MANDATES, **mandates})
+    or a research-based draft, and optionally a severity paragraph in the output section. Only this runner builds
+    configurations other than the launcher's full one."""
+    return launcher.PromptConfiguration(name, {**launcher.MANDATES, **mandates}, severity_note=severity_note)
 
 
 def stage_a_configuration(key: AnswerKey, prompt_name: str) -> Any:
@@ -411,6 +424,18 @@ def mandate_text(file_text: str) -> str:
     return file_text.split(marker, 1)[1].strip() + "\n" if marker in file_text else file_text
 
 
+def severity_note(key: AnswerKey, name: str) -> str:
+    """The severity paragraph a configuration adds to the output section (the text under the file's `## Paragraph`
+    heading), or "" for every configuration without one."""
+    path = configuration_spec(name).get("severity_file")
+    if path is None:
+        return ""
+    stem, marker = Path(path).stem, "\n## Paragraph\n"
+    if marker not in key.prompts.get(stem, ""):
+        raise BenchmarkRefusedError(f"configuration {name} needs {BENCHMARK_DIR}/{path} with a `## Paragraph` heading")
+    return key.prompts[stem].split(marker, 1)[1].strip()
+
+
 def _recheck_inputs(repo: Path, prepared: PreparedCase) -> tuple[Any, Any]:
     """The recheck case's earlier report and answers (S45-D5), as the launcher would load them from a record, refused
     as the launcher refuses them: answers that do not answer the report, a `fixed:` path not in the copy."""
@@ -451,7 +476,7 @@ def _configured(prepared: PreparedCase, key: AnswerKey, name: str, checklist: st
             raise BenchmarkRefusedError(f"{prepared.case.case_id} names no artifact_type, so {name} would run without its list")
         checklist, lists = stage_list(prepared.repo, key, prepared.case)
     recheck, accounting = _recheck_inputs(prepared.source or prepared.repo, prepared) if mode == "recheck" else (None, None)
-    return configuration(name, mandates), mode, templates, lists, checklist, recheck, accounting
+    return configuration(name, mandates, severity_note(key, name)), mode, templates, lists, checklist, recheck, accounting
 
 
 def case_prompt(prepared: PreparedCase, key: AnswerKey, name: str, checklist: str | None = None) -> CasePrompt:
@@ -498,9 +523,12 @@ def leak_hits(prepared: PreparedCase, key: AnswerKey) -> list[str]:
 
 
 def _prompt_text(key: AnswerKey, name: str) -> str:
-    """The case-independent text a configuration or a stage-A prompt adds to the prompt."""
-    mandate_file = CONFIGURATIONS.get(name, {}).get("mandate_file")
-    return key.prompts.get(Path(mandate_file).stem if mandate_file else name, "")
+    """The case-independent text a configuration or a stage-A prompt adds to the prompt: its mandate file and its
+    severity file, each whole."""
+    spec = CONFIGURATIONS.get(name, {})
+    mandate_file, severity_file = spec.get("mandate_file"), spec.get("severity_file")
+    return (key.prompts.get(Path(mandate_file).stem if mandate_file else name, "")
+            + (key.prompts.get(Path(severity_file).stem, "") if severity_file else ""))
 
 
 def _term_hits(where: str, text: str, terms: list[str]) -> list[str]:
@@ -649,6 +677,7 @@ class RunState:
         self.paused = threading.Event()
         self._lock = threading.Lock()
         self.sink: tuple[Path, str] | None = None  # where each finished review is written as soon as it ends
+        self.only: tuple[str, ...] = ()  # `--configuration`: run only these configurations of each case
 
     def take(self) -> bool:
         with self._lock:
@@ -681,8 +710,8 @@ def review_id(line: dict[str, Any]) -> str:
     so a change to anything the reviewer gets makes an earlier result not count as done (S45-D2)."""
     if "configuration" in line:
         return stage_b_id(line["case"], line["configuration"], line.get("prompt_identity", ""), line.get("run", 1))
-    if line.get("kind") == "canary":  # a changed canary (its planted files or its prompt) runs again
-        return f"{line['case']}/{line.get('prompt_identity', '')}"
+    if line.get("kind") == "canary":  # a changed canary (its files, its prompt) or a new CLI version runs again (S45-D9)
+        return f"{line['case']}/{line.get('prompt_identity', '')}/{line.get('cli_version', '')}"
     return f"{line['case']}/{line['prompt']}" if "prompt" in line else str(line["case"])
 
 
@@ -756,8 +785,10 @@ def result_line(prepared: PreparedCase, key: AnswerKey, prompt: CasePrompt, run:
 
 def run_case(prepared: PreparedCase, key: AnswerKey, state: RunState, repeat: int = 1) -> list[dict[str, Any]]:
     """The case's unfinished configurations, in parallel, before the next case starts; a repeat (S45-D6) runs the two
-    compared setups again as run 2. Each review is written as soon as it ends."""
-    names = [n for n in prepared.case.configurations if repeat == 1 or n in REPEATABLE]
+    compared setups again as run 2, or the configurations `--configuration` names. Each review is written as soon as
+    it ends."""
+    names = [n for n in prepared.case.configurations
+             if (n in state.only if state.only else repeat == 1 or n in REPEATABLE)]
     prompts = [case_prompt(prepared, key, name) for name in names]
     todo = [p for p in prompts if stage_b_id(prepared.case.case_id, p.configuration, p.identity, repeat) not in state.done]
 
@@ -907,7 +938,8 @@ def run_item(repo: Path, item: PreparedCase, key: AnswerKey, state: RunState) ->
         return [{"stage": key.stage, "case": item.case.case_id, "kind": item.case.kind, "status": "refused",
                  "reason": item.refused, "key_sha256": key.sha256, "calls": 0}]
     if item.case.kind == "canary":
-        done = review_id({"case": item.case.case_id, "kind": "canary", "prompt_identity": canary_identity(key)}) in state.done
+        done = review_id({"case": item.case.case_id, "kind": "canary", "prompt_identity": canary_identity(key),
+                          "cli_version": state.cli_version}) in state.done
         return [] if done else [state.record(run_canary(item, key, state))]
     check_cli_version(repo, key, state.cli_version)
     return run_case(item, key, state)
@@ -920,8 +952,16 @@ def check_repeats(key: AnswerKey, repeats: list[str]) -> None:
         raise BenchmarkRefusedError(f"--repeat takes at most {MAX_REPEATS} cases that run {' and '.join(REPEATABLE)}")
 
 
+@dataclass(frozen=True)
+class Selection:
+    """What `--case` and `--configuration` limit a run to; empty means every case, or every configuration."""
+
+    cases: tuple[str, ...] = ()
+    configurations: tuple[str, ...] = ()
+
+
 def run_benchmark(repo: Path, key: AnswerKey, budget_limit: int, repeats: list[str] | None = None,
-                  names: list[str] | None = None) -> list[dict[str, Any]]:
+                  selection: Selection = Selection()) -> list[dict[str, Any]]:
     if key.stage == "A":
         raise BenchmarkRefusedError("stage A is closed; its results stay as committed")
     check_budget(budget_limit, key.stage)
@@ -929,10 +969,13 @@ def run_benchmark(repo: Path, key: AnswerKey, budget_limit: int, repeats: list[s
     check_match_rule(key)
     check_lists_commit(key)
     check_repeats(key, repeats or [])
+    names = list(selection.cases)
     selected_cases(key, names)
+    for name in selection.configurations:
+        configuration_spec(name)
     scratch = Path(tempfile.mkdtemp(prefix="review-benchmark-"))
     state = previous_state(repo, key, budget_limit)
-    state.sink = (repo, key.stage)
+    state.sink, state.only = (repo, key.stage), selection.configurations
     lines: list[dict[str, Any]] = []
     try:
         for item in prepare_all(repo, key, scratch, names):
@@ -1003,16 +1046,43 @@ def export_confirmation(repo: Path, key: AnswerKey, seed: int) -> int:
             items.append(({"case": line["case"], "expected": cases[line["case"]].expected, "finding": finding},
                           {"configuration": line["configuration"], "prompt_identity": line["prompt_identity"],
                            "run": line.get("run", 1), "finding": finding["id"]}))
+    count = _write_export(repo, items, seed, "T", (EXPORT_FILE, EXPORT_KEY_FILE))
+    print(f"[benchmark] exported {count} findings to {EXPORT_FILE}; match rule: {key.match_rule_sha256}")
+    return 0
+
+
+def _write_export(repo: Path, items: list[tuple[dict[str, Any], dict[str, Any]]], seed: int, prefix: str,
+                  files: tuple[Path, Path]) -> int:
+    """Shuffle the items with the seed, give each a token, and write what the confirmer sees and the private map."""
     random.Random(seed).shuffle(items)  # noqa: S311 - a fixed shuffle for blinding, not for security
     export, private = [], []
     for index, (shown, hidden) in enumerate(items, start=1):
-        token = f"T{index:03d}"
+        token = f"{prefix}{index:03d}"
         export.append({"token": token, **shown})
         private.append({"token": token, "case": shown["case"], **hidden})
-    for path, rows in ((EXPORT_FILE, export), (EXPORT_KEY_FILE, private)):
+    for path, rows in zip(files, (export, private)):
         (repo / path).parent.mkdir(parents=True, exist_ok=True)
         (repo / path).write_text("".join(json.dumps(r, sort_keys=True) + "\n" for r in rows), encoding="utf-8")
-    print(f"[benchmark] exported {len(export)} findings to {EXPORT_FILE}; match rule: {key.match_rule_sha256}")
+    return len(export)
+
+
+def export_measurement(repo: Path, key: AnswerKey, seed: int, configurations: list[str]) -> int:
+    """Decision concern 8, step 3: every blocking or high finding of the named setups' first completed review of each
+    case (a rerun stands in for a failed or withheld first run), the setups mixed and shuffled under fresh tokens, so a
+    blind confirmer cannot tell which setup produced a finding. No-defect cases are included, with no expected finding.
+    The stage's first export and its verdicts stay as they are."""
+    if len(set(configurations)) < 2:
+        raise BenchmarkRefusedError("--export-measurement needs at least two --configuration names, so the setups mix")
+    cases = {c.case_id: c for c in key.cases}
+    lines = [line for line in read_results(repo, key.stage) if line.get("configuration") in configurations
+             and of_key(key, line)]
+    items = [({"case": case_id, "expected": cases[case_id].expected, "finding": finding},
+              {"configuration": name, "prompt_identity": line["prompt_identity"], "run": line.get("run", 1),
+               "finding": finding["id"]})
+             for (case_id, name), line in _completed_reviews(lines).items()
+             for finding in line.get("findings", []) if is_detection(finding)]
+    count = _write_export(repo, items, seed, "S", (MEASURE_EXPORT_FILE, MEASURE_KEY_FILE))
+    print(f"[benchmark] exported {count} findings to {MEASURE_EXPORT_FILE}, tokens in {MEASURE_KEY_FILE}")
     return 0
 
 
@@ -1474,11 +1544,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     mode.add_argument("--report", action="store_true")
     mode.add_argument("--rescore", choices=["A"])
     mode.add_argument("--export-confirmation", action="store_true")
+    mode.add_argument("--export-measurement", action="store_true")
     mode.add_argument("--sample-confirmation", action="store_true")
     mode.add_argument("--second-confirmation", type=int, choices=[0, 1])
     parser.add_argument("--budget", type=int)
     parser.add_argument("--repeat", action="append", default=[])
     parser.add_argument("--case", action="append", default=[], help="only this case of the key (--run, --dry-run)")
+    parser.add_argument("--configuration", action="append", default=[],
+                        help="only this configuration (--run); the setups --export-measurement exports")
     parser.add_argument("--stage", action="append", choices=["A", "B"])
     parser.add_argument("--seed", type=int, default=45)
     return parser.parse_args(argv)
@@ -1494,6 +1567,8 @@ def dispatch(args: argparse.Namespace, repo: Path, key: AnswerKey) -> int:
         return 0
     if args.rescore:
         return rescore_stage_a(repo, key)
+    if args.export_measurement:
+        return export_measurement(repo, key, args.seed, args.configuration)
     if args.export_confirmation:
         return export_confirmation(repo, key, args.seed)
     if args.sample_confirmation:
@@ -1501,7 +1576,8 @@ def dispatch(args: argparse.Namespace, repo: Path, key: AnswerKey) -> int:
         return 0
     if args.second_confirmation is not None:
         return second_confirmation(repo, key, args.second_confirmation)
-    run_benchmark(repo, key, args.budget if args.budget is not None else key.budget, args.repeat, args.case)
+    run_benchmark(repo, key, args.budget if args.budget is not None else key.budget, args.repeat,
+                  Selection(tuple(args.case), tuple(args.configuration)))
     return 0
 
 

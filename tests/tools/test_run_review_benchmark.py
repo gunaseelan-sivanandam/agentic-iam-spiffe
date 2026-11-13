@@ -35,7 +35,8 @@ REVIEWED = "scripts/review_me.py"
 LOG = "docs/slices/demo/review_attempts.jsonl"
 MATCH_RULE = "A defect is detected by a blocking or high finding at its place with one of its terms."
 PROMPTS = {"short": "Short prompt.\n", "checklist": "Checklist prompt.\n", "short_list": "SHORT LIST PROMPT.\n",
-           "mandate_initial_b": "DRAFT INITIAL MANDATE.\n", "mandate_recheck_b": "DRAFT RECHECK MANDATE.\n"}
+           "mandate_initial_b": "DRAFT INITIAL MANDATE.\n", "mandate_recheck_b": "DRAFT RECHECK MANDATE.\n",
+           "severity_scenario": "# Severity paragraph\n\nWhat it is for.\n\n## Paragraph\n\nSEVERITY PARAGRAPH TEXT.\n"}
 LIST_TEXT = "# Code review list\n\nThe minimum for code.\n\n1. A CODE LIST QUESTION? [S:google]\n"
 
 
@@ -297,21 +298,23 @@ def test_a_changed_template_runs_again_and_does_not_count_the_earlier_result_as_
     assert r.calls() == 3  # only short+list runs again
 
 
-def test_stage_b_stops_at_sixty_calls_counting_retries_and_the_canary(repo: tuple[Repo, str, str]) -> None:
+def test_stage_b_stops_at_its_budget_counting_retries_and_the_canary(repo: tuple[Repo, str, str]) -> None:
     r, base, commit = repo
-    r.key([_case(f"C{i}", base, commit) for i in range(31)])  # 62 planned calls
+    limit = bench.BUDGETS["B"]
+    assert limit == 85  # raised from 60 on 2026-11-13 (decision concerns 4 and 8)
+    r.key([_case(f"C{i}", base, commit) for i in range(limit // 2 + 1)], budget=limit)  # more calls than the budget
     r.canary_passed()  # 2 calls already used
     r.scenario({"result": {"is_error": True}, "exit": 1}, {})
     assert _run(r) == 0
-    assert r.calls() == 58
-    assert sum(int(line.get("calls", 0)) for line in r.results()) == 60
+    assert r.calls() == limit - 2
+    assert sum(int(line.get("calls", 0)) for line in r.results()) == limit
     assert any(line.get("status") == "budget" for line in r.results())
 
 
-@pytest.mark.parametrize("args", [["--budget", "61"], []])
+@pytest.mark.parametrize("args", [["--budget", str(bench.BUDGETS["B"] + 1)], []])
 def test_run_over_the_stage_budget_is_refused_before_any_review(repo: tuple[Repo, str, str], args: list[str]) -> None:
     r, base, commit = repo
-    r.key([_case("C1", base, commit)], budget=60 if args else 61)
+    r.key([_case("C1", base, commit)], budget=bench.BUDGETS["B"] if args else bench.BUDGETS["B"] + 1)
     assert _run(r, *args) == 2
     assert r.calls() == 0
 
@@ -582,6 +585,59 @@ def test_results_of_an_earlier_key_the_key_names_are_kept_and_others_refused(rep
     assert _run(r) == 0 and r.calls() == 3  # C1 is done under the earlier key; only C2 runs
 
 
+# --- Decision concern 8, step 3: the severity paragraph and its measurement ---------------------
+
+SEV = "open+list+sev"
+SEVERITY_LINE = "`simpler_alternative` is always `low`."
+
+
+def test_the_severity_paragraph_reaches_only_its_own_configuration(repo: tuple[Repo, str, str], tmp_path: Path) -> None:
+    _r, base, commit = repo
+    names = ["short+list", "open+list", "open-B+list", SEV]
+    prepared, key = _prepared(repo, tmp_path, _case("C1", base, commit, configurations=names))
+    prompts = {name: bench.case_prompt(prepared, key, name).prompt for name in names}
+    assert f"{SEVERITY_LINE}\n  SEVERITY PARAGRAPH TEXT.\n- `origin_stage`" in prompts[SEV]
+    assert all("SEVERITY PARAGRAPH TEXT." not in prompts[name] for name in names if name != SEV)
+    # everything else is open+list, byte for byte
+    assert prompts[SEV].replace("\n  SEVERITY PARAGRAPH TEXT.", "", 1) == prompts["open+list"]
+    # the launcher's own prompt and its configuration hash are as they were without the field
+    assert launcher._output_section() == launcher._output_section("") and "SEVERITY" not in launcher._output_section()
+    full = launcher.FULL_CONFIGURATION
+    assert full.sha256 == launcher.sha256_text(json.dumps({"name": full.name, "mandates": full.mandates,
+                                                           "sections": full.sections}, sort_keys=True))
+
+
+def test_configuration_option_runs_only_the_named_configuration(repo: tuple[Repo, str, str]) -> None:
+    r, base, commit = repo
+    r.key([_case("C1", base, commit, configurations=["short+list", "open+list", SEV])])
+    r.canary_passed()
+    assert _run(r, "--configuration", "no-such-setup") == 2 and r.calls() == 0
+    assert _run(r, "--configuration", SEV) == 0 and r.calls() == 1
+    assert [line["configuration"] for line in r.results() if line.get("configuration")] == [SEV]
+    assert "SEVERITY PARAGRAPH TEXT." in r.prompts()[0]
+
+
+def test_measurement_export_mixes_the_two_setups_first_runs_under_fresh_tokens(repo: tuple[Repo, str, str]) -> None:
+    r, base, commit = repo
+    r.key([_case("C1", base, commit, configurations=["short+list", "open+list", SEV]),
+           _case("CL", base, commit, kind="clean", configurations=["open+list", SEV])])
+    r.canary_passed()
+    r.scenario(_reply([_new_finding("X1", "high"), _new_finding("X2", "blocking", line=3), _new_finding("X3", "medium")]))
+    assert _run(r) == 0
+    _write(r.root, str(bench.EXPORT_FILE), "the stage's first export\n")
+    assert bench.main(["--export-measurement", "--configuration", "open+list"], repo=r.root) == 2  # one setup is not blind
+    assert bench.main(["--export-measurement", "--configuration", "open+list", "--configuration", SEV], repo=r.root) == 0
+    text = (r.root / bench.MEASURE_EXPORT_FILE).read_text()
+    export = [json.loads(line) for line in text.splitlines()]
+    # the blocking and high findings of both setups on both cases, none of short+list, none rated medium
+    assert len(export) == 8 and {e["finding"]["id"] for e in export} == {"X1", "X2"}
+    assert all(e["token"].startswith("S") for e in export) and {e["case"] for e in export} == {"C1", "CL"}
+    assert "open+list" not in text and "prompt_identity" not in text and '"run"' not in text
+    private = [json.loads(line) for line in (r.root / bench.MEASURE_KEY_FILE).read_text().splitlines()]
+    assert sorted(p["configuration"] for p in private) == ["open+list"] * 4 + [SEV] * 4
+    assert (r.root / bench.EXPORT_FILE).read_text() == "the stage's first export\n"
+
+
 # --- Stage A compatibility and rescoring ---------------------------------------------------------
 
 
@@ -732,6 +788,9 @@ def test_a_changed_canary_runs_again_and_an_unchanged_one_does_not(repo: tuple[R
     original_twin = bench.twin_invocation
     monkeypatch.setattr(bench, "twin_invocation", lambda model, effort: [*original_twin(model, effort), "--verbose"])
     assert len(run_once("twin-changed")) == 1 and r.calls() == 8
+    monkeypatch.setattr(bench.launcher, "cli_version", lambda: "9.9.10 (Claude Code)")  # S45-D9: a canary per CLI
+    assert len(run_once("new-cli")) == 1 and r.calls() == 10
+    assert run_once("new-cli-again") == [] and r.calls() == 10
 
 
 @pytest.mark.parametrize(("canary", "runs"), [
@@ -1107,9 +1166,9 @@ def test_second_confirmer_is_refused_when_the_stage_budget_is_spent(repo: tuple[
     r.key([])
     _write(r.root, str(bench.SAMPLE_FILE), json.dumps({"half": 0, "tokens": ["t1"]}) + "\n")
     _write(r.root, str(bench.EXPORT_FILE), json.dumps({"token": "t1", "finding": {}}) + "\n")
-    bench.append_result(r.root, "B", {"stage": "B", "case": "C1", "configuration": "open+list", "calls": 60,
-                                      "key_sha256": bench.load_key(r.root).sha256})
-    with pytest.raises(bench.BenchmarkRefusedError, match="budget of 60 calls is spent"):
+    bench.append_result(r.root, "B", {"stage": "B", "case": "C1", "configuration": "open+list",
+                                      "calls": bench.BUDGETS["B"], "key_sha256": bench.load_key(r.root).sha256})
+    with pytest.raises(bench.BenchmarkRefusedError, match=f"budget of {bench.BUDGETS['B']} calls is spent"):
         bench.second_confirmation(r.root, bench.load_key(r.root), 0)
     assert r.calls() == 0
 
