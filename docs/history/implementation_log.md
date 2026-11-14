@@ -5,6 +5,78 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-11-14 Slice agentic-sdlc-poc 4: round 2, the owner's findings on review severity
+
+- Branch `poc/slice-4-implementation`, 15 commits `8a82388` to `c79ed96`: round 2 (R2-1 to R2-10), from the owner's
+  findings of 2026-11-14, in the owner's words on the [decision page](../slices/agentic-sdlc-poc/slice_4_decisions.md)
+  (section "Round 2"); it replaces decision 6. Logged as
+  [DPL-013](../delivery_problem_log.md#dpl-013-review-severity-decided-what-got-fixed-a-rejection-could-stand-on-the-authors-word-and-fixes-grew-the-process).
+- The answer rules (R2-1 to R2-4, R2-8; `8a82388`, `5e62097`, `83eabdf`, `0007f65`): blocking, high and medium
+  findings are fixed and take `fixed`, `rejected` or `owner` (a medium finding is no longer deferred); a rejected
+  medium finding, like a blocking or high one, stands only when the next round accepts it, and the review loop's rounds
+  continue while one waits for its recheck; a rejection of those severities cites a checkable fact, checked by shape
+  only; one dispute round (a re-raised rejection is fixed or goes `owner:`, never `rejected:` again; a later `fixed:`
+  settles it; a low finding may be rejected again); a fix adds no mechanism (rule text, `AGENTS.md`, Fixes stay within
+  the agreed decisions); the brief lists medium rejections. A probe of every record the check reads (23 attempts, 107
+  answer rows) found none that the new rules refuse, so no transition rule was added.
+- The review prompt and the recheck (R2-5 to R2-7; `67b0402`, `f884421`, `a549e19`, `7b524b2`, `6e88d19`,
+  `f8f19c5`): the answer rules live once in `scripts/run_independent_review.py` (`FIXED_SEVERITIES`,
+  `ALLOWED_ANSWERS`, `CHECKABLE_FACT`, `answer_rule_problems`), and the launcher refuses before a recheck what
+  `make docs-check` refuses after; a finding a recheck accounted `cannot determine` can be answered `fixed:` or
+  `owner:` (before, its record could never turn green). The output section, shared by every mandate wording, asks an
+  initial review whether the change adds a mechanism without the owner's approval where changing a choice would do,
+  and a recheck the same of each `fixed:` answer; the final review gets no such question. This wording is its own
+  commit, `7b524b2`. A recheck's evidence lists every process file (`PROCESS_FILES` in `scripts/review_inputs.py`)
+  changed since the reviewed round, with line counts; a recheck quotes the lines each rejection it accepts or re-raises
+  rests on, and the launcher checks each quote in the copy (whitespace aside, Read line prefixes dropped, within the
+  named lines give or take two).
+- The benchmark (R2-9, R2-10; `294d85b`, `ff276bc`, committed before any run, `e4943aa`, `7fd4723`, `c79ed96`): a
+  match rated medium counts as detected, and a medium finding on a no-defect case as a false alarm; the earlier results
+  are re-scored apart (`--rescore B`, which writes nothing unless the earlier rule reproduces every recorded score: 62
+  of 62); the 146 findings no earlier export held were judged blind by a fresh session (15 match); stage A is not
+  re-scored. First runs, blocking or high against R2-9: `short+list` 6 and 9 of 11, `open+list` 7 and 8, `open-B+list`
+  6 and 8. RC-3 (a `fixed:` answer that adds a step) and RC-4 (a rejection citing a test that does not cover the
+  scenario) ran on `recheck-A` and `recheck-B`, base `e842e97`: RC-4 re-raised by both, RC-3 accepted by both. Calls 76
+  to 80 of the hard stop of 80, under a pinned install of CLI 2.1.323 in a scratch folder (the installed CLI had
+  updated itself to 2.1.325, which has no canary). The key keeps `budget: 85`; the runner checks the run's `--budget`
+  against the hard stop. Report: [`benchmark_report.md`](../slices/poc-4-5-benchmark/benchmark_report.md).
+- Tests first, the failures on the base of each change:
+  - Record check and brief (base `4316724`, `python3 -m pytest -q --tb=line tests/tools/test_check_review_records.py
+    tests/tools/test_review_brief.py`; 13 failed): `…next_round_accepts_passes[medium]` `:299 assert False`;
+    `…cites_no_checkable_fact_fails` (5 cases) `:331 AssertionError: []`; `…rules_do_not_allow_fails[medium-deferred,
+    medium-rejected-alone]` `:357 AssertionError: []`; `…answered_rejected_again_fails[blocking, high]` `:449`, only the
+    old "no later round accepted" message, `[medium]` `:449 AssertionError: []`;
+    `…answered_with_a_fix_settles_the_rejection` `:456`; `test_the_brief_lists_every_item_the_owner_must_see`
+    `test_review_brief.py:66`, heading missing. Passing on the base by design: the 10 fact shapes, low-deferred,
+    medium-owner, the re-raised low finding, a re-raised fix rejected once.
+  - Launcher (base `83eabdf`, `python3 -m pytest -q -p no:cacheprovider --tb=line <ids>`):
+    `…refused_before_the_recheck[3]` `:1410 assert 1 == 2`; `…did_not_accept…`, the undetermined cases `:1447` (refused
+    "answer row for X1, which the report does not hold"), the re-raised cases `:1424 assert 1 == 0`;
+    `…quote_counts…[10]` `:1485/1487`, fields differ from the schema; `…is_quoted` 5 of 7 `:1513` (the two twins pass);
+    `…wrong_shape[7]` `:1527`; `…schema_offers_quotes…` `:1532 KeyError: 'quotes'`; `…process_file_changed…`
+    `:1548 assert 0 == 1`; `…no_process_file_change…` `:1569`; `…adds_a_mechanism` `:1576 AttributeError
+    MECHANISM_RULES`; `…severity_rule_and_the_quote_rule` `:1598`; `test_review_inputs.py:699/710 AttributeError
+    is_process_file / process_file_evidence`; record check `:525` no attribute `answer_rule_problems`, `:557` (4
+    cases), `:564`, `:436`; benchmark `:1365 AttributeError MECHANISM_RULES`, `:1384 'completed' == 'failed'`,
+    `:1396 DID NOT RAISE`; brief `test_review_brief.py:54 assert 1 == 0`. Tests that need a quote could fail on the
+    old schema only ("fields differ").
+  - Benchmark (the runner of the previous commit, `python3 -m pytest -q --tb=line
+    tests/tools/test_run_review_benchmark.py -k <names>`): R2-9's medium detection `assert ([] == ['E1']`, medium false
+    alarm `assert ([] == ['X1']`, the case that holds `assert [] == ['R1-2']`, the measurement's export
+    `assert (8 == 12)`, the re-score report `assert 0 == 2`, the re-score refusal `invalid choice: 'B'`, the third
+    export's not yet confirmed `'0'`, the rating agreement a dict mismatch, the unjudged fix `assert '0' == '1'`;
+    R2-10's budget `assert 76 == 80`, a run within the hard stop `assert (2 == 0)`, the recheck line
+    `no attribute 'false_answer_line'`. Not red: `test_a_false_rejection_is_scored_as_a_false_fix_is` (the scorer was
+    already generic; kept as a regression test).
+- Validation, local, on `c79ed96`: `make qa-quality` passed (qa-trace in PR mode against `origin/poc/agentic-sdlc`:
+  requirements 170, architecture 34, design 131, tests 386, coverage gaps 113, 0 new; docs-check, test-lint, and
+  qa-deploy with 18 known violations and 22 warnings); `make tooling-test` 916 passed and 9 shell tests (with a scratch
+  shellcheck); `make lint` passed (0 new or worsened findings); `make unit-guard-check` and `make gate-consistency`
+  passed. Not run: the full E2E suite (`git diff --name-only 4316724 c79ed96` lists no service, policy, compose,
+  harness or CI file; CI's `e2e` job runs it on the PR), `make unit-trust`, `make unit-mutation` and
+  `make unit-diff-cov` (no `services/` change), and CI (the branch is not pushed).
+- Review: unit `round-2` of `docs/slices/agentic-sdlc-poc/`, round 1 next.
+
 ## 2026-11-13 Slice agentic-sdlc-poc 4: the owner's decisions on the decision concerns
 
 - Branch `poc/slice-4-implementation`, commits `44a040c` to `ea4e100` and the commit with the fixes to their review:

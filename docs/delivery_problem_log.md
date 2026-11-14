@@ -237,6 +237,9 @@ Why review did not catch it:
   - the reviewer may check metadata of secret files, never their content;
   - a plan that depends on a fact outside the repository records the probe and its result (plan
     template "Environment facts").
+- Later (2026-11-14): fixes kept growing the process while the first preventive action stayed rule text only;
+  round 2 of slice 4 has a fix add no mechanism and asks it in every initial review and recheck
+  ([DPL-013](#dpl-013-review-severity-decided-what-got-fixed-a-rejection-could-stand-on-the-authors-word-and-fixes-grew-the-process)).
 
 ### Lesson
 Before fixing a finding, ask which upstream choice causes it and whether changing that choice removes
@@ -475,3 +478,69 @@ Why review did not catch it earlier:
 ### Lesson
 Write a claim from the check's output, not from the plan. When an approved rule seems impossible, look first for
 the author's own choice that makes it so. Before loosening a check, look at what each of its failures caught.
+
+## DPL-013: Review severity decided what got fixed, a rejection could stand on the author's word, and fixes grew the process
+
+- Status: Open until slice 4's final PR merges; round 2's preventive actions (R2-1 to R2-8) are implemented on the
+  slice 4 branch, and RC-3's miss (decision concern 13 on the decision page) is the part still open
+- Introduced: the review rules, where severity has decided what gets fixed since "everything else is advisory … not
+  fixed by default", kept in four levels by slice 4.1 (S41-D6, S41-D12); the rule against growth has been rule text
+  only since [DPL-007](#dpl-007-plan-review-answered-every-finding-by-adding-mechanisms)
+- Found: 2026-11-14, by the owner, after the review of the owner's decisions on slice 4's decision concerns
+  ([decision page](slices/agentic-sdlc-poc/slice_4_decisions.md), section "Round 2")
+
+### What happened
+- The reviewer's severity decided what was fixed: a medium finding could be deferred to an issue, or rejected without
+  a later round accepting the rejection. RM-3 of the benchmark (requirements added without proof, DPL-004's miss) was
+  found by every review and rated medium, so under these rules it could merge unfixed. Severity is also the least
+  reliable part of a review: 16 of the 39 defects that several reviews found got different severities
+  ([severity analysis](slices/poc-4-5-benchmark/severity_analysis.md)).
+- A rejection needed only "a reason the reviewer can check", and the recheck that judged it was the same reviewer
+  reading the author's argument; LLM judges tend to give in to rebuttals
+  ([industry research](slices/agentic-sdlc-poc/industry_research.md), finding 5). A dispute went to the owner only
+  when rechecks re-raised the same finding in two rounds in a row, so it could loop or end on the author's word.
+- Fixes grew the process: DPL-007's check that read every registered secret (the base64 case), 4.6's brief written
+  again after CI and after every push (4.6 review F3's first fix, reverted; decision concern 10), and the benchmark's
+  budget raised from 60 to 85 calls (decision concern 11). The rule against it was in `AGENTS.md`, but no review
+  question asked it where a fix is written or judged.
+
+### Root causes
+Why it happened:
+- RC1: severity did two jobs, saying how serious a finding is and deciding whether it is fixed.
+- RC2: a rejection's reason had no required form, and nothing made the recheck show what the reason rests on.
+- RC3: DPL-007's preventive action stopped at rule text; it put no question where a fix is written or judged.
+
+Why review did not catch it:
+- RC4: no review prompt asked whether a fix adds a mechanism, and a recheck did not see which process files the fixes
+  had changed.
+- RC5: a recheck could accept or re-raise a rejection without quoting the lines its decision rests on.
+
+### Actions
+- Corrective: the benchmark is re-scored under the new rule (R2-9: a match rated medium is detected, the earlier
+  results re-scored apart and the new matches confirmed blind): `short+list` 9, `open+list` 8 and `open-B+list` 8 of
+  11 defect cases, against 6, 7 and 6 under the rule of the runs.
+- Preventive (round 2 of slice 4, implemented on the slice 4 branch; the decision page names each one's tests):
+  - R2-1: blocking, high and medium findings are fixed; only a low finding may be deferred (`AGENTS.md`, Review
+    findings and Review loop; `ALLOWED_ANSWERS` in `scripts/run_independent_review.py`, which the launcher applies
+    before a recheck and `make docs-check` after);
+  - R2-2: a rejection of a blocking, high or medium finding cites a checkable fact, by its shape (`CHECKABLE_FACT`);
+  - R2-3: one dispute round: a rejection the recheck re-raises or cannot determine is fixed or goes to the owner;
+  - R2-4: a fix adds no mechanism, and a finding only a mechanism would answer goes to the owner with a one-line
+    proposal (`AGENTS.md`, Fixes stay within the agreed decisions);
+  - R2-5: the review prompt asks an initial review whether the change adds a mechanism, and a recheck the same of
+    each fix (`MECHANISM_RULES`);
+  - R2-6: a recheck's evidence lists the process files changed since the reviewed round (`PROCESS_FILES` in
+    `scripts/review_inputs.py`);
+  - R2-7: a recheck quotes the lines each rejection it accepts or re-raises rests on, and the launcher checks the
+    quote in the copy;
+  - R2-8: the decision brief lists medium findings answered `rejected`.
+- Measured (R2-10, one run per case and recheck wording): both wordings re-raised RC-4's false rejection, and both
+  accepted RC-3's fix that adds a step where leaving the CI result out would do.
+- Open: RC-3's miss: R2-5's question did not make either wording re-raise a fix that works but grows the process
+  (decision concern 13); the process files leave out the benchmark runner, its key and the skills (decision concern
+  15); the plan list's question 8 still states the rule before R2-4 (growth proposal 14).
+
+### Lesson
+Let a rule, not the reviewer's rating, decide what gets fixed; make a rejection rest on a fact the recheck must quote;
+and ask the growth question where the fix is written and judged. A rule that lives only in the rulebook is not yet a
+question anyone asks.

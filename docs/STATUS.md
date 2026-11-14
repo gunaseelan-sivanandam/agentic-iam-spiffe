@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-11-13. Update this page at the end of every slice (see `AGENTS.md`, slice workflow, handoff).
+Last updated: 2026-11-14. Update this page at the end of every slice (see `AGENTS.md`, slice workflow, handoff).
 Detailed history: [`docs/history/implementation_log.md`](history/implementation_log.md).
 
 ## Where the project stands
@@ -14,14 +14,18 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 - **Open PoC work, in "needed before" order:**
   1. now: slice 4 ([#33](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/33), sub-issues #38–#43), implemented on
      the branch `poc/slice-4-implementation` for one final PR: 4.1 to 4.6 implemented and reviewed; 4.5b's
-     benchmark ran (57 of 60 calls, then 76 under a budget raised to 85, now stopped at 76;
+     benchmark ran (57 of 60 calls, then 76 under a budget raised to 85, then 80 of a hard stop of 80 in round 2;
      [report](slices/poc-4-5-benchmark/benchmark_report.md)); one dry slice ran; the final review ended after
      round 2; the owner's growth of 2026-11-13 (rejections read like fixes, a `searched` list, the checklist
      question on findings) is implemented and reviewed (unit `growth`); the owner's decisions of 2026-11-13 on
      decision concerns 2, 3, 4, 7, 8 and 10 are implemented (small slices, the decision page, a second recheck
      case, a severity measurement that came out worse, so nothing is adopted) and reviewed (unit
-     `owner-decisions`, ended after round 2). Then the owner's open decisions on the decision page, the push and the
-     final PR.
+     `owner-decisions`, ended after round 2). Round 2, from the owner's findings on review severity of 2026-11-14
+     (R2-1 to R2-10), is implemented: blocking, high and medium findings are fixed, a rejection cites a checkable
+     fact, one dispute round, a fix adds no mechanism and the review prompt asks it, a recheck sees the process
+     files the fixes changed and quotes what each rejection rests on; the benchmark is re-scored with a medium match
+     counted, and two more recheck cases ran. Its review (unit `round-2`) is next. Then the owner's open decisions
+     on the decision page, the push and the final PR.
      Progress and the owner's decisions: [`slice_4_decisions.md`](slices/agentic-sdlc-poc/slice_4_decisions.md);
      Next, before slice 5: a slice of author prompts and their benchmark (owner, 2026-11-09: "let's
      continue this slice for just review, after this let's run a new slice of author prompts and
@@ -72,6 +76,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Last verification
 | Check | Date | Result |
 | --- | --- | --- |
+| `make qa-quality` (qa-trace in `--mode pr --base origin/poc/agentic-sdlc`, docs-check, test-lint, qa-deploy), `make tooling-test`, `make lint`, `make unit-guard-check`, `make gate-consistency` on `poc/slice-4-implementation` (`c79ed96`) | 2026-11-14 | PASSED; gap gate: 0 new gaps, 113 coverage gaps remain; qa-deploy 18 known violations, 22 warnings; 916 pytest (with a scratch shellcheck), 9 shell; lint 0 new or worsened. The E2E suite was not run again: round 2 changed no service, policy, compose, harness or CI file |
 | Full E2E suite, clean stack, `make e2e` on `poc/slice-4-implementation` (`11667c5`) | 2026-11-10 | 120/120 passed; 1 warning (M5-T55 env-gated skip); `make qa-evidence` PASSED (validated 119, skipped 1) |
 | `make qa-quality` (and qa-trace in `--mode pr --base origin/poc/agentic-sdlc`), `make lint`, `make tooling-test` on `poc/slice-4-implementation` | 2026-11-10 | PASSED; gap gate: 0 new gaps; 764 pytest (with a scratch shellcheck), 9 shell |
 | Full E2E suite, clean stack, `make e2e` on `poc/slice-3-changed-files-lint` (`89c9cbe`; slice 2 at `642b840` gave the same) | 2026-11-08 | 120/120 passed; 1 warning (M5-T55 env-gated skip); `make qa-deploy` (image users inspected) and `make qa-evidence` PASSED after it |
@@ -89,7 +94,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `poc/slice-4-implementation` | agentic-sdlc-poc slice 4: the six sub-issues (#38–#43), on the plans merged with PR #48 | Implemented and reviewed, local; the owner's decisions of 2026-11-13 implemented, their review at round 2; one final PR into `poc/agentic-sdlc` when the owner pushes |
+| `poc/slice-4-implementation` | agentic-sdlc-poc slice 4: the six sub-issues (#38–#43), on the plans merged with PR #48 | Implemented and reviewed, local; the owner's decisions of 2026-11-13 implemented and reviewed; round 2 (R2-1 to R2-10, 2026-11-14) implemented, its review unit `round-2` next; one final PR into `poc/agentic-sdlc` when the owner pushes |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
@@ -112,6 +117,9 @@ Full entries, root causes and lessons in [`docs/delivery_problem_log.md`](delive
   PR #48 and on the slice 4 branch, closing it when slice 4 merges.
 - **DPL-012** Slice 4's implementation run made claims and checks that did not hold; all fixed on the slice
   4 branch, closing it when slice 4 merges.
+- **DPL-013** Review severity decided what got fixed, a rejection could stand on the author's word, and fixes
+  grew the process; round 2's rules are on the slice 4 branch, closing it when slice 4 merges; open: both recheck
+  wordings accepted a fix that grows the process (RC-3, decision concern 13).
 - DPL-008 closed on 2026-11-04.
 
 ## Known gaps and debt
