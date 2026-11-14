@@ -7,7 +7,8 @@ with the base branch) and writes Markdown for the review outcome section of the 
 - each unit's last verdict and its findings by severity;
 - every finding answered `owner:`, every decision concern, every recheck answer marked `cannot determine`, and every
   finding still disputed after its recheck;
-- the blocking and high findings answered `rejected`, with their reasons;
+- the blocking, high and medium findings answered `rejected`, with their reasons (round 2 of slice 4, R2-8: with
+  R2-1 all three are to be fixed, so the owner sees each rejection of one);
 - the origin stage of each finding against the review that found it (S41-D16).
 
 It holds no CI result: the user sees the PR's required checks on the PR page (owner, 2026-11-13, decision concern 10
@@ -209,12 +210,13 @@ def _collect_findings(unit: Unit, brief: Brief) -> None:
                 brief.concerns.append(f"{where}: {answer}")
             elif word == "owner":
                 brief.owner.append(f"{where}: {answer}")
-            if word == "rejected" and finding["severity"] in ("blocking", "high"):
+            if word == "rejected" and finding["severity"] in checker.FIXED_SEVERITIES:
                 brief.rejected.append(f"{where}: {answer}")
 
 
 def _collect_rechecks(unit: Unit, brief: Brief) -> None:
-    """`cannot determine` answers, and findings a recheck re-raised whose latest answer is again `rejected:`."""
+    """`cannot determine` answers, and findings a recheck re-raised whose latest answer is again `rejected:` (for a
+    blocking, high or medium finding the record check refuses that since R2-3)."""
     reraised: dict[str, Attempt] = {}
     for attempt in unit.reported():
         for entry in attempt.report.get("accounted", []):  # type: ignore[union-attr]
@@ -256,7 +258,7 @@ def render(brief: Brief, head: str, merge_base: str) -> str:
     lines += _items("Answered `owner:`", brief.owner) + _items("Decision concerns", brief.concerns)
     lines += _items("`cannot determine` in a recheck", brief.undetermined)
     lines += _items("Still disputed after a recheck", brief.disputed)
-    lines += _items("Blocking and high findings answered `rejected`", brief.rejected)
+    lines += _items("Blocking, high and medium findings answered `rejected`", brief.rejected)
     found_by = sorted({f for _o, f in brief.origins})
     lines += ["**Where findings started** (origin stage of each finding, against the review that found it: its "
               "`--stage` lists, or its unit when it had none)", ""]

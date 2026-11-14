@@ -63,8 +63,10 @@ def test_the_brief_lists_every_item_the_owner_must_see(fx: base.Fixture) -> None
     assert "X4: NOTE ON X4" in text.split("**`cannot determine` in a recheck**", 1)[1].split("**Still", 1)[0]
     disputed = text.split("**Still disputed after a recheck**", 1)[1].split("**Blocking", 1)[0]
     assert "X1: re-raised by the recheck, answered again: rejected: it still does not happen" in disputed
+    assert "**Blocking, high and medium findings answered `rejected`**" in text  # R2-8
     rejected = text.split("answered `rejected`**", 1)[1].split("**Where", 1)[0]
     assert "X5 (high): rejected: already covered by scripts/review_me.py:1" in rejected and "X1" not in rejected
+    assert "X6 (medium): rejected: the input is checked at scripts/review_me.py:1" in rejected  # R2-8
     assert "| discovery | 1 |" in text and "| tests first | 1 |" in text and "| implementation | 5 |" in text
 
 
