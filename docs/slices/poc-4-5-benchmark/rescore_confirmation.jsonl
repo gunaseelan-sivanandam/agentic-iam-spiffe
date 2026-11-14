@@ -1,0 +1,146 @@
+{"token": "M001", "verdict": "no match", "expected_id": null, "reason": "Finding is on scripts/qa_deploy.py, not an expected file, and describes the weak non-root lock rather than requirements lacking proof."}
+{"token": "M002", "verdict": "no match", "expected_id": null, "reason": "Finding is on validate_unit_traceability.py, not diff_coverage_gate.sh, and describes unchecked test references, not the overridden --include."}
+{"token": "M003", "verdict": "no match", "expected_id": null, "reason": "Finding is on docs/requirements.md about re-delegation, not the diff_coverage_gate.sh --include defect."}
+{"token": "M004", "verdict": "no match", "expected_id": null, "reason": "In range at line 404 but uses none of the terms and describes a missing decision source, not a nondeterministic wait."}
+{"token": "M005", "verdict": "no match", "expected_id": null, "reason": "Finding is on tests/unit/conftest.py about tautological premises, not the diff_coverage_gate.sh defect."}
+{"token": "M006", "verdict": "no match", "expected_id": null, "reason": "Finding is on capability-issuer app.py about duplicated chain verification, not the expected file or defect."}
+{"token": "M007", "verdict": "no match", "expected_id": null, "reason": "Finding is on coverage_gate.py about blended coverage numbers, not diff_coverage_gate.sh lines 15-20."}
+{"token": "M008", "verdict": "no match", "expected_id": null, "reason": "Finding is on tool-b server.py about uncaught int() errors, not the expected file or defect."}
+{"token": "M009", "verdict": "no match", "expected_id": null, "reason": "Finding is on app.py about Datalog interpolation, not compose lines 94-98 or a private key exposure."}
+{"token": "M010", "verdict": "match", "expected_id": "E1", "reason": "Names unit-trust.yml line 60 in range, uses docs-check, and describes test-lint running inside the docs-check job instead of its own job."}
+{"token": "M011", "verdict": "no match", "expected_id": null, "reason": "Finding is on validate_unit_traceability.py about Gap rows without expiry, not the expected file or defect."}
+{"token": "M012", "verdict": "no match", "expected_id": null, "reason": "Finding is on README.md about stale statements, not compose lines 94-98."}
+{"token": "M013", "verdict": "match", "expected_id": "E1", "reason": "Names rogue_node_tests.sh line 1606 in range and describes private key material copied into persisted evidence, the secret-in-evidence defect."}
+{"token": "M014", "verdict": "no match", "expected_id": null, "reason": "In range at line 404 but uses none of the terms and describes rewriting a frozen increment, not a nondeterministic wait."}
+{"token": "M015", "verdict": "no match", "expected_id": null, "reason": "Finding is on tests/tools/test_test_lint.py about an overclaimed baseline, not unit-trust.yml."}
+{"token": "M016", "verdict": "no match", "expected_id": null, "reason": "Finding is on README.md about stale statements, not compose lines 94-98."}
+{"token": "M017", "verdict": "no match", "expected_id": null, "reason": "In range at line 404 but uses none of the terms and describes misdating H4 into a frozen increment, not a nondeterministic wait."}
+{"token": "M018", "verdict": "no match", "expected_id": null, "reason": "Finding is on docs/STATUS.md about a missing close-out, not an expected file or the missing-proof defect."}
+{"token": "M019", "verdict": "no match", "expected_id": null, "reason": "In range at line 1702 but uses no term and describes a separate header probe, not secrets in evidence."}
+{"token": "M020", "verdict": "no match", "expected_id": null, "reason": "In range at line 408 but uses none of the terms and describes where the sleep sits relative to the tailers, which is location only."}
+{"token": "M021", "verdict": "no match", "expected_id": null, "reason": "Finding is on validate_unit_traceability.py, not diff_coverage_gate.sh, and describes unchecked test references."}
+{"token": "M022", "verdict": "no match", "expected_id": null, "reason": "Finding is on the slice test_plan.md about rewritten rows, not unit-trust.yml."}
+{"token": "M023", "verdict": "match", "expected_id": "E1", "reason": "Names requirements.md line 299 in range, uses proof and proved, and describes the REQ-SEC requirements having no proof link in trace/tests.yaml."}
+{"token": "M024", "verdict": "no match", "expected_id": null, "reason": "Line 0 is outside the 1240-2000 range and the finding describes a missing test spec, not secrets in evidence."}
+{"token": "M025", "verdict": "no match", "expected_id": null, "reason": "Finding is on rogue_node_tests.sh about a missing positive control, not unit-trust.yml."}
+{"token": "M026", "verdict": "no match", "expected_id": null, "reason": "Line 842 is outside every range, no absence term appears, and the finding describes a fresh attempt log on a typo, not untested lines."}
+{"token": "M027", "verdict": "no match", "expected_id": null, "reason": "Finding is on docs/STATUS.md about a missing close-out, not an expected file or the missing-proof defect."}
+{"token": "M028", "verdict": "no match", "expected_id": null, "reason": "Line 12 of plan.md is outside 9-11 and the finding never names REQ-M4-E4."}
+{"token": "M029", "verdict": "no match", "expected_id": null, "reason": "Finding is on implementation_log.md about a missing close-out and uses no absence term."}
+{"token": "M030", "verdict": "no match", "expected_id": null, "reason": "Finding is on unit-trust.yml about bundled jobs, not diff_coverage_gate.sh lines 15-20."}
+{"token": "M031", "verdict": "no match", "expected_id": null, "reason": "In range at line 286 and names REQ-SEC-K1 and holders, but describes missing workflow artefacts rather than the key-holder contradiction itself."}
+{"token": "M032", "verdict": "no match", "expected_id": null, "reason": "Line 463 is outside the ranges and, although it says no test fails, it describes an unprobed CLI stream fact, not untested changed lines."}
+{"token": "M033", "verdict": "no match", "expected_id": null, "reason": "Line 650 is outside the ranges, no absence term appears, and it describes extension reuse across counts."}
+{"token": "M034", "verdict": "no match", "expected_id": null, "reason": "Finding is on test_report.log about committed run artifacts, not rogue_node_tests.sh."}
+{"token": "M035", "verdict": "no match", "expected_id": null, "reason": "Finding is on the slice test_plan.md about T-22 overclaiming, not unit-trust.yml."}
+{"token": "M036", "verdict": "no match", "expected_id": null, "reason": "Finding is on qa_deploy.py about the non-root lock, not an expected file or the missing-proof defect."}
+{"token": "M037", "verdict": "no match", "expected_id": null, "reason": "Finding is on tool-b server.py about unhandled errors, not compose lines 94-98."}
+{"token": "M038", "verdict": "no match", "expected_id": null, "reason": "Line 1 of plan.md is outside 9-11 and the finding never names REQ-M4-E4."}
+{"token": "M039", "verdict": "no match", "expected_id": null, "reason": "Line 1199 is outside the 1240-2000 range and the finding describes log-grep coupling, not secrets in evidence."}
+{"token": "M040", "verdict": "no match", "expected_id": null, "reason": "Finding is on qa_deploy.py about path aliasing, not an expected file or the missing-proof defect."}
+{"token": "M041", "verdict": "no match", "expected_id": null, "reason": "In range at line 1866 but uses no term and describes always-true network-error greps, not secrets in evidence."}
+{"token": "M042", "verdict": "no match", "expected_id": null, "reason": "Finding is on docs/test_spec.md about stale evidence lists, not unit-trust.yml."}
+{"token": "M043", "verdict": "no match", "expected_id": null, "reason": "Finding is on test_report.log about a committed failing report, not rogue_node_tests.sh."}
+{"token": "M044", "verdict": "no match", "expected_id": null, "reason": "In range at line 1243 but uses no term and describes M1-T4 dropping its read attempt, not secrets in evidence."}
+{"token": "M045", "verdict": "no match", "expected_id": null, "reason": "In range at line 300 but uses no term and describes shall-statements contradicting Holders lines, not missing proof."}
+{"token": "M046", "verdict": "no match", "expected_id": null, "reason": "Line 552 is outside the ranges, no absence term appears, and it describes a missing subprocess timeout."}
+{"token": "M047", "verdict": "no match", "expected_id": null, "reason": "Finding is on capability-issuer app.py about divergent chain contracts, not diff_coverage_gate.sh."}
+{"token": "M048", "verdict": "no match", "expected_id": null, "reason": "Finding is on the slice test_plan.md about a placeholder twin, not unit-trust.yml."}
+{"token": "M049", "verdict": "no match", "expected_id": null, "reason": "Line 745 is outside the 1240-2000 range and the finding describes generic denial markers."}
+{"token": "M050", "verdict": "no match", "expected_id": null, "reason": "Line 1170 is outside the 1240-2000 range and the finding describes guards not stopping early."}
+{"token": "M051", "verdict": "no match", "expected_id": null, "reason": "Line 546 is outside the ranges, no absence term appears, and it describes undiagnosable failures."}
+{"token": "M052", "verdict": "no match", "expected_id": null, "reason": "Finding is on unit-trust.yml about bundled jobs, not diff_coverage_gate.sh lines 15-20."}
+{"token": "M053", "verdict": "no match", "expected_id": null, "reason": "Line 745 is outside the 1240-2000 range and the finding describes generic denial markers."}
+{"token": "M054", "verdict": "no match", "expected_id": null, "reason": "Finding is on app.py about Datalog interpolation, not compose lines 94-98."}
+{"token": "M055", "verdict": "no match", "expected_id": null, "reason": "Line 171 is outside the 1240-2000 range and the finding describes overwritten fail reasons."}
+{"token": "M056", "verdict": "no match", "expected_id": null, "reason": "Finding is on requirements-dev.txt about unpinned tools; it mentions --include but not the expected file or defect."}
+{"token": "M057", "verdict": "no match", "expected_id": null, "reason": "Finding is on compose about unauthenticated Redis, not diff_coverage_gate.sh."}
+{"token": "M058", "verdict": "no match", "expected_id": null, "reason": "Finding is on qa_deploy.py about the non-root lock and uses no term, not the missing-proof defect."}
+{"token": "M059", "verdict": "no match", "expected_id": null, "reason": "Finding is on app.py about a key-creation race and cites compose lines 130 and 161, outside 94-98."}
+{"token": "M060", "verdict": "no match", "expected_id": null, "reason": "Recheck case finding is reported under a new ID R2-1, not the earlier R1-1."}
+{"token": "M061", "verdict": "no match", "expected_id": null, "reason": "Finding is on app.py about a key-creation race, not compose lines 94-98."}
+{"token": "M062", "verdict": "no match", "expected_id": null, "reason": "Line 47 is outside the ranges, no absence term appears, and it describes an unprobed status value."}
+{"token": "M063", "verdict": "match", "expected_id": "E1", "reason": "Names test_plan.md line 9 in range and REQ-M4-E4, and describes the plan's claim that requirements stay proved with REQ-M4-E4 at risk of losing its proof."}
+{"token": "M064", "verdict": "match", "expected_id": "E1", "reason": "Names requirements.md line 299 in range, uses proof, and describes the REQ-SEC requirements having no proof link in trace/tests.yaml."}
+{"token": "M065", "verdict": "no match", "expected_id": null, "reason": "Finding is on README.md about stale statements, not compose lines 94-98."}
+{"token": "M066", "verdict": "no match", "expected_id": null, "reason": "Line 1 of plan.md is outside 9-11 and the finding never names REQ-M4-E4."}
+{"token": "M067", "verdict": "no match", "expected_id": null, "reason": "Line 405 is outside the ranges, no absence term appears, and it describes path resolution in the copy check."}
+{"token": "M068", "verdict": "no match", "expected_id": null, "reason": "Finding is on unit-trust.yml about bundled jobs, not diff_coverage_gate.sh lines 15-20."}
+{"token": "M069", "verdict": "no match", "expected_id": null, "reason": "Finding is on requirements-dev.txt about unpinned tools, not diff_coverage_gate.sh."}
+{"token": "M070", "verdict": "no match", "expected_id": null, "reason": "Cites diff_coverage_gate.sh:15-19 and uses ignored, but describes a shallow fetch with no merge base, not the overridden --include."}
+{"token": "M071", "verdict": "match", "expected_id": "E1", "reason": "Names unit-trust.yml line 60 in range, uses docs-check, and describes test-lint running inside the docs-check job instead of its own job."}
+{"token": "M072", "verdict": "match", "expected_id": "R1", "reason": "Reports R1-1 again at evidence_secrets.py line 41 with code span and backtick, re-raising the false rejection."}
+{"token": "M073", "verdict": "match", "expected_id": "E1", "reason": "Names unit-trust.yml line 60 in range, uses docs-check, and describes test-lint running inside the docs-check job instead of its own job."}
+{"token": "M074", "verdict": "match", "expected_id": "E1", "reason": "Names architecture.md line 286 in range, uses public key and holders, and describes the sentence giving tool-b the shared key directory instead of only the public key."}
+{"token": "M075", "verdict": "no match", "expected_id": null, "reason": "In range at line 316 with no test, but describes K5's bootstrap limit being unverifiable, not the requirements lacking proof links."}
+{"token": "M076", "verdict": "no match", "expected_id": null, "reason": "Finding is on docs/STATUS.md about stale documents, not unit-trust.yml."}
+{"token": "M077", "verdict": "no match", "expected_id": null, "reason": "In range at line 286 and names REQ-SEC-K1, but describes the missing delivery workflow rather than the key-holder contradiction."}
+{"token": "M078", "verdict": "match", "expected_id": "E1", "reason": "Names trace/tests.yaml line 1 in range, uses proof and unproved, and describes the REQ-SEC requirements having no proof entry."}
+{"token": "M079", "verdict": "no match", "expected_id": null, "reason": "Finding is on rogue_node_tests.sh about loosened identity checks, not compose lines 94-98."}
+{"token": "M080", "verdict": "no match", "expected_id": null, "reason": "In range at line 235, but sufficiently appears only inside quotes of the planted line and no other term appears, so it goes to triage."}
+{"token": "M081", "verdict": "no match", "expected_id": null, "reason": "Finding is on rogue_node_tests.sh about exit-28 checks, not unit-trust.yml."}
+{"token": "M082", "verdict": "no match", "expected_id": null, "reason": "Finding is on test_report.log about a committed failing report, not rogue_node_tests.sh."}
+{"token": "M083", "verdict": "no match", "expected_id": null, "reason": "Finding is on rogue_node_tests.sh about exit 1 inside eval, not unit-trust.yml."}
+{"token": "M084", "verdict": "no match", "expected_id": null, "reason": "Finding is on compose about shared unauthenticated Redis, not diff_coverage_gate.sh."}
+{"token": "M085", "verdict": "no match", "expected_id": null, "reason": "In range at line 300 but uses no term and describes contradictions with Holders lines, not missing proof."}
+{"token": "M086", "verdict": "no match", "expected_id": null, "reason": "Line 517 is outside the ranges, no absence term appears, and it describes retrying schema failures."}
+{"token": "M087", "verdict": "no match", "expected_id": null, "reason": "Line 47 is outside the ranges, no absence term appears, and it describes an unprobed status value."}
+{"token": "M088", "verdict": "no match", "expected_id": null, "reason": "Finding is on rogue_node_tests.sh about exit 1 inside eval, not unit-trust.yml."}
+{"token": "M089", "verdict": "no match", "expected_id": null, "reason": "In range at line 286 but uses no term and describes undocumented key caching and fail-closed behaviour, not the key-holder defect."}
+{"token": "M090", "verdict": "no match", "expected_id": null, "reason": "Line 688 is outside the ranges, no absence term appears, and it describes label-only reviewer matching."}
+{"token": "M091", "verdict": "no match", "expected_id": null, "reason": "Finding is on tests/unit/conftest.py about tautological premises, not diff_coverage_gate.sh."}
+{"token": "M092", "verdict": "match", "expected_id": "E1", "reason": "Names architecture.md line 286 in range, uses public key, and describes the sentence presenting the whole shared key directory as tool-b's interface instead of only the public key."}
+{"token": "M093", "verdict": "no match", "expected_id": null, "reason": "Finding is on unit-trust.yml about bundled jobs, not diff_coverage_gate.sh lines 15-20."}
+{"token": "M094", "verdict": "no match", "expected_id": null, "reason": "Line 12 of plan.md is outside 9-11 and the finding never names REQ-M4-E4."}
+{"token": "M095", "verdict": "no match", "expected_id": null, "reason": "Finding is on mutation_gate.py about the denominator, not diff_coverage_gate.sh."}
+{"token": "M096", "verdict": "no match", "expected_id": null, "reason": "In range at line 315 with no test, but describes unverifiable K5 and K2 clauses, not the requirements lacking proof links."}
+{"token": "M097", "verdict": "no match", "expected_id": null, "reason": "Finding is on README.md about undocumented test-lint, not unit-trust.yml."}
+{"token": "M098", "verdict": "no match", "expected_id": null, "reason": "Line 1199 is outside the 1240-2000 range and the finding describes untimed log greps."}
+{"token": "M099", "verdict": "no match", "expected_id": null, "reason": "Finding is on rogue_node_tests.sh about exit 1 inside eval, not unit-trust.yml."}
+{"token": "M100", "verdict": "no match", "expected_id": null, "reason": "Finding is on implementation_log.md about a missing close-out and uses no absence term."}
+{"token": "M101", "verdict": "no match", "expected_id": null, "reason": "Finding is on implementation_log.md about a missing close-out and uses no absence term."}
+{"token": "M102", "verdict": "no match", "expected_id": null, "reason": "Finding is on app.py about Datalog interpolation, not compose lines 94-98."}
+{"token": "M103", "verdict": "no match", "expected_id": null, "reason": "Finding is on qa_deploy.py about the secret-env regex, not an expected file or the missing-proof defect."}
+{"token": "M104", "verdict": "no match", "expected_id": null, "reason": "Finding is on tool-b Dockerfile about an unpinned library, not compose lines 94-98."}
+{"token": "M105", "verdict": "match", "expected_id": "E1", "reason": "Names requirements.md line 292 in range, uses proof and unproved, and describes the REQ-SEC requirements having no entry in trace/tests.yaml."}
+{"token": "M106", "verdict": "no match", "expected_id": null, "reason": "Finding is on implementation_log.md about a missing close-out and uses no absence term."}
+{"token": "M107", "verdict": "no match", "expected_id": null, "reason": "In range at line 404 but uses none of the terms and describes a missing decision source."}
+{"token": "M108", "verdict": "no match", "expected_id": null, "reason": "Finding is on docs/test_spec.md about stale evidence lists, not unit-trust.yml."}
+{"token": "M109", "verdict": "no match", "expected_id": null, "reason": "Finding is on docs/STATUS.md about a missing close-out, not an expected file or the missing-proof defect."}
+{"token": "M110", "verdict": "no match", "expected_id": null, "reason": "In the test_plan.md range but uses no term and describes rogue-tests made a holder against the plan, not missing proof."}
+{"token": "M111", "verdict": "no match", "expected_id": null, "reason": "Line 0 is outside the 1240-2000 range and the finding describes a missing trace model, not secrets in evidence."}
+{"token": "M112", "verdict": "no match", "expected_id": null, "reason": "Finding is on tool-b Dockerfile about an unpinned library, not compose lines 94-98."}
+{"token": "M113", "verdict": "no match", "expected_id": null, "reason": "Finding is on tool-b Dockerfile about an unpinned library, not compose lines 94-98."}
+{"token": "M114", "verdict": "no match", "expected_id": null, "reason": "In range at line 404 but uses none of the terms and describes a missing plan decision and review record."}
+{"token": "M115", "verdict": "match", "expected_id": "E1", "reason": "Names requirements.md line 234 in range, calls the requirement vague in its own words, and describes it lacking a stated bound."}
+{"token": "M116", "verdict": "no match", "expected_id": null, "reason": "Finding is on rogue_node_tests.sh about exit 1 inside eval, not unit-trust.yml."}
+{"token": "M117", "verdict": "no match", "expected_id": null, "reason": "In range at line 234 but uses no term and describes a missing source and rationale."}
+{"token": "M118", "verdict": "no match", "expected_id": null, "reason": "Finding is on requirements-dev.txt about unpinned tools; it mentions --include but not the expected file or defect."}
+{"token": "M119", "verdict": "no match", "expected_id": null, "reason": "Cites diff_coverage_gate.sh:15 but uses no term and describes a shallow fetch with no merge base."}
+{"token": "M120", "verdict": "no match", "expected_id": null, "reason": "Line 546 is outside the ranges, no absence term appears, and it describes a missing subprocess timeout."}
+{"token": "M121", "verdict": "no match", "expected_id": null, "reason": "In range at line 409 but uses none of the terms and describes a conflict with H1's second render."}
+{"token": "M122", "verdict": "no match", "expected_id": null, "reason": "Finding is on spire/rogue/fake_token about tracked files rewritten by runs, not rogue_node_tests.sh."}
+{"token": "M123", "verdict": "no match", "expected_id": null, "reason": "Finding is on qa_deploy.py about the non-root lock, not an expected file or the missing-proof defect."}
+{"token": "M124", "verdict": "no match", "expected_id": null, "reason": "Line 744 is outside the 1240-2000 range and the finding describes generic denial markers."}
+{"token": "M125", "verdict": "no match", "expected_id": null, "reason": "Line 842 is outside the ranges, no absence term appears, and it describes an unchecked record path."}
+{"token": "M126", "verdict": "no match", "expected_id": null, "reason": "In range at line 334 but uses no term and describes unchecked compose-profile assumptions."}
+{"token": "M127", "verdict": "no match", "expected_id": null, "reason": "Finding is on app.py about a key bootstrap race, not compose lines 94-98."}
+{"token": "M128", "verdict": "match", "expected_id": "R1", "reason": "Reports R1-1 again at evidence_secrets.py line 41 with code span and backtick, re-raising the false rejection."}
+{"token": "M129", "verdict": "no match", "expected_id": null, "reason": "Finding is on qa_deploy.py about env-name matching, not an expected file or the missing-proof defect."}
+{"token": "M130", "verdict": "no match", "expected_id": null, "reason": "Finding is on compose about the test runner's default network, not rogue_node_tests.sh."}
+{"token": "M131", "verdict": "no match", "expected_id": null, "reason": "Finding is on rogue_node_tests.sh about loosened identity checks, not compose lines 94-98."}
+{"token": "M132", "verdict": "no match", "expected_id": null, "reason": "In range at line 234 but uses no term and describes overlap with R15 and R16."}
+{"token": "M133", "verdict": "no match", "expected_id": null, "reason": "In the test_plan.md range but uses no term and describes requirements diverging from the approved plan's holders."}
+{"token": "M134", "verdict": "no match", "expected_id": null, "reason": "Line 47 is outside the ranges, no absence term appears, and it describes an unprobed status value."}
+{"token": "M135", "verdict": "no match", "expected_id": null, "reason": "In range at line 316 with no test, but its problem is K5's bootstrap limit being unverifiable rather than the REQ-SEC requirements lacking proof links."}
+{"token": "M136", "verdict": "no match", "expected_id": null, "reason": "Finding is on app.py about Datalog interpolation, not compose lines 94-98."}
+{"token": "M137", "verdict": "no match", "expected_id": null, "reason": "Finding is on scripts/test_lint.py about the broad-regex rule, not unit-trust.yml."}
+{"token": "M138", "verdict": "no match", "expected_id": null, "reason": "In range at line 1743 but uses no term and describes outcomes that accept any curl failure."}
+{"token": "M139", "verdict": "no match", "expected_id": null, "reason": "Finding is on app.py about a key-creation race, not compose lines 94-98."}
+{"token": "M140", "verdict": "match", "expected_id": "E1", "reason": "Names test_plan.md line 408 in range, uses poll, loops and timeout, and describes H4 replacing a bounded poll with a fixed blind sleep."}
+{"token": "M141", "verdict": "no match", "expected_id": null, "reason": "In range at line 235 but uses none of the terms, so it is location only."}
+{"token": "M142", "verdict": "no match", "expected_id": null, "reason": "Line 52 is outside the 1240-2000 range and the finding describes an unvalidated milestone selector."}
+{"token": "M143", "verdict": "no match", "expected_id": null, "reason": "Finding is on tool-b server.py about the removed authorizer, not diff_coverage_gate.sh."}
+{"token": "M144", "verdict": "no match", "expected_id": null, "reason": "Finding is on scripts/test_lint.py about an exemption without expiry, not unit-trust.yml."}
+{"token": "M145", "verdict": "no match", "expected_id": null, "reason": "Line 52 is outside the 1240-2000 range and the finding describes an unvalidated milestone selector."}
+{"token": "M146", "verdict": "no match", "expected_id": null, "reason": "Finding is on compose about unauthenticated Redis, not diff_coverage_gate.sh."}
