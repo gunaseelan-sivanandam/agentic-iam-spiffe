@@ -76,6 +76,12 @@ is first); every heading carries its date.
     `[one-word]` and `[parts-of-two-lines]` `:1566 assert (0 == 1)` (each recheck completed); the five twins pass.
     After the change, `test_a_rejection_counts_only_when_the_files_it_cites_were_read[cited-file-read]` quotes the file
     its answer cites instead of the reviewed file.
+  - The brief over a frozen record (base `e621f36`, `python3 -m pytest -q -p no:cacheprovider --tb=line
+    tests/tools/test_review_brief.py -k before_4_3`; 1 failed, 1 passed): `[True]` `review_brief.BriefError: the
+    records cannot give a complete brief`; the twin `[False]` (the record check reads the attempt) passes. Fixed in
+    `5245997`: from `f884421` the brief applied today's answer rules to attempts logged before slice 4.3, so
+    `python3 scripts/review_brief.py --base origin/poc/agentic-sdlc` refused to build over 4.1's medium finding
+    answered `deferred: #42` (discovered issue 35); it builds again.
 - Review round 1 of unit `round-2` (record `docs/slices/agentic-sdlc-poc/review_round_2.md`): attempt 1 failed the
   read check (discovered issue 36); attempt 2 not approvable: 2 high, 2 medium, 3 low. Fixed (`6d8de53` to
   `cdfce97`): F1, the stage-table test's `DISCOVERY_EXIT` held the exit cell `eb46b58` had rewritten, so
