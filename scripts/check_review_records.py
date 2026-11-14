@@ -11,9 +11,11 @@ no such field and are not checked, S43-D5):
   report, fails;
 - a recheck's logged answers hash equals the hash of the answers section it names, so answers edited after the
   recheck read them fail;
-- every finding of a released report has an answer its severity and kind allow (the launcher's own rule), and a
-  rejected blocking or high finding is accepted by the next round's report, or carries an `owner:` link in its own
-  row or in a later round's answer to the same finding (a re-raised finding keeps its ID).
+- every finding of a released report has an answer its severity and kind allow (the launcher's own rule, and no
+  deferred medium finding, round 2 of slice 4, R2-1);
+- a rejected blocking, high or medium finding cites a checkable fact (R2-2), and is accepted by the next round's
+  report, or carries an `owner:` link in its own row, or a later round answers the same finding `owner:` or `fixed:`
+  (a re-raised finding keeps its ID); a finding re-raised after its rejection is not rejected again (R2-3).
 
 A block is the fenced block right after a Prompt, Evidence or Report label under an attempt heading; any other fence,
 for example one inside an answers section, is not a block.
@@ -32,9 +34,23 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 LOG_NAME = "review_attempts.jsonl"
-# S43-D4: a rejected blocking or high finding stands without a later round's acceptance only with an owner link.
+# S43-D4, R2-1: a rejected blocking, high or medium finding stands without a later round's acceptance only with an
+# owner link.
 OWNER_LINK = re.compile(r"\bowner:\s*(?:https://\S+|(?:docs|AGENTS)[\w./-]*\.md\b)")
 LOG_FIELDS = {"prompt": "prompt_sha256", "evidence": "evidence_sha256"}
+# Round 2 of slice 4 (the owner, 2026-11-14), R2-1: blocking, high and medium findings are fixed; only a low finding
+# is the author's choice. The rules on rejections below (S43-D4, R2-2, R2-3) bind these three severities.
+FIXED_SEVERITIES = ("blocking", "high", "medium")
+# R2-2: the checkable facts a rejection may cite, by shape only. Records are frozen while the repository moves on, so
+# whether a cited test or line still exists is the recheck's question, not this check's.
+CHECKABLE_FACT = re.compile("|".join((
+    r"(?<![\w.-])M\d+[\w.]*-T\d+(?![\w-])",  # an E2E harness test: M5-T49, M3.S4-T2, M4a-T3
+    r"(?<![\w-])[A-Z]{3,}-[A-Z]\d+(?![\w-])",  # a static test: DEPLOY-K1, EVID-T1 (not REQ-M1-R1, not CR-B8)
+    r"(?<![\w-])UT-\d{3,}(?![\w-])",  # a unit test: UT-123
+    r"[\w.-]+\.py::\w+",  # a tooling test: tests/tools/test_x.py::test_y
+    r"`make [\w-]+`",  # a gate, in a code span, so that prose such as "make sure" is no gate
+    r"(?<![\w/.-])(?:(?:[\w.-]+/)+[\w.-]+|[\w.-]+\.[A-Za-z0-9]+|Makefile):\d+(?:-\d+)?(?!\d)",  # a file and line
+)))
 
 
 def _load_launcher() -> Any:
@@ -50,6 +66,7 @@ def _load_launcher() -> Any:
 launcher = _load_launcher()
 records = launcher._RECORDS  # the parser the launcher writes records with
 AttemptSection = records.AttemptSection
+AnswerRow = launcher.AnswerRow
 
 
 def sha256_text(text: str) -> str:
@@ -104,15 +121,24 @@ def _answers_problems(attempt: str, logged: LoggedAttempt, record_text: str) -> 
     return []
 
 
-def _next_round_accepts(attempts: dict[str, LoggedAttempt], sections: dict[str, AttemptSection],
-                        start: dict[str, Any], finding: str) -> bool:
+@dataclass(frozen=True)
+class RecordContext:
+    """What the answer rules read besides one attempt's report: the log's attempts, the record's attempt sections
+    and the record's text."""
+
+    attempts: dict[str, LoggedAttempt]
+    sections: dict[str, AttemptSection]
+    text: str
+
+
+def _next_round_accepts(ctx: RecordContext, start: dict[str, Any], finding: str) -> bool:
     """Whether the same reviewer's completed attempt in the next round accounts the finding as accepted."""
-    for attempt, logged in attempts.items():
+    for attempt, logged in ctx.attempts.items():
         later = logged.start
         if (later.get("unit"), later.get("count"), later.get("round"), later.get("reviewer")) != (
                 start.get("unit"), start.get("count"), start.get("round", 0) + 1, start.get("reviewer")):
             continue
-        section = sections.get(attempt)
+        section = ctx.sections.get(attempt)
         block = section.blocks.get("report") if section else None
         if (logged.end or {}).get("status") == "completed" and block:
             accounted = json.loads(block).get("accounted", [])
@@ -121,44 +147,78 @@ def _next_round_accepts(attempts: dict[str, LoggedAttempt], sections: dict[str, 
     return False
 
 
-def _later_owner_answer(attempts: dict[str, LoggedAttempt], record_text: str, start: dict[str, Any],
-                        finding: str) -> bool:
+def _later_answer_settles(ctx: RecordContext, start: dict[str, Any], finding: str) -> bool:
     """Whether a later round of the same reviewer answers the same finding (a re-raised finding keeps its ID) with
-    `owner:`: how a rejection that the recheck re-raised reaches the owner without editing answers a recheck read."""
-    for attempt, logged in attempts.items():
+    `owner:` or `fixed:`: how a rejection that the recheck re-raised goes to the owner or is fixed (R2-3) without
+    editing answers a recheck read."""
+    for attempt, logged in ctx.attempts.items():
         later = logged.start
         if (later.get("unit"), later.get("count"), later.get("reviewer")) != (
                 start.get("unit"), start.get("count"), start.get("reviewer")) or later.get("round", 0) <= start.get("round", 0):
             continue
-        section = launcher.answers_section(record_text, attempt)
+        section = launcher.answers_section(ctx.text, attempt)
         rows = launcher.answer_rows(section) if section else []
-        if any(r.finding == finding and launcher.answer_word(r.answer) == "owner" for r in rows):
+        if any(r.finding == finding and launcher.answer_word(r.answer) in ("owner", "fixed") for r in rows):
             return True
     return False
 
 
-def _finding_answer_problems(attempt: str, report: dict[str, Any], record_text: str,
-                             context: tuple[dict[str, LoggedAttempt], dict[str, AttemptSection]]) -> list[str]:
-    """S43-D4: every finding of a released report has an answer its severity and kind allow."""
+def _earlier_answer_word(ctx: RecordContext, start: dict[str, Any], finding: str) -> str | None:
+    """The first word of the answer to `finding` in the earlier round a recheck read, or None."""
+    earlier = start.get("earlier_attempt")
+    section = launcher.answers_section(ctx.text, earlier) if earlier else None
+    rows = launcher.answer_rows(section) if section else []
+    return next((launcher.answer_word(r.answer) for r in rows if r.finding == finding), None)
+
+
+def _rejection_problems(attempt: str, row: AnswerRow, severity: str, report: dict[str, Any], ctx: RecordContext) -> list[str]:
+    """What a rejection of a blocking, high or medium finding needs: a checkable fact (R2-2), and the next round's
+    acceptance, an owner link in its row, or a later round's `owner:` or `fixed:` answer to the same finding (S43-D4,
+    R2-1, R2-3). A finding the recheck re-raised after its rejection is fixed or goes to the owner; it is not rejected
+    again (R2-3: one dispute round)."""
+    problems = []
+    if not CHECKABLE_FACT.search(row.answer):
+        problems.append(f"{row.finding} is a rejected {severity} finding whose answer cites no checkable fact (a test "
+                        "ID, a gate as `make <target>` or a file and line)")
+    start = ctx.attempts[attempt].start
+    reraised = any(e.get("item") == row.finding and e.get("status") == "re-raised" for e in report.get("accounted", []))
+    if reraised and _earlier_answer_word(ctx, start, row.finding) == "rejected":
+        problems.append(f"{row.finding} was re-raised after its rejection: there is one dispute round, so it is "
+                        "answered fixed: or owner:, not rejected: again")
+    elif not (OWNER_LINK.search(row.answer) or _next_round_accepts(ctx, start, row.finding)
+              or _later_answer_settles(ctx, start, row.finding)):
+        problems.append(f"{row.finding} is a rejected {severity} finding that no later round accepted and no owner "
+                        "link or later fix covers")
+    return problems
+
+
+def _deferral_problem(row: AnswerRow, finding: dict[str, Any]) -> str | None:
+    """R2-1: a medium finding is not deferred. The launcher's table (`ALLOWED_ANSWERS`) still allows it, so the record
+    check refuses it, where the launcher's own row rules pass the row (same severity cell, not a decision concern)."""
+    if (finding.get("severity") == row.severity == "medium" and finding.get("kind") != "decision_concern"
+            and launcher.answer_word(row.answer) == "deferred"):
+        return f"a medium finding ({row.finding}) cannot be answered deferred:"
+    return None
+
+
+def _finding_answer_problems(attempt: str, report: dict[str, Any], ctx: RecordContext) -> list[str]:
+    """S43-D4, R2-1 to R2-3: every finding of a released report has an answer its severity and kind allow."""
     if not report.get("findings"):
         return []
-    section = launcher.answers_section(record_text, attempt)
+    section = launcher.answers_section(ctx.text, attempt)
     if section is None:
         return [f"{attempt}: its report has findings and the record has no answers to it"]
     rows = launcher.answer_rows(section)
-    problems = [f"{attempt}: {p}" for p in launcher.answer_table_problems(report, rows)]
-    problems += [f"{attempt}: {p}" for p in filter(None, map(launcher.answer_format_problem, rows))]
-    attempts, sections = context
-    severities = {f["id"]: f.get("severity") for f in report["findings"]}
-    for row in rows:
-        rejected = launcher.answer_word(row.answer) == "rejected" and severities.get(row.finding) in ("blocking", "high")
-        start = attempts[attempt].start
-        settled = (OWNER_LINK.search(row.answer) or _next_round_accepts(attempts, sections, start, row.finding)
-                   or _later_owner_answer(attempts, record_text, start, row.finding))
-        if rejected and not settled:
-            problems.append(f"{attempt}: {row.finding} is a rejected {severities[row.finding]} finding that no later "
-                            "round accepted and no owner link covers")
-    return problems
+    problems = [*launcher.answer_table_problems(report, rows), *filter(None, map(launcher.answer_format_problem, rows))]
+    findings = {f["id"]: f for f in report["findings"]}
+    for row in (r for r in rows if r.finding in findings):
+        severity = findings[row.finding].get("severity")
+        deferral = _deferral_problem(row, findings[row.finding])
+        if deferral:
+            problems.append(deferral)
+        if launcher.answer_word(row.answer) == "rejected" and severity in FIXED_SEVERITIES:
+            problems += _rejection_problems(attempt, row, severity, report, ctx)
+    return [f"{attempt}: {p}" for p in problems]
 
 
 def check_log(root: Path, log: Path) -> list[str]:
@@ -174,6 +234,7 @@ def check_log(root: Path, log: Path) -> list[str]:
         sections, form = records.parse_record(text)
         problems += [f"{record}: {p}" for p in form]
         mine = {a: logged for a, logged in checked.items() if record_of(logged.start) == record}
+        context = RecordContext(attempts, sections, text)
         for attempt in sorted(set(sections) - set(attempts)):
             problems.append(f"{record}: attempt {attempt} has a heading but no entry in {log.name}")
         for attempt, logged in sorted(mine.items()):
@@ -183,7 +244,7 @@ def check_log(root: Path, log: Path) -> list[str]:
             found = [*_block_problems(attempt, logged, sections[attempt]), *_answers_problems(attempt, logged, text)]
             report = sections[attempt].blocks.get("report")
             if report and not found:
-                found += _finding_answer_problems(attempt, json.loads(report), text, (attempts, sections))
+                found += _finding_answer_problems(attempt, json.loads(report), context)
             problems += [f"{record}: {p}" for p in found]
     return problems
 

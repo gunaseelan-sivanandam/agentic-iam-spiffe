@@ -32,27 +32,31 @@ def _brief(fx: base.Fixture) -> str:
 
 
 def _two_rounds(fx: base.Fixture, last_answer: str = "rejected: it still does not happen") -> None:
-    """Round 1 with five findings and their answers; a recheck that re-raises one and cannot settle another; the
-    answers to the recheck."""
-    findings = [base._finding("X1", severity="medium"), base._finding("X2", severity="medium"),
+    """Round 1 with six findings and their answers; a recheck that re-raises one and cannot settle another; the
+    answers to the recheck. The re-raised X1 is low, the author's choice, so it may be rejected again (R2-3 binds
+    blocking, high and medium findings only)."""
+    findings = [base._finding("X1", severity="low"), base._finding("X2", severity="medium"),
                 base._finding("X3", kind="decision_concern", severity="low", origin="discovery"),
-                base._finding("X4", severity="high"), base._finding("X5", severity="high", origin="tests first")]
-    commit = base._recheck(fx, "| X1 | medium | rejected: the scenario does not happen |",
+                base._finding("X4", severity="high"), base._finding("X5", severity="high", origin="tests first"),
+                base._finding("X6", severity="medium")]
+    commit = base._recheck(fx, "| X1 | low | rejected: the scenario does not happen |",
                            "| X2 | medium | owner: docs/slices/demo/decisions.md |",
                            "| X3 | low | owner: docs/slices/demo/decisions.md |",
                            "| X4 | high | fixed: scripts/review_me.py: guarded |",
-                           "| X5 | high | rejected: already covered by scripts/review_me.py |", findings=tuple(findings))
-    fx.scenario(base._reply([base._finding("X1", severity="medium")], verdict="no", accounted=[
+                           "| X5 | high | rejected: already covered by scripts/review_me.py:1 |",
+                           "| X6 | medium | rejected: the input is checked at scripts/review_me.py:1 |",
+                           findings=tuple(findings))
+    fx.scenario(base._reply([base._finding("X1", severity="low")], verdict="no", accounted=[
         base._accounted("X1", "re-raised"), base._accounted("X2"), base._accounted("X3"),
-        base._accounted("X4", "cannot determine", note="NOTE ON X4"), base._accounted("X5")]))
+        base._accounted("X4", "cannot determine", note="NOTE ON X4"), base._accounted("X5"), base._accounted("X6")]))
     assert base._run(fx, round_no=2, commit=commit) == 0
-    base._answers(fx, "unit1/c1/r2/A/1", f"| X1 | medium | {last_answer} |")
+    base._answers(fx, "unit1/c1/r2/A/1", f"| X1 | low | {last_answer} |")
 
 
 def test_the_brief_lists_every_item_the_owner_must_see(fx: base.Fixture) -> None:
     _two_rounds(fx)
     text = _brief(fx)
-    assert "| `demo` `unit1` | no | 2 | 0 | 2 | 2 | 1 | 4 for the owner |" in text  # the re-raised X1 counts once
+    assert "| `demo` `unit1` | no | 2 | 0 | 2 | 2 | 2 | 4 for the owner |" in text  # the re-raised X1 counts once
     owner = text.split("**Answered `owner:`**", 1)[1].split("**Decision concerns**", 1)[0]
     assert "X2 (medium): owner: docs/slices/demo/decisions.md" in owner and "X3" not in owner
     assert "X3 (low): owner:" in text.split("**Decision concerns**", 1)[1].split("**`cannot", 1)[0]
@@ -60,8 +64,8 @@ def test_the_brief_lists_every_item_the_owner_must_see(fx: base.Fixture) -> None
     disputed = text.split("**Still disputed after a recheck**", 1)[1].split("**Blocking", 1)[0]
     assert "X1: re-raised by the recheck, answered again: rejected: it still does not happen" in disputed
     rejected = text.split("answered `rejected`**", 1)[1].split("**Where", 1)[0]
-    assert "X5 (high): rejected: already covered by scripts/review_me.py" in rejected and "X1" not in rejected
-    assert "| discovery | 1 |" in text and "| tests first | 1 |" in text and "| implementation | 4 |" in text
+    assert "X5 (high): rejected: already covered by scripts/review_me.py:1" in rejected and "X1" not in rejected
+    assert "| discovery | 1 |" in text and "| tests first | 1 |" in text and "| implementation | 5 |" in text
 
 
 def test_a_re_raised_finding_answered_with_a_fix_is_not_disputed(fx: base.Fixture) -> None:

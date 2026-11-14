@@ -272,14 +272,18 @@ def test_docs_check_runs_the_record_check(fx: base.Fixture) -> None:
 # --- The check: allowed answers (S43-D4) ----------------------------------------------------------------------------
 
 
+OWNER_ROW_LINK = "owner: https://github.com/o/r/pull/1#issuecomment-3"
+
+
 @pytest.mark.parametrize(("finding", "answer"), [
     (base._finding("X1", severity="blocking"), "fixed: scripts/review_me.py: guarded"),
     (base._finding("X1", severity="high"), "owner: https://github.com/o/r/pull/1#issuecomment-2"),
-    (base._finding("X1", severity="medium"), "deferred: #12"),
+    (base._finding("X1", severity="medium"), "owner: docs/slices/demo/decisions.md"),
+    (base._finding("X1", severity="low"), "deferred: #12"),
     (base._finding("X1", severity="low"), "rejected: style"),
-    (base._finding("X1", severity="high"), "rejected: disputed; owner: https://github.com/o/r/pull/1#issuecomment-3"),
+    (base._finding("X1", severity="high"), f"rejected: disputed, M5-T49 covers it; {OWNER_ROW_LINK}"),
     (base._finding("X1", kind="decision_concern", severity="medium"), "owner: docs/slices/demo/decisions.md"),
-], ids=["blocking-fixed", "high-owner", "medium-deferred", "low-rejected", "high-rejected-with-owner-link",
+], ids=["blocking-fixed", "high-owner", "medium-owner", "low-deferred", "low-rejected", "high-rejected-with-owner-link",
         "decision-concern-owner"])
 def test_each_allowed_answer_passes(fx: base.Fixture, finding: dict, answer: str) -> None:
     _completed(fx, finding)
@@ -287,29 +291,63 @@ def test_each_allowed_answer_passes(fx: base.Fixture, finding: dict, answer: str
     assert _problems(fx) == []
 
 
-def test_rejected_blocking_finding_that_the_next_round_accepts_passes(fx: base.Fixture) -> None:
-    _completed(fx, base._finding("X1", severity="blocking"))
-    commit = base._answers(fx, "unit1/c1/r1/A/1", "| X1 | blocking | rejected: the scenario does not happen |")
-    assert any("X1 is a rejected blocking finding that no later round accepted" in p for p in _problems(fx))
+@pytest.mark.parametrize("severity", ["blocking", "medium"])
+def test_rejected_blocking_or_medium_finding_that_the_next_round_accepts_passes(fx: base.Fixture, severity: str) -> None:
+    """R2-1: a rejected medium finding, like a blocking or high one, stands only when the next round accepts it."""
+    _completed(fx, base._finding("X1", severity=severity))
+    commit = base._answers(fx, "unit1/c1/r1/A/1", f"| X1 | {severity} | rejected: it does not happen, scripts/review_me.py:1 |")
+    assert any(f"X1 is a rejected {severity} finding that no later round accepted" in p for p in _problems(fx))
     fx.scenario(base._reply(accounted=[base._accounted("X1"), base._accounted("EV1", "explained")]))
     assert base._run(fx, round_no=2, commit=commit) == 0
     assert _problems(fx) == []
 
 
+# --- The check: a rejection cites a checkable fact (R2-2) -----------------------------------------------------------
+
+
+@pytest.mark.parametrize("fact", ["M5-T49", "M3.S4-T2", "M4a-T3", "DEPLOY-K1", "UT-123", "tests/tools/test_x.py::test_y",
+                                  "`make qa-trace`", "scripts/review_me.py:1", "AGENTS.md:40-52", "Makefile:12"],
+                         ids=["harness", "harness-sub-slice", "harness-milestone-letter", "static", "unit", "tooling",
+                              "gate", "file-and-line", "file-and-lines", "makefile-line"])
+def test_a_rejection_citing_a_checkable_fact_of_each_shape_passes(fx: base.Fixture, fact: str) -> None:
+    _completed(fx, base._finding("X1", severity="high"))
+    base._answers(fx, "unit1/c1/r1/A/1", f"| X1 | high | rejected: already covered by {fact}; {OWNER_ROW_LINK} |")
+    assert _problems(fx) == []
+
+
+@pytest.mark.parametrize(("severity", "reason"), [
+    ("blocking", "the scenario does not happen"),
+    ("high", "see docs/slices/demo/plan.md, which says so"),
+    ("medium", "we make sure of it in the gate"),
+    ("high", "CR-B8 settled it"),
+    ("medium", "REQ-M1-R1 and REQ-SEC-D2 say so"),
+], ids=["blocking-prose", "high-file-without-line", "medium-make-in-prose", "high-finding-id", "medium-requirement-ids"])
+def test_a_rejection_of_a_blocking_high_or_medium_finding_that_cites_no_checkable_fact_fails(
+        fx: base.Fixture, severity: str, reason: str) -> None:
+    """R2-2: the owner link settles the dispute, but the rejection itself still has to cite a fact."""
+    _completed(fx, base._finding("X1", severity=severity))
+    base._answers(fx, "unit1/c1/r1/A/1", f"| X1 | {severity} | rejected: {reason}; {OWNER_ROW_LINK} |")
+    problems = _problems(fx)
+    assert len(problems) == 1 and f"X1 is a rejected {severity} finding whose answer cites no checkable fact" in problems[0], problems
+
+
 @pytest.mark.parametrize(("finding", "rows", "problem"), [
     (base._finding("X1"), (), "has findings and the record has no answers"),
     (base._finding("X1"), ("| X1 | high | accepted: fine |",), "does not start with fixed:"),
-    (base._finding("X1", severity="medium"), ("| X1 | medium | deferred: later |",), "names no issue"),
+    (base._finding("X1", severity="low"), ("| X1 | low | deferred: later |",), "names no issue"),
     (base._finding("X1", severity="blocking"), ("| X1 | blocking | deferred: #3 |",), "cannot be answered deferred"),
-    (base._finding("X1", severity="high"), ("| X1 | high | rejected: no |",), "no later round accepted"),
-    (base._finding("X1", severity="high"), ("| X1 | high | rejected: see docs/slices/demo/plan.md |",),
+    (base._finding("X1", severity="medium"), ("| X1 | medium | deferred: #3 |",), "cannot be answered deferred"),
+    (base._finding("X1", severity="high"), ("| X1 | high | rejected: covered by M5-T49 |",), "no later round accepted"),
+    (base._finding("X1", severity="medium"), ("| X1 | medium | rejected: covered by M5-T49 |",),
+     "X1 is a rejected medium finding that no later round accepted"),
+    (base._finding("X1", severity="high"), ("| X1 | high | rejected: see docs/slices/demo/plan.md:3 |",),
      "no later round accepted"),
     (base._finding("X1", kind="decision_concern", severity="low"), ("| X1 | low | rejected: no |",),
      "must be answered owner"),
     (base._finding("X1"), ("| X1 | high | fixed: scripts/review_me.py: g |", "| X9 | low | rejected: r |"),
      "which the report does not hold"),
-], ids=["no-row", "other-first-word", "deferred-without-issue", "blocking-deferred", "high-rejected-alone",
-     "high-rejected-with-a-link-but-no-owner",
+], ids=["no-row", "other-first-word", "deferred-without-issue", "blocking-deferred", "medium-deferred",
+        "high-rejected-alone", "medium-rejected-alone", "high-rejected-with-a-link-but-no-owner",
         "decision-concern-rejected", "row-for-unknown-id"])
 def test_each_answer_the_rules_do_not_allow_fails(fx: base.Fixture, finding: dict, rows: tuple[str, ...],
                                                   problem: str) -> None:
@@ -385,13 +423,50 @@ def test_an_acceptance_in_a_next_round_attempt_that_did_not_complete_settles_not
     assert any("X1 is a rejected blocking finding that no later round accepted" in p for p in problems), problems
 
 
-def test_a_later_owner_answer_to_the_re_raised_finding_settles_the_rejection(fx: base.Fixture) -> None:
-    _completed(fx, base._finding("X1", severity="high"))
-    commit = base._answers(fx, "unit1/c1/r1/A/1", "| X1 | high | rejected: the scenario does not happen |")
-    fx.scenario(base._reply([base._finding("X1")], accounted=[base._accounted("X1", "re-raised"),
-                                                             base._accounted("EV1", "explained")], verdict="no"))
+def _re_raised_after(fx: base.Fixture, severity: str, first_answer: str) -> None:
+    """Round 1 with X1 at `severity` answered `first_answer`; the recheck re-raises X1 at the same severity."""
+    _completed(fx, base._finding("X1", severity=severity))
+    commit = base._answers(fx, "unit1/c1/r1/A/1", f"| X1 | {severity} | {first_answer} |")
+    fx.scenario(base._reply([base._finding("X1", severity=severity)], verdict="no", accounted=[
+        base._accounted("X1", "re-raised"), base._accounted("EV1", "explained")]))
     assert base._run(fx, round_no=2, commit=commit) == 0
+
+
+def test_a_later_owner_answer_to_the_re_raised_finding_settles_the_rejection(fx: base.Fixture) -> None:
+    _re_raised_after(fx, "high", "rejected: the scenario does not happen, scripts/review_me.py:1")
     base._answers(fx, "unit1/c1/r2/A/1", "| X1 | high | owner: docs/slices/demo/decisions.md |")
+    assert _problems(fx) == []
+
+
+# --- The check: one dispute round (R2-3) ----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("severity", ["blocking", "high", "medium"])
+def test_a_re_raised_rejection_answered_rejected_again_fails(fx: base.Fixture, severity: str) -> None:
+    _re_raised_after(fx, severity, "rejected: the scenario does not happen, scripts/review_me.py:1")
+    base._answers(fx, "unit1/c1/r2/A/1", f"| X1 | {severity} | rejected: it still does not happen, scripts/review_me.py:1 |")
+    problems = _problems(fx)
+    assert any("unit1/c1/r2/A/1: X1 was re-raised after its rejection" in p for p in problems), problems
+
+
+def test_a_re_raised_rejection_answered_with_a_fix_settles_the_rejection(fx: base.Fixture) -> None:
+    """R2-3: a rejection the recheck does not accept goes to the owner or is fixed; the fix settles it too."""
+    _re_raised_after(fx, "high", "rejected: the scenario does not happen, scripts/review_me.py:1")
+    base._answers(fx, "unit1/c1/r2/A/1", "| X1 | high | fixed: scripts/review_me.py: guarded after all |")
+    assert _problems(fx) == []
+
+
+def test_a_re_raised_low_finding_may_be_rejected_again(fx: base.Fixture) -> None:
+    """A low finding is the author's choice (R2-1), so the one-dispute rule does not bind it."""
+    _re_raised_after(fx, "low", "rejected: style")
+    base._answers(fx, "unit1/c1/r2/A/1", "| X1 | low | rejected: still style |")
+    assert _problems(fx) == []
+
+
+def test_a_re_raised_fix_may_be_rejected_once(fx: base.Fixture) -> None:
+    """The one dispute round starts with a rejection: a fix the recheck re-raised may still be defended once."""
+    _re_raised_after(fx, "high", "fixed: scripts/review_me.py: guarded")
+    base._answers(fx, "unit1/c1/r2/A/1", f"| X1 | high | rejected: the fix holds, scripts/review_me.py:1; {OWNER_ROW_LINK} |")
     assert _problems(fx) == []
 
 
