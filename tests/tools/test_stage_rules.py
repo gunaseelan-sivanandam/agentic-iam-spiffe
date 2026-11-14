@@ -32,8 +32,8 @@ SKILL = ROOT / ".claude" / "skills" / "grill-me" / "SKILL.md"
 STAGE_LISTS = {"Discovery": ["plan-and-test-plan"], "Requirements": ["requirements"],
                "Architecture and interfaces": ["architecture-and-interfaces"], "Tests first": ["unit-tests", "e2e-tests"],
                "Implementation": ["code"], "Final review": [], "Handoff": []}
-DISCOVERY_EXIT = ("| the plan review has no blocking or high finding open, and the user merges the plan PR; a small "
-                  "slice's plan stays in its one PR |")
+DISCOVERY_EXIT = ("| the plan review has ended, and the user merges the plan PR; a small slice's plan stays in its one "
+                  "PR |")
 # Decision concern 10 of slice 4 (owner, 2026-11-13): the sections of every slice's decision page.
 DECISION_PAGE_SECTIONS = ("Goal", "What the slice builds", "Decisions made", "Decisions to make", "Decision concerns",
                           "Discovered issues", "Implementation review: the test-plan questions", "Review outcome",
