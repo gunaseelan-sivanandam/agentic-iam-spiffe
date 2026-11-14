@@ -110,7 +110,8 @@ them.
   answers that it cannot determine it. That is the one dispute
   round: a rejection of a blocking, high or medium finding stands only when that recheck accepts it;
   one it re-raises or cannot determine is fixed or goes to the user (`owner:`), who decides, and is
-  never answered `rejected:` again. A fix goes to the origin of the problem and adds no mechanism
+  never answered `rejected:` again; the answers to that recheck hold its row even when the recheck's
+  report no longer lists the finding. A fix goes to the origin of the problem and adds no mechanism
   ([Fixes stay within the agreed decisions](#independent-review)), and the author searches for the
   same cause elsewhere and says where it looked
   ([DPL-007](docs/delivery_problem_log.md#dpl-007-plan-review-answered-every-finding-by-adding-mechanisms)).
@@ -355,8 +356,15 @@ All of the following, in the same change:
   section of the record, never the whole record); it lists every answer under `accounted` with the
   files it opened for it (a file it only searched goes under `searched`), and the launcher fails it
   when it leaves an answer out, names an opened file it did not read, or did not read a file that a
-  `fixed:` answer names or a `rejected:` answer cites. Whoever writes a task text never
-  makes a file list the scope, never says "only check X", and never asks a closed recheck question.
+  `fixed:` answer names or a `rejected:` answer cites. For every `rejected:` answer it accepts or
+  re-raises, it quotes the lines its decision rests on, with file and lines (`quotes`); the launcher
+  fails it when such a quote is missing or its text is not at that place in the copy (whitespace
+  aside, within two lines). Before the call, the launcher refuses answers that break a rule
+  `make docs-check` applies to them. The prompt asks an initial review whether the change adds a
+  mechanism (a gate, check, CI job, process step, document, register or field) without the user's
+  approval where changing a choice would do, and a recheck the same of each `fixed:` answer, which
+  it re-raises if so. Whoever writes a task text never makes a file list the scope, never says
+  "only check X", and never asks a closed recheck question.
 - **What the reviewer receives.** The launcher computes the review's inputs; the author does not
   choose or summarise them. The files under review come from the diff between the merge-base and
   the reviewed commit, deleted files apart; `--path` only puts files first and carries the
@@ -367,8 +375,11 @@ All of the following, in the same change:
   clone of the reviewed commit with only `PATH`, `LANG` and a scratch `HOME` (which links only the
   interpreter's user site-packages): the changed script lines and branches the tooling tests do not
   run, the trace gaps among the upstream items, and the CI results of the reviewed commit from the
-  public API. A command that cannot run is shown as failed, and the reviewer accounts for every
-  numbered evidence entry under `accounted`, as `explained` or `flagged` with the finding it raised.
+  public API; in a recheck, also each rulebook, gate, CI, template, checklist or launcher file
+  (`PROCESS_FILES` in `scripts/review_inputs.py`) that the commits since the reviewed round changed,
+  with its line counts. A command that cannot run is shown as failed, and the reviewer accounts for
+  every numbered evidence entry under `accounted`, as `explained` or `flagged` with the finding it
+  raised.
 - **Stage checklists.** Each review gets its stage's list from
   [`docs/review_checklists/`](docs/review_checklists/) as the minimum, never the limit: `--stage
   <type>` reads the list from the base commit, so a change cannot rewrite the list it is reviewed
