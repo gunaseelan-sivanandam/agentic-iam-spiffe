@@ -1568,3 +1568,34 @@ def test_a_recheck_after_no_process_file_change_says_so_and_an_initial_review_li
     assert _run(fx, round_no=2, commit=commit) == 0
     evidence = _section(_prompt(fx), "Evidence")
     assert "No entries: nothing to account for." in evidence and "No process file changed since the reviewed round" in evidence
+
+
+def test_each_review_asks_whether_the_change_or_a_fix_adds_a_mechanism(fx: Fixture) -> None:
+    """R2-5: the question at the pause point, in the output section every mandate wording shares; the final review
+    keeps its open question and gets none."""
+    _first_round(fx)
+    rules = launcher.MECHANISM_RULES
+    for text in rules.values():
+        assert "a gate, check, CI job, process step, document, register or field" in text
+        assert "without the owner's approval where changing a choice would do" in text
+    initial = _section(_prompt(fx), "Output")
+    assert rules["initial"] in initial and rules["recheck"] not in initial
+    commit = _answers(fx, "unit1/c1/r1/A/1", "| X1 | high | fixed: scripts/review_me.py: guarded |")
+    fx.scenario(_reply(accounted=[_accounted("X1")]))
+    assert _run(fx, round_no=2, commit=commit) == 0
+    recheck = _section(_prompt(fx), "Output")
+    assert rules["recheck"] in recheck and rules["initial"] not in recheck and "re-raise" in rules["recheck"]
+    final_record = "docs/slices/demo/review_final.md"
+    _write(fx.work, final_record, "# final\n")
+    assert _run(fx, unit="final", record=final_record, commit=_commit_all(fx.work, "final record")) == 0
+    final = _section(_prompt(fx), "Output")
+    assert all(text not in final for text in rules.values()) and "final" not in rules
+
+
+def test_the_output_section_states_round_2s_severity_rule_and_the_quote_rule(fx: Fixture) -> None:
+    """R2-1: blocking, high and medium findings are fixed; only a low finding is the author's choice."""
+    assert _run(fx) == 0
+    output = _section(_prompt(fx), "Output")
+    assert "Blocking, high and medium findings are fixed" in output and "deferred with a tracking issue" not in output
+    assert "unless the owner defers it" not in output and "`low` (style, preference) is the author's choice" in output
+    assert launcher.QUOTE_RULE in output and "`quotes`" in launcher.QUOTE_RULE

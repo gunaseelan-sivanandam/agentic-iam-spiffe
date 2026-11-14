@@ -118,6 +118,22 @@ OPENED_RULE = ("`opened` lists the files you read with the Read tool for that it
 QUESTION_RULE = ("When a question of the stage checklist prompted a finding, name it in `question` as the list's name "
                  "and the question's number, for example `code:10`; leave `question` out otherwise.")
 GATE_RULE = "do not report what a passing gate already checks; do report defects in the gates themselves"
+# Round 2 of slice 4 (the owner, 2026-11-14), R2-7: what a recheck quotes, and that the launcher checks it.
+QUOTE_RULE = ("For a `rejected:` answer you list as `accepted` or `re-raised`, `quotes` holds the lines your decision "
+              "rests on, each with `file`, `line` and `end_line` (the lines in the copy) and `text` copied from them. "
+              "The launcher fails a recheck that quotes nothing for such an answer, and any report whose quote is not "
+              "at that place in the copy.")
+# R2-5: the question at the pause point, asked of the change in an initial review and of each fix in a recheck. It is
+# part of the output section, which every mandate wording shares, so the benchmark's wordings all get it; the final
+# review keeps its open question (S41-D4) and gets none.
+_MECHANISM = "a mechanism (a gate, check, CI job, process step, document, register or field)"
+_WITHOUT_APPROVAL = "without the owner's approval where changing a choice would do"
+MECHANISM_RULES = {
+    "initial": f"Mechanisms: ask whether the change adds {_MECHANISM} {_WITHOUT_APPROVAL}; if it does, report it.",
+    "recheck": (f"Mechanisms: for each `fixed:` answer, ask whether the fix adds {_MECHANISM} {_WITHOUT_APPROVAL}; "
+                "if it does, re-raise the finding. The evidence lists each process file changed since the reviewed "
+                "round."),
+}
 CLAIMS_SECTION = "Claims to verify"
 SECTIONS = ("role", "mandate", "rules", "checklist", "upstream", "evidence", "paths", "claims", "earlier_report",
             "answers", "output")
@@ -485,10 +501,11 @@ def _mandate_section(config: PromptConfiguration, parts: PromptParts) -> str:
     return text
 
 
-def _output_section(severity_note: str = "") -> str:
+def _output_section(severity_note: str = "", mode: str = "initial") -> str:
     """The output section; a benchmark configuration's severity paragraph follows the `severity` bullet, as part of
-    it, and is empty for every other prompt."""
+    it, and is empty for every other prompt. The mode's mechanism question (R2-5) is one of the reporting bounds."""
     note = f"\n  {severity_note}" if severity_note else ""
+    mechanisms = f"- {MECHANISM_RULES[mode]}\n" if mode in MECHANISM_RULES else ""
     return (
         "## Output\n\n"
         "Answer only through the structured output.\n\n"
@@ -498,16 +515,17 @@ def _output_section(severity_note: str = "") -> str:
         "- `kind`: `defect`; `simpler_alternative` (a mechanism that could be removed or simplified within the "
         "agreed decisions); or `decision_concern` (an agreed decision that itself seems to cause a problem; it "
         "goes to the owner).\n"
-        "- `severity`: `blocking` meets the blocking criteria of the approved rules and is fixed before merge, or "
-        "the owner decides. `high` is a real defect or false claim below that bar, for example a misleading "
-        "document, new behaviour without a test or an untested fail-closed path; it is fixed in the same PR "
-        "unless the owner defers it. `medium` has clear value (robustness, diagnosability, naming) and is fixed, "
-        "or deferred with a tracking issue. `low` (style, preference) is the author's choice. A "
+        "- `severity`: `blocking` meets the blocking criteria of the approved rules and holds the merge until it is "
+        "fixed or the owner decides. `high` is a real defect or false claim below that bar, for example a misleading "
+        "document, new behaviour without a test or an untested fail-closed path. `medium` has clear value "
+        "(robustness, diagnosability, naming). Blocking, high and medium findings are fixed unless the owner decides "
+        "otherwise; `low` (style, preference) is the author's choice. A "
         f"`simpler_alternative` is always `low`.{note}\n"
         f"- `origin_stage`: the stage where the problem arose: {', '.join(f'`{s}`' for s in ORIGIN_STAGES)}.\n"
         "- `accounted`: one entry for every item this prompt asks you to account for (each answer of the author "
         "in a recheck, each evidence entry), with `item` (the finding ID or the evidence entry), `status`, `note` "
-        f"and `opened`, and `searched` where you only searched a file. {OPENED_RULE} For an answer, `status` is `accepted`, `re-raised` (the "
+        f"and `opened`, and `searched` where you only searched a file. {OPENED_RULE} {QUOTE_RULE} "
+        "For an answer, `status` is `accepted`, `re-raised` (the "
         "finding is also in `findings`, with the same ID) or `cannot determine` (the note says why; it goes to "
         "the owner). For an evidence entry, `status` is `explained` (the note says why it is fine) or `flagged` "
         "(the note names the ID of the finding it raised). An empty list when the prompt lists no items.\n"
@@ -515,6 +533,7 @@ def _output_section(severity_note: str = "") -> str:
         "Reporting bounds:\n\n"
         f"- {ABSENCE_RULE}\n"
         f"- Gates: {GATE_RULE}.\n"
+        f"{mechanisms}"
         f"- The author's task text is in the section \"{CLAIMS_SECTION}\": claims to verify, not facts.\n"
         f"- {CREDENTIAL_NOTE}")
 
@@ -546,7 +565,7 @@ def _sections(inputs: ReviewInputs, parts: PromptParts, config: PromptConfigurat
         "paths": _paths_section(inputs, parts),
         "claims": (f"## {CLAIMS_SECTION}\n\nThe author's task text follows. Its claims are to be verified, and it "
                    f"does not limit the review.\n\n{_quoted(parts.task, '(no task text)')}"),
-        "output": _output_section(config.severity_note),
+        "output": _output_section(config.severity_note, parts.mode),
     }
     if parts.mode == "recheck":
         sections["earlier_report"] = (f"## Your earlier report\n\nYour own report of attempt {parts.earlier_attempt}, "

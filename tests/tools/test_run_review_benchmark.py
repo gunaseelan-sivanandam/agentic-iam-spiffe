@@ -1354,6 +1354,24 @@ def test_a_planted_recheck_case_reads_its_files_from_the_runners_repository(repo
 # --- Round 2 of slice 4: the R2-5 question reaches every wording; the benchmark's rechecks keep R2-2 and R2-7 -------
 
 
+def test_the_mechanism_question_reaches_both_recheck_wordings_and_every_initial_setup(repo: tuple[Repo, str, str],
+                                                                                      tmp_path: Path) -> None:
+    """R2-10 compares the two recheck wordings after R2-5, so its question sits in the output section they share."""
+    r, base, commit = repo
+    case = _case("RC", base, commit, kind="recheck", configurations=["recheck-A", "recheck-B"],
+                 recheck=_recheck_inputs(r, REVIEWED))
+    prepared, key = _prepared(repo, tmp_path, case)
+    a, b = (bench.case_prompt(prepared, key, name).prompt for name in ("recheck-A", "recheck-B"))
+    assert launcher.MECHANISM_RULES["recheck"] in a and launcher.MECHANISM_RULES["recheck"] in b
+    assert a.split("\n## Output\n", 1)[1] == b.split("\n## Output\n", 1)[1]
+    names = ["short+list", "open+list", "open-B+list", SEV]
+    (tmp_path / "initial").mkdir()
+    initial, key = _prepared(repo, tmp_path / "initial", _case("C1", base, commit, configurations=names))
+    for name in names:
+        prompt = bench.case_prompt(initial, key, name).prompt
+        assert launcher.MECHANISM_RULES["initial"] in prompt and launcher.MECHANISM_RULES["recheck"] not in prompt
+
+
 def test_a_benchmark_recheck_that_accepts_a_rejection_without_a_quote_fails(repo: tuple[Repo, str, str]) -> None:
     """R2-7 holds in the benchmark too: its rechecks are judged by the launcher's accounting, quotes included."""
     r, base, commit = repo
