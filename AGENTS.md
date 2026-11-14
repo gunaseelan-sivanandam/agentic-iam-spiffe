@@ -87,8 +87,9 @@ them.
   production-hardening ideas (see the simplifications above) and report them as low at most.
 - **Review loop.** A review unit (one change under review; a plan and its test plan are one unit)
   gets an initial review, round 1, and at most three fix rounds, rounds 2 to 4. Several reviewers in
-  one round count as one round. Rounds continue until no blocking or high finding is open; after
-  round 4, open blocking and high findings go to the user, and only the user can allow more rounds.
+  one round count as one round. Rounds continue until no blocking or high finding is open and no
+  rejected medium finding waits for its recheck; after round 4, open blocking and high findings and
+  unaccepted rejections go to the user, and only the user can allow more rounds.
   A new revision keeps the count; only the user resets it, by an explicit act recorded with the
   user's words. The author (the fixer) answers every finding in writing, one table row per finding
   (`| <finding id> | <severity> | <answer> |`) in the review record's section
