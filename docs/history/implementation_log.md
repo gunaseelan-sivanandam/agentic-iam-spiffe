@@ -76,14 +76,23 @@ is first); every heading carries its date.
     `[one-word]` and `[parts-of-two-lines]` `:1566 assert (0 == 1)` (each recheck completed); the five twins pass.
     After the change, `test_a_rejection_counts_only_when_the_files_it_cites_were_read[cited-file-read]` quotes the file
     its answer cites instead of the reviewed file.
-- Validation, local, on `c79ed96`: `make qa-quality` passed (qa-trace in PR mode against `origin/poc/agentic-sdlc`:
+- Review round 1 of unit `round-2` (record `docs/slices/agentic-sdlc-poc/review_round_2.md`): attempt 1 failed the
+  read check (discovered issue 36); attempt 2 not approvable: 2 high, 2 medium, 3 low. Fixed (`6d8de53` to
+  `cdfce97`): F1, the stage-table test's `DISCOVERY_EXIT` held the exit cell `eb46b58` had rewritten, so
+  `make tooling-test` failed (discovered issue 34); F2, the review loop handles a medium finding as a high one and
+  states the end of a review once; F3, a quote counts only from a file the attempt read, with a whole line, and a
+  rejection that cites files is quoted from one of them (`QUOTE_RULE` in its own commit, `99eee9e`); F5, the call
+  numbers below; F7, discovered issue 35 (frozen records the check does not read). F4 went to the owner as decision
+  concern 16; F6 was rejected with the lines it rests on. Answers committed in `03ffc55`.
+- Validation, local, on `03ffc55`: `make qa-quality` passed (qa-trace in PR mode against `origin/poc/agentic-sdlc`:
   requirements 170, architecture 34, design 131, tests 386, coverage gaps 113, 0 new; docs-check, test-lint, and
-  qa-deploy with 18 known violations and 22 warnings); `make tooling-test` 916 passed and 9 shell tests (with a scratch
+  qa-deploy with 18 known violations and 22 warnings); `make tooling-test` 925 passed and 9 shell tests (with a scratch
   shellcheck); `make lint` passed (0 new or worsened findings); `make unit-guard-check` and `make gate-consistency`
-  passed. Not run: the full E2E suite (`git diff --name-only 4316724 c79ed96` lists no service, policy, compose,
+  passed. Not run: the full E2E suite (`git diff --name-only 4316724 03ffc55` lists no service, policy, compose,
   harness or CI file; CI's `e2e` job runs it on the PR), `make unit-trust`, `make unit-mutation` and
-  `make unit-diff-cov` (no `services/` change), and CI (the branch is not pushed).
-- Review: unit `round-2` of `docs/slices/agentic-sdlc-poc/`, round 1 next.
+  `make unit-diff-cov` (no `services/` change), and CI (the branch is not pushed). The validation on `c79ed96` before
+  the review had passed `make tooling-test` with 916 tests, but `eb46b58` came after it and was not rerun (F1).
+- Review: unit `round-2` of `docs/slices/agentic-sdlc-poc/`, round 2 (the recheck) next.
 
 ## 2026-11-13 Slice agentic-sdlc-poc 4: the owner's decisions on the decision concerns
 
