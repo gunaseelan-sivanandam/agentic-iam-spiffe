@@ -13,8 +13,9 @@ is first); every heading carries its date.
   [DPL-013](../delivery_problem_log.md#dpl-013-review-severity-decided-what-got-fixed-a-rejection-could-stand-on-the-authors-word-and-fixes-grew-the-process).
 - The answer rules (R2-1 to R2-4, R2-8; `8a82388`, `5e62097`, `83eabdf`, `0007f65`): blocking, high and medium
   findings are fixed and take `fixed`, `rejected` or `owner` (a medium finding is no longer deferred); a rejected
-  medium finding, like a blocking or high one, stands only when the next round accepts it, and the review loop's rounds
-  continue while one waits for its recheck; a rejection of those severities cites a checkable fact, checked by shape
+  medium finding, like a blocking or high one, stands only when the next round accepts it, and the review loop handles
+  a medium finding as a high one, defining the end of a review once (review round 1, F2, replaced `0007f65`'s extra
+  clause); a rejection of those severities cites a checkable fact, checked by shape
   only; one dispute round (a re-raised rejection is fixed or goes `owner:`, never `rejected:` again; a later `fixed:`
   settles it; a low finding may be rejected again); a fix adds no mechanism (rule text, `AGENTS.md`, Fixes stay within
   the agreed decisions); the brief lists medium rejections. A probe of every record the check reads (23 attempts, 107
