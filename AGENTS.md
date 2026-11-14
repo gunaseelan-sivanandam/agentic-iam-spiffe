@@ -75,15 +75,16 @@ them.
   requirement no test could verify, a design that lets an asset reach a non-holder, or a test that
   can pass while the behaviour is broken.
 
-  A blocking finding is fixed before merge, or the user decides. **High** is a real defect or false
-  claim below that bar, for example a misleading document, new behaviour without a test or an
-  untested fail-closed path outside the system under test's security decisions; it is fixed in the
-  same PR unless the user defers it. **Medium** has clear value (robustness, diagnosability, naming)
-  and is fixed, or deferred with a tracking issue.
-  **Low** (style, preference) is the author's choice. A simpler alternative is always low; a decision
-  concern goes to the user, whatever its severity. Implementation details become notes for the
-  implementation PR. Reviewers should expect production-hardening ideas (see the simplifications
-  above) and report them as low at most.
+  Blocking, high and medium findings are fixed; only a low finding is the author's choice. The
+  severity says how serious a finding is. A blocking finding holds the merge: it is fixed before
+  merge, or the user decides. **High** is a real defect or false claim below that bar, for example a
+  misleading document, new behaviour without a test or an untested fail-closed path outside the
+  system under test's security decisions. **Medium** has clear value (robustness, diagnosability,
+  naming). A high or medium finding is fixed in the same PR unless the user decides otherwise
+  (`owner:`); the author does not defer it to an issue. **Low** is style or preference. A simpler
+  alternative is always low; a decision concern goes to the user, whatever its severity.
+  Implementation details become notes for the implementation PR. Reviewers should expect
+  production-hardening ideas (see the simplifications above) and report them as low at most.
 - **Review loop.** A review unit (one change under review; a plan and its test plan are one unit)
   gets an initial review, round 1, and at most three fix rounds, rounds 2 to 4. Several reviewers in
   one round count as one round. Rounds continue until no blocking or high finding is open; after
@@ -94,23 +95,29 @@ them.
   `#### Answers to <attempt id>`, and the answer starts with one of four words:
   `fixed: <path>[, <path>…]: <what changed>`, naming at least one repository path; `deferred: #N`;
   `rejected:` with a reason the reviewer can check; or `owner:` with a link to where the user decides
-  or was asked. Blocking and high findings take `fixed`, `rejected` (it stands only when the next
-  round accepts it) or `owner`; medium and low findings take any of the four; a decision concern is
-  always answered `owner:`. A rejection needs a reason the reviewer can check, for example: the
-  failure scenario does not happen (with the evidence), it is outside the threat model, it is already
-  covered by a named test or gate, or it does not meet the blocking criteria above. A finding
-  labelled blocking that does not meet them is answered at the severity it does meet. In the next
-  round the original reviewer (the same model and review role, in a fresh session given its own
-  earlier report and the author's answers) sees each rejection and either accepts it, re-raises it
-  with new evidence, or answers that it cannot determine it, which goes to the user; a finding still
-  disputed after that goes to the user, who decides. A fix goes to the origin of the problem, and the
-  author searches for the same cause elsewhere and says where it looked
+  or was asked. Blocking, high and medium findings take `fixed`, `rejected` or `owner`; low findings
+  take any of the four; a decision concern is always answered `owner:`. A rejection needs a reason
+  the reviewer can check, for example: the failure scenario does not happen (with the evidence), it
+  is outside the threat model, it is already covered by a named test or gate, or it does not meet the
+  blocking criteria above. A finding labelled blocking that does not meet them is answered at the
+  severity it does meet. A rejection of a blocking, high or medium finding cites at least one
+  checkable fact: a test (`M5-T49`, `M3.S4-T2`, `DEPLOY-K1`, `UT-123` or
+  `tests/tools/test_x.py::test_y`), a gate in a code span (`` `make qa-trace` ``), or a file and
+  line (`scripts/x.py:12`, `AGENTS.md:40-52`). `make docs-check` refuses a rejection that cites none
+  (it checks the shape, not that the test or line still exists). In the next round the original
+  reviewer (the same model and review role, in a fresh session given its own earlier report and the
+  author's answers) sees each rejection and either accepts it, re-raises it with new evidence, or
+  answers that it cannot determine it. That is the one dispute
+  round: a rejection of a blocking, high or medium finding stands only when that recheck accepts it;
+  one it re-raises or cannot determine is fixed or goes to the user (`owner:`), who decides, and is
+  never answered `rejected:` again. A fix goes to the origin of the problem and adds no mechanism
+  ([Fixes stay within the agreed decisions](#independent-review)), and the author searches for the
+  same cause elsewhere and says where it looked
   ([DPL-007](docs/delivery_problem_log.md#dpl-007-plan-review-answered-every-finding-by-adding-mechanisms)).
-  The review ends when every blocking and high finding is fixed, accepted as rejected, or decided by
-  the user. Only the user waives a blocker that is still disputed. The author asks the user before
-  round 4 when a finding conflicts with an approved decision, or when rechecks re-raise the answer to
-  the same finding in two rounds in a row (status `re-raised` under `accounted`; a re-raised finding
-  keeps its ID).
+  The review ends when every blocking, high and medium finding is fixed, accepted as rejected, or
+  decided by the user. The author asks the user before round 4 when a finding conflicts with an
+  approved decision, or when rechecks re-raise the fix of the same finding in two rounds in a row
+  (status `re-raised` under `accounted`; a re-raised finding keeps its ID).
 
 ## Operating model (black-box first)
 - Treat the system as a black box first:
@@ -308,9 +315,9 @@ All of the following, in the same change:
 - paste into the decision page's review outcome section the decision brief that
   `scripts/review_brief.py` builds from the attempt logs and review records of the units in the PR
   (each unit's last verdict and severity counts; every `owner:` answer, decision concern,
-  `cannot determine` answer and finding still disputed; every blocking or high finding answered
-  `rejected`, with its reason; the origin stage against the stage that found each finding). The user
-  reads the plans and records where the brief points;
+  `cannot determine` answer and finding still disputed; every blocking, high or medium finding
+  answered `rejected`, with its reason; the origin stage against the stage that found each finding).
+  The user reads the plans and records where the brief points;
 - put on the decision page, for each test-plan question, the IDs of the implementation review's
   findings that answer it (or "no finding"), every discovered issue with its disposition (see
   [PoC scope and proportion](#poc-scope-and-proportion)) and each issue's link. The issue is the home
@@ -395,9 +402,11 @@ All of the following, in the same change:
   comment or name that does not say what it does is a medium finding. The slice's decision page lists,
   for each question, the IDs of the findings that answer it, or "no finding".
 - **Fixes stay within the agreed decisions** (the plan's decisions, or the request, and this file).
-  Before answering a finding with a new mechanism, the author names the upstream choice that causes
-  it and weighs changing that choice; removing or changing a mechanism is preferred over adding one.
-  A fix that would change an agreed decision goes to the user as a question before it is applied.
+  A fix corrects the defect or changes the choice that caused it; it never adds a mechanism (a gate,
+  check, CI job, process step, document, register or field). A finding that only a new or wider
+  mechanism would answer is answered `owner:` with a one-line proposal, as
+  [Ask before growing](#poc-scope-and-proportion) asks of every addition. A fix that would change an
+  agreed decision goes to the user as a question before it is applied.
 - **Report sections.** Besides findings of each severity, every round may report *simpler
   alternatives* (a mechanism that could be removed or simplified within the agreed decisions; always
   low) and *decision concerns* (an agreed decision that itself seems to cause a problem; for the

@@ -73,5 +73,5 @@ for each question, the IDs of the findings that answer it, or "no finding":
 
 A "yes" to question 1 or 2 is a blocking finding, under [AGENTS.md — PoC scope and proportion](../../../AGENTS.md#poc-scope-and-proportion).
 A purpose comment or name that does not say what it does (question 3) is a medium finding: the author
-fixes it, or defers it with a tracking issue. Every other finding takes the severity scale of the same
-section (blocking, high, medium, low).
+fixes it, unless the user decides otherwise (`owner:`). Every other finding takes the severity scale
+of the same section (blocking, high, medium, low).
