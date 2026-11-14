@@ -277,6 +277,59 @@ the defects were detected".
 | 2026-11-13 | Decision concern 7: a small slice (four conditions, `AGENTS.md`, Small slices) runs as one PR with the plan review and the implementation review as its units and the final review "none, small slice"; the user merges once; the plan states the conditions and the plan review checks the claim; no tool checks them until a review accepts a wrong "small" claim (the author's choice) | "DC7 yes, smaller slices can have single PR, but needs to define what a smaller slice is"; on the definition: "sound right" |
 | 2026-11-13 | Decision concern 8: the three-step analysis of why reviewers rate found defects below the detection threshold: classify the mis-rated findings; one general severity-wording change; measure it on all cases (about 15 reviews and USD 12 beyond the 60-call budget); not the two R5 and C10 blocking conditions alone | "I see it as gap that the reviewers cannot assign the severrity scoring propoerly, just adding these two questions would find this issue, but miss others. Needs further analsis"; on the three steps: "complete it and do not wait for my approval" |
 | 2026-11-13 | Decision concern 10: the brief holds no CI result; every slice gets a decision page (this page for slice 4) that holds the brief, the implementation review's answers and every discovered issue; the PR body states the goal and what changed and links the page (the author's resolution: one home per fact) | "DC 10 - I can see the CI job failue or success in PR page, Keep the PR page that explain the goal, changes, and anything everything that needs my attention."; on the proposed PR-body layout: "Wont all these info be available in my decisions page" |
+| 2026-11-14 | Round 2 (the section below): blocking, high and medium findings are fixed; a rejection cites a checkable fact; one dispute round; a fix never adds a mechanism; the reviews ask it, see the files fixes changed and quote what a rejection rests on; two recheck cases measure it (4 calls). Replaces decision 6 | "Great, now list all the changes in order, capture it as part of second round of implementation" |
+
+## Round 2: the owner's findings and the fixes (2026-11-14)
+
+After the review of the owner's decisions on the decision concerns, the owner questioned how review severity is
+handled now. In the owner's words: "still 6 feels short sighted, it is not clear review severity word change has
+any impact and we can direct author to fix blocking and high and meduim and author can reject the low findings, I
+do not want to get stuck in a loop where reviewer rate something and autour rejects it or did not challenge the
+author rejcetion. I feel like something is missing, what is the general industry practice here?"; then "how do we
+avoid the situation where the author starts to fix everything and grows the process or gates unncessarlily, like the
+base64 case or PR CI info double commits thing we just avoided?"; "should we make sure every agent review and any
+stage get this info? Agent.md is good place, but is this enough?"; "how can we ensure that the reviewer actually
+opened the author rejection comment cheked for its fact, evauated and accepted or rejected the fact and not just
+accept it?"; and, on the list below: "Great, now list all the changes in order, capture it as part of second round
+of implementation". This replaces decision 6 under "Decisions to make".
+
+**The three problems.** (1) The reviewer's severity decides what gets fixed, and severity is the least reliable part
+of a review (16 of 39 defects found more than once were rated differently; RM-3 was found by every review and rated
+medium, so it could merge unfixed). (2) A dispute can loop, or end with the author's word accepted: the same
+reviewer rechecks while reading the author's argument, and LLM judges give in to rebuttals
+([`industry_research.md`](industry_research.md), finding 5). (3) A fix can grow the process: a valid finding is
+silenced with a new mechanism instead of a change to its cause (DPL-007's base64 scan, 4.6's brief pasted again
+after CI, the budget raised to 85); the rule against it is in `AGENTS.md`, but nothing asks it when a fix is written
+or judged.
+
+**Industry practice it follows.** Fix by default, and let only explicitly optional comments be skipped (Google's
+"Nit", "Optional", "FYI"; Conventional Comments' blocking and non-blocking); settle a disagreement with facts, then
+by a third party, and do not let a change sit ("Technical facts and data overrule opinions and personal
+preferences"; escalate to a lead or maintainer); someone other than the author verifies the rework (the Fagan and
+IEEE 1028 moderator); correcting a defect and preventing its recurrence are separate decisions (8D's D5–D6 against
+D7); put the question where the action happens (a checklist at the pause point), not only in the manual.
+
+**The changes, in the order they are built:**
+
+| # | Change | Solves | Where |
+| --- | --- | --- | --- |
+| R2-1 | Blocking, high and medium findings are fixed; only a low finding is the author's choice. A medium finding is no longer deferred to an issue unless the owner decides it (`owner:`). Severity stays as the measure of how serious a finding is, and a blocking finding still holds the merge | 1 | `AGENTS.md` (Review findings, Review loop); `scripts/check_review_records.py` (the answers each severity allows) |
+| R2-2 | A rejection of a blocking, high or medium finding cites at least one checkable fact: a test ID, a gate, or a file and line. A rejection that cites none is refused by `make docs-check` | 2 | `AGENTS.md` (Review loop); `scripts/check_review_records.py` |
+| R2-3 | One dispute round: a rejection the recheck does not accept goes to the owner (`owner:`) or is fixed; there is no second round of argument | 2 | `AGENTS.md` (Review loop); `scripts/check_review_records.py` |
+| R2-4 | A fix corrects the defect or changes the choice that caused it, and never adds a mechanism (a gate, check, CI job, process step, document, register or field). A finding that only a new or wider mechanism would answer goes to the owner as `owner:` with a one-line proposal: the failure it catches, its cost, the simpler alternative weighed | 3 | `AGENTS.md` (Fixes stay within the agreed decisions; Review loop) |
+| R2-5 | The review instructions ask it at the pause point: the recheck, for each `fixed:` answer, whether the fix adds a mechanism without the owner's approval where changing a choice would do (re-raise it if so); the initial review the same of the change itself. An instruction-wording change, in its own commit (decision 2) | 3 | `scripts/run_independent_review.py` (mandates, output section) |
+| R2-6 | A recheck's evidence lists each rulebook, gate, CI, template, checklist or launcher file that the commits since the reviewed round changed, with its line counts; the recheck accounts for each as explained or flagged | 3 | `scripts/run_independent_review.py`, `scripts/review_inputs.py` |
+| R2-7 | For every rejection it accepts or re-raises, the recheck quotes the lines its decision rests on, with file and line; the launcher fails a recheck whose quote is not at that place in the copy. (The launcher already fails a recheck that did not read a cited file) | 2 | `scripts/run_independent_review.py` (report schema, answer checks) |
+| R2-8 | The decision brief lists medium findings answered `rejected` too, beside blocking and high ones, so the owner sees every accepted rejection | 2 | `scripts/review_brief.py` |
+| R2-9 | The benchmark counts a match rated blocking, high or medium as detected (the existing results re-scored, no reviewer call): with R2-1 a medium finding is fixed, so it is caught | 1 | `scripts/run_review_benchmark.py`, `tests/review_benchmark/answer_key.yaml`, the benchmark report |
+| R2-10 | Two recheck cases, run on both recheck wordings after R2-5 and R2-7 (4 reviewer calls; the stage-B hard stop raised from 76 to 80): RC-3, a `fixed:` answer that adds a mechanism where changing a choice would do (a good recheck re-raises it), and RC-4, a false rejection that cites a real test which does not cover the scenario (a good recheck re-raises it). With RC-2, a rejection that holds, they show whether a recheck tells a true fact from a false one | 2, 3 | `tests/review_benchmark/`, the runner, the benchmark report |
+| R2-11 | Records: this section; decision 6 replaced; the implementation log, `docs/STATUS.md`; one review unit, `round-2`, at high effort, with its recheck | all | this page, `docs/history/implementation_log.md`, `docs/STATUS.md` |
+
+**Not in round 2.** Running the fact itself (the launcher runs the test a rejection cites on the author's scenario
+patch) waits for RC-4's result; the authors' own pause-point check goes to the author-prompts slice; decision 7 (a
+Blocks bullet for a false "small" claim), decision concern 11 (the budget) and growth proposal 12 (resuming a review
+that failed the read check) stay open. The four severity levels, the stage lists and the gates and CI jobs do not
+change, and no gate is added.
 
 ## Decisions to make
 
@@ -287,7 +340,7 @@ the defects were detected".
 | 3 | Recreate the hidden issues under the owner's account if GitHub has not answered | At the end, or about 2026-11-23 if the owner is around | Recreate the open ones; keep waiting | Recreate the open ones |
 | 4 | Remove your personal copy of the grill-me skill. A personal skill takes precedence over a project skill of the same name, so while it exists, discovery runs the old text, which cuts off two sentences and never asks the assets question, instead of the repository's (4.6 review, F4) | Before the next slice's discovery | Remove it; rename one of them | Remove it: the repository copy is the reviewed one |
 | 5 | Measure the `unit-tests` list, which no benchmark case used, nor the tests-first pair with `e2e-tests` (discovered issue 15) | Before relying on the list, or in slice 8 | Add one or two unit-test cases now (about 6 calls; S45-D5's cases and the 60-call budget change, 3 calls are left); or measure it in slice 8 | Slice 8, which measures the lists' own effect against reviews without them |
-| 6 | What to do about review severity now. Reviewers find defects but rate them inconsistently: 16 of the 39 defects that several reviews found got different severities, and one general wording change made things worse, not better (decision concern 8) | Before the next slice relies on review severities | (a) Leave severities to reviewers and rely on the deterministic gates that now exist for both historical misses: the gap gate of `make qa-trace` for requirements without proof (DPL-004) and `make gate-consistency` for a gate hidden in another CI job (DPL-005); (b) align each stage list's "Blocks at this stage" with its questions, so a list question's answer can block; (c) in slice 8's evaluation, count findings seen at any severity as well as detected ones, given the severity noise | (a), with (c): where a tool can decide, a tool decides before a review, and both misses now have one; (c) costs nothing. (b) adds blocking conditions to the lists, which would reach the two misses but, by the analysis, not the rest of the noise |
+| 6 | Replaced on 2026-11-14 by round 2 (the section above): what to do about review severity now | — | — | Decided: R2-1 to R2-11 |
 | 7 | How the plan review checks a "small slice" claim. Since decision concern 7, a slice that meets four conditions (`AGENTS.md`, Small slices: no requirement or trace change, nothing that checks everyone else, no security decision path, about 50 lines in 5 files) is one PR without a final review. Only the plan review checks that the claim is true, and its list, `docs/review_checklists/plan-and-test-plan.md` (12 questions, the limit of S44-D3), asks nothing about it. A list item needs the owner's approval (`AGENTS.md`, Stage checklists), so the author has not changed the list (review of the owner's decisions, F2) | Before the first small slice | (a) Add a bullet to the list's "Blocks at this stage": "a plan that claims a small slice while one of the four conditions of `AGENTS.md` (Small slices) does not hold for the planned change"; (b) add it as a 13th question, past the limit of 12; (c) leave it to the open mandate and `AGENTS.md` | (a): the question limit stays, and a false "small" claim skips the final review, so it should block, not only be asked. Until the owner decides, the open mandate and `AGENTS.md` are the only check |
 
 ## Parked units, decision concerns and growth proposals
