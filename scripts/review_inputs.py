@@ -7,13 +7,16 @@ Three things the author no longer chooses or summarises:
   it touches, and the requirement, architecture and test items the trace model links to it;
 - the evidence, computed in a scratch clone of the reviewed commit with a minimal environment: the changed
   script lines the tooling tests do not run, the trace gaps among the upstream items, and the CI results of the
-  reviewed commit read from the public API without a token. A command that cannot run is shown as failed.
+  reviewed commit read from the public API without a token; and, in a recheck, each process file the commits since
+  the reviewed round changed, with its line counts (round 2 of slice 4, R2-6). A command that cannot run is shown as
+  failed.
 
 Every evidence entry is numbered (EV1, EV2, ...) so the reviewer can account for each one.
 """
 
 from __future__ import annotations
 
+import fnmatch
 import json
 import os
 import re
@@ -48,6 +51,20 @@ ARCH_HEADING = re.compile(r"^##\s+(ARCH-\d{3})\b")
 HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 GITHUB_REMOTE = re.compile(r"github\.com[:/]([\w.-]+)/([\w.-]+?)(?:\.git)?$")
 TIMEOUT_S = 600
+# R2-6 (the owner, 2026-11-14): the process files are those that check everyone else's work (AGENTS.md, Small slices,
+# condition 2) apart from the tests and the E2E harness, which a fix changes as a matter of course: the rulebook, the
+# gates with their QA tooling, CI, the slice templates, the review checklists, and the review launcher with its modules
+# and the brief. Patterns as `fnmatch` reads them, so `*` also matches `/`.
+PROCESS_FILES = (
+    "AGENTS.md", "tests/unit/AGENTS.md",  # the rulebook
+    "Makefile", "ruff_changed_files.toml", "scripts/check_*", "scripts/validate_*", "scripts/*_gate.*",  # gates
+    "scripts/qa_deploy.py", "scripts/test_lint.py", "scripts/lint_changed_files.py", "scripts/evidence_secrets.py",
+    "scripts/run_e2e.sh",
+    ".github/*", "docs/slices/_template/*", "docs/review_checklists/*",  # CI, templates, checklists
+    "scripts/run_independent_review.py", "scripts/review_inputs.py", "scripts/review_records.py",  # the launcher
+    "scripts/review_brief.py",
+)
+PROCESS_COMMAND = "git diff --numstat --no-renames <earlier attempt's commit> <commit>"
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -230,7 +247,7 @@ def upstream_items(repo: Path, commits: tuple[str, str], record: str, changed: l
     return Upstream("\n".join(lines), frozenset(ids))
 
 
-# --- Evidence (S42-D5 to S42-D8) ---------------------------------------------------------------
+# --- Evidence (S42-D5 to S42-D8; R2-6) --------------------------------------------------------
 
 
 @dataclass
@@ -468,6 +485,32 @@ def ci_evidence(evidence: Evidence, repo: Path, commit: str, fetch: Fetch) -> No
         evidence.add(f"CI run {run.get('name')} {run['id']} ({run.get('event')}): {run.get('status')}"
                      + (f"/{run.get('conclusion')}" if run.get("status") == "completed" else "") + f"; jobs: {listed}")
     evidence.status["ci"] = "ok"
+
+
+def is_process_file(path: str) -> bool:
+    """R2-6: whether a path is a rulebook, gate, CI, template, checklist or launcher file (`PROCESS_FILES`)."""
+    return any(fnmatch.fnmatchcase(path, pattern) for pattern in PROCESS_FILES)
+
+
+def process_file_evidence(evidence: Evidence, repo: Path, since: tuple[str, ...], commit: str) -> None:
+    """(d) R2-6, in a recheck: each process file the commits from the reviewed round's commit (`since`, one per
+    distinct earlier commit) to the reviewed commit changed, with its line counts. Nothing for another review."""
+    for earlier in since:
+        span = f"({earlier[:12]} to {commit[:12]}; {PROCESS_COMMAND})"
+        try:
+            numstat = _git(repo, "diff", "--numstat", "--no-renames", earlier, commit)
+        except ValueError:
+            evidence.add(f"failed: {PROCESS_COMMAND}: git cannot compare {earlier[:12]} with {commit[:12]}")
+            evidence.status["process"] = "failed"
+            continue
+        changed = [line.split("\t", 2) for line in numstat.splitlines() if line.count("\t") >= 2]
+        listed = [(added, deleted, path) for added, deleted, path in changed if is_process_file(path)]
+        for added, deleted, path in listed:
+            counts = "binary" if added == "-" else f"+{added} -{deleted} lines"
+            evidence.add(f"process file changed since the reviewed round: {path}, {counts} {span}")
+        if not listed:
+            evidence.notes.append(f"No process file changed since the reviewed round {span}.")
+        evidence.status.setdefault("process", "ok")
 
 
 def sanitise(text: str, scratch: Scratch) -> str:

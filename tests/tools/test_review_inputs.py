@@ -674,3 +674,55 @@ def test_user_base_keeps_its_place_under_home(monkeypatch: pytest.MonkeyPatch, t
     assert inputs_module.user_base_under_home(tmp_path / "Library" / "Python" / "3.12") == Path("Library/Python/3.12")
     assert inputs_module.user_base_under_home(tmp_path / ".local") == Path(".local")
     assert inputs_module.user_base_under_home(Path("/elsewhere/.local")) == Path(".local")
+
+
+# --- Round 2 of slice 4, R2-6: the process files a recheck's evidence lists -------------------------------------
+
+
+@pytest.mark.parametrize(("path", "process"), [
+    ("AGENTS.md", True), ("tests/unit/AGENTS.md", True),  # the rulebook
+    ("Makefile", True), ("ruff_changed_files.toml", True), ("scripts/check_docs.py", True),  # gates, QA tooling
+    ("scripts/check_review_records.py", True), ("scripts/validate_traceability.py", True),
+    ("scripts/mutation_gate.py", True), ("scripts/diff_coverage_gate.sh", True), ("scripts/qa_deploy.py", True),
+    ("scripts/test_lint.py", True), ("scripts/lint_changed_files.py", True), ("scripts/evidence_secrets.py", True),
+    ("scripts/run_e2e.sh", True),
+    (".github/workflows/ci.yml", True), (".github/CODEOWNERS", True),  # CI
+    ("docs/slices/_template/plan.md", True), ("docs/review_checklists/code.md", True),  # templates, checklists
+    ("scripts/run_independent_review.py", True), ("scripts/review_inputs.py", True),  # the launcher and the brief
+    ("scripts/review_records.py", True), ("scripts/review_brief.py", True),
+    ("scripts/rogue_node_tests.sh", False), ("tests/tools/test_review_inputs.py", False),  # tests, the E2E harness
+    ("tests/unit/test_issuer.py", False), ("services/tool-b/server.py", False), ("docs/slices/demo/plan.md", False),
+    ("docs/requirements.md", False), ("docs/AGENTS.md", False), ("README.md", False),
+    ("scripts/run_review_benchmark.py", False), ("scripts/varambu_audit.py", False),
+])
+def test_process_files_are_the_rulebook_gates_ci_templates_checklists_and_the_launcher(path: str, process: bool) -> None:
+    assert inputs_module.is_process_file(path) is process
+
+
+def test_process_file_evidence_lists_line_counts_and_shows_a_comparison_that_cannot_run_as_failed(fx: base.Fixture) -> None:
+    earlier = fx.commit
+    base._write(fx.work, "Makefile", "lint:\n\truff check .\n")
+    (fx.work / ".github").mkdir()
+    (fx.work / ".github" / "logo.png").write_bytes(b"\x00\x01\x02binary")
+    base._write(fx.work, "README.md", "# Readme\n")
+    commit = base._commit_all(fx.work, "process and other files")
+    evidence = inputs_module.Evidence()
+    inputs_module.process_file_evidence(evidence, fx.work, (earlier,), commit)
+    span = f"({earlier[:12]} to {commit[:12]}; {inputs_module.PROCESS_COMMAND})"
+    assert evidence.entries == [
+        f"EV1: process file changed since the reviewed round: .github/logo.png, binary {span}",
+        f"EV2: process file changed since the reviewed round: Makefile, +2 -0 lines {span}"]
+    assert evidence.status == {"process": "ok"} and evidence.notes == []
+    unchanged = inputs_module.Evidence()
+    inputs_module.process_file_evidence(unchanged, fx.work, (commit,), commit)
+    assert unchanged.entries == [] and unchanged.status == {"process": "ok"}
+    assert unchanged.notes == [f"No process file changed since the reviewed round ({commit[:12]} to {commit[:12]}; "
+                               f"{inputs_module.PROCESS_COMMAND})."]
+    failed = inputs_module.Evidence()
+    inputs_module.process_file_evidence(failed, fx.work, ("0" * 40,), commit)
+    assert failed.entries == [f"EV1: failed: {inputs_module.PROCESS_COMMAND}: git cannot compare {'0' * 12} with "
+                              f"{commit[:12]}"]
+    assert failed.status == {"process": "failed"}
+    nothing = inputs_module.Evidence()
+    inputs_module.process_file_evidence(nothing, fx.work, (), commit)  # not a recheck: nothing to compare
+    assert (nothing.entries, nothing.notes, nothing.status) == ([], [], {})

@@ -1540,13 +1540,25 @@ def compute_evidence(spec: RoundSpec, inputs: ReviewInputs) -> tuple[str, Any]:
     return upstream_text, evidence
 
 
-def round_inputs(spec: RoundSpec, inputs: ReviewInputs, lists: StageLists | None = None) -> RoundInputs:
-    """The round's shared inputs, computed once before any call."""
+def round_inputs(spec: RoundSpec, inputs: ReviewInputs, lists: StageLists | None = None,
+                 since: tuple[str, ...] = ()) -> RoundInputs:
+    """The round's shared inputs, computed once before any call; in a recheck, `since` holds the commits its reviewers
+    reviewed in the round before, where the process-file evidence starts (R2-6)."""
     withheld = list(inputs.withheld)
     final = review_mode(spec.unit, spec.round_no) == "final"
     records = final_records(spec.repo, inputs.commit, spec.record, inputs.base_commit, withheld) if final else ()
     upstream, evidence = compute_evidence(spec, inputs)
+    _INPUTS.process_file_evidence(evidence, spec.repo, since, inputs.commit)
     return RoundInputs(records, upstream, evidence.text(), tuple(evidence.items), dict(evidence.status), lists)
+
+
+def earlier_commits(entries: list[dict[str, Any]], spec: RoundSpec, labels: list[str]) -> tuple[str, ...]:
+    """R2-6: the commits a recheck's reviewers reviewed in the round before, once each; none for another review. A
+    reviewer without its earlier attempt is refused here, as `plan_recheck` would refuse it."""
+    if review_mode(spec.unit, spec.round_no) != "recheck":
+        return ()
+    return tuple(dict.fromkeys(earlier_attempt(entries, spec.unit, spec.count, spec.round_no, label)[0]["commit"]
+                               for label in labels))
 
 
 def plan_reviews(spec: RoundSpec, inputs: ReviewInputs, entries: list[dict[str, Any]],
@@ -1945,7 +1957,7 @@ def main(argv: list[str], repo: Path | None = None) -> int:
             recover(log, repo)
             admission = admit_round(log.entries(), spec.unit, spec.round_no, [r.label for r in reviewers], spec.refs)
             spec = RoundSpec(**{**spec.__dict__, "count": admission.count})
-            shared = round_inputs(spec, inputs, lists)
+            shared = round_inputs(spec, inputs, lists, earlier_commits(log.entries(), spec, admission.to_run))
             plans = plan_reviews(spec, inputs, log.entries(), [r for r in reviewers if r.label in admission.to_run],
                                  shared)
             statuses = run_round(spec, inputs, log, plans, shared)

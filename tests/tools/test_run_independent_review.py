@@ -513,6 +513,7 @@ def test_round_five_with_an_extension_runs_and_the_log_keeps_the_reference(fx: F
         entries += _done(round_no, "A", "no", ["A"])
     report = json.dumps({"findings": [_finding("X1")], "accounted": [], "verdict": "no"}) + "\n"
     entries[-1]["report_sha256"] = launcher.sha256_text(report)
+    entries[-2]["commit"] = fx.commit  # every logged start entry names its commit; the recheck's evidence starts there
     _write(fx.work, LOG, "".join(json.dumps(e) + "\n" for e in entries))
     _write(fx.work, RECORD, f"# record\n\n### Attempt unit1/c1/r4/A/1\n\n#### Report\n\n```json\n{report}```\n")
     commit = _answers(fx, "unit1/c1/r4/A/1", "| X1 | high | fixed: scripts/review_me.py: guarded |")
@@ -1533,3 +1534,37 @@ def test_the_schema_offers_quotes_as_an_optional_field_with_its_own_shape() -> N
     assert "quotes" not in accounted["required"]
     assert set(quote["required"]) == {"file", "line", "end_line", "text"} and quote["additionalProperties"] is False
     assert quote["properties"]["line"]["minimum"] == 1 == quote["properties"]["end_line"]["minimum"]
+
+
+def test_a_recheck_accounts_for_each_process_file_changed_since_the_reviewed_round(fx: Fixture) -> None:
+    """R2-6: the rulebook, gate, CI, template, checklist and launcher files the commits since the earlier attempt
+    changed, each with its line counts; other changed files are not listed."""
+    _first_round(fx)
+    earlier = fx.log()[0]["commit"]
+    _write(fx.work, "AGENTS.md", "BASE RULE SENTENCE v1\nBRANCH MARKER SENTENCE\nA NEW RULE SENTENCE\n")
+    _write(fx.work, ".github/workflows/ci.yml", "# CI\njobs: {}\n")
+    _write(fx.work, REVIEWED, "print('fixed')\n")
+    commit = _answers(fx, "unit1/c1/r1/A/1", "| X1 | high | fixed: scripts/review_me.py: guarded |")
+    fx.scenario(_reply(accounted=[_accounted("X1")]))
+    assert _run(fx, round_no=2, commit=commit) == 1
+    evidence = _section(_prompt(fx), "Evidence")
+    span = f"({earlier[:12]} to {commit[:12]}; {launcher._INPUTS.PROCESS_COMMAND})"
+    assert f"EV1: process file changed since the reviewed round: .github/workflows/ci.yml, +2 -0 lines {span}" in evidence
+    assert f"EV2: process file changed since the reviewed round: AGENTS.md, +1 -0 lines {span}" in evidence
+    assert REVIEWED not in evidence and "review_demo.md" not in evidence
+    assert "EV1 is not accounted" in _ends(fx)[-1]["reason"]
+    fx.scenario(_reply(accounted=[_accounted("X1"), _accounted("EV1", "explained"),
+                                  _accounted("EV2", "explained", opened=(REVIEWED, "AGENTS.md"))],
+                       reads=[REVIEWED, "AGENTS.md"]))
+    assert _run(fx, round_no=2, commit=commit) == 0
+    assert fx.log()[-2]["evidence_status"]["process"] == "ok"
+
+
+def test_a_recheck_after_no_process_file_change_says_so_and_an_initial_review_lists_none(fx: Fixture) -> None:
+    _first_round(fx)
+    assert "process file" not in _section(_prompt(fx), "Evidence")
+    commit = _answers(fx, "unit1/c1/r1/A/1", "| X1 | high | fixed: scripts/review_me.py: guarded |")
+    fx.scenario(_reply(accounted=[_accounted("X1")]))
+    assert _run(fx, round_no=2, commit=commit) == 0
+    evidence = _section(_prompt(fx), "Evidence")
+    assert "No entries: nothing to account for." in evidence and "No process file changed since the reviewed round" in evidence
