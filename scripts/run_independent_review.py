@@ -123,9 +123,11 @@ QUESTION_RULE = ("When a question of the stage checklist prompted a finding, nam
 GATE_RULE = "do not report what a passing gate already checks; do report defects in the gates themselves"
 # Round 2 of slice 4 (the owner, 2026-11-14), R2-7: what a recheck quotes, and that the launcher checks it.
 QUOTE_RULE = ("For a `rejected:` answer you list as `accepted` or `re-raised`, `quotes` holds the lines your decision "
-              "rests on, each with `file`, `line` and `end_line` (the lines in the copy) and `text` copied from them. "
-              "The launcher fails a recheck that quotes nothing for such an answer, and any report whose quote is not "
-              "at that place in the copy.")
+              "rests on, each with `file`, `line` and `end_line` (the lines in the copy) and `text` copied from them: "
+              "whole lines of a file you read with the Read tool, and, when the answer cites files, at least one quote "
+              "from one of them. The launcher fails a recheck that quotes nothing for such an answer or none of the "
+              "files it cites, and any report whose quote is from a file it did not Read, is not at that place in the "
+              "copy, or holds no whole line of it.")
 # R2-5: the question at the pause point, asked of the change in an initial review and of each fix in a recheck. It is
 # part of the output section, which every mandate wording shares, so the benchmark's wordings all get it; the final
 # review keeps its open question (S41-D4) and gets none.
