@@ -536,6 +536,10 @@ Why review did not catch it:
   - R2-8: the decision brief lists medium findings answered `rejected`.
 - Measured (R2-10, one run per case and recheck wording): both wordings re-raised RC-4's false rejection, and both
   accepted RC-3's fix that adds a step where leaving the CI result out would do.
+- Found by round 2's own review (round 1, F1): a rulebook edit after the validation (`eb46b58`) was checked with
+  `make docs-check` and `make lint` only and broke a tooling test that pins its text; fixed, and every gate rerun on
+  the final commit ([DPL-012](#dpl-012-slice-4s-implementation-run-made-claims-and-checks-that-did-not-hold)'s lesson:
+  a claim is written from the check's output).
 - Open: RC-3's miss: R2-5's question did not make either wording re-raise a fix that works but grows the process
   (decision concern 13); the process files leave out the benchmark runner, its key and the skills (decision concern
   15); the plan list's question 8 still states the rule before R2-4 (growth proposal 14).
