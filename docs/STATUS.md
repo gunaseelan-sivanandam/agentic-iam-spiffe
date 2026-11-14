@@ -26,7 +26,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
      files the fixes changed and quotes what each rejection rests on; the benchmark is re-scored with a medium match
      counted, and two more recheck cases ran. Its review (unit `round-2`) ran round 1 (not approvable: 2 high, 2
      medium, 3 low, all answered: 5 fixed, 1 to the owner as decision concern 16, 1 rejected); its recheck, round 2,
-     is next. Then the owner's open decisions on the decision page, the push and the final PR.
+     was approvable and the review ended (1 new low, fixed). Then the owner's open decisions on the decision page, the push and the final PR.
      Progress and the owner's decisions: [`slice_4_decisions.md`](slices/agentic-sdlc-poc/slice_4_decisions.md);
      Next, before slice 5: a slice of author prompts and their benchmark (owner, 2026-11-09: "let's
      continue this slice for just review, after this let's run a new slice of author prompts and
@@ -95,7 +95,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `poc/slice-4-implementation` | agentic-sdlc-poc slice 4: the six sub-issues (#38–#43), on the plans merged with PR #48 | Implemented and reviewed, local; the owner's decisions of 2026-11-13 implemented and reviewed; round 2 (R2-1 to R2-10, 2026-11-14) implemented, its review unit `round-2` answered after round 1, its recheck next; one final PR into `poc/agentic-sdlc` when the owner pushes |
+| `poc/slice-4-implementation` | agentic-sdlc-poc slice 4: the six sub-issues (#38–#43), on the plans merged with PR #48 | Implemented and reviewed, local; the owner's decisions of 2026-11-13 implemented and reviewed; round 2 (R2-1 to R2-10, 2026-11-14) implemented, its review unit `round-2` ended after round 2 (approvable; decision concern 16 to the owner); one final PR into `poc/agentic-sdlc` when the owner pushes |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).

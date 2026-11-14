@@ -89,7 +89,10 @@ is first); every heading carries its date.
   states the end of a review once; F3, a quote counts only from a file the attempt read, with a whole line, and a
   rejection that cites files is quoted from one of them (`QUOTE_RULE` in its own commit, `99eee9e`); F5, the call
   numbers below; F7, discovered issue 35 (frozen records the check does not read). F4 went to the owner as decision
-  concern 16; F6 was rejected with the lines it rests on. Answers committed in `03ffc55`.
+  concern 16; F6 was rejected with the lines it rests on. Answers committed in `03ffc55`. Round 2, the recheck
+  (`round-2/c1/r2/A/1`, medium): approvable; all 7 answers accepted, F6's rejection with three quotes the launcher
+  checked in the copy; 1 new low, F8 (the validation named `1f224d1`, not the reviewed commit), fixed in `05c0894`;
+  the review ended. The brief, rebuilt on the decision page (`40aecde`), builds over every unit.
 - Validation, local, on `1f224d1` (after the brief's fix; first on `03ffc55`, with 925 tooling tests): `make qa-quality` passed (qa-trace in PR mode against `origin/poc/agentic-sdlc`:
   requirements 170, architecture 34, design 131, tests 386, coverage gaps 113, 0 new; docs-check, test-lint, and
   qa-deploy with 18 known violations and 22 warnings); `make tooling-test` 927 passed and 9 shell tests (with a scratch
