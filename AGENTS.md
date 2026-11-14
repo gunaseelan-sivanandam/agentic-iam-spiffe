@@ -182,16 +182,16 @@ A slice passes seven stages, in this order. The plan's stage table says for each
 a stage that does not apply is marked "none, with a reason". Each review is an
 [independent review](#independent-review) with the stage's checklist from
 [`docs/review_checklists/`](docs/review_checklists/) (`--stage`), and each review unit has its own round
-limit (the [review loop](#poc-scope-and-proportion)).
+limit and ends as the [review loop](#poc-scope-and-proportion) says.
 
 | Stage | Produces | Review | Checks | Exit |
 | --- | --- | --- | --- | --- |
-| Discovery | `plan.md`, `test_plan.md` and the decision page `decisions.md` | plan review, list `plan-and-test-plan` | `make docs-check`, `make lint` | the plan review has no blocking or high finding open, and the user merges the plan PR; a small slice's plan stays in its one PR |
-| Requirements | new or changed `REQ` items in `docs/requirements.md` and their entries in `trace/tests.yaml` | requirements review, list `requirements` | `make qa-trace`, `make docs-check` | the review has no blocking or high finding open |
-| Architecture and interfaces | `ARCH` sections and the state inventory of `docs/architecture.md`, and `security/invariants.yaml` | architecture review, list `architecture-and-interfaces` | `make qa-trace`, `make qa-deploy` | the review has no blocking or high finding open |
-| Tests first | unit and E2E tests from the reviewed test plan, and their `docs/test_spec.md` entries | tests-first review, lists `unit-tests` and `e2e-tests` | `make tooling-test`, `make test-lint`, `make unit-guard-check`, `make docs-check`: the new tests fail as planned, every other test and check passes | each new test fails on the base code for the reason it exists, and the review has no blocking or high finding open |
-| Implementation | the code and configuration the plan approved, with what it retires removed | implementation review, list `code` | every gate of [Quality gates](#quality-gates), the full E2E suite on a clean stack, `make qa-evidence` | every gate's CI job passes on the PR, and the review has no blocking or high finding open |
-| Final review | the record of the unit `final`; none for a small slice | final review, 4.1's final mode, no list | the decision brief, `scripts/review_brief.py` | no blocking or high finding open |
+| Discovery | `plan.md`, `test_plan.md` and the decision page `decisions.md` | plan review, list `plan-and-test-plan` | `make docs-check`, `make lint` | the plan review has ended, and the user merges the plan PR; a small slice's plan stays in its one PR |
+| Requirements | new or changed `REQ` items in `docs/requirements.md` and their entries in `trace/tests.yaml` | requirements review, list `requirements` | `make qa-trace`, `make docs-check` | the review has ended |
+| Architecture and interfaces | `ARCH` sections and the state inventory of `docs/architecture.md`, and `security/invariants.yaml` | architecture review, list `architecture-and-interfaces` | `make qa-trace`, `make qa-deploy` | the review has ended |
+| Tests first | unit and E2E tests from the reviewed test plan, and their `docs/test_spec.md` entries | tests-first review, lists `unit-tests` and `e2e-tests` | `make tooling-test`, `make test-lint`, `make unit-guard-check`, `make docs-check`: the new tests fail as planned, every other test and check passes | each new test fails on the base code for the reason it exists, and the review has ended |
+| Implementation | the code and configuration the plan approved, with what it retires removed | implementation review, list `code` | every gate of [Quality gates](#quality-gates), the full E2E suite on a clean stack, `make qa-evidence` | every gate's CI job passes on the PR, and the review has ended |
+| Final review | the record of the unit `final`; none for a small slice | final review, 4.1's final mode, no list | the decision brief, `scripts/review_brief.py` | the review has ended |
 | Handoff | the decision page: the decision brief, the implementation review's findings on the test-plan questions, every discovered issue with its disposition; the PR body: the goal, what changed, a link to the page | the user's approval | the PR's required CI checks, which the user sees on the PR page | the user merges |
 
 ### Small slices
@@ -242,7 +242,7 @@ conditions; one is added only if a review ever accepts a wrong "small" claim.
   brief, built by `scripts/review_brief.py` as at handoff. The user approves the plan by merging the
   plan PR; implement only from the plan as merged on the integration branch (see
   [Git rules](#git-rules)). A small slice implements from its plan in the same PR once the plan
-  review has no blocking or high finding open, and the user approves both by merging that PR. On a
+  review has ended, and the user approves both by merging that PR. On a
   branch that changes the rulebook (this file, `tests/unit/AGENTS.md`) or the slice templates, the
   author works by the base branch's version until the change merges.
 - When the user chooses it for a slice, a slice may hold several sub-issues. They share one plan PR,
