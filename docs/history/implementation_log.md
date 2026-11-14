@@ -90,11 +90,11 @@ is first); every heading carries its date.
   rejection that cites files is quoted from one of them (`QUOTE_RULE` in its own commit, `99eee9e`); F5, the call
   numbers below; F7, discovered issue 35 (frozen records the check does not read). F4 went to the owner as decision
   concern 16; F6 was rejected with the lines it rests on. Answers committed in `03ffc55`.
-- Validation, local, on `03ffc55`: `make qa-quality` passed (qa-trace in PR mode against `origin/poc/agentic-sdlc`:
+- Validation, local, on `1f224d1` (after the brief's fix; first on `03ffc55`, with 925 tooling tests): `make qa-quality` passed (qa-trace in PR mode against `origin/poc/agentic-sdlc`:
   requirements 170, architecture 34, design 131, tests 386, coverage gaps 113, 0 new; docs-check, test-lint, and
-  qa-deploy with 18 known violations and 22 warnings); `make tooling-test` 925 passed and 9 shell tests (with a scratch
+  qa-deploy with 18 known violations and 22 warnings); `make tooling-test` 927 passed and 9 shell tests (with a scratch
   shellcheck); `make lint` passed (0 new or worsened findings); `make unit-guard-check` and `make gate-consistency`
-  passed. Not run: the full E2E suite (`git diff --name-only 4316724 03ffc55` lists no service, policy, compose,
+  passed. Not run: the full E2E suite (`git diff --name-only 4316724 1f224d1` lists no service, policy, compose,
   harness or CI file; CI's `e2e` job runs it on the PR), `make unit-trust`, `make unit-mutation` and
   `make unit-diff-cov` (no `services/` change), and CI (the branch is not pushed). The validation on `c79ed96` before
   the review had passed `make tooling-test` with 916 tests, but `eb46b58` came after it and was not rerun (F1).
