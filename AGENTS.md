@@ -358,9 +358,11 @@ All of the following, in the same change:
   files it opened for it (a file it only searched goes under `searched`), and the launcher fails it
   when it leaves an answer out, names an opened file it did not read, or did not read a file that a
   `fixed:` answer names or a `rejected:` answer cites. For every `rejected:` answer it accepts or
-  re-raises, it quotes the lines its decision rests on, with file and lines (`quotes`); the launcher
-  fails it when such a quote is missing or its text is not at that place in the copy (whitespace
-  aside, within two lines). Before the call, the launcher refuses answers that break a rule
+  re-raises, it quotes the lines its decision rests on, with file and lines (`quotes`), at least one
+  quote from a file the answer cites when it cites one; the launcher fails it when such a quote is
+  missing, when a quote's file is not one it read, or when a quote's text is not at that place in the
+  copy or holds no whole line of it (whitespace aside, within two lines). Before the call, the
+  launcher refuses answers that break a rule
   `make docs-check` applies to them. The prompt asks an initial review whether the change adds a
   mechanism (a gate, check, CI job, process step, document, register or field) without the user's
   approval where changing a choice would do, and a recheck the same of each `fixed:` answer, which

@@ -12,8 +12,9 @@ review's mode (initial, recheck or final, taken from the round), so no task text
 review. A recheck gets the reviewer's own earlier report and the author's answers to it, and the process files
 changed since that round in its evidence (round 2 of slice 4, R2-6); it is refused before the call when the answers
 break the answer rules the record check applies after it (R2-1 to R2-3), and fails when it leaves an answer
-unaccounted, did not read what an answer names, or does not quote, at its place in the copy, what a rejection it
-accepts or re-raises rests on (R2-7). Every finding carries a severity and the stage where its problem arose.
+unaccounted, did not read what an answer names, or does not quote what a rejection it accepts or re-raises rests on:
+whole lines at their place in the copy, from files it read, one of them cited by the rejection when it cites one
+(R2-7). Every finding carries a severity and the stage where its problem arose.
 
 Usage (from the repository root):
     python3 scripts/run_independent_review.py --commit <sha> --base <branch> \\
@@ -839,11 +840,12 @@ class Accounting:
     """What a report must account for (S41-D8): the items the prompt lists, each with the statuses it may take,
     and the files the attempt must have read because a `fixed:` answer names them or a `rejected:` answer cites them
     (owner-approved growth, 2026-11-13: an accepted rejection rests on what it cites); and the items answered
-    `rejected:`, which the report quotes when it accepts or re-raises them (R2-7)."""
+    `rejected:`, each with the files its answer cites, which the report quotes when it accepts or re-raises them
+    (R2-7)."""
 
     items: dict[str, tuple[str, ...]] = field(default_factory=dict)
     must_read: tuple[str, ...] = ()
-    quoted: tuple[str, ...] = ()
+    quoted: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 def accounting_problems(report: dict[str, Any], accounting: Accounting, paths_read: list[str],
@@ -862,18 +864,26 @@ def accounting_problems(report: dict[str, Any], accounting: Accounting, paths_re
                 problems.append(f"{entry['item']} names an opened file the attempt did not read")
     problems += [f"{path} is named in a fixed: or rejected: answer and was not read" for path in accounting.must_read
                  if path not in read]
-    return problems + quote_problems(report, accounting, copy_root)
+    return problems + quote_problems(report, accounting, copy_root, read)
 
 
-def quote_problems(report: dict[str, Any], accounting: Accounting, copy_root: Path) -> list[str]:
-    """R2-7: every rejection the report accepts or re-raises quotes the lines its decision rests on, and every quote
-    of the report is at its place in the copy."""
+def quote_problems(report: dict[str, Any], accounting: Accounting, copy_root: Path, read: set[str]) -> list[str]:
+    """R2-7: every rejection the report accepts or re-raises quotes the lines its decision rests on, at least once from
+    a file its answer cites when it cites one; and every quote of the report is from a file the attempt read, at its
+    place in the copy."""
     entries = {e["item"]: e for e in report["accounted"]}
-    problems = [f"{item} accepts or re-raises a rejection without quoting the lines it rests on"
-                for item in accounting.quoted
-                if entries.get(item, {}).get("status") in ("accepted", "re-raised") and not entries[item].get("quotes")]
+    problems = []
+    for item, cited in accounting.quoted.items():
+        if entries.get(item, {}).get("status") not in ("accepted", "re-raised"):
+            continue
+        files = {relative_to_copy(q["file"], copy_root) for q in entries[item].get("quotes", [])}
+        if not files:
+            problems.append(f"{item} accepts or re-raises a rejection without quoting the lines it rests on")
+        elif cited and not files & set(cited):
+            problems.append(f"{item} quotes none of the files its rejection cites ({', '.join(cited)})")
     for entry in report["accounted"]:
-        problems += [p for quote in entry.get("quotes", []) if (p := _quote_place_problem(entry["item"], quote, copy_root))]
+        problems += [p for quote in entry.get("quotes", [])
+                     if (p := _quote_place_problem(entry["item"], quote, copy_root, read))]
     return problems
 
 
@@ -881,18 +891,24 @@ def _normalised(text: str) -> str:
     return " ".join(text.split())
 
 
-def _quote_place_problem(item: str, quote: dict[str, Any], copy_root: Path) -> str | None:
-    """Why a quote is not at its place: its file is not in the copy, its lines are not in the file, or its text,
-    whitespace aside and the Read tool's line numbers dropped, is not within those lines (give or take QUOTE_SLACK)."""
+def _quote_place_problem(item: str, quote: dict[str, Any], copy_root: Path, read: set[str]) -> str | None:
+    """Why a quote is not at its place: its file is not in the copy or was not read with the Read tool, its lines
+    are not in the file, its text, whitespace aside and the Read tool's line numbers dropped, is not within those lines
+    (give or take QUOTE_SLACK), or it holds no whole non-blank line of them (a word found nearby is no quote)."""
     rel = relative_to_copy(quote["file"], copy_root)
     path = copy_root / rel if rel is not None else None
     if path is None or not path.is_file():
         return f"{item} quotes a file that is not in the copy"
+    if rel not in read:
+        return f"{item} quotes {rel}, which the attempt did not read"
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     window = lines[max(quote["line"] - 1 - QUOTE_SLACK, 0):quote["end_line"] + QUOTE_SLACK]
     text = _normalised(" ".join(READ_LINE_NUMBER.sub("", line) for line in quote["text"].splitlines()))
+    place = f"{rel}:{quote['line']}-{quote['end_line']}"
     if quote["end_line"] > len(lines) or not text or text not in _normalised(" ".join(window)):
-        return f"{item} quotes {rel}:{quote['line']}-{quote['end_line']}, and the copy holds no such text there"
+        return f"{item} quotes {place}, and the copy holds no such text there"
+    if not any(whole and f" {whole} " in f" {text} " for whole in map(_normalised, window)):
+        return f"{item} quotes {place} without one whole line of it"
     return None
 
 
@@ -1372,10 +1388,18 @@ def _row_against_finding(row: AnswerRow, finding: dict[str, Any]) -> list[str]:
 def recheck_accounting(rows: tuple[AnswerRow, ...] | list[AnswerRow], must_read: tuple[str, ...],
                        evidence_items: tuple[str, ...] = ()) -> Accounting:
     """What a recheck's report accounts for: every answer and every evidence entry; it reads the files the answers
-    name or cite, and quotes what each rejection it accepts or re-raises rests on (R2-7). The launcher and the
-    benchmark build it the same way."""
+    name or cite, and quotes what each rejection it accepts or re-raises rests on, from a file the rejection cites
+    when it cites one (R2-7). The launcher and the benchmark build it the same way. `check_answers` put every file a
+    rejection cites into `must_read` (the change's diff for one the change deletes), so the files are found there."""
     items = {**{row.finding: ANSWER_STATUSES for row in rows}, **{item: EVIDENCE_STATUSES for item in evidence_items}}
-    return Accounting(items, must_read, tuple(row.finding for row in rows if answer_word(row.answer) == "rejected"))
+    held = set(must_read).__contains__
+    quoted = {row.finding: _cited_and_held(row.answer, held) for row in rows if answer_word(row.answer) == "rejected"}
+    return Accounting(items, must_read, quoted)
+
+
+def _cited_and_held(answer: str, held: Any) -> tuple[str, ...]:
+    cited, away = cited_paths(answer, held)
+    return tuple(cited + ([f"{INPUTS_DIR}/change.diff"] if away else []))
 
 
 def check_answers(rows: list[AnswerRow], exists: Any, away: set[str]) -> tuple[str, ...]:

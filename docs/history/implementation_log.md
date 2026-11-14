@@ -30,7 +30,8 @@ is first); every heading carries its date.
   commit, `7b524b2`. A recheck's evidence lists every process file (`PROCESS_FILES` in `scripts/review_inputs.py`)
   changed since the reviewed round, with line counts; a recheck quotes the lines each rejection it accepts or re-raises
   rests on, and the launcher checks each quote in the copy (whitespace aside, Read line prefixes dropped, within the
-  named lines give or take two).
+  named lines give or take two; since review round 1, F3, also from a file the attempt read, holding a whole line, and
+  for a rejection that cites files, at least one quote from one of them).
 - The benchmark (R2-9, R2-10; `294d85b`, `ff276bc`, committed before any run, `e4943aa`, `7fd4723`, `c79ed96`): a
   match rated medium counts as detected, and a medium finding on a no-defect case as a false alarm; the earlier results
   are re-scored apart (`--rescore B`, which writes nothing unless the earlier rule reproduces every recorded score: 62
@@ -69,6 +70,12 @@ is first); every heading carries its date.
     R2-10's budget `assert 76 == 80`, a run within the hard stop `assert (2 == 0)`, the recheck line
     `no attribute 'false_answer_line'`. Not red: `test_a_false_rejection_is_scored_as_a_false_fix_is` (the scorer was
     already generic; kept as a regression test).
+  - Review round 1, F3, the quote check (base `2270e4a`, `python3 -m pytest -q -p no:cacheprovider --tb=line
+    tests/tools/test_run_independent_review.py -k "a_quote_comes_from_a_file or holds_at_least_one_whole_line"`; 4
+    failed, 5 passed): `[quote-from-an-unread-file]` and `[quotes-only-from-uncited-files]` `:1544 assert (0 == 1)`,
+    `[one-word]` and `[parts-of-two-lines]` `:1566 assert (0 == 1)` (each recheck completed); the five twins pass.
+    After the change, `test_a_rejection_counts_only_when_the_files_it_cites_were_read[cited-file-read]` quotes the file
+    its answer cites instead of the reviewed file.
 - Validation, local, on `c79ed96`: `make qa-quality` passed (qa-trace in PR mode against `origin/poc/agentic-sdlc`:
   requirements 170, architecture 34, design 131, tests 386, coverage gaps 113, 0 new; docs-check, test-lint, and
   qa-deploy with 18 known violations and 22 warnings); `make tooling-test` 916 passed and 9 shell tests (with a scratch

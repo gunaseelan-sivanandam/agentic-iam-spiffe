@@ -1108,7 +1108,8 @@ def test_a_rejection_counts_only_when_the_files_it_cites_were_read(fx: Fixture, 
     _write(fx.work, "scripts/cover.py", "def test_x():\n    pass\n")
     fx.commit = _commit_all(fx.work, "a covering test")
     commit = _recheck(fx, f"| X1 | high | {answer} |")
-    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[QUOTE])], reads=reads))
+    cover = {"file": "scripts/cover.py", "line": 1, "end_line": 1, "text": "def test_x():"}  # from the cited file (F3)
+    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[cover if "cover.py" in answer else QUOTE])], reads=reads))
     status = _run(fx, round_no=2, commit=commit)
     reason = _ends(fx)[-1].get("reason", "")
     assert (status, "scripts/cover.py is named in a fixed: or rejected: answer and was not read" in reason) == (
@@ -1512,6 +1513,58 @@ def test_every_rejection_the_recheck_accepts_or_re_raises_is_quoted(fx: Fixture,
     code = _run(fx, round_no=2, commit=commit)
     end = _ends(fx)[-1]
     assert (code, reason is None or reason in end["reason"]) == ((0, True) if reason is None else (1, True)), end["reason"]
+
+
+RULE_QUOTE = {"file": "AGENTS.md", "line": 1, "end_line": 1, "text": "BASE RULE SENTENCE v1"}  # also in the prompt's rules
+
+
+@pytest.mark.parametrize(("answer", "reads", "quotes", "reason"), [
+    (f"rejected: the scenario does not happen, {FACT}", [REVIEWED], [QUOTE, RULE_QUOTE],
+     "X1 quotes AGENTS.md, which the attempt did not read"),
+    (f"rejected: the scenario does not happen, {FACT}", [REVIEWED, "AGENTS.md"], [QUOTE, RULE_QUOTE], None),
+    (f"rejected: covered by {COVER}:10-11", [REVIEWED, COVER], [QUOTE],
+     f"X1 quotes none of the files its rejection cites ({COVER})"),
+    (f"rejected: covered by {COVER}:10-11", [REVIEWED, COVER],
+     [QUOTE, {"file": COVER, "line": 10, "end_line": 10, "text": "check number 10 holds"}], None),
+    ("rejected: covered by M5-T49", [REVIEWED], [QUOTE], None),
+], ids=["quote-from-an-unread-file", "quote-from-a-read-file", "quotes-only-from-uncited-files",
+        "a-quote-from-the-cited-file", "no-file-cited"])
+def test_a_quote_comes_from_a_file_the_recheck_read_and_one_the_rejection_cites(
+        fx: Fixture, answer: str, reads: list[str], quotes: list[dict], reason: str | None) -> None:
+    """R2-7 (review round 1 of round 2, F3): the lines a decision rests on are in a file the recheck read with the
+    Read tool, not text it knows from its prompt; and when the rejection cites files, one quote is from one of them."""
+    _write(fx.work, COVER, COVER_TEXT)
+    fx.commit = _commit_all(fx.work, "a covering check")
+    commit = _recheck(fx, f"| X1 | high | {answer} |")
+    fx.scenario(_reply(accounted=[_accounted("X1", opened=tuple(reads), quotes=quotes)], reads=reads))
+    status = _run(fx, round_no=2, commit=commit)
+    end = _ends(fx)[-1]
+    if reason is None:
+        assert status == 0 and end["status"] == "completed", end["reason"]
+        return
+    assert status == 1 and end["status"] == "failed" and reason in end["reason"], end["reason"]
+
+
+@pytest.mark.parametrize(("quote", "reason"), [
+    ({"file": COVER, "line": 10, "end_line": 10, "text": "holds"},
+     f"X1 quotes {COVER}:10-10 without one whole line of it"),
+    ({"file": COVER, "line": 10, "end_line": 11, "text": "10 holds check number 11"},
+     f"X1 quotes {COVER}:10-11 without one whole line of it"),
+    ({"file": COVER, "line": 10, "end_line": 11, "text": "check number 10 holds check number"}, None),
+    ({"file": COVER, "line": 10, "end_line": 10, "text": "check number 10 holds"}, None),
+], ids=["one-word", "parts-of-two-lines", "a-whole-line-and-a-part", "a-whole-line"])
+def test_a_quote_holds_at_least_one_whole_line_of_its_place(fx: Fixture, quote: dict, reason: str | None) -> None:
+    """R2-7 (review round 1 of round 2, F3): a word found near the named lines is no quote of them."""
+    _write(fx.work, COVER, COVER_TEXT)
+    fx.commit = _commit_all(fx.work, "a covering check")
+    commit = _recheck(fx, f"| X1 | high | rejected: covered by {COVER}:10-11 |")
+    fx.scenario(_reply(accounted=[_accounted("X1", opened=(REVIEWED, COVER), quotes=[quote])], reads=[REVIEWED, COVER]))
+    status = _run(fx, round_no=2, commit=commit)
+    end = _ends(fx)[-1]
+    if reason is None:
+        assert status == 0 and end["status"] == "completed", end["reason"]
+        return
+    assert status == 1 and end["status"] == "failed" and reason in end["reason"], end["reason"]
 
 
 @pytest.mark.parametrize(("quotes", "problem"), [
