@@ -1394,6 +1394,62 @@ def test_flagged_note_naming_a_finding_before_punctuation_is_accepted() -> None:
 # --- Round 2 of slice 4: the answer rules before the call (R2-1 to R2-3), quotes (R2-7), process files (R2-6) ------
 
 
+@pytest.mark.parametrize(("findings", "rows", "message"), [
+    ((_finding("X1", severity="medium"),), ("| X1 | medium | deferred: #12 |",),
+     "a medium finding (X1) cannot be answered deferred:"),
+    ((_finding("X1"),), ("| X1 | high | rejected: the scenario does not happen |",),
+     "X1 is a rejected high finding whose answer cites no checkable fact"),
+    ((_finding("X1", severity="medium"),), ("| X1 | medium | rejected: we make sure of it |",),
+     "X1 is a rejected medium finding whose answer cites no checkable fact"),
+], ids=["medium-deferred", "high-rejected-without-a-fact", "medium-rejected-without-a-fact"])
+def test_answers_the_record_check_would_refuse_are_refused_before_the_recheck(
+        fx: Fixture, findings: tuple[dict, ...], rows: tuple[str, ...], message: str,
+        capsys: pytest.CaptureFixture[str]) -> None:
+    """R2-1, R2-2: the launcher applies the record check's answer rules before the call, not only after it."""
+    commit = _recheck(fx, *rows, findings=findings)
+    assert _run(fx, round_no=2, commit=commit) == 2
+    assert message in capsys.readouterr().err
+    assert len(fx.calls()) == 1
+
+
+def _third_round(fx: Fixture, status: str, row: str) -> str:
+    """Round 1 finds X1 (high), answered by a rejection that cites a fact; the round-2 recheck accounts X1 with
+    `status` (a re-raise holds X1 in its findings and quotes the line it rests on); the answers to round 2 hold
+    `row`. Return the commit for round 3."""
+    commit = _recheck(fx, f"| X1 | high | rejected: the scenario does not happen, {FACT} |")
+    if status == "re-raised":
+        fx.scenario(_reply([_finding("X1")], accounted=[_accounted("X1", status, quotes=[QUOTE])], verdict="no"))
+    else:
+        fx.scenario(_reply(accounted=[_accounted("X1", status, note="the copy does not settle it")], verdict="no"))
+    assert _run(fx, round_no=2, commit=commit) == 0
+    return _answers(fx, "unit1/c1/r2/A/1", row)
+
+
+@pytest.mark.parametrize(("status", "row", "refused"), [
+    ("re-raised", f"| X1 | high | rejected: it still does not happen, {FACT} |", "X1 was re-raised after its rejection"),
+    ("re-raised", "| X1 | high | fixed: scripts/review_me.py: guarded after all |", None),
+    ("cannot determine", "| X1 | high | owner: docs/slices/demo/decisions.md |", None),
+    ("cannot determine", "| X1 | high | fixed: scripts/review_me.py: guarded after all |", None),
+    ("cannot determine", f"| X1 | high | rejected: it does not happen, {FACT} |",
+     "X1 was accounted cannot determine, so it is answered fixed: or owner:"),
+    ("cannot determine", "| X1 | low | owner: docs/slices/demo/decisions.md |",
+     "answer row for X1 says 'low'; the finding is 'high'"),
+], ids=["re-raised-rejected-again", "re-raised-fixed", "undetermined-owner", "undetermined-fixed",
+        "undetermined-rejected-again", "undetermined-relabelled"])
+def test_a_rejection_the_recheck_did_not_accept_is_fixed_or_goes_to_the_owner_before_the_next_round(
+        fx: Fixture, status: str, row: str, refused: str | None, capsys: pytest.CaptureFixture[str]) -> None:
+    """R2-3: one dispute round. A finding the recheck could not determine is not in its findings, yet its answer row
+    is accepted (S43-D4's gap): it is fixed or goes to the owner."""
+    commit = _third_round(fx, status, row)
+    fx.scenario(_reply(accounted=[_accounted("X1")]))
+    status_code = _run(fx, round_no=3, commit=commit)
+    if refused is None:
+        assert status_code == 0 and _ends(fx)[-1]["status"] == "completed"
+        return
+    assert status_code == 2 and refused in capsys.readouterr().err
+    assert len(fx.calls()) == 2
+
+
 COVER = "scripts/cover.py"
 COVER_TEXT = "".join(f"check number {n} holds\n" for n in range(1, 21))
 

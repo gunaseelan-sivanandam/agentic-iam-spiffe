@@ -72,6 +72,14 @@ def test_the_brief_lists_every_item_the_owner_must_see(fx: base.Fixture) -> None
     assert "| discovery | 1 |" in text and "| tests first | 1 |" in text and "| implementation | 5 |" in text
 
 
+def test_the_answer_to_a_finding_the_recheck_could_not_determine_is_shown_with_it(fx: base.Fixture) -> None:
+    """Round 2 of slice 4: the answers to a recheck may answer a finding it could not determine (R2-3), and every
+    `owner:` answer reaches the brief."""
+    _two_rounds(fx, "rejected: it still does not happen", "| X4 | high | owner: docs/slices/demo/decisions.md#x4 |")
+    undetermined = _brief(fx).split("**`cannot determine` in a recheck**", 1)[1].split("**Still", 1)[0]
+    assert "X4: NOTE ON X4; answered: owner: docs/slices/demo/decisions.md#x4" in undetermined
+
+
 def test_a_re_raised_finding_answered_with_a_fix_is_not_disputed(fx: base.Fixture) -> None:
     _two_rounds(fx, last_answer="fixed: scripts/review_me.py: guarded now")
     disputed = _brief(fx).split("**Still disputed after a recheck**", 1)[1].split("**Blocking", 1)[0]

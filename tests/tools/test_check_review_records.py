@@ -514,3 +514,62 @@ def test_finishing_an_attempt_the_record_has_no_section_for_is_refused() -> None
 
 
 # --- Round 2 of slice 4: one home for the answer rules; a finding the recheck could not determine ------------------
+
+
+def test_the_record_check_applies_the_launchers_answer_rules(fx: base.Fixture, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The rules live once, in the launcher (`answer_rule_problems`), which refuses a recheck before the call on what
+    the record check fails after it; the record check holds no copy of them."""
+    _completed(fx, base._finding("X1"))
+    base._answers(fx, "unit1/c1/r1/A/1", "| X1 | high | fixed: scripts/review_me.py: guarded |")
+    assert _problems(fx) == []
+    monkeypatch.setattr(check.launcher, "answer_rule_problems", lambda *_args: ["PLANTED RULE PROBLEM"])
+    assert _problems(fx) == [f"records: {RECORD}: unit1/c1/r1/A/1: PLANTED RULE PROBLEM"]
+    assert not hasattr(check, "CHECKABLE_FACT") and not hasattr(check, "FIXED_SEVERITIES")
+
+
+def _undetermined_after(fx: base.Fixture, *other: dict) -> None:
+    """Round 1 finds X1 (high), answered by a rejection with a fact; the recheck accounts X1 as `cannot determine`,
+    so its report does not hold X1, and reports the findings `other`."""
+    _completed(fx, base._finding("X1"))
+    commit = base._answers(fx, "unit1/c1/r1/A/1", f"| X1 | high | rejected: it does not happen, {FACT} |")
+    fx.scenario(base._reply(list(other), verdict="no", accounted=[
+        base._accounted("X1", "cannot determine", note="the copy does not settle it"), base._accounted("EV1", "explained")]))
+    assert base._run(fx, round_no=2, commit=commit) == 0
+
+
+@pytest.mark.parametrize(("rows", "problem"), [
+    (("| X1 | high | owner: docs/slices/demo/decisions.md |",), None),
+    (("| X1 | high | fixed: scripts/review_me.py: guarded after all |",), None),
+    ((), "unit1/c1/r1/A/1: X1 is a rejected high finding that no later round accepted"),
+    ((f"| X1 | high | rejected: it still does not happen, {FACT} |",),
+     "unit1/c1/r2/A/1: X1 was accounted cannot determine, so it is answered fixed: or owner:"),
+    (("| X1 | low | owner: docs/slices/demo/decisions.md |",),
+     "unit1/c1/r2/A/1: answer row for X1 says 'low'; the finding is 'high'"),
+    (("| X1 | high | owner: asked in chat |",), "unit1/c1/r2/A/1: owner answer to X1 gives no link"),
+], ids=["owner", "fixed", "no-answer", "rejected-again", "relabelled", "owner-without-link"])
+def test_a_finding_the_recheck_could_not_determine_is_answered_fixed_or_owner_in_the_next_answers(
+        fx: base.Fixture, rows: tuple[str, ...], problem: str | None) -> None:
+    """R2-3 and S43-D4's gap: the recheck's report does not hold the undetermined finding, yet the answers to it may
+    hold its row, which settles the earlier rejection; a recheck with another finding (Y1) is checked as before."""
+    _undetermined_after(fx, base._finding("Y1", severity="low"))
+    base._answers(fx, "unit1/c1/r2/A/1", "| Y1 | low | rejected: style |", *rows)
+    problems = _problems(fx)
+    assert (problems == []) if problem is None else any(problem in p for p in problems), problems
+
+
+def test_the_answers_to_a_recheck_without_findings_are_checked_too(fx: base.Fixture) -> None:
+    """Before round 2, a recheck without findings had its answers skipped, so any `owner:` word settled a rejection."""
+    _undetermined_after(fx)
+    base._answers(fx, "unit1/c1/r2/A/1", "| X1 | high | owner: asked in chat |")
+    assert any("unit1/c1/r2/A/1: owner answer to X1 gives no link" in p for p in _problems(fx)), _problems(fx)
+    _edit(fx, "owner: asked in chat", "owner: docs/slices/demo/decisions.md")
+    assert _problems(fx) == []
+
+
+def test_a_re_raised_rejection_keeps_its_id_so_its_fix_or_owner_row_is_accepted(fx: base.Fixture) -> None:
+    """The re-raised path of the same gap: the re-raised finding is in the recheck's findings under its ID."""
+    _re_raised_after(fx, "high", f"rejected: the scenario does not happen, {FACT}")
+    report = json.loads(records.parse_record(_record(fx).read_text())[0]["unit1/c1/r2/A/1"].blocks["report"])
+    assert [f["id"] for f in report["findings"]] == ["X1"]
+    base._answers(fx, "unit1/c1/r2/A/1", "| X1 | high | fixed: scripts/review_me.py: guarded after all |")
+    assert _problems(fx) == []

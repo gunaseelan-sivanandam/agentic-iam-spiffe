@@ -1365,3 +1365,16 @@ def test_a_benchmark_recheck_that_accepts_a_rejection_without_a_quote_fails(repo
     line = next(line for line in r.results() if line.get("configuration") == "recheck-A")
     assert line["status"] == "failed"
     assert "R1-1 accepts or re-raises a rejection without quoting the lines it rests on" in line["reason"]
+
+
+def test_a_benchmark_recheck_whose_rejection_cites_no_checkable_fact_is_refused(repo: tuple[Repo, str, str],
+                                                                                tmp_path: Path) -> None:
+    """R2-2 holds in the benchmark too: the case is refused before any call, as the launcher refuses a recheck."""
+    r, base, commit = repo
+    case = _holds_case(r, base, commit)
+    answers = r.root / "tests/review_benchmark/recheck/holds_answers.md"
+    answers.write_text(answers.read_text().replace("AGENTS.md:1 says", "AGENTS.md says"))
+    prepared, key = _prepared(repo, tmp_path, case)
+    with pytest.raises(bench.BenchmarkRefusedError, match="R1-1 is a rejected high finding whose answer cites no "
+                                                          "checkable fact"):
+        bench.case_prompt(prepared, key, "recheck-A")

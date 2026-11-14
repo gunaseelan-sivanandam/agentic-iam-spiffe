@@ -42,6 +42,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -1244,26 +1245,96 @@ def answer_format_problem(row: AnswerRow) -> str | None:
     return None
 
 
-# S41-D7: the answers each severity allows; a decision concern is always answered owner:.
-ALLOWED_ANSWERS = {"blocking": ("fixed", "rejected", "owner"), "high": ("fixed", "rejected", "owner"),
-                   "medium": ANSWER_WORDS, "low": ANSWER_WORDS}
+# The answer rules (S41-D7, S43-D4; round 2 of slice 4, the owner, 2026-11-14, R2-1 to R2-3) live here once: the
+# launcher refuses a recheck on them before the call, and `make docs-check` (scripts/check_review_records.py) fails a
+# record on them after it. R2-1: blocking, high and medium findings are fixed; only a low finding is the author's
+# choice, so only a low finding is deferred. A decision concern is always answered owner:.
+FIXED_SEVERITIES = ("blocking", "high", "medium")
+ALLOWED_ANSWERS = {**{severity: ("fixed", "rejected", "owner") for severity in FIXED_SEVERITIES}, "low": ANSWER_WORDS}
+# R2-3: a finding a recheck could not determine is fixed or goes to the owner.
+UNDETERMINED_ANSWERS = ("fixed", "owner")
+# R2-2: the checkable facts a rejection of a blocking, high or medium finding cites, by shape only. Records are frozen
+# while the repository moves on, so whether a cited test or line still exists is the recheck's question.
+CHECKABLE_FACT = re.compile("|".join((
+    r"(?<![\w.-])M\d+[\w.]*-T\d+(?![\w-])",  # an E2E harness test: M5-T49, M3.S4-T2, M4a-T3
+    r"(?<![\w-])[A-Z]{3,}-[A-Z]\d+(?![\w-])",  # a static test: DEPLOY-K1, EVID-T1 (not REQ-M1-R1, not CR-B8)
+    r"(?<![\w-])UT-\d{3,}(?![\w-])",  # a unit test: UT-123
+    r"[\w.-]+\.py::\w+",  # a tooling test: tests/tools/test_x.py::test_y
+    r"`make [\w-]+`",  # a gate, in a code span, so that prose such as "make sure" is no gate
+    r"(?<![\w/.-])(?:(?:[\w.-]+/)+[\w.-]+|[\w.-]+\.[A-Za-z0-9]+|Makefile):\d+(?:-\d+)?(?!\d)",  # a file and line
+)))
 
 
-def answer_table_problems(report: dict[str, Any], rows: list[AnswerRow]) -> list[str]:
+def answer_table_problems(report: dict[str, Any], rows: list[AnswerRow],
+                          earlier: list[AnswerRow] | tuple[AnswerRow, ...] = ()) -> list[str]:
     """Why an answers table does not answer this report (S41-D7): a finding without exactly one row, a row for an
     ID the report does not hold, a severity cell that differs from the finding's, or an answer its severity or kind
-    does not allow. The launcher refuses a recheck on any of these, and slice 4.3's record check applies them too."""
+    does not allow. A row may also answer an item the report accounted as `cannot determine`, which its findings do
+    not hold: one the round before answered (`earlier`, the rows the report's attempt read), under that row's
+    severity, with `fixed:` or `owner:` (R2-3)."""
     findings = {f["id"]: f for f in report.get("findings", [])}
+    undetermined = _undetermined_items(report, earlier, findings)
     by_id: dict[str, list[AnswerRow]] = {}
     for row in rows:
         by_id.setdefault(row.finding, []).append(row)
     problems = [f"finding {fid} has no answer row" for fid in findings if fid not in by_id]
     problems += [f"finding {fid} has {len(rs)} answer rows" for fid, rs in by_id.items() if len(rs) > 1]
-    problems += [f"answer row for {fid}, which the report does not hold" for fid in by_id if fid not in findings]
+    problems += [f"answer row for {fid}, which the report does not hold" for fid in by_id
+                 if fid not in findings and fid not in undetermined]
     for fid, finding in findings.items():
         for row in by_id.get(fid, [])[:1]:
             problems += _row_against_finding(row, finding)
+    for fid, before in undetermined.items():
+        for row in by_id.get(fid, [])[:1]:
+            problems += _row_after_undetermined(row, before)
     return problems
+
+
+def _undetermined_items(report: dict[str, Any], earlier: list[AnswerRow] | tuple[AnswerRow, ...],
+                        findings: dict[str, Any]) -> dict[str, AnswerRow]:
+    """The items the report accounted as `cannot determine` that the round before answered, each with that answer."""
+    unsettled = {e.get("item") for e in report.get("accounted", []) if e.get("status") == "cannot determine"}
+    return {row.finding: row for row in earlier if row.finding in unsettled and row.finding not in findings}
+
+
+def _row_after_undetermined(row: AnswerRow, before: AnswerRow) -> list[str]:
+    if row.severity != before.severity:
+        return [f"answer row for {row.finding} says {row.severity!r}; the finding is {before.severity!r}"]
+    if answer_word(row.answer) not in UNDETERMINED_ANSWERS:
+        return [f"{row.finding} was accounted cannot determine, so it is answered fixed: or owner:"]
+    return []
+
+
+def rejected_again(report: dict[str, Any], earlier: list[AnswerRow] | tuple[AnswerRow, ...]) -> set[str]:
+    """The findings the report re-raised after the round before rejected them: R2-3's one dispute round is over."""
+    reraised = {e.get("item") for e in report.get("accounted", []) if e.get("status") == "re-raised"}
+    return {row.finding for row in earlier if row.finding in reraised and answer_word(row.answer) == "rejected"}
+
+
+def answer_rule_problems(report: dict[str, Any], rows: list[AnswerRow],
+                         earlier: list[AnswerRow] | tuple[AnswerRow, ...] = ()) -> list[str]:
+    """Every rule an answers table meets, in one place: the table answers the report, each answer has its word's form,
+    and a rejection of a blocking, high or medium finding cites a checkable fact (R2-2) and is not a second rejection
+    of a finding the report re-raised after the round before rejected it (R2-3). `earlier` holds the rows the report's
+    attempt read (none for an initial review). Whether a rejection was later settled is the record check's question."""
+    problems = [*answer_table_problems(report, rows, earlier), *filter(None, map(answer_format_problem, rows))]
+    severities = {f["id"]: f.get("severity") for f in report.get("findings", [])}
+    disputed = rejected_again(report, earlier)
+    for row in (r for r in rows if answer_word(r.answer) == "rejected" and severities.get(r.finding) in FIXED_SEVERITIES):
+        if not CHECKABLE_FACT.search(row.answer):
+            problems.append(f"{row.finding} is a rejected {severities[row.finding]} finding whose answer cites no "
+                            "checkable fact (a test ID, a gate as `make <target>` or a file and line)")
+        if row.finding in disputed:
+            problems.append(f"{row.finding} was re-raised after its rejection: there is one dispute round, so it is "
+                            "answered fixed: or owner:, not rejected: again")
+    return problems
+
+
+def earlier_answer_rows(record_text: str, start: dict[str, Any]) -> list[AnswerRow]:
+    """The answer rows a recheck read: those of the answers to the attempt its start entry names as earlier."""
+    earlier = start.get("earlier_attempt")
+    section = answers_section(record_text, earlier) if earlier else None
+    return answer_rows(section) if section else []
 
 
 def _row_against_finding(row: AnswerRow, finding: dict[str, Any]) -> list[str]:
@@ -1483,35 +1554,54 @@ def plan_reviews(spec: RoundSpec, inputs: ReviewInputs, entries: list[dict[str, 
     """Build every reviewer's parts before any call; a recheck without its inputs is refused here (S41-D5). Every
     evidence entry is an item to account for, in every mode (S42-D6)."""
     mode = review_mode(spec.unit, spec.round_no)
-    withheld = list(inputs.withheld)
-    evidence_items = {item: EVIDENCE_STATUSES for item in shared.evidence_items}
-    record_text, away = None, set()
-    if mode == "recheck":
-        record_bytes = file_at(spec.repo, inputs.commit, spec.record)
-        record_text = record_bytes.decode("utf-8") if record_bytes is not None else None
-        away = set(inputs.deleted)  # the change's deleted files, the old names of renames included
-
-    def exists(path: str) -> bool:
-        return path not in withheld and file_at(spec.repo, inputs.commit, path) is not None
-
+    evidence_items = tuple(shared.evidence_items)
+    view = commit_view(spec, inputs) if mode == "recheck" else None
     plans = []
     for reviewer in reviewers:
         task = reviewer.prompt_file.read_bytes().decode("utf-8")  # no newline translation: prompt_sha256 is of the bytes
-        recheck, accounting = None, Accounting(dict(evidence_items))
-        if mode == "recheck":
-            recheck = load_recheck(spec.repo, record_text, *earlier_attempt(entries, spec.unit, spec.count,
-                                                                            spec.round_no, reviewer.label))
-            must_read = check_answers(list(recheck.rows), exists, away)
-            table = answer_table_problems(json.loads(recheck.earlier_report), list(recheck.rows))
-            if table:
-                raise ReviewRefusedError(f"the answers to {recheck.earlier_attempt} do not answer its report: "
-                                         + "; ".join(table[:5]))
-            accounting = recheck_accounting(recheck.rows, must_read, tuple(evidence_items))
+        recheck, accounting = None, Accounting({item: EVIDENCE_STATUSES for item in evidence_items})
+        if view is not None:
+            recheck, accounting = plan_recheck(entries, spec, reviewer.label, view, evidence_items)
         parts = make_parts(mode, task, spec.unit, recheck, shared)
         prompt = build_prompt(inputs, parts, FULL_CONFIGURATION, diff_base=inputs.base_commit)
         check_prompt(prompt, parts, reviewer.prompt_file.name)
         plans.append(ReviewPlan(reviewer, parts, accounting, recheck, prompt))
     return plans
+
+
+@dataclass(frozen=True)
+class CommitView:
+    """The reviewed commit as a recheck's answers are checked against it: the review record's text there, the files it
+    holds outside the withheld paths, and the files the change deletes (the old names of renames included)."""
+
+    record_text: str | None
+    exists: Callable[[str], bool]
+    away: frozenset[str]
+
+
+def commit_view(spec: RoundSpec, inputs: ReviewInputs) -> CommitView:
+    withheld = set(inputs.withheld)
+    record = file_at(spec.repo, inputs.commit, spec.record)
+
+    def exists(path: str) -> bool:
+        return path not in withheld and file_at(spec.repo, inputs.commit, path) is not None
+
+    return CommitView(record.decode("utf-8") if record is not None else None, exists, frozenset(inputs.deleted))
+
+
+def plan_recheck(entries: list[dict[str, Any]], spec: RoundSpec, label: str, view: CommitView,
+                 evidence_items: tuple[str, ...]) -> tuple[Recheck, Accounting]:
+    """A recheck's inputs and what its report accounts for (S41-D5). Refused before any call when an answer cannot be
+    verified (S41-D7, S41-D8) or breaks a rule the record check applies after the call (R2-1 to R2-3)."""
+    start, end = earlier_attempt(entries, spec.unit, spec.count, spec.round_no, label)
+    recheck = load_recheck(spec.repo, view.record_text, start, end)
+    must_read = check_answers(list(recheck.rows), view.exists, set(view.away))
+    before = earlier_answer_rows(view.record_text or "", start)
+    problems = answer_rule_problems(json.loads(recheck.earlier_report), list(recheck.rows), before)
+    if problems:
+        raise ReviewRefusedError(f"the answers to {recheck.earlier_attempt} break the answer rules: "
+                                 + "; ".join(problems[:5]))
+    return recheck, recheck_accounting(recheck.rows, must_read, evidence_items)
 
 
 def check_prompt(prompt: str, parts: PromptParts, task_name: str) -> None:

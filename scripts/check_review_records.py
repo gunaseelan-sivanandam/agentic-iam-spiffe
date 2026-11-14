@@ -11,11 +11,13 @@ no such field and are not checked, S43-D5):
   report, fails;
 - a recheck's logged answers hash equals the hash of the answers section it names, so answers edited after the
   recheck read them fail;
-- every finding of a released report has an answer its severity and kind allow (the launcher's own rule, and no
-  deferred medium finding, round 2 of slice 4, R2-1);
-- a rejected blocking, high or medium finding cites a checkable fact (R2-2), and is accepted by the next round's
-  report, or carries an `owner:` link in its own row, or a later round answers the same finding `owner:` or `fixed:`
-  (a re-raised finding keeps its ID); a finding re-raised after its rejection is not rejected again (R2-3).
+- the answers to a released report meet the launcher's answer rules (`answer_rule_problems`, their one home, which
+  the launcher also applies before a recheck): every finding has an answer its severity and kind allow, so no
+  deferred blocking, high or medium finding (round 2 of slice 4, R2-1); a rejection of a blocking, high or medium
+  finding cites a checkable fact (R2-2); a finding re-raised after its rejection is not rejected again, and a finding
+  the recheck could not determine, which its report does not hold, may be answered `fixed:` or `owner:` (R2-3);
+- a rejected blocking, high or medium finding is accepted by the next round's report, or carries an `owner:` link in
+  its own row, or a later round answers the same finding `owner:` or `fixed:` (a re-raised finding keeps its ID).
 
 A block is the fenced block right after a Prompt, Evidence or Report label under an attempt heading; any other fence,
 for example one inside an answers section, is not a block.
@@ -38,19 +40,6 @@ LOG_NAME = "review_attempts.jsonl"
 # owner link.
 OWNER_LINK = re.compile(r"\bowner:\s*(?:https://\S+|(?:docs|AGENTS)[\w./-]*\.md\b)")
 LOG_FIELDS = {"prompt": "prompt_sha256", "evidence": "evidence_sha256"}
-# Round 2 of slice 4 (the owner, 2026-11-14), R2-1: blocking, high and medium findings are fixed; only a low finding
-# is the author's choice. The rules on rejections below (S43-D4, R2-2, R2-3) bind these three severities.
-FIXED_SEVERITIES = ("blocking", "high", "medium")
-# R2-2: the checkable facts a rejection may cite, by shape only. Records are frozen while the repository moves on, so
-# whether a cited test or line still exists is the recheck's question, not this check's.
-CHECKABLE_FACT = re.compile("|".join((
-    r"(?<![\w.-])M\d+[\w.]*-T\d+(?![\w-])",  # an E2E harness test: M5-T49, M3.S4-T2, M4a-T3
-    r"(?<![\w-])[A-Z]{3,}-[A-Z]\d+(?![\w-])",  # a static test: DEPLOY-K1, EVID-T1 (not REQ-M1-R1, not CR-B8)
-    r"(?<![\w-])UT-\d{3,}(?![\w-])",  # a unit test: UT-123
-    r"[\w.-]+\.py::\w+",  # a tooling test: tests/tools/test_x.py::test_y
-    r"`make [\w-]+`",  # a gate, in a code span, so that prose such as "make sure" is no gate
-    r"(?<![\w/.-])(?:(?:[\w.-]+/)+[\w.-]+|[\w.-]+\.[A-Za-z0-9]+|Makefile):\d+(?:-\d+)?(?!\d)",  # a file and line
-)))
 
 
 def _load_launcher() -> Any:
@@ -163,61 +152,35 @@ def _later_answer_settles(ctx: RecordContext, start: dict[str, Any], finding: st
     return False
 
 
-def _earlier_answer_word(ctx: RecordContext, start: dict[str, Any], finding: str) -> str | None:
-    """The first word of the answer to `finding` in the earlier round a recheck read, or None."""
-    earlier = start.get("earlier_attempt")
-    section = launcher.answers_section(ctx.text, earlier) if earlier else None
-    rows = launcher.answer_rows(section) if section else []
-    return next((launcher.answer_word(r.answer) for r in rows if r.finding == finding), None)
-
-
-def _rejection_problems(attempt: str, row: AnswerRow, severity: str, report: dict[str, Any], ctx: RecordContext) -> list[str]:
-    """What a rejection of a blocking, high or medium finding needs: a checkable fact (R2-2), and the next round's
-    acceptance, an owner link in its row, or a later round's `owner:` or `fixed:` answer to the same finding (S43-D4,
-    R2-1, R2-3). A finding the recheck re-raised after its rejection is fixed or goes to the owner; it is not rejected
-    again (R2-3: one dispute round)."""
-    problems = []
-    if not CHECKABLE_FACT.search(row.answer):
-        problems.append(f"{row.finding} is a rejected {severity} finding whose answer cites no checkable fact (a test "
-                        "ID, a gate as `make <target>` or a file and line)")
+def _unsettled_rejections(attempt: str, rows: list[AnswerRow], report: dict[str, Any], ctx: RecordContext) -> list[str]:
+    """S43-D4, R2-1, R2-3: a rejection of a blocking, high or medium finding stands when the next round accepts it, an
+    owner link in its row covers it, or a later round answers the same finding `owner:` or `fixed:`. A finding re-raised
+    after its rejection already fails the answer rules, so it is not reported twice."""
     start = ctx.attempts[attempt].start
-    reraised = any(e.get("item") == row.finding and e.get("status") == "re-raised" for e in report.get("accounted", []))
-    if reraised and _earlier_answer_word(ctx, start, row.finding) == "rejected":
-        problems.append(f"{row.finding} was re-raised after its rejection: there is one dispute round, so it is "
-                        "answered fixed: or owner:, not rejected: again")
-    elif not (OWNER_LINK.search(row.answer) or _next_round_accepts(ctx, start, row.finding)
-              or _later_answer_settles(ctx, start, row.finding)):
-        problems.append(f"{row.finding} is a rejected {severity} finding that no later round accepted and no owner "
-                        "link or later fix covers")
+    severities = {f["id"]: f.get("severity") for f in report.get("findings", [])}
+    disputed = launcher.rejected_again(report, launcher.earlier_answer_rows(ctx.text, start))
+    problems = []
+    for row in rows:
+        severity = severities.get(row.finding)
+        if launcher.answer_word(row.answer) != "rejected" or severity not in launcher.FIXED_SEVERITIES:
+            continue
+        settled = (OWNER_LINK.search(row.answer) or _next_round_accepts(ctx, start, row.finding)
+                   or _later_answer_settles(ctx, start, row.finding))
+        if row.finding not in disputed and not settled:
+            problems.append(f"{row.finding} is a rejected {severity} finding that no later round accepted and no owner "
+                            "link or later fix covers")
     return problems
 
 
-def _deferral_problem(row: AnswerRow, finding: dict[str, Any]) -> str | None:
-    """R2-1: a medium finding is not deferred. The launcher's table (`ALLOWED_ANSWERS`) still allows it, so the record
-    check refuses it, where the launcher's own row rules pass the row (same severity cell, not a decision concern)."""
-    if (finding.get("severity") == row.severity == "medium" and finding.get("kind") != "decision_concern"
-            and launcher.answer_word(row.answer) == "deferred"):
-        return f"a medium finding ({row.finding}) cannot be answered deferred:"
-    return None
-
-
 def _finding_answer_problems(attempt: str, report: dict[str, Any], ctx: RecordContext) -> list[str]:
-    """S43-D4, R2-1 to R2-3: every finding of a released report has an answer its severity and kind allow."""
-    if not report.get("findings"):
-        return []
+    """The answers to a released report: required when it has findings, and checked whenever the record holds them,
+    by the launcher's answer rules and then for rejections no later round settled."""
     section = launcher.answers_section(ctx.text, attempt)
     if section is None:
-        return [f"{attempt}: its report has findings and the record has no answers to it"]
+        return [f"{attempt}: its report has findings and the record has no answers to it"] if report.get("findings") else []
     rows = launcher.answer_rows(section)
-    problems = [*launcher.answer_table_problems(report, rows), *filter(None, map(launcher.answer_format_problem, rows))]
-    findings = {f["id"]: f for f in report["findings"]}
-    for row in (r for r in rows if r.finding in findings):
-        severity = findings[row.finding].get("severity")
-        deferral = _deferral_problem(row, findings[row.finding])
-        if deferral:
-            problems.append(deferral)
-        if launcher.answer_word(row.answer) == "rejected" and severity in FIXED_SEVERITIES:
-            problems += _rejection_problems(attempt, row, severity, report, ctx)
+    earlier = launcher.earlier_answer_rows(ctx.text, ctx.attempts[attempt].start)
+    problems = [*launcher.answer_rule_problems(report, rows, earlier), *_unsettled_rejections(attempt, rows, report, ctx)]
     return [f"{attempt}: {p}" for p in problems]
 
 

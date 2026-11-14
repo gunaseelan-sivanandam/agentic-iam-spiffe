@@ -133,14 +133,16 @@ def integrity_problems(repo: Path, logs: list[str], units: list[Unit]) -> list[s
     record check does not cover (logged before slice 4.3), a missing Report block or a finding without its answer."""
     problems = [p for log in logs for p in checker.check_log(repo, repo / log)]
     for unit in units:
+        answers = {a.start["attempt"]: a.answers for a in unit.attempts}
         for attempt in (a for a in unit.attempts if a.completed):
             name = f"{unit.bundle}: {attempt.start['attempt']}"
+            earlier = answers.get(attempt.start.get("earlier_attempt"), [])  # a row may answer an undetermined item
             if attempt.report is None:
                 problems.append(f"{name}: completed, but its record holds no Report block")
             elif attempt.report.get("findings") and not attempt.answers:
                 problems.append(f"{name}: its report has findings and the record has no answers to it")
             else:
-                problems += [f"{name}: {p}" for p in launcher.answer_table_problems(attempt.report, attempt.answers)]
+                problems += [f"{name}: {p}" for p in launcher.answer_table_problems(attempt.report, attempt.answers, earlier)]
     return sorted(set(problems))
 
 
@@ -210,7 +212,7 @@ def _collect_findings(unit: Unit, brief: Brief) -> None:
                 brief.concerns.append(f"{where}: {answer}")
             elif word == "owner":
                 brief.owner.append(f"{where}: {answer}")
-            if word == "rejected" and finding["severity"] in checker.FIXED_SEVERITIES:
+            if word == "rejected" and finding["severity"] in launcher.FIXED_SEVERITIES:
                 brief.rejected.append(f"{where}: {answer}")
 
 
@@ -220,8 +222,10 @@ def _collect_rechecks(unit: Unit, brief: Brief) -> None:
     reraised: dict[str, Attempt] = {}
     for attempt in unit.reported():
         for entry in attempt.report.get("accounted", []):  # type: ignore[union-attr]
-            if entry.get("status") == "cannot determine":
-                brief.undetermined.append(f"{unit.label} {entry['item']}: {entry.get('note', '')}")
+            if entry.get("status") == "cannot determine":  # with the answer to it, if any (R2-3)
+                row = _answer_to(attempt, entry["item"])
+                answered = f"; answered: {row.answer}" if row else ""
+                brief.undetermined.append(f"{unit.label} {entry['item']}: {entry.get('note', '')}{answered}")
             elif entry.get("status") == "re-raised":
                 reraised[entry["item"]] = attempt
             elif entry.get("status") == "accepted":

@@ -444,7 +444,7 @@ def severity_note(key: AnswerKey, name: str) -> str:
 
 def _recheck_inputs(repo: Path, prepared: PreparedCase) -> tuple[Any, Any]:
     """The recheck case's earlier report and answers (S45-D5), as the launcher would load them from a record, refused
-    as the launcher refuses them: answers that do not answer the report, a `fixed:` path not in the copy."""
+    as the launcher refuses them: answers that break its answer rules, a `fixed:` path not in the copy."""
     case = prepared.case
     attempt = case.recheck.get("attempt", "case/c1/r1/A/1")
     report = (repo / BENCHMARK_DIR / case.recheck["earlier_report"]).read_text(encoding="utf-8")
@@ -458,7 +458,7 @@ def _recheck_inputs(repo: Path, prepared: PreparedCase) -> tuple[Any, Any]:
         must = launcher.check_answers(list(rows), lambda path: (prepared.copy_root / path).is_file(), set(prepared.deleted))
     except launcher.ReviewRefusedError as refused:
         raise BenchmarkRefusedError(f"{case.case_id}: {refused}") from None
-    problems = launcher.answer_table_problems(json.loads(report), list(rows))
+    problems = launcher.answer_rule_problems(json.loads(report), list(rows))  # the launcher's rules, R2-1 to R2-3
     if problems:
         raise BenchmarkRefusedError(f"{case.case_id}: the answers do not answer the earlier report: {problems[0]}")
     accounting = launcher.recheck_accounting(rows, must)  # R2-7: an accepted or re-raised rejection is quoted
