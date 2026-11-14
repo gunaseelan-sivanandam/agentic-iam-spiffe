@@ -180,8 +180,8 @@ def test_paths_section_says_to_open_every_file_and_the_end_entry_lists_those_not
 
 
 def test_recheck_paths_section_says_to_open_the_answered_files_first(fx: base.Fixture) -> None:
-    commit = base._recheck(fx, "| X1 | high | rejected: the scenario does not happen |")
-    fx.scenario(base._reply(accounted=[base._accounted("X1")]))
+    commit = base._recheck(fx, f"| X1 | high | rejected: the scenario does not happen, {base.FACT} |")
+    fx.scenario(base._reply(accounted=[base._accounted("X1", quotes=[base.QUOTE])]))
     assert base._run(fx, round_no=2, commit=commit) == 0
     assert "open the files each answer names first" in base._section(base._prompt(fx), "Paths under review")
 

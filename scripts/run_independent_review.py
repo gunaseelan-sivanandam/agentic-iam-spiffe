@@ -73,8 +73,14 @@ ANSWER_STATUSES = ("accepted", "re-raised", "cannot determine")
 EVIDENCE_STATUSES = ("explained", "flagged")
 ACCOUNTED_FIELDS = {"item": str, "status": str, "note": str, "opened": list}
 # Owner-approved growth (2026-11-13): files a reviewer only searched (Grep, Glob) go here, so `opened` stays a claim
-# the launcher can check.
-OPTIONAL_ACCOUNTED_FIELDS = {"searched": list}
+# the launcher can check. Round 2 of slice 4 (the owner, 2026-11-14), R2-7: `quotes`, the lines a rejection the recheck
+# accepts or re-raises rests on, each checked at its place in the copy.
+OPTIONAL_ACCOUNTED_FIELDS = {"searched": list, "quotes": list}
+QUOTE_FIELDS = {"file": str, "line": int, "end_line": int, "text": str}
+# R2-7: a quote counts at its place in the copy: whitespace aside, its text lies within the lines it names, or at most
+# this many lines before or after them (a miscounted line is not a wrong place).
+QUOTE_SLACK = 2
+READ_LINE_NUMBER = re.compile(r"^\s*\d+(?:\t|→)")  # the Read tool's line number, which a quoted line may keep
 ANSWER_WORDS = ("fixed", "deferred", "rejected", "owner")
 FINAL_UNIT = "final"
 PR_COMMENT_URL = re.compile(
@@ -149,6 +155,16 @@ REPORT_SCHEMA = {
                     "note": _STRING,
                     "opened": {"type": "array", "items": _STRING},
                     "searched": {"type": "array", "items": _STRING},
+                    "quotes": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {"file": _STRING, "line": {"type": "integer", "minimum": 1},
+                                           "end_line": {"type": "integer", "minimum": 1}, "text": _STRING},
+                            "required": list(QUOTE_FIELDS),
+                            "additionalProperties": False,
+                        },
+                    },
                 },
                 "required": list(ACCOUNTED_FIELDS),
                 "additionalProperties": False,
@@ -773,6 +789,7 @@ def _accounted_problems(entry: Any, finding_ids: set[Any]) -> list[str]:
     if "searched" in entry and not (isinstance(entry["searched"], list)
                                     and all(isinstance(path, str) for path in entry["searched"])):
         problems.append("searched is not a list of paths")
+    problems += _quotes_shape_problems(entry.get("quotes", []))
     status, note = entry["status"], entry["note"]
     if status not in (*ANSWER_STATUSES, *EVIDENCE_STATUSES):
         problems.append("unknown status")
@@ -785,14 +802,26 @@ def _accounted_problems(entry: Any, finding_ids: set[Any]) -> list[str]:
     return problems
 
 
+def _quotes_shape_problems(quotes: Any) -> list[str]:
+    """R2-7: `quotes` is a list of quotes, each with a file, its first and last line, and the text."""
+    if not isinstance(quotes, list) or not all(isinstance(q, dict) and set(q) == set(QUOTE_FIELDS) for q in quotes):
+        return ["quotes is not a list of quotes with file, line, end_line and text"]
+    problems = [f"quote {index + 1}: {p}" for index, q in enumerate(quotes) for p in _typed_problems(q, QUOTE_FIELDS)]
+    if not problems and any(not 1 <= q["line"] <= q["end_line"] for q in quotes):
+        problems.append("a quote's lines are not 1 <= line <= end_line")
+    return problems
+
+
 @dataclass(frozen=True)
 class Accounting:
     """What a report must account for (S41-D8): the items the prompt lists, each with the statuses it may take,
     and the files the attempt must have read because a `fixed:` answer names them or a `rejected:` answer cites them
-    (owner-approved growth, 2026-11-13: an accepted rejection rests on what it cites)."""
+    (owner-approved growth, 2026-11-13: an accepted rejection rests on what it cites); and the items answered
+    `rejected:`, which the report quotes when it accepts or re-raises them (R2-7)."""
 
     items: dict[str, tuple[str, ...]] = field(default_factory=dict)
     must_read: tuple[str, ...] = ()
+    quoted: tuple[str, ...] = ()
 
 
 def accounting_problems(report: dict[str, Any], accounting: Accounting, paths_read: list[str],
@@ -811,7 +840,38 @@ def accounting_problems(report: dict[str, Any], accounting: Accounting, paths_re
                 problems.append(f"{entry['item']} names an opened file the attempt did not read")
     problems += [f"{path} is named in a fixed: or rejected: answer and was not read" for path in accounting.must_read
                  if path not in read]
+    return problems + quote_problems(report, accounting, copy_root)
+
+
+def quote_problems(report: dict[str, Any], accounting: Accounting, copy_root: Path) -> list[str]:
+    """R2-7: every rejection the report accepts or re-raises quotes the lines its decision rests on, and every quote
+    of the report is at its place in the copy."""
+    entries = {e["item"]: e for e in report["accounted"]}
+    problems = [f"{item} accepts or re-raises a rejection without quoting the lines it rests on"
+                for item in accounting.quoted
+                if entries.get(item, {}).get("status") in ("accepted", "re-raised") and not entries[item].get("quotes")]
+    for entry in report["accounted"]:
+        problems += [p for quote in entry.get("quotes", []) if (p := _quote_place_problem(entry["item"], quote, copy_root))]
     return problems
+
+
+def _normalised(text: str) -> str:
+    return " ".join(text.split())
+
+
+def _quote_place_problem(item: str, quote: dict[str, Any], copy_root: Path) -> str | None:
+    """Why a quote is not at its place: its file is not in the copy, its lines are not in the file, or its text,
+    whitespace aside and the Read tool's line numbers dropped, is not within those lines (give or take QUOTE_SLACK)."""
+    rel = relative_to_copy(quote["file"], copy_root)
+    path = copy_root / rel if rel is not None else None
+    if path is None or not path.is_file():
+        return f"{item} quotes a file that is not in the copy"
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    window = lines[max(quote["line"] - 1 - QUOTE_SLACK, 0):quote["end_line"] + QUOTE_SLACK]
+    text = _normalised(" ".join(READ_LINE_NUMBER.sub("", line) for line in quote["text"].splitlines()))
+    if quote["end_line"] > len(lines) or not text or text not in _normalised(" ".join(window)):
+        return f"{item} quotes {rel}:{quote['line']}-{quote['end_line']}, and the copy holds no such text there"
+    return None
 
 
 def structured_reply(result: dict[str, Any]) -> Any:
@@ -1217,6 +1277,15 @@ def _row_against_finding(row: AnswerRow, finding: dict[str, Any]) -> list[str]:
     return []
 
 
+def recheck_accounting(rows: tuple[AnswerRow, ...] | list[AnswerRow], must_read: tuple[str, ...],
+                       evidence_items: tuple[str, ...] = ()) -> Accounting:
+    """What a recheck's report accounts for: every answer and every evidence entry; it reads the files the answers
+    name or cite, and quotes what each rejection it accepts or re-raises rests on (R2-7). The launcher and the
+    benchmark build it the same way."""
+    items = {**{row.finding: ANSWER_STATUSES for row in rows}, **{item: EVIDENCE_STATUSES for item in evidence_items}}
+    return Accounting(items, must_read, tuple(row.finding for row in rows if answer_word(row.answer) == "rejected"))
+
+
 def check_answers(rows: list[AnswerRow], exists: Any, away: set[str]) -> tuple[str, ...]:
     """Refuse an answers section the recheck cannot verify (S41-D7, S41-D8); return the files it must read: those a
     `fixed:` answer names and those a `rejected:` answer cites."""
@@ -1437,8 +1506,7 @@ def plan_reviews(spec: RoundSpec, inputs: ReviewInputs, entries: list[dict[str, 
             if table:
                 raise ReviewRefusedError(f"the answers to {recheck.earlier_attempt} do not answer its report: "
                                          + "; ".join(table[:5]))
-            accounting = Accounting({**{row.finding: ANSWER_STATUSES for row in recheck.rows}, **evidence_items},
-                                    must_read)
+            accounting = recheck_accounting(recheck.rows, must_read, tuple(evidence_items))
         parts = make_parts(mode, task, spec.unit, recheck, shared)
         prompt = build_prompt(inputs, parts, FULL_CONFIGURATION, diff_base=inputs.base_commit)
         check_prompt(prompt, parts, reviewer.prompt_file.name)

@@ -29,6 +29,7 @@ launcher = base.launcher
 records = launcher._RECORDS
 fx = base.fx
 RECORD, LOG = base.RECORD, base.LOG
+FACT, QUOTE = base.FACT, base.QUOTE
 
 
 def _problems(fx: base.Fixture) -> list[str]:
@@ -162,7 +163,7 @@ def test_secret_or_local_path_in_the_prompt_is_refused_before_anything_is_writte
     elif where == "home-path":
         fx.prompt.write_text(f"See {os.path.expanduser('~')}/notes.txt\n")
     else:
-        commit, round_no = base._recheck(fx, "| X1 | high | rejected: the key below is a test value |",
+        commit, round_no = base._recheck(fx, f"| X1 | high | rejected: the key below is a test value, {FACT} |",
                                          extra=f"\n{pem}"), 2
         fx.scenario(base._reply(accounted=[base._accounted("X1")]))
     before_log, before_record = (fx.work / LOG).read_text(), _record(fx).read_text()
@@ -195,8 +196,8 @@ def test_one_changed_character_in_a_block_fails(fx: base.Fixture, block: str) ->
 
 def test_report_block_under_another_attempts_heading_fails(fx: base.Fixture) -> None:
     _completed(fx, base._finding("X1"))
-    base._answers(fx, "unit1/c1/r1/A/1", "| X1 | high | rejected: style; owner: https://example.org/decision |")
-    fx.scenario(base._reply(accounted=[base._accounted("X1"), base._accounted("EV1", "explained")]))
+    base._answers(fx, "unit1/c1/r1/A/1", f"| X1 | high | rejected: style, {FACT}; owner: https://example.org/decision |")
+    fx.scenario(base._reply(accounted=[base._accounted("X1", quotes=[QUOTE]), base._accounted("EV1", "explained")]))
     assert base._run(fx, round_no=2, commit=base._git(fx.work, "rev-parse", "HEAD")) == 0
     text = _record(fx).read_text()
     first = records.parse_record(text)[0]["unit1/c1/r1/A/1"].blocks["report"]
@@ -297,7 +298,7 @@ def test_rejected_blocking_or_medium_finding_that_the_next_round_accepts_passes(
     _completed(fx, base._finding("X1", severity=severity))
     commit = base._answers(fx, "unit1/c1/r1/A/1", f"| X1 | {severity} | rejected: it does not happen, scripts/review_me.py:1 |")
     assert any(f"X1 is a rejected {severity} finding that no later round accepted" in p for p in _problems(fx))
-    fx.scenario(base._reply(accounted=[base._accounted("X1"), base._accounted("EV1", "explained")]))
+    fx.scenario(base._reply(accounted=[base._accounted("X1", quotes=[QUOTE]), base._accounted("EV1", "explained")]))
     assert base._run(fx, round_no=2, commit=commit) == 0
     assert _problems(fx) == []
 
@@ -401,9 +402,10 @@ def test_a_label_twice_and_an_unclosed_fence_fail(fx: base.Fixture) -> None:
 
 def test_rejected_finding_that_the_next_round_re_raises_still_fails(fx: base.Fixture) -> None:
     _completed(fx, base._finding("X1", severity="blocking"))
-    commit = base._answers(fx, "unit1/c1/r1/A/1", "| X1 | blocking | rejected: the scenario does not happen |")
+    commit = base._answers(fx, "unit1/c1/r1/A/1", f"| X1 | blocking | rejected: the scenario does not happen, {FACT} |")
     fx.scenario(base._reply([base._finding("X1", severity="blocking")],
-                            accounted=[base._accounted("X1", "re-raised"), base._accounted("EV1", "explained")],
+                            accounted=[base._accounted("X1", "re-raised", quotes=[QUOTE]),
+                                       base._accounted("EV1", "explained")],
                             verdict="no"))
     assert base._run(fx, round_no=2, commit=commit) == 0
     assert any("unit1/c1/r1/A/1: X1 is a rejected blocking finding that no later round accepted" in p for p in _problems(fx))
@@ -413,11 +415,12 @@ def test_an_acceptance_in_a_next_round_attempt_that_did_not_complete_settles_not
     """4.4 critique, C-14: only a completed attempt's released report can accept a rejection; a Report block put
     into a failed attempt's section by hand does not."""
     _completed(fx, base._finding("X1", severity="blocking"))
-    commit = base._answers(fx, "unit1/c1/r1/A/1", "| X1 | blocking | rejected: the scenario does not happen |")
-    fx.scenario(base._reply(accounted=[base._accounted("X1")]))  # leaves EV1 out, so the launcher fails it
+    commit = base._answers(fx, "unit1/c1/r1/A/1", f"| X1 | blocking | rejected: the scenario does not happen, {FACT} |")
+    fx.scenario(base._reply(accounted=[base._accounted("X1", quotes=[QUOTE])]))  # leaves EV1 out, so the launcher fails it
     assert base._run(fx, round_no=2, commit=commit) == 1
     assert fx.log()[-1]["status"] == "failed"
-    accepting = json.dumps({"findings": [], "accounted": [base._accounted("X1")], "verdict": "yes"}, indent=2)
+    accepting = json.dumps({"findings": [], "accounted": [base._accounted("X1", quotes=[QUOTE])], "verdict": "yes"},
+                           indent=2)
     _record(fx).write_text(_record(fx).read_text().rstrip("\n") + f"\n\n#### Report\n\n```json\n{accepting}\n```\n")
     problems = _problems(fx)
     assert any("X1 is a rejected blocking finding that no later round accepted" in p for p in problems), problems
@@ -427,8 +430,9 @@ def _re_raised_after(fx: base.Fixture, severity: str, first_answer: str) -> None
     """Round 1 with X1 at `severity` answered `first_answer`; the recheck re-raises X1 at the same severity."""
     _completed(fx, base._finding("X1", severity=severity))
     commit = base._answers(fx, "unit1/c1/r1/A/1", f"| X1 | {severity} | {first_answer} |")
+    quotes = [QUOTE] if first_answer.startswith("rejected:") else None  # R2-7: a re-raised rejection is quoted
     fx.scenario(base._reply([base._finding("X1", severity=severity)], verdict="no", accounted=[
-        base._accounted("X1", "re-raised"), base._accounted("EV1", "explained")]))
+        base._accounted("X1", "re-raised", quotes=quotes), base._accounted("EV1", "explained")]))
     assert base._run(fx, round_no=2, commit=commit) == 0
 
 
@@ -507,3 +511,6 @@ def test_recovery_removes_the_round_heading_written_with_its_first_unlogged_sect
 def test_finishing_an_attempt_the_record_has_no_section_for_is_refused() -> None:
     with pytest.raises(ValueError, match="no section for attempt unit1/c1/r2/A/1"):
         records.finish("# Review record\n", "unit1/c1/r2/A/1", "Status: completed.", "{}\n")
+
+
+# --- Round 2 of slice 4: one home for the answer rules; a finding the recheck could not determine ------------------

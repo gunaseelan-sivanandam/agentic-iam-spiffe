@@ -31,7 +31,7 @@ def _brief(fx: base.Fixture) -> str:
     return brief_module.build(fx.work, "origin/poc/base", "HEAD")
 
 
-def _two_rounds(fx: base.Fixture, last_answer: str = "rejected: it still does not happen") -> None:
+def _two_rounds(fx: base.Fixture, last_answer: str = "rejected: it still does not happen", *more: str) -> None:
     """Round 1 with six findings and their answers; a recheck that re-raises one and cannot settle another; the
     answers to the recheck. The re-raised X1 is low, the author's choice, so it may be rejected again (R2-3 binds
     blocking, high and medium findings only)."""
@@ -46,11 +46,13 @@ def _two_rounds(fx: base.Fixture, last_answer: str = "rejected: it still does no
                            "| X5 | high | rejected: already covered by scripts/review_me.py:1 |",
                            "| X6 | medium | rejected: the input is checked at scripts/review_me.py:1 |",
                            findings=tuple(findings))
+    quoted = [base.QUOTE]  # R2-7: the recheck quotes the line each rejection it accepts or re-raises rests on
     fx.scenario(base._reply([base._finding("X1", severity="low")], verdict="no", accounted=[
-        base._accounted("X1", "re-raised"), base._accounted("X2"), base._accounted("X3"),
-        base._accounted("X4", "cannot determine", note="NOTE ON X4"), base._accounted("X5"), base._accounted("X6")]))
+        base._accounted("X1", "re-raised", quotes=quoted), base._accounted("X2"), base._accounted("X3"),
+        base._accounted("X4", "cannot determine", note="NOTE ON X4"), base._accounted("X5", quotes=quoted),
+        base._accounted("X6", quotes=quoted)]))
     assert base._run(fx, round_no=2, commit=commit) == 0
-    base._answers(fx, "unit1/c1/r2/A/1", f"| X1 | low | {last_answer} |")
+    base._answers(fx, "unit1/c1/r2/A/1", f"| X1 | low | {last_answer} |", *more)
 
 
 def test_the_brief_lists_every_item_the_owner_must_see(fx: base.Fixture) -> None:

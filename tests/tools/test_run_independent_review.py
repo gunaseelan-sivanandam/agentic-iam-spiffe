@@ -35,6 +35,8 @@ RECORD = "docs/slices/demo/review_demo.md"
 LOG = "docs/slices/demo/review_attempts.jsonl"
 REVIEWED = "scripts/review_me.py"
 PR_COMMENT = "https://github.com/owner/repo/pull/7#issuecomment-123"
+FACT = "scripts/review_me.py:1"  # a checkable fact (R2-2); the fake reviewer reads the file by default
+QUOTE = {"file": REVIEWED, "line": 1, "end_line": 1, "text": "print('change')"}  # line 1 of the reviewed file (R2-7)
 
 
 @dataclass
@@ -163,8 +165,11 @@ def _finding(fid: str, origin: str = "implementation", **fields: object) -> dict
             "problem": "p", "evidence": "e", "failure_scenario": "f", **fields}
 
 
-def _accounted(item: str, status: str = "accepted", note: str = "n", opened: tuple[str, ...] = (REVIEWED,)) -> dict:
-    return {"item": item, "status": status, "note": note, "opened": list(opened)}
+def _accounted(item: str, status: str = "accepted", note: str = "n", opened: tuple[str, ...] = (REVIEWED,),
+               quotes: list[dict] | None = None) -> dict:
+    """An accounted entry; `quotes` are the lines a rejection the recheck accepts or re-raises rests on (R2-7)."""
+    return {"item": item, "status": status, "note": note, "opened": list(opened),
+            **({"quotes": quotes} if quotes is not None else {})}
 
 
 def _reply(findings: list[dict] | None = None, accounted: list[dict] | None = None, verdict: str = "yes",
@@ -336,8 +341,8 @@ def test_log_has_one_start_and_one_end_entry_with_the_planned_fields(fx: Fixture
 def test_log_is_only_appended(fx: Fixture) -> None:
     _first_round(fx)
     first = (fx.work / LOG).read_text()
-    commit = _answers(fx, "unit1/c1/r1/A/1", "| X1 | high | rejected: the scenario does not happen |")
-    fx.scenario(_reply(accounted=[_accounted("X1")]))
+    commit = _answers(fx, "unit1/c1/r1/A/1", f"| X1 | high | rejected: the scenario does not happen, {FACT} |")
+    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[QUOTE])]))
     assert _run(fx, round_no=2, commit=commit) == 0
     assert (fx.work / LOG).read_text().startswith(first)
 
@@ -862,8 +867,8 @@ def test_start_entry_records_the_mode_and_the_mandate_hash(fx: Fixture, monkeypa
 def test_every_mode_holds_its_mandate_verbatim(fx: Fixture) -> None:
     _first_round(fx)
     assert launcher.MANDATES["initial"] in _prompt(fx)
-    commit = _answers(fx, "unit1/c1/r1/A/1", "| X1 | high | rejected: the scenario does not happen |")
-    fx.scenario(_reply(accounted=[_accounted("X1")]))
+    commit = _answers(fx, "unit1/c1/r1/A/1", f"| X1 | high | rejected: the scenario does not happen, {FACT} |")
+    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[QUOTE])]))
     assert _run(fx, round_no=2, commit=commit) == 0
     recheck = _prompt(fx)
     assert launcher.MANDATES["recheck"] in recheck and launcher.MANDATES["initial"] not in recheck
@@ -942,9 +947,9 @@ def test_recheck_prompt_holds_its_earlier_report_and_only_its_answers_section(fx
 
 def test_two_reviewers_each_get_only_the_answers_to_their_own_report(fx: Fixture) -> None:
     _first_round(fx, labels=("A", "B"))
-    _answers(fx, "unit1/c1/r1/A/1", "| X1 | high | rejected: ANSWERS FOR A |")
-    commit = _answers(fx, "unit1/c1/r1/B/1", "| X1 | high | rejected: ANSWERS FOR B |")
-    fx.scenario(_reply(accounted=[_accounted("X1")]))
+    _answers(fx, "unit1/c1/r1/A/1", f"| X1 | high | rejected: ANSWERS FOR A, {FACT} |")
+    commit = _answers(fx, "unit1/c1/r1/B/1", f"| X1 | high | rejected: ANSWERS FOR B, {FACT} |")
+    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[QUOTE])]))
     assert _run(fx, round_no=2, labels=("A", "B"), commit=commit) == 0
     prompts = {json.loads(c["stdin"].split("Your own report of attempt ", 1)[1].split(",")[0].join('""')): c["stdin"]
                for c in fx.calls()[2:]}
@@ -972,9 +977,9 @@ def test_earlier_attempt_is_only_the_same_unit_count_and_label(entries: list[dic
 def test_recheck_without_its_inputs_is_refused_before_any_call(fx: Fixture) -> None:
     _first_round(fx)
     assert _run(fx, round_no=2) == 2  # the reviewed commit holds no answers section
-    other = _answers(fx, "unit1/c1/r1/A/9", "| X1 | high | rejected: answers to another attempt |")
+    other = _answers(fx, "unit1/c1/r1/A/9", f"| X1 | high | rejected: answers to another attempt, {FACT} |")
     assert _run(fx, round_no=2, commit=other) == 2
-    commit = _answers(fx, "unit1/c1/r1/A/1", "| X1 | high | rejected: the scenario does not happen |")
+    commit = _answers(fx, "unit1/c1/r1/A/1", f"| X1 | high | rejected: the scenario does not happen, {FACT} |")
     record = fx.work / RECORD
     text = record.read_text()
     record.write_text(text.replace('"verdict": "no"', '"verdict": "yes"'))  # the Report block no longer matches the log
@@ -987,14 +992,14 @@ def test_recheck_without_its_inputs_is_refused_before_any_call(fx: Fixture) -> N
     assert [e["event"] for e in fx.log()] == ["start", "end"]
     record.write_text(text)
     _commit_all(fx.work, "the record as the launcher wrote it")
-    fx.scenario(_reply(accounted=[_accounted("X1")]))
+    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[QUOTE])]))
     assert _run(fx, round_no=2, commit=commit) == 0  # the positive twin: the same round with its inputs runs
 
 
 def test_recheck_reads_the_earlier_report_from_the_record_with_the_released_file_deleted(fx: Fixture) -> None:
-    commit = _recheck(fx, "| X1 | high | rejected: the scenario does not happen |")
+    commit = _recheck(fx, f"| X1 | high | rejected: the scenario does not happen, {FACT} |")
     _report(fx, fx.log()[0]).unlink()
-    fx.scenario(_reply(accounted=[_accounted("X1")]))
+    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[QUOTE])]))
     assert _run(fx, round_no=2, commit=commit) == 0
     assert '"id": "X1"' in _section(_prompt(fx), "Your earlier report")
 
@@ -1047,9 +1052,11 @@ def test_fixed_answer_naming_a_file_the_change_deletes_is_accepted_and_needs_the
 def test_answers_table_with_every_answer_word_is_accepted(fx: Fixture) -> None:
     findings = (_finding("X1"), _finding("X2", severity="medium"), _finding("X3", severity="low"),
                 _finding("X4", kind="decision_concern", severity="medium"))
-    commit = _recheck(fx, "| `X1` | High | fixed: ./scripts/review_me.py:3-4: guarded |", "| X2 | medium | deferred: #12 |",
-                      "| X3 | low | rejected: style |", f"| X4 | medium | owner: {PR_COMMENT} |", findings=findings)
-    accounted = [_accounted(i) for i in ("X1", "X2", "X3")] + [_accounted("X4", "cannot determine", note="needs the owner")]
+    commit = _recheck(fx, "| `X1` | High | fixed: ./scripts/review_me.py:3-4: guarded |",
+                      "| X2 | medium | rejected: covered by `make docs-check` |", "| X3 | low | deferred: #12 |",
+                      f"| X4 | medium | owner: {PR_COMMENT} |", findings=findings)
+    accounted = [_accounted("X1"), _accounted("X2", quotes=[QUOTE]), _accounted("X3"),
+                 _accounted("X4", "cannot determine", note="needs the owner")]
     fx.scenario(_reply(accounted=accounted))
     assert _run(fx, round_no=2, commit=commit) == 0
     assert _ends(fx)[-1]["accounted_counts"] == {"accepted": 3, "re-raised": 0, "cannot determine": 1,
@@ -1092,7 +1099,7 @@ def test_fixed_file_that_was_not_read_fails_even_when_a_path_under_review_was(fx
 @pytest.mark.parametrize(("answer", "reads", "fails"), [
     ("rejected: already covered by `scripts/cover.py::test_x`", [REVIEWED], True),
     ("rejected: already covered by `scripts/cover.py::test_x`", [REVIEWED, "scripts/cover.py"], False),
-    ("rejected: the scenario does not happen", [REVIEWED], False),
+    ("rejected: the scenario does not happen, as `make docs-check` shows", [REVIEWED], False),
 ], ids=["cited-file-not-read", "cited-file-read", "no-file-cited"])
 def test_a_rejection_counts_only_when_the_files_it_cites_were_read(fx: Fixture, answer: str, reads: list[str],
                                                                     fails: bool) -> None:
@@ -1100,7 +1107,7 @@ def test_a_rejection_counts_only_when_the_files_it_cites_were_read(fx: Fixture, 
     _write(fx.work, "scripts/cover.py", "def test_x():\n    pass\n")
     fx.commit = _commit_all(fx.work, "a covering test")
     commit = _recheck(fx, f"| X1 | high | {answer} |")
-    fx.scenario(_reply(accounted=[_accounted("X1")], reads=reads))
+    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[QUOTE])], reads=reads))
     status = _run(fx, round_no=2, commit=commit)
     reason = _ends(fx)[-1].get("reason", "")
     assert (status, "scripts/cover.py is named in a fixed: or rejected: answer and was not read" in reason) == (
@@ -1117,7 +1124,7 @@ def test_cited_paths_find_files_with_and_without_a_directory_and_name_missing_pa
 
 
 def test_a_rejection_citing_a_root_level_file_must_read_it(fx: Fixture) -> None:
-    commit = _recheck(fx, "| X1 | high | rejected: outside the threat model, see AGENTS.md (PoC scope) |")
+    commit = _recheck(fx, "| X1 | high | rejected: outside the threat model, see AGENTS.md:1 (PoC scope) |")
     fx.scenario(_reply(accounted=[_accounted("X1")]))
     assert _run(fx, round_no=2, commit=commit) == 1
     assert "AGENTS.md is named in a fixed: or rejected: answer and was not read" in _ends(fx)[-1]["reason"]
@@ -1135,9 +1142,9 @@ def test_a_rejection_citing_a_path_the_copy_lacks_is_refused_before_any_call(fx:
 @pytest.mark.parametrize(("where", "status"), [("searched", 0), ("opened", 1)])
 def test_a_searched_file_need_not_be_read_but_an_opened_one_must(fx: Fixture, where: str, status: int) -> None:
     """The reviewer can report a Grep honestly under `searched`; `opened` stays a checked claim."""
-    commit = _recheck(fx, "| X1 | high | rejected: the scenario does not happen |")
-    entry = ({**_accounted("X1"), "searched": ["docs/not_read.md"]} if where == "searched"
-             else _accounted("X1", opened=(REVIEWED, "docs/not_read.md")))
+    commit = _recheck(fx, "| X1 | high | rejected: the scenario does not happen, as `make docs-check` shows |")
+    entry = ({**_accounted("X1", quotes=[QUOTE]), "searched": ["docs/not_read.md"]} if where == "searched"
+             else _accounted("X1", opened=(REVIEWED, "docs/not_read.md"), quotes=[QUOTE]))
     fx.scenario(_reply(accounted=[entry]))
     assert _run(fx, round_no=2, commit=commit) == status
     assert ("X1 names an opened file the attempt did not read" in _ends(fx)[-1].get("reason", "")) is (status == 1)
@@ -1175,12 +1182,12 @@ def test_an_entry_logged_with_an_earlier_schema_is_not_rebuilt(fx: Fixture) -> N
 
 
 def test_re_raised_finding_keeps_its_id(fx: Fixture) -> None:
-    commit = _recheck(fx, "| X1 | high | rejected: the scenario does not happen |")
-    fx.scenario(_reply(accounted=[_accounted("X1", "re-raised")]))
+    commit = _recheck(fx, f"| X1 | high | rejected: the scenario does not happen, {FACT} |")
+    fx.scenario(_reply(accounted=[_accounted("X1", "re-raised", quotes=[QUOTE])]))
     assert _run(fx, round_no=2, commit=commit) == 1
     assert _ends(fx)[-1]["reason"] == ("the reply does not match the report schema: accounted 0: a re-raised finding "
                                        "is not in findings under its ID")
-    fx.scenario(_reply([_finding("X1")], accounted=[_accounted("X1", "re-raised")], verdict="no"))
+    fx.scenario(_reply([_finding("X1")], accounted=[_accounted("X1", "re-raised", quotes=[QUOTE])], verdict="no"))
     assert _run(fx, round_no=2, commit=commit) == 0
     assert _ends(fx)[-1]["accounted_counts"]["re-raised"] == 1
 
@@ -1259,13 +1266,15 @@ def test_recheck_prompt_is_rebuilt_from_its_entry_and_a_changed_answers_section_
     fx.scenario(_reply(accounted=[_accounted("X1")]))
     assert _run(fx, round_no=2, commit=commit) == 0
     start = fx.log()[-2]
-    argv, mismatches = launcher.invocation_from_entry(start, fx.work, fx.prompt, diff_base=start["base_commit"], given=_given(fx))
+    logged = launcher._RECORDS.parse_record((fx.work / RECORD).read_text())[0][start["attempt"]].blocks["evidence"]
+    argv, mismatches = launcher.invocation_from_entry(start, fx.work, fx.prompt, diff_base=start["base_commit"],
+                                                      given=launcher.GivenInputs(logged))
     assert argv[1:] == fx.calls()[-1]["argv"] and mismatches == []
     loaded = launcher._entry_recheck(start, fx.work, RECORD)
     changed = launcher.Recheck(loaded.earlier_attempt, loaded.earlier_report, loaded.answers + "one more line\n",
                                loaded.rows)
     _argv, mismatches = launcher.invocation_from_entry(start, fx.work, fx.prompt, diff_base=start["base_commit"],
-                                                     given=launcher.GivenInputs(_evidence_text(fx), changed))
+                                                     given=launcher.GivenInputs(logged, changed))
     assert mismatches == ["answers_sha256", "full_prompt_sha256"]
 
 
@@ -1380,3 +1389,91 @@ def test_flagged_note_naming_a_finding_before_punctuation_is_accepted() -> None:
     for note in ("raised R1-2.", "see (R1-2)", "R1-2; and more"):
         report = {"findings": [_finding("R1-2")], "accounted": [_accounted("EV1", "flagged", note=note)], "verdict": "no"}
         assert launcher.validate_report(report) == [], note
+
+
+# --- Round 2 of slice 4: the answer rules before the call (R2-1 to R2-3), quotes (R2-7), process files (R2-6) ------
+
+
+COVER = "scripts/cover.py"
+COVER_TEXT = "".join(f"check number {n} holds\n" for n in range(1, 21))
+
+
+@pytest.mark.parametrize(("quote", "reason"), [
+    ({"file": COVER, "line": 10, "end_line": 11, "text": "check number 10 holds\ncheck number 11 holds"}, None),
+    ({"file": f"./{COVER}", "line": 10, "end_line": 10, "text": "  check number 10\tholds  "}, None),
+    ({"file": COVER, "line": 12, "end_line": 12, "text": "check number 10 holds"}, None),
+    ({"file": COVER, "line": 10, "end_line": 10, "text": "    10\tcheck number 10 holds"}, None),
+    ({"file": "scripts/not_there.py", "line": 10, "end_line": 10, "text": "check number 10 holds"},
+     "X1 quotes a file that is not in the copy"),
+    ({"file": REVIEWED, "line": 1, "end_line": 1, "text": "check number 10 holds"},
+     f"X1 quotes {REVIEWED}:1-1, and the copy holds no such text there"),
+    ({"file": COVER, "line": 13, "end_line": 13, "text": "check number 10 holds"},
+     f"X1 quotes {COVER}:13-13, and the copy holds no such text there"),
+    ({"file": COVER, "line": 10, "end_line": 10, "text": "check number 10 always holds"},
+     f"X1 quotes {COVER}:10-10, and the copy holds no such text there"),
+    ({"file": COVER, "line": 20, "end_line": 21, "text": "check number 20 holds"},
+     f"X1 quotes {COVER}:20-21, and the copy holds no such text there"),
+    ({"file": COVER, "line": 10, "end_line": 10, "text": " \n "}, f"X1 quotes {COVER}:10-10, and the copy holds no such text"),
+], ids=["lines-and-text", "whitespace-and-dot-slash", "two-lines-off", "read-tool-line-number", "wrong-file-missing",
+        "wrong-file-other-text", "wrong-lines", "text-not-there", "past-the-end", "empty-text"])
+def test_a_quote_counts_only_at_its_place_in_the_copy(fx: Fixture, quote: dict, reason: str | None) -> None:
+    """R2-7: the recheck quotes the lines an accepted rejection rests on; whitespace and a line or two aside, the
+    quoted text must be at the file and lines it names."""
+    _write(fx.work, COVER, COVER_TEXT)
+    fx.commit = _commit_all(fx.work, "a covering check")
+    commit = _recheck(fx, f"| X1 | high | rejected: covered by {COVER}:10-11 |")
+    fx.scenario(_reply(accounted=[_accounted("X1", opened=(REVIEWED, COVER), quotes=[quote])], reads=[REVIEWED, COVER]))
+    status = _run(fx, round_no=2, commit=commit)
+    end = _ends(fx)[-1]
+    if reason is None:
+        assert status == 0 and end["status"] == "completed", end["reason"]
+        return
+    assert status == 1 and end["status"] == "failed" and reason in end["reason"]
+    assert not _report(fx, fx.log()[-2]).exists()
+
+
+@pytest.mark.parametrize(("answer", "status", "quotes", "reason"), [
+    (f"rejected: the scenario does not happen, {FACT}", "accepted", None,
+     "X1 accepts or re-raises a rejection without quoting the lines it rests on"),
+    (f"rejected: the scenario does not happen, {FACT}", "accepted", [], "without quoting the lines it rests on"),
+    (f"rejected: the scenario does not happen, {FACT}", "re-raised", None, "without quoting the lines it rests on"),
+    (f"rejected: the scenario does not happen, {FACT}", "cannot determine", None, None),
+    ("rejected: style", "accepted", None, "without quoting the lines it rests on"),
+    ("fixed: scripts/review_me.py: guarded", "accepted", None, None),
+    ("fixed: scripts/review_me.py: guarded", "accepted", [{**QUOTE, "text": "print('base')"}],
+     f"X1 quotes {REVIEWED}:1-1, and the copy holds no such text there"),
+], ids=["accepted-rejection-unquoted", "accepted-rejection-empty-quotes", "re-raised-rejection-unquoted",
+        "undetermined-rejection-needs-no-quote", "low-rejection-unquoted", "fix-needs-no-quote",
+        "any-quote-is-checked"])
+def test_every_rejection_the_recheck_accepts_or_re_raises_is_quoted(fx: Fixture, answer: str, status: str,
+                                                                     quotes: list[dict] | None, reason: str | None) -> None:
+    """R2-7, as written: every rejection, whatever its severity; a quote given anywhere is checked."""
+    severity = "low" if answer == "rejected: style" else "high"
+    commit = _recheck(fx, f"| X1 | {severity} | {answer} |", findings=(_finding("X1", severity=severity),))
+    findings = [_finding("X1", severity=severity)] if status == "re-raised" else []
+    fx.scenario(_reply(findings, accounted=[_accounted("X1", status, quotes=quotes)], verdict="no"))
+    code = _run(fx, round_no=2, commit=commit)
+    end = _ends(fx)[-1]
+    assert (code, reason is None or reason in end["reason"]) == ((0, True) if reason is None else (1, True)), end["reason"]
+
+
+@pytest.mark.parametrize(("quotes", "problem"), [
+    ("scripts/x.py:1", "quotes is not a list of quotes with file, line, end_line and text"),
+    ([{"file": REVIEWED, "line": 1, "text": "t"}], "quotes is not a list of quotes with file, line, end_line and text"),
+    ([{**QUOTE, "extra": 1}], "quotes is not a list of quotes with file, line, end_line and text"),
+    ([{**QUOTE, "line": 0, "end_line": 0}], "a quote's lines are not 1 <= line <= end_line"),
+    ([{**QUOTE, "line": 3, "end_line": 2}], "a quote's lines are not 1 <= line <= end_line"),
+    ([{**QUOTE, "line": True}], "line is not int"),
+    ([{**QUOTE, "text": 3}], "text is not str"),
+], ids=["not-a-list", "no-end-line", "extra-field", "line-zero", "end-before-line", "line-a-bool", "text-not-a-string"])
+def test_a_quotes_field_of_the_wrong_shape_fails(quotes: object, problem: str) -> None:
+    report = {"findings": [], "accounted": [{**_accounted("X1"), "quotes": quotes}], "verdict": "yes"}
+    assert any(problem in p for p in launcher.validate_report(report)), launcher.validate_report(report)
+
+
+def test_the_schema_offers_quotes_as_an_optional_field_with_its_own_shape() -> None:
+    accounted = launcher.REPORT_SCHEMA["properties"]["accounted"]["items"]
+    quote = accounted["properties"]["quotes"]["items"]
+    assert "quotes" not in accounted["required"]
+    assert set(quote["required"]) == {"file", "line", "end_line", "text"} and quote["additionalProperties"] is False
+    assert quote["properties"]["line"]["minimum"] == 1 == quote["properties"]["end_line"]["minimum"]

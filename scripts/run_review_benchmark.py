@@ -461,7 +461,7 @@ def _recheck_inputs(repo: Path, prepared: PreparedCase) -> tuple[Any, Any]:
     problems = launcher.answer_table_problems(json.loads(report), list(rows))
     if problems:
         raise BenchmarkRefusedError(f"{case.case_id}: the answers do not answer the earlier report: {problems[0]}")
-    accounting = launcher.Accounting({row.finding: launcher.ANSWER_STATUSES for row in rows}, must)
+    accounting = launcher.recheck_accounting(rows, must)  # R2-7: an accepted or re-raised rejection is quoted
     return recheck, accounting
 
 

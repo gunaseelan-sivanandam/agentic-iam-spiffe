@@ -490,7 +490,7 @@ def _holds_inputs(r: Repo) -> dict:
     _write(r.root, "tests/review_benchmark/recheck/holds_report.json", json.dumps(report, indent=2, sort_keys=True) + "\n")
     _write(r.root, "tests/review_benchmark/recheck/holds_answers.md",
            "#### Answers to implementation/c1/r1/A/1\n\n| ID | Severity | Answer |\n| --- | --- | --- |\n"
-           "| R1-1 | high | rejected: AGENTS.md says the call may fail |\n"
+           "| R1-1 | high | rejected: AGENTS.md:1 says the call may fail |\n"
            f"| R1-2 | blocking | fixed: {REVIEWED}: the call now fails closed |\n")
     return {"earlier_report": "recheck/holds_report.json", "answers": "recheck/holds_answers.md",
             "attempt": "implementation/c1/r1/A/1", "holds": ["R1-1", "R1-2"]}
@@ -501,9 +501,16 @@ def _holds_case(r: Repo, base: str, commit: str) -> dict:
                  recheck=_holds_inputs(r), expected=[])
 
 
-def _accounted(r1: str, r2: str, opened: tuple[str, ...] = ("AGENTS.md", REVIEWED)) -> list[dict]:
-    return [{"item": item, "status": status, "note": "n", "opened": list(opened)}
-            for item, status in (("R1-1", r1), ("R1-2", r2))]
+RULES_QUOTE = {"file": "AGENTS.md", "line": 1, "end_line": 1, "text": "Rules."}  # what the rejection of R1-1 rests on
+
+
+def _accounted(r1: str, r2: str, opened: tuple[str, ...] = ("AGENTS.md", REVIEWED), quote: bool = True) -> list[dict]:
+    """R1-1 is a rejection: a recheck that accepts or re-raises it quotes the line it rests on (R2-7)."""
+    entries = [{"item": item, "status": status, "note": "n", "opened": list(opened)}
+               for item, status in (("R1-1", r1), ("R1-2", r2))]
+    if quote and r1 in ("accepted", "re-raised"):
+        entries[0]["quotes"] = [RULES_QUOTE]
+    return entries
 
 
 @pytest.mark.parametrize(("accounted", "findings", "passed"), [
@@ -1342,3 +1349,19 @@ def test_a_planted_recheck_case_reads_its_files_from_the_runners_repository(repo
     prepared, key = _prepared(repo, tmp_path, case)
     assert prepared.repo != r.root  # a planted case is reviewed from a scratch clone
     assert "FALSE FIX TEXT" in bench.case_prompt(prepared, key, "recheck-A").prompt
+
+
+# --- Round 2 of slice 4: the R2-5 question reaches every wording; the benchmark's rechecks keep R2-2 and R2-7 -------
+
+
+def test_a_benchmark_recheck_that_accepts_a_rejection_without_a_quote_fails(repo: tuple[Repo, str, str]) -> None:
+    """R2-7 holds in the benchmark too: its rechecks are judged by the launcher's accounting, quotes included."""
+    r, base, commit = repo
+    r.key([_holds_case(r, base, commit)])
+    r.canary_passed()
+    r.scenario({"reads": ["AGENTS.md", REVIEWED], "result": {"structured_output": {
+        "findings": [], "accounted": _accounted("accepted", "accepted", quote=False), "verdict": "yes"}}})
+    assert _run(r) == 0
+    line = next(line for line in r.results() if line.get("configuration") == "recheck-A")
+    assert line["status"] == "failed"
+    assert "R1-1 accepts or re-raises a rejection without quoting the lines it rests on" in line["reason"]
