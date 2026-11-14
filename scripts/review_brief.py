@@ -130,19 +130,21 @@ def _attempt(repo: Path, start: dict[str, Any], end: dict[str, Any] | None) -> A
 
 def integrity_problems(repo: Path, logs: list[str], units: list[Unit]) -> list[str]:
     """What would make the brief omit something: the record check's problems for these logs, and, for attempts the
-    record check does not cover (logged before slice 4.3), a missing Report block or a finding without its answer."""
+    record check does not cover (logged before slice 4.3), a missing Report block or a finding without its answer.
+    The answer rules are the record check's: an attempt it does not cover is frozen under the rules of its time (round
+    2 of slice 4: 4.1's medium finding answered `deferred:`), so the brief checks only that each finding has its row."""
     problems = [p for log in logs for p in checker.check_log(repo, repo / log)]
     for unit in units:
-        answers = {a.start["attempt"]: a.answers for a in unit.attempts}
         for attempt in (a for a in unit.attempts if a.completed):
             name = f"{unit.bundle}: {attempt.start['attempt']}"
-            earlier = answers.get(attempt.start.get("earlier_attempt"), [])  # a row may answer an undetermined item
             if attempt.report is None:
                 problems.append(f"{name}: completed, but its record holds no Report block")
             elif attempt.report.get("findings") and not attempt.answers:
                 problems.append(f"{name}: its report has findings and the record has no answers to it")
             else:
-                problems += [f"{name}: {p}" for p in launcher.answer_table_problems(attempt.report, attempt.answers, earlier)]
+                rows = Counter(row.finding for row in attempt.answers)
+                problems += [f"{name}: finding {f['id']} has {rows[f['id']]} answer rows"
+                             for f in attempt.report.get("findings", []) if rows[f["id"]] != 1]
     return sorted(set(problems))
 
 

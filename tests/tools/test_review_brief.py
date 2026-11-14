@@ -139,6 +139,25 @@ def test_a_base_git_cannot_resolve_is_refused(fx: base.Fixture) -> None:
         brief_module.build(fx.work, "origin/no-such-branch", "HEAD")
 
 
+@pytest.mark.parametrize("before_4_3", [True, False])
+def test_a_record_from_before_4_3_is_checked_for_completeness_only(fx: base.Fixture, before_4_3: bool) -> None:
+    """Round 2 of slice 4: an attempt logged before slice 4.3 (no `record_blocks`) is frozen under the rules of its
+    time, such as 4.1's medium finding answered `deferred: #42`; the brief checks only that each finding has its row,
+    while the record check holds a newer attempt to today's answer rules (R2-1), and the brief then fails."""
+    base._recheck(fx, "| X1 | medium | deferred: #42 |", findings=(base._finding("X1", severity="medium"),))
+    if before_4_3:
+        log = fx.work / base.LOG
+        entries = [json.loads(line) for line in log.read_text().splitlines() if line.strip()]
+        log.write_text("".join(json.dumps({k: v for k, v in e.items() if k != "record_blocks"}) + "\n"
+                               for e in entries))
+        base._commit_all(fx.work, "the attempt logged before slice 4.3")
+    if before_4_3:
+        assert "| `demo` `unit1` |" in _brief(fx)
+    else:
+        with pytest.raises(brief_module.BriefError, match="cannot be answered deferred"):
+            _brief(fx)
+
+
 def test_a_finding_without_an_answer_fails_instead_of_a_brief_that_omits_it(fx: base.Fixture) -> None:
     base._first_round(fx, base._finding("X1", severity="medium"))
     base._commit_all(fx.work, "the review, not answered")
