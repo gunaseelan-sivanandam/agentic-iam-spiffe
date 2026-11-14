@@ -400,9 +400,10 @@ def test_finding_elsewhere_or_not_blocking_is_not_detected(finding: dict) -> Non
 
 
 @pytest.mark.parametrize(("severity", "detected", "blocking"), [("blocking", ["E1"], ["E1"]), ("high", ["E1"], []),
-                                                                ("medium", [], []), ("low", [], [])])
-def test_new_report_counts_blocking_and_high_as_detections_and_blocking_only_apart(severity: str, detected: list,
-                                                                                    blocking: list) -> None:
+                                                                ("medium", ["E1"], []), ("low", [], [])])
+def test_new_report_counts_blocking_high_and_medium_as_detections_and_blocking_only_apart(severity: str, detected: list,
+                                                                                          blocking: list) -> None:
+    """R2-9 (round 2 of slice 4): a medium finding is fixed (R2-1), so a match rated medium is a detection."""
     result = bench.score(_key_case(), {"findings": [_new_finding("X1", severity)], "accounted": [], "verdict": "no"})
     assert result["detected"] == detected and result["detected_blocking"] == blocking
     assert result["not_blocking"] == ([] if detected else ["E1"])
@@ -429,9 +430,11 @@ def test_a_detection_is_refused_when_the_match_rules_hash_differs(repo: tuple[Re
     assert _run(r) == 2 and r.calls() == 0
 
 
-def test_unmatched_high_finding_on_a_clean_case_is_a_false_alarm_not_a_false_blocker() -> None:
+def test_unmatched_high_or_medium_finding_on_a_clean_case_is_a_false_alarm_not_a_false_blocker() -> None:
+    """R2-9: a medium finding is fixed like a high one, so at no expected place it is a false alarm too."""
     clean = _key_case(case_id="CL", kind="clean", expected=[])
-    for severity, alarms, blockers in (("high", ["X1"], []), ("blocking", ["X1"], ["X1"])):
+    for severity, alarms, blockers in (("high", ["X1"], []), ("blocking", ["X1"], ["X1"]), ("medium", ["X1"], []),
+                                       ("low", [], [])):
         result = bench.score(clean, {"findings": [_new_finding("X1", severity)]})
         assert result["unmatched_detections"] == alarms and result["unmatched_blocking"] == blockers
 
@@ -526,7 +529,8 @@ def test_a_recheck_of_answers_that_hold_passes_only_when_it_accepts_every_answer
     case = _key_case(kind="recheck_holds", expected=[], recheck={"holds": ["R1-1", "R1-2"]})
     result = bench.score_holds(case, {"findings": findings, "accounted": accounted})
     assert result["passed"] is passed and result["detected"] == []
-    assert result["unmatched_detections"] == [f["id"] for f in findings if f["severity"] in ("blocking", "high")]
+    # R2-9: every finding rated blocking, high or medium is a false alarm, as on a no-defect case
+    assert result["unmatched_detections"] == [f["id"] for f in findings if f["severity"] in ("blocking", "high", "medium")]
 
 
 @pytest.mark.parametrize(("r2", "findings", "outcome", "alarms"), [
@@ -649,12 +653,13 @@ def test_measurement_export_mixes_the_two_setups_first_runs_under_fresh_tokens(r
     assert bench.main(["--export-measurement", "--configuration", "open+list", "--configuration", SEV], repo=r.root) == 0
     text = (r.root / bench.MEASURE_EXPORT_FILE).read_text()
     export = [json.loads(line) for line in text.splitlines()]
-    # the blocking and high findings of both setups on both cases, none of short+list, none rated medium
-    assert len(export) == 8 and {e["finding"]["id"] for e in export} == {"X1", "X2"}
+    # the findings rated as detections (blocking or high; medium too since R2-9) of both setups on both cases, none of
+    # short+list
+    assert len(export) == 12 and {e["finding"]["id"] for e in export} == {"X1", "X2", "X3"}
     assert all(e["token"].startswith("S") for e in export) and {e["case"] for e in export} == {"C1", "CL"}
     assert "open+list" not in text and "prompt_identity" not in text and '"run"' not in text
     private = [json.loads(line) for line in (r.root / bench.MEASURE_KEY_FILE).read_text().splitlines()]
-    assert sorted(p["configuration"] for p in private) == ["open+list"] * 4 + [SEV] * 4
+    assert sorted(p["configuration"] for p in private) == ["open+list"] * 6 + [SEV] * 6
     assert (r.root / bench.EXPORT_FILE).read_text() == "the stage's first export\n"
 
 
@@ -1396,3 +1401,92 @@ def test_a_benchmark_recheck_whose_rejection_cites_no_checkable_fact_is_refused(
     with pytest.raises(bench.BenchmarkRefusedError, match="R1-1 is a rejected high finding whose answer cites no "
                                                           "checkable fact"):
         bench.case_prompt(prepared, key, "recheck-A")
+
+
+# --- Round 2 of slice 4, R2-9: a medium match is a detection; earlier results keep their score, re-scored apart ------
+
+R2_9_RULE = "A defect is detected by a blocking, high or medium finding at its place with one of its terms."
+
+
+def _as_recorded_before_r2_9(r: Repo) -> str:
+    """Give every completed result the score the rule before R2-9 gave it (a medium finding seen, not detected), as
+    stage B's earlier results were recorded; return the key's hash, under which they were recorded."""
+    key = bench.load_key(r.root)
+    cases = {c.case_id: c for c in key.cases}
+    lines = r.results()
+    for line in lines:
+        if line.get("status") == "completed" and line.get("configuration"):
+            earlier = [{**f, "severity": "low"} if f.get("severity") == "medium" else f for f in line["findings"]]
+            line["score"] = bench.score(cases[line["case"]], {"findings": earlier})
+    _write(r.root, str(bench.RESULTS["B"]), "".join(json.dumps(line, sort_keys=True) + "\n" for line in lines))
+    return key.sha256
+
+
+def _key_under_r2_9(r: Repo, cases: list[dict], earlier: str) -> None:
+    r.key(cases, match_rule=R2_9_RULE, match_rule_sha256=hashlib.sha256(R2_9_RULE.encode()).hexdigest(),
+          earlier_key_sha256=[earlier])
+
+
+def test_rescore_b_scores_earlier_results_under_the_keys_rule_and_the_report_shows_both(repo: tuple[Repo, str, str]) -> None:
+    r, base, commit = repo
+    cases = [_case("C1", base, commit, configurations=["open+list"])]
+    r.key(cases)
+    r.canary_passed()
+    r.scenario(_reply([_new_finding("X1", "medium")]))
+    assert _run(r) == 0
+    _key_under_r2_9(r, cases, _as_recorded_before_r2_9(r))
+    before = (r.root / bench.RESULTS["B"]).read_text()
+    assert bench.main(["--report", "--stage", "B"], repo=r.root) == 2  # an earlier result without its re-score
+    assert bench.main(["--rescore", "B"], repo=r.root) == 0
+    assert (r.root / bench.RESULTS["B"]).read_text() == before
+    rows = [json.loads(line) for line in (r.root / bench.RESCORE_B_FILE).read_text().splitlines()]
+    assert [(row["case"], row["score"]["detected"]) for row in rows] == [("C1", ["E1"])]
+    report = bench.report_stage_b(r.root, bench.load_key(r.root))
+    earlier, current = report.split("Under the key's rule (R2-9", 1)
+    assert "Under the rule of their runs (blocking or high)" in earlier and "| open+list | 0 of 1 |" in earlier
+    assert "| open+list | 1 of 1 |" in current
+
+
+def test_rescore_b_writes_nothing_when_a_recorded_score_is_not_the_earlier_rules(repo: tuple[Repo, str, str]) -> None:
+    """The re-score changes the rule and nothing else: a recorded score the earlier rule does not give is refused."""
+    r, base, commit = repo
+    cases = [_case("C1", base, commit, configurations=["open+list"])]
+    r.key(cases)
+    r.canary_passed()
+    r.scenario(_reply([_new_finding("X1", "medium")]))
+    assert _run(r) == 0  # recorded under R2-9's rule, so its score already counts the medium match
+    _key_under_r2_9(r, cases, bench.load_key(r.root).sha256)
+    assert bench.main(["--rescore", "B"], repo=r.root) == 2
+    assert not (r.root / bench.RESCORE_B_FILE).exists()
+
+
+def test_the_third_export_holds_only_findings_no_earlier_export_holds_and_confirms_a_medium_match(
+        repo: tuple[Repo, str, str]) -> None:
+    r, base, commit = repo
+    r.key([_case("C1", base, commit, configurations=["open+list"])])
+    r.canary_passed()
+    r.scenario(_reply([_new_finding("X1", "medium"), _new_finding("X2", "high", line=99, problem="unrelated")]))
+    assert _run(r) == 0
+    # the first export ran before R2-9: it holds the high finding only, which was judged no match
+    _write(r.root, str(bench.EXPORT_KEY_FILE), json.dumps({"token": "T001", "case": "C1", "configuration": "open+list",
+                                                          "run": 1, "finding": "X2"}) + "\n")
+    _write(r.root, str(bench.VERDICT_FILES["author"]), json.dumps({"token": "T001", "verdict": "no match"}) + "\n")
+    report = bench.report_stage_b(r.root, bench.load_key(r.root))
+    row = _report_row(report, "open+list")
+    assert row[1] == "0 of 1" and row[_header(report).index("Not yet confirmed")] == "1"
+    assert bench.main(["--export-rescore"], repo=r.root) == 0
+    text = (r.root / bench.RESCORE_EXPORT_FILE).read_text()
+    assert [(e["token"], e["finding"]["id"]) for e in map(json.loads, text.splitlines())] == [("M001", "X1")]
+    assert "open+list" not in text and "prompt_identity" not in text
+    _write(r.root, str(bench.VERDICT_FILES["rescore"]), json.dumps({"token": "M001", "verdict": "match"}) + "\n")
+    report = bench.report_stage_b(r.root, bench.load_key(r.root))
+    row = _report_row(report, "open+list")
+    assert row[1] == "1 of 1" and row[_header(report).index("Not yet confirmed")] == "0" and "third export" in report
+
+
+def test_rating_agreement_tells_a_medium_detection_from_a_high_one() -> None:
+    """R2-9: a detection can be rated medium, so two runs that detect a defect, one at high and one at medium, differ."""
+    key = _key_with(_key_case(case_id="C1"))
+    high = _rated(1, ["E1"], [], [], ("F1",))
+    medium = {**_rated(2, ["E1"], [], [], ("F2",)), "findings": [_new_finding("F2", "medium")]}
+    assert bench.severity_agreement([high, medium], key, bench.Confirmation()) == {"same": 0, "different": 1}

@@ -19,7 +19,9 @@ Usage (from the repository root):
     python3 scripts/run_review_benchmark.py --run --configuration <name>    # only the named configurations
     python3 scripts/run_review_benchmark.py --report --stage B [--stage A]  # one stage, or two compared
     python3 scripts/run_review_benchmark.py --rescore A                     # stage A's results under the new key
+    python3 scripts/run_review_benchmark.py --rescore B                     # stage B's earlier results, R2-9's rule
     python3 scripts/run_review_benchmark.py --export-confirmation           # blinded findings for confirmation
+    python3 scripts/run_review_benchmark.py --export-rescore                # the findings no earlier export holds
     python3 scripts/run_review_benchmark.py --export-measurement --configuration A --configuration B  # two setups
     python3 scripts/run_review_benchmark.py --sample-confirmation           # ten of them for the second confirmer
     python3 scripts/run_review_benchmark.py --second-confirmation 0|1       # one Sonnet session on one half
@@ -67,10 +69,17 @@ EXPORT_KEY_FILE = BENCH_OUT / "confirmation_key.jsonl"
 # Decision concern 8, step 3: the measurement's own blinded export, so the stage's first export stays as it is.
 MEASURE_EXPORT_FILE = BENCH_OUT / "severity_export.jsonl"
 MEASURE_KEY_FILE = BENCH_OUT / "severity_export_key.jsonl"
+# Round 2 of slice 4, R2-9: the findings the key's rule counts that neither earlier export holds (the medium ones, and
+# the reviews run after the first export), so the first two exports and their verdicts stay as they are.
+RESCORE_EXPORT_FILE = BENCH_OUT / "rescore_export.jsonl"
+RESCORE_EXPORT_KEY_FILE = BENCH_OUT / "rescore_export_key.jsonl"
 VERDICT_FILES = {"author": BENCH_OUT / "confirmation_author.jsonl", "second": BENCH_OUT / "confirmation_second.jsonl",
                  # decision concern 8: a fresh session's blind verdicts on the measurement's export
-                 "measurement": BENCH_OUT / "severity_confirmation_author.jsonl"}
+                 "measurement": BENCH_OUT / "severity_confirmation_author.jsonl",
+                 # R2-9: a fresh session's blind verdicts on the third export
+                 "rescore": BENCH_OUT / "rescore_confirmation.jsonl"}
 RESCORE_FILE = BENCH_OUT / "benchmark_rescore_A.jsonl"
+RESCORE_B_FILE = BENCH_OUT / "benchmark_rescore_B.jsonl"  # R2-9: stage B's earlier results under the key's rule
 SAMPLE_FILE = BENCH_OUT / "confirmation_sample.jsonl"
 SECOND_MODEL = "claude-sonnet-5-5"  # S45-D10: Sonnet only as the second confirmer
 SAMPLE_SIZE = 10  # S45-D7: ten findings, five for each of two Sonnet sessions
@@ -173,7 +182,8 @@ class AnswerKey:
 
 def of_key(key: AnswerKey, line: dict[str, Any]) -> bool:
     """Whether a result belongs to this key: produced with it, or with an earlier version that the key names in
-    `earlier_key_sha256` because it only added to that version (a case, and the match rule's sentence for it)."""
+    `earlier_key_sha256`. Such a result keeps the score of its run; where that version's match rule differs from the
+    key's (R2-9), `--rescore B` scores it again under the key's rule, apart from the results."""
     return line.get("key_sha256") in (key.sha256, *key.earlier)
 
 
@@ -558,10 +568,24 @@ def _finding_text(finding: dict[str, Any], quoted: tuple[str, ...] = ()) -> str:
     return text
 
 
+# Round 2 of slice 4 (the owner, 2026-11-14), R2-9: blocking, high and medium findings are fixed (R2-1), so a match
+# rated medium is caught and counts as a detection. Results recorded before it counted blocking and high only; they
+# keep that score, and `--rescore B` scores them again under this rule.
+DETECTION_SEVERITIES = ("blocking", "high", "medium")
+
+
 def is_detection(finding: dict[str, Any]) -> bool:
-    """A finding that counts as a detection. Stage A's reports carry the retired kind "blocking"; new reports carry a
-    severity, and blocking and high findings both count, since both are fixed before merge (S41-D6)."""
-    return finding.get("kind") == "blocking" or finding.get("severity") in ("blocking", "high")
+    """A finding that counts as a detection. Stage A's reports carry the retired kind "blocking" or "advisory", which
+    holds medium and low alike, so only "blocking" counts, as before; new reports carry a severity, and blocking, high
+    and medium findings count, since all three are fixed (R2-9)."""
+    return finding.get("kind") == "blocking" or finding.get("severity") in DETECTION_SEVERITIES
+
+
+def as_earlier_rule(report: dict[str, Any]) -> dict[str, Any]:
+    """The report as the rule before R2-9 scored it: a medium finding counted as a low one does, as seen, not
+    detected. Scoring this gives the score a result was recorded with, which `--rescore B` checks for every result."""
+    findings = [{**f, "severity": "low"} if f.get("severity") == "medium" else f for f in report.get("findings", [])]
+    return {**report, "findings": findings}
 
 
 def is_blocking(finding: dict[str, Any]) -> bool:
@@ -579,9 +603,9 @@ def _names_absence(finding: dict[str, Any], absence: dict[str, list[str]] | None
 
 
 def score(case: Case, report: dict[str, Any], quoted: tuple[str, ...] = ()) -> dict[str, Any]:
-    """Deterministic first pass: detected (blocking or high), detected by a blocking finding, location-only and
-    not-blocking matches (triage), unmatched findings (false blockers and false alarms on a no-defect case), and for
-    each detected expected finding the IDs of the findings that matched it (for blinded confirmation)."""
+    """Deterministic first pass: detected (blocking, high or medium, R2-9), detected by a blocking finding,
+    location-only and not-blocking matches (triage), unmatched findings (false blockers and false alarms on a no-defect
+    case), and for each detected expected finding the IDs of the findings that matched it (for blinded confirmation)."""
     findings = report.get("findings", [])
     result: dict[str, Any] = {"detected": [], "detected_blocking": [], "location_only": [], "not_blocking": [],
                               "matches": {}}
@@ -599,7 +623,8 @@ def score(case: Case, report: dict[str, Any], quoted: tuple[str, ...] = ()) -> d
             result["detected_blocking"].append(expected["id"])
         matched.update(f["id"] for f in [*at_location, *absent] if is_detection(f))
     result["unmatched_blocking"] = [f["id"] for f in findings if is_blocking(f) and f["id"] not in matched]
-    # A high rating counts as a detection, so an unmatched high finding counts as a false alarm too (S41-D13).
+    # Every rating that counts as a detection counts as a false alarm at no expected place (S41-D13): a high finding
+    # since S41-D13, a medium one since R2-9, as it is fixed too.
     result["unmatched_detections"] = [f["id"] for f in findings if is_detection(f) and f["id"] not in matched]
     return result
 
@@ -654,8 +679,8 @@ def score_recheck(case: Case, report: dict[str, Any], quoted: tuple[str, ...] = 
 
 def score_holds(case: Case, report: dict[str, Any], quoted: tuple[str, ...] = ()) -> dict[str, Any]:
     """Decision concern 4: a recheck case whose answers all hold is passed when the recheck lists every answer as
-    accepted and reports none of the earlier findings again; every blocking or high finding is a false alarm, as on a
-    no-defect case. A recheck that fails the read check never completes, so it has no score and is a miss."""
+    accepted and reports none of the earlier findings again; every finding rated as a detection is a false alarm, as on
+    a no-defect case. A recheck that fails the read check never completes, so it has no score and is a miss."""
     del quoted  # scored by its accounting, not by terms
     findings = report.get("findings", [])
     statuses = {e.get("item"): e.get("status") for e in report.get("accounted", [])}
@@ -1034,8 +1059,9 @@ def dry_run(repo: Path, key: AnswerKey, names: list[str] | None = None) -> int:
 
 
 def _exported_findings(line: dict[str, Any], case: Case) -> list[dict[str, Any]]:
-    """The findings of a review that confirmation judges: every blocking or high finding, and in the recheck case the
-    re-raised earlier finding whatever its severity, since it alone decides that case."""
+    """The findings of a review that confirmation judges: every finding rated as a detection (blocking or high when the
+    first two exports ran; medium too since R2-9), and in the recheck case the re-raised earlier finding whatever its
+    severity, since it alone decides that case."""
     target = case.recheck.get("finding") if case.kind == "recheck" else None
     return [f for f in line.get("findings", []) if is_detection(f) or f.get("id") == target]
 
@@ -1073,8 +1099,9 @@ def _write_export(repo: Path, items: list[tuple[dict[str, Any], dict[str, Any]]]
 
 
 def export_measurement(repo: Path, key: AnswerKey, seed: int, configurations: list[str]) -> int:
-    """Decision concern 8, step 3: every blocking or high finding of the named setups' first completed review of each
-    case (a rerun stands in for a failed or withheld first run), the setups mixed and shuffled under fresh tokens, so a
+    """Decision concern 8, step 3: every finding rated as a detection (blocking or high when it ran; medium too since
+    R2-9) of the named setups' first completed review of each case (a rerun stands in for a failed or withheld first
+    run), the setups mixed and shuffled under fresh tokens, so a
     blind confirmer cannot tell which setup produced a finding. No-defect cases are included, with no expected finding.
     The stage's first export and its verdicts stay as they are."""
     if len(set(configurations)) < 2:
@@ -1089,6 +1116,28 @@ def export_measurement(repo: Path, key: AnswerKey, seed: int, configurations: li
              for finding in line.get("findings", []) if is_detection(finding)]
     count = _write_export(repo, items, seed, "S", (MEASURE_EXPORT_FILE, MEASURE_KEY_FILE))
     print(f"[benchmark] exported {count} findings to {MEASURE_EXPORT_FILE}, tokens in {MEASURE_KEY_FILE}")
+    return 0
+
+
+def export_rescore(repo: Path, key: AnswerKey, seed: int) -> int:
+    """R2-9: every finding that confirmation judges under the key's rule, from every completed defect-case review,
+    that neither earlier export holds: the medium findings, which the first two exports left out, and every finding
+    of a review run after the first export (the later rechecks). Shuffled under fresh tokens, without the
+    configuration; the first two exports and their verdicts stay as they are."""
+    check_match_rule(key)
+    held = set(read_tokens(repo)) | set(read_tokens(repo, MEASURE_KEY_FILE))
+    cases = {c.case_id: c for c in key.cases}
+    items = []
+    for line in load_results(repo, key):
+        if line.get("status") != "completed" or line.get("kind") not in DEFECT_KINDS:
+            continue
+        for finding in _exported_findings(line, cases[line["case"]]):
+            if (line["case"], line["configuration"], line.get("run", 1), finding["id"]) not in held:
+                items.append(({"case": line["case"], "expected": cases[line["case"]].expected, "finding": finding},
+                              {"configuration": line["configuration"], "prompt_identity": line["prompt_identity"],
+                               "run": line.get("run", 1), "finding": finding["id"]}))
+    count = _write_export(repo, items, seed, "M", (RESCORE_EXPORT_FILE, RESCORE_EXPORT_KEY_FILE))
+    print(f"[benchmark] exported {count} findings to {RESCORE_EXPORT_FILE}, tokens in {RESCORE_EXPORT_KEY_FILE}")
     return 0
 
 
@@ -1247,18 +1296,19 @@ def decide(short: dict[str, int], checklist: dict[str, int]) -> str:
     return "short (no measurable difference)" if abs(checklist["real_miss"] - short["real_miss"]) < 2 else "short"
 
 
-COLUMN_NOTE = ("Detected: a blocking or high finding at the expected place with one of its terms; Detected (blocking): "
-               "the same, by a blocking finding; Not blocking: a match rated medium or low (stage A: advisory); "
-               "Unmatched blocking, and Unmatched (blocking or high): findings at no expected place, the false blockers "
-               "and false alarms on a clean case. \"False blocker\" names the metric, not a verdict: step 1 of decision "
-               "concern 8 found all 20 of the first runs' to be real defects of the reviewed commits outside the planted "
-               "ones.")
+COLUMN_NOTE = ("Detected: a finding rated as a detection (blocking or high before R2-9; blocking, high or medium under "
+               "it) at the expected place with one of its terms; Detected (blocking): the same, by a blocking finding; "
+               "Not blocking: a match rated below that (medium or low before R2-9, low under it; stage A: advisory); "
+               "Unmatched blocking, and Unmatched (rated as a detection): findings at no expected place, the false "
+               "blockers and false alarms on a clean case. \"False blocker\" names the metric, not a verdict: step 1 of "
+               "decision concern 8 found all 20 of the first runs' to be real defects of the reviewed commits outside "
+               "the planted ones.")
 
 
 def report_rows(lines: list[dict[str, Any]]) -> list[str]:
     """One table row per result line; a canary line has no scores."""
     rows = ["| Case | Kind | Prompt | Status | Verdict | Detected | Detected (blocking) | Location only | Not blocking "
-            "| Unmatched blocking | Unmatched (blocking or high) | Tries |",
+            "| Unmatched blocking | Unmatched (rated as a detection) | Tries |",
             "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for line in lines:
         name = line.get("configuration", line.get("prompt"))
@@ -1397,12 +1447,15 @@ def origin_table(lines: list[dict[str, Any]], key: AnswerKey) -> dict[str, dict[
 
 
 def defect_rating(line: dict[str, Any], expected_id: str, confirmation: Confirmation) -> str:
-    """How a review rated one expected defect: detected by a blocking finding, detected by a high one, seen at medium
-    or low, or not found. Detections are the confirmed ones."""
+    """How a review rated one expected defect: detected, at the highest severity among the findings that matched it,
+    seen below the rule's detection severities, or not found. Detections are the confirmed ones."""
     score_ = line.get("score", {})
     if expected_id in confirmation.confirmed(line):
-        return "blocking" if expected_id in score_.get("detected_blocking", []) else "high"
-    return "medium or low" if expected_id in score_.get("not_blocking", []) else "not found"
+        rated = {f.get("id"): f.get("severity") for f in line.get("findings", [])}
+        severities = {rated.get(fid) for fid in score_.get("matches", {}).get(expected_id, [])}
+        return "blocking" if expected_id in score_.get("detected_blocking", []) else next(
+            (s for s in ("high", "medium") if s in severities), "high")
+    return "seen, not detected" if expected_id in score_.get("not_blocking", []) else "not found"
 
 
 def severity_agreement(lines: list[dict[str, Any]], key: AnswerKey, confirmation: Confirmation) -> dict[str, int]:
@@ -1484,7 +1537,7 @@ def measurement_rows(lines: list[dict[str, Any]], key: AnswerKey, measured: Conf
     counts = configuration_counts([line for line in lines if line.get("configuration") in names], key, measured)
     kinds = {c.case_id: c.kind for c in key.cases}
     rows = [f"{title}, by the second blinded export's verdicts:", "",
-            "| Configuration | Detected | Cases detected | Detected (blocking) | Blocking or high on no-defect cases | "
+            "| Configuration | Detected | Cases detected | Detected (blocking) | False alarms on no-defect cases | "
             "False blockers | Failed | Cost USD | Minutes |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for name in names:
         c = counts.get(name, ConfigurationCounts())
@@ -1526,33 +1579,96 @@ SIZE_NOTE = ("What these sizes can show: with about 15 cases and one run each, a
              "from the counts; no rule decides.")
 
 
-def report_stage_b(repo: Path, key: AnswerKey) -> str:
-    check_match_rule(key)
-    lines = load_results(repo, key)
-    confirmation = Confirmation(read_verdicts(repo, "author"), read_tokens(repo))
-    measured = Confirmation(read_verdicts(repo, "measurement"), read_tokens(repo, MEASURE_KEY_FILE))
+def under_earlier_rule(line: dict[str, Any], key: AnswerKey) -> bool:
+    """A review recorded under a match rule other than the key's, so its stored score follows that rule (R2-9)."""
+    return bool(line.get("configuration")) and line.get("match_rule_sha256") != key.match_rule_sha256
+
+
+def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+    return [json.loads(t) for t in path.read_text(encoding="utf-8").splitlines() if t.strip()] if path.exists() else []
+
+
+def rescored(repo: Path, key: AnswerKey, lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """R2-9: every result under the key's match rule. A review recorded under it stands as it is; a completed review
+    recorded under an earlier rule takes its re-score from `--rescore B`, and one without a re-score is refused."""
+    rows = {review_id(row): row["score"] for row in _read_jsonl(repo / RESCORE_B_FILE)
+            if row.get("match_rule_sha256") == key.match_rule_sha256}
+    out = []
+    for line in lines:
+        if not under_earlier_rule(line, key) or line.get("status") != "completed":
+            out.append(line)
+        elif review_id(line) in rows:
+            out.append({**line, "score": rows[review_id(line)]})
+        else:
+            raise BenchmarkRefusedError(f"{line['case']} {line['configuration']} was scored under an earlier match "
+                                        f"rule and has no re-score under the key's; run --rescore B")
+    return out
+
+
+@dataclass(frozen=True)
+class RuleView:
+    """One set of results, each scored under one rule, with the verdicts that confirm them."""
+
+    title: str
+    lines: list[dict[str, Any]]
+    confirmation: Confirmation
+    measured: Confirmation
+
+
+def rule_section(view: RuleView, key: AnswerKey) -> list[str]:
+    """The counts of one rule's view, its discordant cases, rating agreement and repeats, and decision concern 8's
+    measurement under the same rule."""
+    lines, confirmation, measured = view.lines, view.confirmation, view.measured
     sev = key.measurement.get("configuration")
     # The measured setup's reviews came after the first export, so the second export's verdicts confirm them.
     counts = {**configuration_counts([line for line in lines if line.get("configuration") != sev], key, confirmation),
               **configuration_counts([line for line in lines if sev and line.get("configuration") == sev], key, measured)}
-    canaries = [{**{k: c.get(k) for k in ("cli_version", "valid", "passed")}, "twin_ran_hook": settings_shown(c)}
-                for c in lines if c.get("kind") == "canary"]
-    return "\n".join([
-        f"Stage B. Answer key SHA-256: `{key.sha256}`; match rule SHA-256: `{key.match_rule_sha256}`; lists at "
-        f"`{key.lists_commit or 'none'}`.", "",
-        "Detections are " + ("confirmed by the author's blinded verdicts." if confirmation.verdicts else
-                             "automatic (no blinded verdicts yet)."), "", *_counts_rows(counts), "",
+    return [
+        view.title, "", *_counts_rows(counts), "",
         f"Discordant cases, short+list against open+list: `{json.dumps(discordant(counts, 'short+list', 'open+list'))}`",
         f"Discordant cases, open+list against open-B+list: `{json.dumps(discordant(counts, 'open+list', 'open-B+list'))}`",
         f"Rating agreement where a case ran twice, by expected defect: `{json.dumps(severity_agreement(lines, key, confirmation))}`",
+        repeats_table(lines, confirmation), "", *measurement_rows(lines, key, measured), ""]
+
+
+def rule_views(repo: Path, key: AnswerKey, lines: list[dict[str, Any]]) -> list[RuleView]:
+    """R2-9: the results recorded under an earlier rule, scored as they ran (when there are any), and every result
+    under the key's rule, the earlier ones re-scored. The third export's verdicts join both families of verdicts."""
+    extra, extra_tokens = read_verdicts(repo, "rescore"), read_tokens(repo, RESCORE_EXPORT_KEY_FILE)
+    confirmation = Confirmation({**read_verdicts(repo, "author"), **extra}, {**read_tokens(repo), **extra_tokens})
+    measured = Confirmation({**read_verdicts(repo, "measurement"), **extra},
+                            {**read_tokens(repo, MEASURE_KEY_FILE), **extra_tokens})
+    earlier = [line for line in lines if under_earlier_rule(line, key)]
+    views = [RuleView("Under the rule of their runs (blocking or high), the reviews recorded before the key's rule, "
+                      "each with the score of its run:", earlier, confirmation, measured)] if earlier else []
+    title = "Under the key's rule (R2-9: blocking, high or medium), every review" + (
+        ", those recorded under an earlier rule re-scored by `--rescore B`:" if earlier else ":")
+    return [*views, RuleView(title, rescored(repo, key, lines), confirmation, measured)]
+
+
+def report_stage_b(repo: Path, key: AnswerKey) -> str:
+    check_match_rule(key)
+    lines = load_results(repo, key)
+    views = rule_views(repo, key, lines)
+    current = views[-1]
+    canaries = [{**{k: c.get(k) for k in ("cli_version", "valid", "passed")}, "twin_ran_hook": settings_shown(c)}
+                for c in lines if c.get("kind") == "canary"]
+    confirmed_by = ("confirmed by the author's blinded verdicts" if read_verdicts(repo, "author") else "")
+    if read_verdicts(repo, "rescore"):
+        confirmed_by += (", and the findings that no earlier export held by a fresh session's blinded verdicts on the "
+                         "third export")
+    return "\n".join([
+        f"Stage B. Answer key SHA-256: `{key.sha256}`; match rule SHA-256: `{key.match_rule_sha256}`; lists at "
+        f"`{key.lists_commit or 'none'}`.", "",
+        "Detections are " + (f"{confirmed_by}." if confirmed_by else "automatic (no blinded verdicts yet)."), "",
+        *[row for view in views for row in rule_section(view, key)],
         f"Origin stage of the findings against the list of the review that found them: `{json.dumps(origin_table(lines, key), sort_keys=True)}`",
         f"Canary: `{json.dumps(canaries)}`. A canary is valid when its twin, without the launcher's flags, followed the "
         "planted CLAUDE.md and ran the planted hook (S45-D9); one whose twin ran only the hook shows that the flags "
-        "keep settings out, not that they keep instruction files out.", repeats_table(lines, confirmation),
-        *holds_line(lines, key), question_line(lines), agreement(repo), "", *measurement_rows(lines, key, measured),
-        "", SIZE_NOTE, "",
-        "Per-review rows: the automatic first pass, before confirmation; the counts above are confirmed.", "",
-        *report_rows(lines), "", COLUMN_NOTE])
+        "keep settings out, not that they keep instruction files out.",
+        *holds_line(current.lines, key), question_line(lines), agreement(repo), "", SIZE_NOTE, "",
+        "Per-review rows: the automatic first pass of each review, under the rule of its run, before confirmation; the "
+        "counts above are confirmed.", "", *report_rows(lines), "", COLUMN_NOTE])
 
 
 def report(repo: Path, key: AnswerKey, stages: list[str]) -> str:
@@ -1575,15 +1691,50 @@ def rescore_stage_a(repo: Path, key: AnswerKey) -> int:
     return 0
 
 
+def rescore_stage_b(repo: Path, key: AnswerKey) -> int:
+    """R2-9: every completed stage-B review recorded under an earlier match rule, scored again under the key's rule
+    from the findings it recorded, written to a separate file that names the key's rule; the results file stays as it
+    is. Each case is prepared again for its expected lines (the quote rule). Scored as the earlier rule did
+    (`as_earlier_rule`), every review must give the score it was recorded with, or nothing is written."""
+    check_match_rule(key)
+    cases = {c.case_id: c for c in key.cases}
+    todo = [line for line in load_results(repo, key) if under_earlier_rule(line, key) and line.get("status") == "completed"]
+    scratch = Path(tempfile.mkdtemp(prefix="review-benchmark-rescore-"))
+    try:
+        quoted = {}
+        for case_id in sorted({line["case"] for line in todo}):
+            (scratch / case_id).mkdir()
+            quoted[case_id] = tuple(prepare_case(repo, cases[case_id], scratch / case_id).quoted)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+    out, differ = [], []
+    for line in todo:
+        case, report_ = cases[line["case"]], {"findings": line["findings"], "accounted": line.get("accounted", [])}
+        scorer = SCORERS.get(case.kind, score)
+        if scorer(case, as_earlier_rule(report_), quoted[case.case_id]) != line["score"]:
+            differ.append(f"{line['case']} {line['configuration']} run {line.get('run', 1)}")
+        out.append({**{k: line[k] for k in ("case", "configuration", "prompt_identity")}, "run": line.get("run", 1),
+                    "key_sha256": key.sha256, "match_rule_sha256": key.match_rule_sha256,
+                    "recorded_under": line.get("match_rule_sha256"), "score": scorer(case, report_, quoted[case.case_id])})
+    if differ:
+        raise BenchmarkRefusedError(f"scored as the earlier rule did, {len(differ)} reviews do not give their recorded "
+                                    f"score, so the re-score would change more than the rule: {differ[0]}")
+    (repo / RESCORE_B_FILE).write_text("".join(json.dumps(r, sort_keys=True) + "\n" for r in out), encoding="utf-8")
+    print(f"[benchmark] re-scored {len(out)} stage-B reviews under match rule {key.match_rule_sha256[:12]} into "
+          f"{RESCORE_B_FILE}; scored as the earlier rule did, all {len(out)} give their recorded score")
+    return 0
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run or report the review benchmark.")
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--dry-run", action="store_true")
     mode.add_argument("--run", action="store_true")
     mode.add_argument("--report", action="store_true")
-    mode.add_argument("--rescore", choices=["A"])
+    mode.add_argument("--rescore", choices=["A", "B"])
     mode.add_argument("--export-confirmation", action="store_true")
     mode.add_argument("--export-measurement", action="store_true")
+    mode.add_argument("--export-rescore", action="store_true")
     mode.add_argument("--sample-confirmation", action="store_true")
     mode.add_argument("--second-confirmation", type=int, choices=[0, 1])
     parser.add_argument("--budget", type=int)
@@ -1596,6 +1747,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+RESCORERS = {"A": rescore_stage_a, "B": rescore_stage_b}
+EXPORTS = {"export_confirmation": export_confirmation, "export_rescore": export_rescore}
+
+
 def dispatch(args: argparse.Namespace, repo: Path, key: AnswerKey) -> int:
     if args.dry_run:
         return dry_run(repo, key, args.case)
@@ -1604,20 +1759,26 @@ def dispatch(args: argparse.Namespace, repo: Path, key: AnswerKey) -> int:
             raise BenchmarkRefusedError("--report needs --stage: name one stage, or both to compare them")
         print(report(repo, key, args.stage))
         return 0
-    if args.rescore:
-        return rescore_stage_a(repo, key)
-    if args.export_measurement:
-        return export_measurement(repo, key, args.seed, args.configuration)
-    if args.export_confirmation:
-        return export_confirmation(repo, key, args.seed)
-    if args.sample_confirmation:
-        print(f"[benchmark] sample: {sample_confirmation(repo, args.seed)}")
-        return 0
-    if args.second_confirmation is not None:
-        return second_confirmation(repo, key, args.second_confirmation)
+    if not args.run:
+        return dispatch_confirmation(args, repo, key)
     run_benchmark(repo, key, args.budget if args.budget is not None else key.budget, args.repeat,
                   Selection(tuple(args.case), tuple(args.configuration)))
     return 0
+
+
+def dispatch_confirmation(args: argparse.Namespace, repo: Path, key: AnswerKey) -> int:
+    """The modes that re-score results or prepare, sample and record their confirmation; no review runs."""
+    if args.rescore:
+        return RESCORERS[args.rescore](repo, key)
+    if args.export_measurement:
+        return export_measurement(repo, key, args.seed, args.configuration)
+    for name, export in EXPORTS.items():
+        if getattr(args, name):
+            return export(repo, key, args.seed)
+    if args.sample_confirmation:
+        print(f"[benchmark] sample: {sample_confirmation(repo, args.seed)}")
+        return 0
+    return second_confirmation(repo, key, args.second_confirmation)
 
 
 def main(argv: list[str], repo: Path | None = None) -> int:

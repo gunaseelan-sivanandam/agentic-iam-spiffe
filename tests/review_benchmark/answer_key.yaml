@@ -1,4 +1,4 @@
-# Answer key of the review benchmark, version 3 (agentic-sdlc-poc slice 4.5, S45-D2 to S45-D5): stage B's
+# Answer key of the review benchmark (agentic-sdlc-poc slice 4.5, S45-D2 to S45-D5; versions below): stage B's
 # cases, their artifact types, configurations, expected findings and leak terms, and the match rule committed
 # before any run. Stage A's key (version 1) is in the history at c325e7d; every result records its key's hash.
 # Version 3 adds RC-2, a recheck case whose answers all hold, and the match rule's sentence for it, after version 2's
@@ -7,30 +7,39 @@
 # budget to 85 (the owner's approval of decision concern 8's measurement beyond the 60 calls, 2026-11-13: "complete it
 # and do not wait for my approval"), adds the configuration open+list+sev to the 15 initial-review cases, and fixes the
 # measurement's criteria (severity_measurement).
-version: 4
+# Version 5 (round 2 of slice 4, R2-9; the owner, 2026-11-14), before any of its use: a match rated medium counts as
+# detected, and a medium finding on a no-defect case as a false alarm, because R2-1 has blocking, high and medium
+# findings fixed, so a medium finding is caught. Only the match rule's severities change. The results of versions 2
+# and 4 (earlier_key_sha256) keep the score of their runs, made under the rule of their runs (blocking or high);
+# `run_review_benchmark.py --rescore B` scores them again under this rule into a separate file, and the report shows
+# both. Stage A's results carry the retired kinds blocking and advisory, and advisory held medium and low alike, so
+# stage A is not re-scored. No reviewer call. The budget stays 85: decision concern 11, the raise to 85, is the owner's.
+version: 5
 stage: B
 model: claude-opus-5-5
 effort: high
 budget: 85
 lists_commit: 04f8df4
-match_rule: 'A defect is detected by a finding rated blocking or high (stage A: kind blocking) that names one of
-  the defect''s files, a line inside one of that file''s ranges, and at least one of its terms (case-insensitive,
-  in the problem, evidence or failure scenario). A defect of absence is also detected by a blocking or high finding
-  that names one of its absence terms and one of its absence places anywhere in the finding. A term counts only
-  outside a verbatim quote of the expected lines, so a finding that only quotes the planted line goes to triage.
-  A finding at the place without a term goes to triage as location only; a match rated medium or low counts as seen,
-  not detected. On a no-defect case every blocking or high finding is a false alarm, and every blocking finding
-  a false blocker; on any completed review a blocking finding at no expected place is a false-blocker candidate.
-  The recheck case of a false fix is detected when the recheck lists the earlier finding as re-raised and reports it
-  again under its ID; a recheck that fails the launcher''s read check is a miss. A recheck case of answers that hold
-  is passed when the recheck lists every answer as accepted and reports none of the earlier findings again; an answer
-  re-raised or listed as cannot determine, or a recheck that fails the read check, is a miss, and every blocking or
-  high finding it reports is a false alarm, as on a no-defect case. Blinded confirmation applies this rule to each
-  exported finding without its configuration.'
-match_rule_sha256: 9605cb43cba72d294294a2414089c397803fd92f2bb8f06c5b3af2d9944944cb
-# Version 2 of this key; its results are kept.
+match_rule: 'A defect is detected by a finding rated blocking, high or medium (stage A: kind blocking) that names
+  one of the defect''s files, a line inside one of that file''s ranges, and at least one of its terms
+  (case-insensitive, in the problem, evidence or failure scenario). A defect of absence is also detected by a
+  blocking, high or medium finding that names one of its absence terms and one of its absence places anywhere in the
+  finding. A term counts only outside a verbatim quote of the expected lines, so a finding that only quotes the
+  planted line goes to triage. A finding at the place without a term goes to triage as location only; a match rated
+  low counts as seen, not detected. On a no-defect case every blocking, high or medium finding is a false alarm, and
+  every blocking finding a false blocker; on any completed review a blocking finding at no expected place is a
+  false-blocker candidate. The recheck case of a false fix is detected when the recheck lists the earlier finding as
+  re-raised and reports it again under its ID; a recheck that fails the launcher''s read check is a miss. A recheck
+  case of answers that hold is passed when the recheck lists every answer as accepted and reports none of the
+  earlier findings again; an answer re-raised or listed as cannot determine, or a recheck that fails the read check,
+  is a miss, and every blocking, high or medium finding it reports is a false alarm, as on a no-defect case. Blinded
+  confirmation applies this rule to each exported finding without its configuration.'
+match_rule_sha256: 36d2c150ffecccd1b2cbec73b2191e265b49e3a627e78b7cde988881efd5f18c
+# Versions 2 and 4 of this key: their results are kept with the score of their runs, and re-scored under this rule
+# apart (R2-9).
 earlier_key_sha256:
 - 7ef0a57963ff33c5b8397eedcf145cedbf3807c8b4a6b7ac09cd29ab4706f899
+- 5b9d6382a06918128102da1b98b9660dd1dad12d35819752adce288878376633
 # Decision concern 8's measurement, fixed before its runs: the baseline, "better" and the outcomes, verbatim from
 # section 9 of the author's severity analysis (step 1).
 severity_measurement:
