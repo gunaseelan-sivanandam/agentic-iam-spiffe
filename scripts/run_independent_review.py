@@ -9,9 +9,11 @@ from that log, and a report is released only for a completed attempt.
 
 The launcher writes every prompt in a fixed order of sections, opening with the mandate of the
 review's mode (initial, recheck or final, taken from the round), so no task text can narrow the
-review. A recheck gets the reviewer's own earlier report and the author's answers to it, and fails
-when it leaves an answer unaccounted or did not read what an answer names. Every finding carries a
-severity and the stage where its problem arose.
+review. A recheck gets the reviewer's own earlier report and the author's answers to it, and the process files
+changed since that round in its evidence (round 2 of slice 4, R2-6); it is refused before the call when the answers
+break the answer rules the record check applies after it (R2-1 to R2-3), and fails when it leaves an answer
+unaccounted, did not read what an answer names, or does not quote, at its place in the copy, what a rejection it
+accepts or re-raises rests on (R2-7). Every finding carries a severity and the stage where its problem arose.
 
 Usage (from the repository root):
     python3 scripts/run_independent_review.py --commit <sha> --base <branch> \\
