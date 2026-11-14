@@ -393,3 +393,271 @@ No trace gap among the upstream items (python3 scripts/validate_traceability.py 
 | F5 | low | fixed: docs/history/implementation_log.md: RC-3's and RC-4's four runs are "Calls 77 to 80", as `benchmark_results_B.jsonl` sums (76 calls in its first 72 rows, 80 in all) and the decision page says. Searched: the decision page, the benchmark report and STATUS state 76 before round 2 and 80 of 80 after, and needed no change |
 | F6 | low | rejected: the three changes apply rules the owner approved through checks that existed before them, so R2-4's route for a finding "that only a new or wider mechanism would answer" does not apply. (1) Before round 2 the launcher already refused a recheck before any call when an answer was one "the severity does not allow" (4.1's author row, docs/slices/agentic-sdlc-poc/slice_4_decisions.md:196, which also put the rule in one function for the launcher and the record check); R2-1 changed which answers a severity allows (`ALLOWED_ANSWERS`, scripts/run_independent_review.py:1291-1292), so that refusal now applies it, and R2-2's and R2-3's rules sit in the same function (scripts/run_independent_review.py:1659-1662 before the call, scripts/check_review_records.py:183 after), which removed the second copy that `8a82388` had added to the record check (`_deferral_problem`): one home instead of two. (2) The `cannot determine` row (issue 24) makes R2-3's own words writable, a rejection the recheck does not accept "goes to the owner (`owner:`) or is fixed" (docs/slices/agentic-sdlc-poc/slice_4_decisions.md:338): the record check refused any row for an ID the report does not hold, so such a record could never turn green; the choice was changed (scripts/run_independent_review.py:1332-1344) and `UNDETERMINED_ANSWERS` is R2-3's two words, not a new answer kind. (3) Issue 25 applies the existing answer rules to answers the check had skipped, those to a report without findings (scripts/check_review_records.py:175-184), without which an `owner:` row with no link could settle a rejection. Each is shown to the owner: the author rows at docs/slices/agentic-sdlc-poc/slice_4_decisions.md:249-250 and discovered issues 24 to 26 at docs/slices/agentic-sdlc-poc/slice_4_decisions.md:483-485 |
 | F7 | low | fixed: docs/slices/agentic-sdlc-poc/slice_4_decisions.md: discovered issue 35 records that the record check does not read records that predate slice 4.3's record blocks (no `record_blocks` in their attempts) and that two of them hold answers the round-2 rules refuse: 4.1's R1-3, a medium finding answered `deferred: #42`, and, found by a probe of every answer row under `docs/slices/`, 4.4's plan review A6, a medium finding rejected without a checkable fact in two rounds. Frozen records, no change: R2-1 and R2-2 apply from round 2. The overclaim "over every record" was the task text's; the repository's wording, "every record the check reads (23 attempts, 107 answer rows)", is accurate and kept |
+
+## Round 2
+
+### Attempt round-2/c1/r2/A/1
+
+Reviewer `A`: `claude-opus-5-5`, effort medium, mode recheck, commit `fe87b4e79ec9`, base `3347754ef038`.
+
+Status: completed; approvable within the threat model: yes.
+
+#### Prompt
+
+```markdown
+# Recheck of round 2 of slice 4, review round 2
+
+The intent is unchanged from round 1: the owner's round 2 (R2-1 to R2-11 on the decision page
+`docs/slices/agentic-sdlc-poc/slice_4_decisions.md`, section "Round 2: the owner's findings and the fixes
+(2026-11-14)"). Round 1's report and the author's answers are below; the fixes are what the reviewed commit adds after
+`d3115fd`, round 1's commit. Among them: the stage-table test's control constant follows the rewritten exit cell;
+the review loop handles a medium finding as a high one and states the end of a review once; the quote check counts a
+quote only from a file the recheck read, holding a whole line, with at least one from a file the rejection cites (the
+prompt's quote rule in its own wording commit, `99eee9e`); the confirmer of R2-9's new matches goes to the owner
+(decision concern 16); the call numbers; the frozen records that predate the record blocks, recorded as discovered
+issues.
+
+One fix is not an answer to a finding: while fixing round 1, the fixer found that `scripts/review_brief.py` refused
+to build since `f884421`, because it applied today's answer rules to attempts logged before slice 4.3 (4.1's medium
+finding answered `deferred: #42`). `5245997` makes the brief check those attempts for completeness only (each finding
+has exactly one row); the record check still applies the full answer rules to every attempt it reads. It is part of
+the change under review like the fixes.
+
+The author's claims to verify: every local gate passes on the reviewed commit (`make qa-quality`, `make tooling-test`
+with a shellcheck on `PATH`, `make lint`, `make unit-guard-check`, `make gate-consistency`), and the brief builds from
+this branch's records (`python3 scripts/review_brief.py --base origin/poc/agentic-sdlc`).
+```
+
+#### Evidence
+
+```text
+Each numbered entry must be listed under `accounted`.
+
+EV1: scripts/check_docs.py: changed lines not run: 215; branches not taken: 214->215 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV2: scripts/check_review_records.py: changed lines not run: 48, 227-230, 234; branches not taken: 47->48, 228->229, 228->230, 233->234 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV3: scripts/review_brief.py: changed lines not run: 43, 301, 305; branches not taken: 42->43, 233->226, 304->305 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV4: scripts/review_inputs.py: changed lines not run: 303; branches not taken: 302->303 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV5: scripts/review_records.py: changed lines not run: none; branches not taken: 189->191, 228->230 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV6: scripts/run_independent_review.py: changed lines not run: 215, 1031, 1089-1090; branches not taken: 1030->1031, 1691->1693 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV7: scripts/run_review_benchmark.py: changed lines not run: 353, 400, 725, 969, 1275, 1807-1808; branches not taken: 352->353, 356->355, 399->400, 491->495, 724->725, 894->891, 900->894, 967->969, 1017->1020, 1256->1254, 1806->1807 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV8: no CI run for this commit (GET https://api.github.com/repos/<owner>/<repo>/actions/runs?head_sha=<commit> (no token))
+EV9: process file changed since the reviewed round: AGENTS.md, +8 -6 lines (d3115fddd542 to fe87b4e79ec9; git diff --numstat --no-renames <earlier attempt's commit> <commit>)
+EV10: process file changed since the reviewed round: scripts/review_brief.py, +6 -4 lines (d3115fddd542 to fe87b4e79ec9; git diff --numstat --no-renames <earlier attempt's commit> <commit>)
+EV11: process file changed since the reviewed round: scripts/run_independent_review.py, +48 -22 lines (d3115fddd542 to fe87b4e79ec9; git diff --numstat --no-renames <earlier attempt's commit> <commit>)
+
+Every changed line and branch run by the tooling tests: scripts/lint_changed_files.py.
+A script the tooling tests run only as a subprocess shows as not run here, because coverage is measured in-process (issue #44).
+No trace gap among the upstream items (python3 scripts/validate_traceability.py --mode pr --base <merge-base> --report-json <scratch>/trace.json --design-report-json <scratch>/design.json).
+```
+
+#### Report
+
+```json
+{
+  "accounted": [
+    {
+      "item": "F1",
+      "note": "DISCOVERY_EXIT (test_stage_rules.py:35-36) now matches AGENTS.md:189 word for word, so the empty-cell control's replace has something to match again. Discovered issue 34, the DPL-013 line, the implementation log and STATUS record it. The fix adds no mechanism.",
+      "opened": [
+        "tests/tools/test_stage_rules.py",
+        "AGENTS.md",
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+        "docs/delivery_problem_log.md",
+        "docs/history/implementation_log.md",
+        "docs/STATUS.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "F2",
+      "note": "AGENTS.md:90-92 now says \"Rounds continue until the review ends (below)\", and AGENTS.md:119-120 is the one definition of the end. The extra clause is removed, so no condition was added. The decision page row (line 246), issue 33 and the log agree.",
+      "opened": [
+        "AGENTS.md",
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+        "docs/history/implementation_log.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "F3",
+      "note": "_quote_place_problem (run_independent_review.py:896-914) now refuses three things: a file not in `read`, which is paths_read; a quote without one whole non-blank line of the window; and, in quote_problems:884-885, a rejection whose quotes miss every cited file. The cited files come from must_read via recheck_accounting:1390-1399. The tests at test_run_independent_review.py:1521-1567 cover an unread file, quotes only from uncited files, one word and parts of two lines, each with a positive twin. This tightens R2-7's approved check to what R2-7 says (\"the lines its decision rests on\"). It does not add a new mechanism. One residual: a short whole line such as `)` still counts. That is acceptable.",
+      "opened": [
+        "scripts/run_independent_review.py",
+        "tests/tools/test_run_independent_review.py",
+        "AGENTS.md",
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+        "docs/history/implementation_log.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "F4",
+      "note": "The answer is owner: with a link. Decision concern 16 (slice_4_decisions.md:450) puts the confirmer change to the owner with options and a recommendation, and the author row at line 254 points to it. This is the right route for a deviation from \"DC3 keep\".",
+      "opened": [
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "F5",
+      "note": "implementation_log.md:41-42 now reads \"Calls 77 to 80 of the hard stop of 80\". That matches the decision page (line 394) and the 80-call sum of the results file.",
+      "opened": [
+        "docs/history/implementation_log.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "F6",
+      "note": "The rejection's facts check out. Since 4.1 the launcher already refused, before the call, answers \"the severity does not allow\" (line 196), so R2-1's ALLOWED_ANSWERS reaches it through an existing refusal. The record check calls the same function (check_review_records.py:183), so the rules have one home, not two. UNDETERMINED_ANSWERS makes R2-3's \"fixed or owner\" writable instead of adding a new answer kind. The owner sees all three changes in author rows 249-250 and issues 24-26. The finding was low, so the author's choice also stands.",
+      "opened": [
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+        "scripts/run_independent_review.py",
+        "scripts/check_review_records.py"
+      ],
+      "quotes": [
+        {
+          "end_line": 196,
+          "file": "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+          "line": 196,
+          "text": "| 4.1 | A recheck is refused before any call when its answers table does not answer the earlier report: a finding without a row, a row for an unknown ID, a changed severity, an answer the severity does not allow | Review round 1 (R1-4): the plan put this check only in 4.3's record check, so rechecks run before 4.3 exists could drop a finding. One function holds the rule, and 4.3's check will use it too |"
+        },
+        {
+          "end_line": 1292,
+          "file": "scripts/run_independent_review.py",
+          "line": 1291,
+          "text": "FIXED_SEVERITIES = (\"blocking\", \"high\", \"medium\")\nALLOWED_ANSWERS = {**{severity: (\"fixed\", \"rejected\", \"owner\") for severity in FIXED_SEVERITIES}, \"low\": ANSWER_WORDS}"
+        },
+        {
+          "end_line": 183,
+          "file": "scripts/check_review_records.py",
+          "line": 183,
+          "text": "    problems = [*launcher.answer_rule_problems(report, rows, earlier), *_unsettled_rejections(attempt, rows, report, ctx)]"
+        }
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "F7",
+      "note": "Discovered issue 35 (slice_4_decisions.md:494) records that records predating 4.3 are not read by the record check. It names 4.1's R1-3 and 4.4's A6, keeps the accurate wording \"every record the check reads\", and leaves the frozen records unchanged. The brief fix that came out of this (review_brief.py:131-148, checking those attempts for completeness only) does what its docstring says.",
+      "opened": [
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+        "scripts/review_brief.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "EV1",
+      "note": "check_docs.py:215 is the fallback when check_review_records.py cannot be loaded, and it fails the gate. It is the same path accepted in round 1.",
+      "opened": [],
+      "searched": [
+        "scripts/check_docs.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV2",
+      "note": "Line 48 is the launcher-load failure, and lines 227-234 are the module's main and __main__ guard. docs-check reaches the rules in-process, and tests cover the rule paths.",
+      "opened": [
+        "scripts/check_review_records.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV3",
+      "note": "Lines 43, 301 and 305 are the loader failure, main's return and the __main__ guard. Branch 233->226 is a non-rejection accounted entry. The 5245997 fix (integrity_problems) is covered by test_a_record_from_before_4_3_is_checked_for_completeness_only, as the log says.",
+      "opened": [
+        "scripts/review_brief.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV4",
+      "note": "review_inputs.py:303 is _link_user_site's early return when the interpreter has no user site directory. It depends on the environment, is unchanged in substance since round 1, and is no security decision.",
+      "opened": [],
+      "searched": [
+        "scripts/review_inputs.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV5",
+      "note": "No changed lines go unrun. The two branches not taken are in the record parser and predate round 2.",
+      "opened": [],
+      "searched": [
+        "scripts/review_records.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV6",
+      "note": "Lines 1031 and 1089-1090 are the defensive paths I read: a log without a record, and a ValueError during recovery. They are round 1's 1013 and 1071-1072, shifted by the F3 lines. Line 215 is the module-load failure, and 1691->1693 is the HOME check. The new quote paths are covered by the tests at lines 1521-1567.",
+      "opened": [
+        "scripts/run_independent_review.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV7",
+      "note": "The benchmark runner's uncovered lines are defensive skip paths, unchanged since round 1. The runner is not a gate.",
+      "opened": [],
+      "searched": [
+        "scripts/run_review_benchmark.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV8",
+      "note": "The branch is not pushed (implementation_log.md:99), so CI runs on the PR. See F8: the local validation names 1f224d1, not the reviewed commit.",
+      "opened": [
+        "docs/history/implementation_log.md"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV9",
+      "note": "The AGENTS.md change is F2's fix, which removes a clause at lines 90-92, plus F3's quote wording at lines 361-364. It adds no mechanism.",
+      "opened": [
+        "AGENTS.md"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV10",
+      "note": "The review_brief.py change is 5245997. integrity_problems now checks pre-4.3 attempts for row completeness only, which narrows a check rather than adding one.",
+      "opened": [
+        "scripts/review_brief.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV11",
+      "note": "The run_independent_review.py change is F3's tightening of R2-7's existing quote check (the read file, a whole line, the cited file) and its QUOTE_RULE wording. It adds no new gate or check kind.",
+      "opened": [
+        "scripts/run_independent_review.py"
+      ],
+      "status": "explained"
+    }
+  ],
+  "findings": [
+    {
+      "evidence": "implementation_log.md:93 says \"Validation, local, on `1f224d1` (after the brief's fix; first on `03ffc55` \u2026)\". STATUS.md:80 names `1f224d1`. delivery_problem_log.md:539-540 says \"fixed, and every gate rerun on the final commit\". slice_4_decisions.md:493 (issue 34) says \"The gates were rerun on the final commit\". The reviewed commit is fe87b4e79ec9.",
+      "failure_scenario": "Suppose a commit after `1f224d1` changes a file that a tooling test pins, as `eb46b58` did. CI's required job then goes red, while the log and DPL-013 claim every gate passed on the final commit. If `fe87b4e` only adds record text, the claim should name the commit it was actually checked on.",
+      "file": "docs/history/implementation_log.md",
+      "id": "F8",
+      "kind": "defect",
+      "line": 93,
+      "origin_stage": "implementation",
+      "problem": "The last validation the records name ran on `1f224d1`, but the commit under review is `fe87b4e`. DPL-013 and discovered issue 34 both say \"every gate rerun on the final commit\", yet no record names `fe87b4e`. From the frozen copy I cannot tell what changed between `1f224d1` and `fe87b4e`. EV9 to EV11 only bound the process-file changes from `d3115fd` onwards. So the claim is not shown to hold for the reviewed commit. That is the gap F1 exposed.",
+      "severity": "low"
+    }
+  ],
+  "verdict": "yes"
+}
+```
+
+
+#### Answers to round-2/c1/r2/A/1
+
+| Finding | Severity | Answer |
+| --- | --- | --- |
+| F8 | low | fixed: docs/delivery_problem_log.md, docs/slices/agentic-sdlc-poc/slice_4_decisions.md: DPL-013 and discovered issue 34 no longer say the gates were rerun "on the final commit"; they name the commit they ran on, `1f224d1`, and say that the commits after it change only `docs/` (`git diff --name-only 1f224d1 fe87b4e` lists `docs/STATUS.md` and `docs/history/implementation_log.md`). The implementation log and STATUS already name `1f224d1` |
