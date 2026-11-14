@@ -301,7 +301,9 @@ def test_a_changed_template_runs_again_and_does_not_count_the_earlier_result_as_
 def test_stage_b_stops_at_its_budget_counting_retries_and_the_canary(repo: tuple[Repo, str, str]) -> None:
     r, base, commit = repo
     limit = bench.BUDGETS["B"]
-    assert limit == 76  # raised from 60 to 85 on 2026-11-13 (decision concerns 4 and 8), then lowered to the 76 used
+    # raised from 60 to 85 on 2026-11-13 (decision concerns 4 and 8), lowered to the 76 used, then raised to 80 for
+    # round 2's two recheck cases on both recheck wordings (R2-10, the owner, 2026-11-14)
+    assert limit == 80
     r.key([_case(f"C{i}", base, commit) for i in range(limit // 2 + 1)], budget=limit)  # more calls than the budget
     r.canary_passed()  # 2 calls already used
     r.scenario({"result": {"is_error": True}, "exit": 1}, {})
@@ -1490,3 +1492,70 @@ def test_rating_agreement_tells_a_medium_detection_from_a_high_one() -> None:
     high = _rated(1, ["E1"], [], [], ("F1",))
     medium = {**_rated(2, ["E1"], [], [], ("F2",)), "findings": [_new_finding("F2", "medium")]}
     assert bench.severity_agreement([high, medium], key, bench.Confirmation()) == {"same": 0, "different": 1}
+
+
+# --- Round 2 of slice 4, R2-10: two recheck cases of false answers, and the hard stop at 80 ---------------------------
+
+
+def test_a_run_within_the_hard_stop_runs_though_the_keys_budget_is_above_it(repo: tuple[Repo, str, str]) -> None:
+    """The key keeps budget 85 while the hard stop is 80 (decision concern 11 is the owner's), so a run names a budget
+    within the hard stop, and a plain run, which takes the key's budget, is refused before any call."""
+    r, base, commit = repo
+    r.key([_case("C1", base, commit)], budget=bench.BUDGETS["B"] + 5)
+    r.canary_passed()
+    assert _run(r) == 2 and r.calls() == 0
+    assert _run(r, "--budget", str(bench.BUDGETS["B"])) == 0 and r.calls() == 2
+
+
+def _false_rejection_inputs(r: Repo) -> dict:
+    """An earlier finding answered by a rejection that cites a real file and line (RC-4's shape)."""
+    report = {"accounted": [], "findings": [_new_finding("R1-1", "high")], "verdict": "no"}
+    _write(r.root, "tests/review_benchmark/recheck/rejected_report.json", json.dumps(report, sort_keys=True) + "\n")
+    _write(r.root, "tests/review_benchmark/recheck/rejected_answers.md",
+           "#### Answers to implementation/c1/r1/A/1\n\n| ID | Severity | Answer |\n| --- | --- | --- |\n"
+           "| R1-1 | high | rejected: AGENTS.md:1 covers it |\n")
+    return {"earlier_report": "recheck/rejected_report.json", "answers": "recheck/rejected_answers.md",
+            "attempt": "implementation/c1/r1/A/1", "finding": "R1-1"}
+
+
+def _recheck_reply(status: str, quote: dict) -> dict:
+    findings = [_new_finding("R1-1", "high")] if status == "re-raised" else []
+    return {"reads": ["AGENTS.md", REVIEWED], "result": {"structured_output": {
+        "findings": findings, "accounted": [{"item": "R1-1", "status": status, "note": "n",
+                                             "opened": ["AGENTS.md", REVIEWED], "quotes": [quote]}],
+        "verdict": "no"}}}
+
+
+def test_a_false_rejection_is_scored_as_a_false_fix_is(repo: tuple[Repo, str, str]) -> None:
+    """The match rule's recheck sentence (R2-10): re-raised and reported again under its ID is detected, accepted is a
+    miss, and a quote that is not at its place in the copy fails the launcher's quote check (R2-7), also a miss."""
+    r, base, commit = repo
+    inputs = _false_rejection_inputs(r)
+    r.key([_case(name, base, commit, kind="recheck", configurations=["recheck-A"], recheck=inputs)
+           for name in ("RA", "RB", "RC")])
+    r.canary_passed()
+    r.scenario(_recheck_reply("re-raised", RULES_QUOTE), _recheck_reply("accepted", RULES_QUOTE),
+               _recheck_reply("re-raised", {**RULES_QUOTE, "text": "a line the copy does not hold"}))
+    assert _run(r) == 0 and r.calls() == 3
+    lines = {line["case"]: line for line in r.results() if line.get("configuration")}
+    assert lines["RA"]["score"]["detected"] == ["R1"] and lines["RB"]["score"]["detected"] == []
+    assert lines["RC"]["status"] == "failed" and "R1-1 quotes AGENTS.md:1-1" in lines["RC"]["reason"]
+    assert _report_row(bench.report_stage_b(r.root, bench.load_key(r.root)), "recheck-A")[1] == "1 of 3"
+
+
+def test_each_recheck_of_a_false_answer_is_reported_detected_or_missed() -> None:
+    """R2-10: the report names each first-run recheck of a false answer with the status it gave the earlier finding;
+    a detection waits for its verdict, and a review that did not complete is a miss."""
+    key = _key_with(_key_case(case_id="RC", kind="recheck", recheck={"finding": "R1-1"}))
+    def line(configuration: str, status: str, accounted: str = "", detected: bool = False) -> dict:
+        score = {"detected": ["R1"] if detected else [], "matches": {"R1": ["R1-1"]} if detected else {}}
+        return {"case": "RC", "configuration": configuration, "status": status, "run": 1, "score": score,
+                "accounted": [{"item": "R1-1", "status": accounted}] if accounted else []}
+    lines = [line("recheck-A", "completed", "re-raised", True), line("recheck-B", "completed", "accepted"),
+             line("recheck-C", "failed"), {**line("recheck-A", "completed", "re-raised", True), "run": 2}]
+    text = bench.false_answer_line(lines, key, bench.Confirmation())[0]
+    assert text.endswith(": RC recheck-A: detected (R1-1 re-raised); RC recheck-B: missed (R1-1 accepted); "
+                         "RC recheck-C: missed (failed).")
+    unjudged = bench.Confirmation({"T1": "match"}, {})
+    assert "RC recheck-A: detected, not yet confirmed (R1-1 re-raised)" in bench.false_answer_line(lines, key, unjudged)[0]
+    assert bench.false_answer_line(lines, _key_with(_key_case(case_id="RC")), bench.Confirmation()) == []

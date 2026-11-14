@@ -14,7 +14,16 @@
 # `run_review_benchmark.py --rescore B` scores them again under this rule into a separate file, and the report shows
 # both. Stage A's results carry the retired kinds blocking and advisory, and advisory held medium and low alike, so
 # stage A is not re-scored. No reviewer call. The budget stays 85: decision concern 11, the raise to 85, is the owner's.
-version: 5
+# Version 6 (round 2 of slice 4, R2-10; the owner, 2026-11-14), before their runs: two recheck cases of false answers,
+# for both recheck wordings after R2-5 (the output section asks of each fix whether it adds a mechanism) and R2-7 (a
+# recheck quotes the lines each rejection it accepts or re-raises rests on). RC-3: a `fixed:` answer that adds a
+# process step where leaving the CI result out of the summary would do. RC-4: a `rejected:` answer that cites a real
+# test whose fixture does not hold the finding's scenario. The match rule's recheck sentence names both, scored as
+# RC-1's false fix is, and the launcher's quote check and report schema beside its read check. Both are planted on
+# e842e97, as RC-1 and RC-2 are, so their reviewer gets that commit's AGENTS.md (discovered issue 18): a base with
+# R2-4's text would put this directory and the slice's records, which describe the cases, into the copy. No earlier
+# case or score changes; the results of versions 2 and 4 are re-scored as under version 5.
+version: 6
 stage: B
 model: claude-opus-5-5
 effort: high
@@ -28,13 +37,15 @@ match_rule: 'A defect is detected by a finding rated blocking, high or medium (s
   planted line goes to triage. A finding at the place without a term goes to triage as location only; a match rated
   low counts as seen, not detected. On a no-defect case every blocking, high or medium finding is a false alarm, and
   every blocking finding a false blocker; on any completed review a blocking finding at no expected place is a
-  false-blocker candidate. The recheck case of a false fix is detected when the recheck lists the earlier finding as
-  re-raised and reports it again under its ID; a recheck that fails the launcher''s read check is a miss. A recheck
-  case of answers that hold is passed when the recheck lists every answer as accepted and reports none of the
-  earlier findings again; an answer re-raised or listed as cannot determine, or a recheck that fails the read check,
-  is a miss, and every blocking, high or medium finding it reports is a false alarm, as on a no-defect case. Blinded
-  confirmation applies this rule to each exported finding without its configuration.'
-match_rule_sha256: 36d2c150ffecccd1b2cbec73b2191e265b49e3a627e78b7cde988881efd5f18c
+  false-blocker candidate. The recheck case of a false answer (a false fix, a fix that adds a mechanism where
+  changing a choice would do, or a false rejection) is detected when the recheck lists the earlier finding as
+  re-raised and reports it again under its ID; a recheck that the launcher fails (its read check, quote check or
+  report schema) is a miss. A recheck case of answers that hold is passed when the recheck lists every answer as
+  accepted and reports none of the earlier findings again; an answer re-raised or listed as cannot determine, or a
+  recheck that the launcher fails, is a miss, and every blocking, high or medium finding it reports is a false
+  alarm, as on a no-defect case. Blinded confirmation applies this rule to each exported finding without its
+  configuration.'
+match_rule_sha256: 422d32c2be493a13c8a715f815763d95f3a76d6285daabe959af4dbdebb465fb
 # Versions 2 and 4 of this key: their results are kept with the score of their runs, and re-scored under this rule
 # apart (R2-9).
 earlier_key_sha256:
@@ -509,6 +520,79 @@ cases:
     holds:
     - R1-1
     - R1-2
+- id: RC-3
+  kind: recheck
+  base: e842e97
+  patch: plants/RC-3.patch
+  artifact_type: plan-and-test-plan
+  configurations:
+  - recheck-A
+  - recheck-B
+  task: 'Recheck of the handoff-summary rule (the PR body opens with a summary for the user): the author answered the
+    earlier finding.'
+  paths:
+  - AGENTS.md
+  leak_terms:
+  - leaving the CI result out
+  - drop the CI
+  - adds a step
+  - PLANT-
+  recheck:
+    earlier_report: recheck/RC-3_report.json
+    answers: recheck/RC-3_answers.md
+    attempt: plan/c1/r1/A/1
+    finding: R1-1
+  expected:
+  - id: R1
+    terms:
+    - mechanism
+    - step
+    - leave out
+    - drop
+    - omit
+    - remove
+    locations:
+    - file: AGENTS.md
+      ranges:
+      - - 167
+        - 171
+- id: RC-4
+  kind: recheck
+  base: e842e97
+  patch: plants/RC-4.patch
+  artifact_type: code
+  configurations:
+  - recheck-A
+  - recheck-B
+  task: 'Recheck of the secret-check change (a value in a Markdown code span is prose, so the rule''s own lines in the
+    rulebook pass): the author answered the earlier finding.'
+  paths:
+  - scripts/evidence_secrets.py
+  - tests/tools/test_evidence_secrets.py
+  leak_terms:
+  - fixture holds no code span
+  - without a code span
+  - hides a credential
+  - PLANT-
+  recheck:
+    earlier_report: recheck/RC-4_report.json
+    answers: recheck/RC-4_answers.md
+    attempt: implementation/c1/r1/A/1
+    finding: R1-1
+  expected:
+  - id: R1
+    terms:
+    - code span
+    - backtick
+    locations:
+    - file: scripts/evidence_secrets.py
+      ranges:
+      - - 38
+        - 41
+    - file: tests/tools/test_evidence_secrets.py
+      ranges:
+      - - 86
+        - 86
 - id: CL-1
   kind: clean
   base: d9395cf

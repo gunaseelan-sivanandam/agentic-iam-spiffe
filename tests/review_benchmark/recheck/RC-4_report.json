@@ -1,0 +1,17 @@
+{
+  "accounted": [],
+  "findings": [
+    {
+      "evidence": "scripts/evidence_secrets.py:41 adds a backtick followed by `.*` to PLACEHOLDER. CREDENTIAL_LINE (scripts/evidence_secrets.py:34-37) takes the value from the first character after the header name and the optional scheme that is not a space or a quote, so a backtick starts the value. A 32-character hex token is shorter than BASE64_RUN's 40 characters, so no other rule of scan_text finds it.",
+      "failure_scenario": "A test writes the header it sent into its evidence as Markdown, Authorization: `Bearer <token>` with a 32-character token. `make qa-evidence` finds nothing, and the publication set is uploaded with the credential.",
+      "file": "scripts/evidence_secrets.py",
+      "id": "R1-1",
+      "kind": "defect",
+      "line": 41,
+      "origin_stage": "implementation",
+      "problem": "The new code-span alternative of PLACEHOLDER accepts every value that starts with a backtick, so a real credential written in a code span passes the check. In Authorization: `Bearer <token>` the scheme group of CREDENTIAL_LINE cannot start at the backtick, so the value it takes is the backtick and the word Bearer, which the placeholder now accepts, and the token after it is never examined; the same holds for Authorization: Bearer `<token>`.",
+      "severity": "high"
+    }
+  ],
+  "verdict": "no"
+}

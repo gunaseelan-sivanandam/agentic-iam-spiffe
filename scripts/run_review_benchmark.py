@@ -14,7 +14,7 @@ both with the stage checklist of the case's artifact type, and two wordings of t
 
 Usage (from the repository root):
     python3 scripts/run_review_benchmark.py --dry-run                       # leak search only, no reviewer call
-    python3 scripts/run_review_benchmark.py --run [--budget N]              # stage B, at most 76 reviewer calls (spent)
+    python3 scripts/run_review_benchmark.py --run --budget N                # stage B, at most 80 reviewer calls
     python3 scripts/run_review_benchmark.py --run --case <case>             # only the named cases (or --dry-run)
     python3 scripts/run_review_benchmark.py --run --configuration <name>    # only the named configurations
     python3 scripts/run_review_benchmark.py --report --stage B [--stage A]  # one stage, or two compared
@@ -59,10 +59,11 @@ RESULTS = {"A": Path("docs/slices/agentic-sdlc-poc/benchmark_results.jsonl"),
 # S45-D1: reviewer calls per stage, counting the canary, failed attempts and retries. Stage B's 60 were raised to 85
 # on 2026-11-13: the owner approved decision concern 8's measurement beyond the 60 ("complete it and do not wait for
 # my approval"); it needs a canary for CLI 2.1.323, which RC-2's two runs share. 76 were used (57 before, the canary 2,
-# RC-2 2, the measurement 15), and the hard stop is lowered to them, so no further stage-B call runs without a new
-# decision (decision page, decision concern 11). The key keeps `budget: 85`, which identifies version 4's results;
-# `run_benchmark` refuses a key budget above this one, so every stage-B run is refused before any call.
-BUDGETS = {"A": 26, "B": 76}
+# RC-2 2, the measurement 15), and the hard stop was lowered to them (decision page, decision concern 11). Round 2 of
+# slice 4 (the owner, 2026-11-14), R2-10, raises it to 80 for two recheck cases on both recheck wordings, 4 calls. The
+# key keeps `budget: 85`, since decision concern 11 is the owner's; a run's budget above the hard stop is refused, so
+# a run names `--budget 80`, and a plain `--run`, which takes the key's 85, is refused before any call.
+BUDGETS = {"A": 26, "B": 80}
 BENCH_OUT = Path("docs/slices/poc-4-5-benchmark")
 EXPORT_FILE = BENCH_OUT / "confirmation_export.jsonl"
 EXPORT_KEY_FILE = BENCH_OUT / "confirmation_key.jsonl"
@@ -995,8 +996,7 @@ def run_benchmark(repo: Path, key: AnswerKey, budget_limit: int, repeats: list[s
                   selection: Selection = Selection()) -> list[dict[str, Any]]:
     if key.stage == "A":
         raise BenchmarkRefusedError("stage A is closed; its results stay as committed")
-    check_budget(budget_limit, key.stage)
-    check_budget(key.budget, key.stage)
+    check_budget(budget_limit, key.stage)  # the key's own budget may be above the hard stop (decision concern 11)
     check_match_rule(key)
     check_lists_commit(key)
     check_repeats(key, repeats or [])
@@ -1524,6 +1524,31 @@ def holds_line(lines: list[dict[str, Any]], key: AnswerKey) -> list[str]:
             "that did not complete is a miss): " + ("; ".join(outcomes) or "none run") + "."]
 
 
+def false_answer_line(lines: list[dict[str, Any]], key: AnswerKey, confirmation: Confirmation) -> list[str]:
+    """R2-10: each first-run recheck of a case whose answer is false (RC-1's false fix, a fix that adds a mechanism, a
+    false rejection), detected or missed by the confirmed verdicts, with the status the recheck gave the earlier
+    finding; a review that did not complete is a miss. No line when the key has no such case."""
+    cases = {c.case_id: c for c in key.cases if c.kind == "recheck"}
+    if not cases:
+        return []
+    outcomes = []
+    for line in lines:
+        case = cases.get(line.get("case", ""))
+        if case is None or line.get("run", 1) != 1 or line.get("status") in ("refused", *UNFINISHED):
+            continue
+        target = case.recheck.get("finding", "")
+        if line.get("status") != "completed":
+            outcomes.append(f"{line['case']} {line.get('configuration')}: missed ({line.get('status')})")
+            continue
+        status = {e.get("item"): e.get("status") for e in line.get("accounted", [])}.get(target, "not accounted")
+        word = ("detected, not yet confirmed" if confirmation.unjudged(line)
+                else "detected" if confirmation.confirmed(line) else "missed")
+        outcomes.append(f"{line['case']} {line.get('configuration')}: {word} ({target} {status})")
+    return ["Rechecks of false answers (detected when the recheck lists the earlier finding as re-raised and reports it "
+            "again under its ID, by the confirmed verdicts; a review that did not complete is a miss): "
+            + ("; ".join(outcomes) or "none run") + "."]
+
+
 def measurement_rows(lines: list[dict[str, Any]], key: AnswerKey, measured: Confirmation) -> list[str]:
     """Decision concern 8: the measured setup against its baseline's first runs, both by the second blinded export's
     verdicts (the two setups mixed, so the baseline is re-confirmed), with each setup's detected cases and its blocking
@@ -1666,7 +1691,8 @@ def report_stage_b(repo: Path, key: AnswerKey) -> str:
         f"Canary: `{json.dumps(canaries)}`. A canary is valid when its twin, without the launcher's flags, followed the "
         "planted CLAUDE.md and ran the planted hook (S45-D9); one whose twin ran only the hook shows that the flags "
         "keep settings out, not that they keep instruction files out.",
-        *holds_line(current.lines, key), question_line(lines), agreement(repo), "", SIZE_NOTE, "",
+        *false_answer_line(current.lines, key, current.confirmation), *holds_line(current.lines, key),
+        question_line(lines), agreement(repo), "", SIZE_NOTE, "",
         "Per-review rows: the automatic first pass of each review, under the rule of its run, before confirmation; the "
         "counts above are confirmed.", "", *report_rows(lines), "", COLUMN_NOTE])
 
