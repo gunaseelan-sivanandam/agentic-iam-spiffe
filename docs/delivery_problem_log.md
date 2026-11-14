@@ -517,8 +517,8 @@ Why review did not catch it:
 
 ### Actions
 - Corrective: the benchmark is re-scored under the new rule (R2-9: a match rated medium is detected, the earlier
-  results re-scored apart and the new matches confirmed blind): `short+list` 9, `open+list` 8 and `open-B+list` 8 of
-  11 defect cases, against 6, 7 and 6 under the rule of the runs.
+  results re-scored apart and the new matches confirmed blind, by a fresh session: decision concern 16):
+  `short+list` 9, `open+list` 8 and `open-B+list` 8 of 11 defect cases, against 6, 7 and 6 under the rule of the runs.
 - Preventive (round 2 of slice 4, implemented on the slice 4 branch; the decision page names each one's tests):
   - R2-1: blocking, high and medium findings are fixed; only a low finding may be deferred (`AGENTS.md`, Review
     findings and Review loop; `ALLOWED_ANSWERS` in `scripts/run_independent_review.py`, which the launcher applies

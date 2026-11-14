@@ -55,8 +55,9 @@ completed defect-case review and RC-4's two re-raises, shuffled under fresh toke
 fresh session, given a directory holding only a copy of that export and the committed match rule, judged them
 (`rescore_confirmation.jsonl`): 15 match. It never saw the token map, the results or the prompts; the author started
 it, as for decision concern 8's measurement (decision concern 3 keeps the author as the confirmer; this follows the
-measurement's practice). Every new detection below rests on such a verdict. Cost and minutes include the failed
-reviews.
+measurement's practice, and whether it stands is the owner's decision concern 16 on the
+[decision page](../agentic-sdlc-poc/slice_4_decisions.md)). Every new detection below rests on such a verdict. Cost and
+minutes include the failed reviews.
 
 Stage A's results carry the retired kinds `blocking` and `advisory`, and `advisory` held medium and low alike, so they
 cannot be re-scored: stage A stays as it was, its kind `blocking` the only detection. False alarms follow the rule's
