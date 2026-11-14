@@ -38,7 +38,7 @@ is first); every heading carries its date.
   of 62); the 146 findings no earlier export held were judged blind by a fresh session (15 match); stage A is not
   re-scored. First runs, blocking or high against R2-9: `short+list` 6 and 9 of 11, `open+list` 7 and 8, `open-B+list`
   6 and 8. RC-3 (a `fixed:` answer that adds a step) and RC-4 (a rejection citing a test that does not cover the
-  scenario) ran on `recheck-A` and `recheck-B`, base `e842e97`: RC-4 re-raised by both, RC-3 accepted by both. Calls 76
+  scenario) ran on `recheck-A` and `recheck-B`, base `e842e97`: RC-4 re-raised by both, RC-3 accepted by both. Calls 77
   to 80 of the hard stop of 80, under a pinned install of CLI 2.1.323 in a scratch folder (the installed CLI had
   updated itself to 2.1.325, which has no canary). The key keeps `budget: 85`; the runner checks the run's `--budget`
   against the hard stop. Report: [`benchmark_report.md`](../slices/poc-4-5-benchmark/benchmark_report.md).
