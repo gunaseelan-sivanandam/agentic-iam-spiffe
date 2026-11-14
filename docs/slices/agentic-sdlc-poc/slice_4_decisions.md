@@ -526,13 +526,14 @@ ran every check it could without Docker. What the next user would trip on, with 
 
 ### Decision brief
 
-Built by `scripts/review_brief.py` from the review units this PR adds (head `e266c154e1ef`, merge-base `3347754ef038`). The plans and records are worth reading where this brief points.
+Built by `scripts/review_brief.py` from the review units this PR adds (head `05c08944f42d`, merge-base `3347754ef038`). The plans and records are worth reading where this brief points.
 
 | Unit | Last verdict | Rounds | Blocking | High | Medium | Low | Open |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `agentic-sdlc-poc` `final` | yes | 2 | 0 | 2 | 5 | 3 | nothing open |
 | `agentic-sdlc-poc` `growth` | yes | 2 | 0 | 1 | 5 | 2 | nothing open |
 | `agentic-sdlc-poc` `owner-decisions` | yes | 2 | 1 | 2 | 5 | 0 | 2 for the owner |
+| `agentic-sdlc-poc` `round-2` | yes | 2 | 0 | 2 | 2 | 4 | 1 for the owner |
 | `poc-4-1-review-prompts` `implementation` | yes | 2 | 0 | 2 | 6 | 5 | 1 for the owner |
 | `poc-4-2-review-inputs` `implementation` | yes | 2 | 0 | 3 | 4 | 4 | nothing open |
 | `poc-4-3-review-records` `implementation` | yes | 2 | 2 | 1 | 3 | 4 | 1 for the owner |
@@ -545,6 +546,7 @@ Built by `scripts/review_brief.py` from the review units this PR adds (head `e26
 **Answered `owner:`**
 
 - `agentic-sdlc-poc` `owner-decisions` F2 (high): owner: docs/slices/agentic-sdlc-poc/slice_4_decisions.md (decision 7 under "Decisions to make"): adding a list item needs the owner's approval (`AGENTS.md`, Stage checklists), and the list holds its 12 questions; the proposal is a Blocks bullet in `docs/review_checklists/plan-and-test-plan.md` for a plan that claims a small slice while a condition does not hold. Until the owner decides, the open mandate and `AGENTS.md` (Small slices, which the reviewer receives) are the only check
+- `agentic-sdlc-poc` `round-2` F4 (medium): owner: docs/slices/agentic-sdlc-poc/slice_4_decisions.md (decision concern 16): the owner decides whether the fresh session's blind verdicts on the third export stand for R2-9's 15 new matches, since the owner kept the author as the blinded confirmer ("DC3 keep"). Options: accept them, as for decision concern 8's measurement; the author confirms the 146 exported findings, though less blind; or report the 15 as unconfirmed. Recommendation: accept, since a session that opened only the export and the match rule is blinder than the author, and decision 2's recommendation does not change under either rule. The author's decision row on the third export, the open items of round 2, the benchmark report's sentence and DPL-013's corrective action point to it
 - `poc-4-6-stage-rules` `implementation` F4 (medium): owner: docs/slices/agentic-sdlc-poc/slice_4_decisions.md: decision 4 under "Decisions to make" asks the owner to remove the personal copy, which takes precedence over the repository's while it exists; removing a file from the owner's own folder is the owner's to do
 
 **Decision concerns**
@@ -564,24 +566,28 @@ None.
 
 None.
 
-**Blocking and high findings answered `rejected`**
+**Blocking, high and medium findings answered `rejected`**
 
 None.
 
 **Where findings started** (origin stage of each finding, against the review that found it: its `--stage` lists, or its unit when it had none)
 
-| Origin | critique | final | growth | implementation | mechanics | owner-decisions | report |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| architecture and interfaces | 0 | 0 | 0 | 3 | 2 | 1 | 0 |
-| discovery | 5 | 0 | 0 | 8 | 0 | 0 | 0 |
-| implementation | 14 | 9 | 7 | 32 | 14 | 6 | 9 |
-| tests first | 3 | 1 | 1 | 10 | 4 | 1 | 1 |
+| Origin | critique | final | growth | implementation | mechanics | owner-decisions | report | round-2 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| architecture and interfaces | 0 | 0 | 0 | 3 | 2 | 1 | 0 | 0 |
+| discovery | 5 | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| implementation | 14 | 9 | 7 | 32 | 14 | 6 | 9 | 8 |
+| tests first | 3 | 1 | 1 | 10 | 4 | 1 | 1 | 0 |
 
 **The test-plan questions.** Slice 4's implementation reviews ran before the rule that they answer the three
 test-plan questions as findings (2026-11-13), so no finding is mapped to a question here; every finding is in its
 unit's record.
+Round 2's unit `round-2` reviewed against the round's table on this page, which has no test plan; by the
+questions' content: question 1 (a wrong failure that would still pass a new or changed test): F1, a negative
+control that planted nothing, and F3, a quote check a recheck could pass without reading what it quotes; question 2
+(a key, socket or secret reaching a non-holder): no finding; question 3 (purpose comments and names): no finding.
 
-Round 2's review unit `round-2` is reviewed next; the brief above is rebuilt after it.
+Round 2's review unit `round-2` ended after round 2, and the brief above was rebuilt after it (head `05c0894`).
 
 ## How the owner can check the work
 
