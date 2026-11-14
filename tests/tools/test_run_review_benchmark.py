@@ -1477,6 +1477,8 @@ def test_the_third_export_holds_only_findings_no_earlier_export_holds_and_confir
     row = _report_row(report, "open+list")
     assert row[1] == "0 of 1" and row[_header(report).index("Not yet confirmed")] == "1"
     assert bench.main(["--export-rescore"], repo=r.root) == 0
+    row = _report_row(bench.report_stage_b(r.root, bench.load_key(r.root)), "open+list")
+    assert row[_header(report).index("Not yet confirmed")] == "1"  # exported, not yet judged
     text = (r.root / bench.RESCORE_EXPORT_FILE).read_text()
     assert [(e["token"], e["finding"]["id"]) for e in map(json.loads, text.splitlines())] == [("M001", "X1")]
     assert "open+list" not in text and "prompt_identity" not in text

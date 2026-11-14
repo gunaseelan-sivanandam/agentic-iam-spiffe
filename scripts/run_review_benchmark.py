@@ -1375,12 +1375,14 @@ class Confirmation:
             for fid in matches.get(eid, []))}
 
     def unjudged(self, line: dict[str, Any]) -> int:
-        """Detections whose matching findings have no token: the review came after the export."""
+        """Detections none of whose matching findings has a verdict: the review came after the export, or its export
+        has not been judged yet."""
         if not self.verdicts:
             return 0
         matches, run = line.get("score", {}).get("matches", {}), line.get("run", 1)
         return sum(1 for fids in matches.values()
-                   if not any((line["case"], line["configuration"], run, fid) in self.tokens for fid in fids))
+                   if not any(self.tokens.get((line["case"], line["configuration"], run, fid)) in self.verdicts
+                              for fid in fids))
 
 
 def _count_line(c: ConfigurationCounts, line: dict[str, Any], case: Case, confirmation: Confirmation) -> None:
