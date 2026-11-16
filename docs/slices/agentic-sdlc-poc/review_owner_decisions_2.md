@@ -245,3 +245,231 @@ No trace gap among the upstream items (python3 scripts/validate_traceability.py 
 | F4 | medium | owner: docs/slices/agentic-sdlc-poc/slice_4_decisions.md (decision concern 17): read literally, "a fix never adds a mechanism" with the widened definition makes a recheck re-raise good fixes that add what an existing rule already requires (a test for new behaviour, which the rules call high when missing; a handoff record such as a log entry), so they go to the owner under the one dispute round. Options: (a) a carve-out sentence in the rule and the prompt, "what an existing rule already requires of the fix, such as a test for new behaviour or a handoff record, is not an added mechanism"; (b) measure first: RC-2, whose `fixed:` answer adds tests, on both recheck wordings under the new wording, 2 calls; (c) both, and also RC-3 again under the shipped wording without its example (F2), 2 more calls: 4 calls, while 3 are left of 85, so the budget would go to 89; (d) neither now, leave both to slice 8. Recommendation: (c): add the carve-out first, then run RC-3 and RC-2 on both wordings (4 calls, about USD 1), because RC-3's result no longer covers the shipped wording and RC-2 is the only case that shows whether good fixes are now re-raised. It blocks nothing now |
 | F5 | low | rejected: the prompt must carry its own copy of the definition while this branch is unmerged, because the reviewer receives the rules from the PR's base branch (AGENTS.md:334-335, the reviewer "receives the approved `AGENTS.md` … from the PR's base branch"; the launcher reads them at the base commit, scripts/run_independent_review.py:355-363 and scripts/run_independent_review.py:409), and the base's `AGENTS.md` (`3347754`, the rules section of this review's own prompt) has no definition of a step added or repeated and still calls a simpler alternative "a mechanism that could be removed or simplified". Dropping the launcher's copy now would leave every review before the merge without the definition; one home is possible only once this branch merges, when the launcher's copy can point to the rules instead: discovered issue 41 on docs/slices/agentic-sdlc-poc/slice_4_decisions.md, disposition "after the merge". The two definitions of a simpler alternative in one prompt have the same cause and end at the same merge. Meanwhile the two copies say the same: both lost the example (F2) |
 | F6 | low | rejected: the key's `budget` is part of the answer key, which is committed before any run and whose hash every result records: the hash is of the whole key file (scripts/run_review_benchmark.py:201) and a result belongs to a key only by that hash or an `earlier_key_sha256` entry (scripts/run_review_benchmark.py:184-188), so dropping the field (tests/review_benchmark/answer_key.yaml:30) means a new key version for every later result. The two copies cannot drift unseen: `test_the_committed_keys_budget_is_the_stage_b_hard_stop` (tests/tools/test_run_review_benchmark.py:1540-1542) pins them equal, and a run checks both against the hard stop before any call (scripts/run_review_benchmark.py:991-992 with `check_budget` at scripts/run_review_benchmark.py:235-237). Low: the author's choice |
+
+## Round 2
+
+### Attempt owner-decisions-2/c1/r2/A/1
+
+Reviewer `A`: `claude-opus-5-5`, effort medium, mode recheck, commit `7e1593708e13`, base `3347754ef038`.
+
+Status: completed; approvable within the threat model: yes.
+
+#### Prompt
+
+```markdown
+# Recheck of the owner's decisions of 2026-11-16, review round 2
+
+The intent is unchanged from round 1: the owner's decisions of 2026-11-16 on decision concerns 13 (option B: the
+mechanism wording, then RC-3 on both recheck wordings) and 11 (the stage-B budget of 85 confirmed). Round 1's report
+and the author's answers are below; the fixes are what the reviewed commit adds after `f0eb19e`, round 1's commit:
+an unapproved mechanism is a `defect` of at least `medium` in the prompt (`10f2977`, wording only) and the rulebook
+(`db39dd5`); the example that was RC-3's own phrase is removed from both, and the records say that RC-3's two
+re-raises ran under the wording with the example, so the shipped wording is unmeasured; the benchmark's leak search
+reads the whole prompt the reviewer gets (`f22bb89`); decision concern 17 puts the open measurement and a possible
+carve-out to the owner.
+
+The author's claims to verify: every local gate passed on `f22bb89`, and the later commits change only `docs/`; a
+dry run over every benchmark case passes the new leak search. Known: in the author's own reruns of
+`tests/tools/test_run_independent_review.py` and `tests/tools/test_run_review_benchmark.py`, the first of five runs
+had one failure, not captured, while another session may still have been running tests; the next four passed.
+```
+
+#### Evidence
+
+```text
+Each numbered entry must be listed under `accounted`.
+
+EV1: scripts/check_docs.py: changed lines not run: 215; branches not taken: 214->215 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV2: scripts/check_review_records.py: changed lines not run: 48, 227-230, 234; branches not taken: 47->48, 228->229, 228->230, 233->234 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV3: scripts/review_brief.py: changed lines not run: 43, 301, 305; branches not taken: 42->43, 233->226, 304->305 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV4: scripts/review_inputs.py: changed lines not run: 303; branches not taken: 302->303 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV5: scripts/review_records.py: changed lines not run: none; branches not taken: 189->191, 228->230 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV6: scripts/run_independent_review.py: changed lines not run: 222, 1039, 1097-1098; branches not taken: 1038->1039, 1699->1701 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV7: scripts/run_review_benchmark.py: changed lines not run: 353, 400, 717, 961, 1268, 1800-1801; branches not taken: 352->353, 356->355, 399->400, 491->495, 716->717, 886->883, 892->886, 959->961, 1010->1013, 1249->1247, 1799->1800 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV8: no CI run for this commit (GET https://api.github.com/repos/<owner>/<repo>/actions/runs?head_sha=<commit> (no token))
+EV9: process file changed since the reviewed round: AGENTS.md, +11 -11 lines (f0eb19ee7e30 to 7e1593708e13; git diff --numstat --no-renames <earlier attempt's commit> <commit>)
+EV10: process file changed since the reviewed round: scripts/run_independent_review.py, +7 -7 lines (f0eb19ee7e30 to 7e1593708e13; git diff --numstat --no-renames <earlier attempt's commit> <commit>)
+
+Every changed line and branch run by the tooling tests: scripts/lint_changed_files.py.
+A script the tooling tests run only as a subprocess shows as not run here, because coverage is measured in-process (issue #44).
+No trace gap among the upstream items (python3 scripts/validate_traceability.py --mode pr --base <merge-base> --report-json <scratch>/trace.json --design-report-json <scratch>/design.json).
+```
+
+#### Report
+
+```json
+{
+  "accounted": [
+    {
+      "item": "F1",
+      "note": "Fixed. MECHANISM_RULES[\"initial\"] (140-142) now reads \"report it as a `defect` of at least `medium` severity, not as a `simpler_alternative`\". The kind bullet that every mode gets (527-530) says the same. AGENTS.md says it in Report sections (429-431) and in Modes and prompts (366-369). test_each_review_asks_whether_the_change_or_a_fix_adds_a_mechanism (1640) and test_a_simpler_alternative_is_only_a_mechanism_the_owner_approved (1665-1667) pin both texts. The fix changes wording only and adds no mechanism.",
+      "opened": [
+        "scripts/run_independent_review.py",
+        "tests/tools/test_run_independent_review.py",
+        "AGENTS.md",
+        "docs/history/implementation_log.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "F2",
+      "note": "Fixed. _MECHANISM (137-138) and AGENTS.md (420-422) now give option B's definition with no example. The test asserts that no mechanism rule holds \"after every push\" or \"such as\" (1638). The records say plainly that RC-3's two re-raises ran under the wording with the example, so the shipped wording is unmeasured: benchmark_report.md:106-112, decision row 13, and decision concern 17 (slice_4_decisions.md:457). The fix adds no mechanism.",
+      "opened": [
+        "scripts/run_independent_review.py",
+        "AGENTS.md",
+        "docs/slices/poc-4-5-benchmark/benchmark_report.md",
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+        "tests/tools/test_run_independent_review.py"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "F3",
+      "note": "Fixed. leak_hits (523-540) now scans case_prompt(prepared, key, name).prompt for each configuration, which is the same prompt the identity hashes. It replaces the per-part texts, so the change removes code rather than adding a scan. The new parametrized test (221-239) has a passing twin, and it finds a term placed only in the initial or recheck mechanism rule or only in a recheck case's answers. The rules and task cases now report the hit under `prompt` (191-208). I cannot rerun the dry-run claim (20 of 20 cases) in this read-only copy. It is consistent with the code and with the implementation log at 74-76.",
+      "opened": [
+        "scripts/run_review_benchmark.py",
+        "tests/tools/test_run_review_benchmark.py",
+        "docs/history/implementation_log.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "F4",
+      "note": "This was a decision concern, and it is now with the owner as decision concern 17 (slice_4_decisions.md:457). The row states the carve-out and the measurement options, recommends one, and says it blocks nothing now. That is the right disposition: it is the owner's to decide.",
+      "opened": [
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "F5",
+      "note": "The rejection holds. The reviewer gets AGENTS.md from the base commit (approved_rules(repo, base_commit)), and the base's rulebook does not have the new definition. Until the merge, then, the prompt must carry its own copy. The two copies now say the same thing, and discovered issue 41 tracks moving the definition to one home after the merge. The finding was low, so this is the author's choice.",
+      "opened": [
+        "AGENTS.md",
+        "scripts/run_independent_review.py"
+      ],
+      "quotes": [
+        {
+          "end_line": 335,
+          "file": "AGENTS.md",
+          "line": 334,
+          "text": "  and attempt log). It loads no instruction or settings files from the copy and receives the\n  approved `AGENTS.md` and `tests/unit/AGENTS.md` from the PR's base branch. A recheck receives its"
+        },
+        {
+          "end_line": 409,
+          "file": "scripts/run_independent_review.py",
+          "line": 409,
+          "text": "        rules_text=approved_rules(repo, base_commit),"
+        }
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "F6",
+      "note": "The rejection holds. The key's budget is in the hashed answer key file, and of_key ties every result to that hash. Dropping the field would make a new key version. The two copies are pinned equal by test_the_committed_keys_budget_is_the_stage_b_hard_stop (1540-1542), and run_benchmark checks both against the hard stop before any call (991-992). The finding was a low simpler alternative, so this is the author's choice.",
+      "opened": [
+        "scripts/run_review_benchmark.py",
+        "tests/review_benchmark/answer_key.yaml",
+        "tests/tools/test_run_review_benchmark.py"
+      ],
+      "quotes": [
+        {
+          "end_line": 201,
+          "file": "scripts/run_review_benchmark.py",
+          "line": 200,
+          "text": "    return AnswerKey([_case(c) for c in data[\"cases\"]], int(data[\"budget\"]), data[\"model\"], data.get(\"effort\", \"high\"),\n                     launcher.sha256_bytes(raw), prompts, sha256_text(\"\".join(prompts[n] for n in sorted(prompts))),"
+        },
+        {
+          "end_line": 188,
+          "file": "scripts/run_review_benchmark.py",
+          "line": 184,
+          "text": "def of_key(key: AnswerKey, line: dict[str, Any]) -> bool:\n    \"\"\"Whether a result belongs to this key: produced with it, or with an earlier version that the key names in\n    `earlier_key_sha256`. Such a result keeps the score of its run; where that version's match rule differs from the\n    key's (R2-9), `--rescore B` scores it again under the key's rule, apart from the results.\"\"\"\n    return line.get(\"key_sha256\") in (key.sha256, *key.earlier)"
+        },
+        {
+          "end_line": 1542,
+          "file": "tests/tools/test_run_review_benchmark.py",
+          "line": 1540,
+          "text": "def test_the_committed_keys_budget_is_the_stage_b_hard_stop() -> None:\n    \"\"\"A plain `--run` takes the key's budget, so the committed key must be within the hard stop (decision concern 11).\"\"\"\n    assert bench.load_key(ROOT).budget == bench.BUDGETS[\"B\"]"
+        }
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "EV1",
+      "note": "The fix commits do not touch scripts/check_docs.py. The uncovered line 215 belongs to earlier sub-slices' reviewed changes.",
+      "opened": [],
+      "searched": [
+        "_review_inputs/change.diff"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV2",
+      "note": "The fix commits do not touch scripts/check_review_records.py. These guard lines come from 4.3 and round 2, which were reviewed in their own units.",
+      "opened": [],
+      "status": "explained"
+    },
+    {
+      "item": "EV3",
+      "note": "The fix commits do not touch scripts/review_brief.py. These lines come from 4.6 and round 2.",
+      "opened": [],
+      "status": "explained"
+    },
+    {
+      "item": "EV4",
+      "note": "The fix commits do not touch scripts/review_inputs.py. Line 303 comes from earlier units.",
+      "opened": [],
+      "status": "explained"
+    },
+    {
+      "item": "EV5",
+      "note": "scripts/review_records.py has only two untaken branches, and the fixes do not touch the file.",
+      "opened": [],
+      "status": "explained"
+    },
+    {
+      "item": "EV6",
+      "note": "The fixes changed lines 131-148 and 527-529, and the two mechanism tests run them. Lines 222, 1039 and 1097-1098 and branch 1699 are outside the changed regions. They are guards of 4.3's record machinery.",
+      "opened": [
+        "scripts/run_independent_review.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV7",
+      "note": "The rewritten leak_hits (523-540) is not in the list, so the tests run it. The listed lines (353, 400, 717, 961, 1268, 1800-1801) are guard branches from earlier benchmark work that F3's fix does not touch.",
+      "opened": [
+        "scripts/run_review_benchmark.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV8",
+      "note": "The implementation log (103-105) says the branch is not pushed, so there is no CI run. The local gates are claimed to pass on f22bb89. I could not verify that claim here, and CI's verdict comes when the branch is pushed. The author's reported first-run failure in the tooling tests, not captured, cannot be verified either. The four reruns passed, and the author reports it openly.",
+      "opened": [
+        "docs/history/implementation_log.md"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV9",
+      "note": "These AGENTS.md changes are F1's severity wording and F2's removal of the example, at 366-369, 420-422 and 429-431. I read them, and they add no mechanism.",
+      "opened": [
+        "AGENTS.md"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV10",
+      "note": "These launcher changes are the _MECHANISM, MECHANISM_RULES and kind-bullet wording plus its comment (131-148, 527-529). I read them, and the two tests pin them.",
+      "opened": [
+        "scripts/run_independent_review.py"
+      ],
+      "status": "explained"
+    }
+  ],
+  "findings": [],
+  "verdict": "yes"
+}
+```
+
