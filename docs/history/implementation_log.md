@@ -154,7 +154,7 @@ is first); every heading carries its date.
   harness or CI file; CI's `e2e` job runs it on the PR), `make unit-trust`, `make unit-mutation` and
   `make unit-diff-cov` (no `services/` change), and CI (the branch is not pushed). The validation on `c79ed96` before
   the review had passed `make tooling-test` with 916 tests, but `eb46b58` came after it and was not rerun (F1).
-- Review: unit `round-2` of `docs/slices/agentic-sdlc-poc/`, round 2 (the recheck) next.
+- Review: unit `round-2` of `docs/slices/agentic-sdlc-poc/`, round 1, then round 2 (the recheck), approvable; the review ended (the round-1 and round-2 bullets above).
 
 ## 2026-11-13 Slice agentic-sdlc-poc 4: the owner's decisions on the decision concerns
 
