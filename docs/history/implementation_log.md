@@ -5,6 +5,59 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-11-16 Slice agentic-sdlc-poc 4: the owner's decisions on decision concerns 11 and 13
+
+- Branch `poc/slice-4-implementation`, 5 commits `5941c56` to `03c02c0`, then these records: the owner's decisions of
+  2026-11-16, in the owner's words on the [decision page](../slices/agentic-sdlc-poc/slice_4_decisions.md) ("okay go
+  ahead and also increase the review counts to 85", in reply to the author's explanation of decision concern 13, which
+  recommended option B). Logged under
+  [DPL-013](../delivery_problem_log.md#dpl-013-review-severity-decided-what-got-fixed-a-rejection-could-stand-on-the-authors-word-and-fixes-grew-the-process).
+- Decision concern 13, option B (`5941c56`, the launcher's wording only, in its own commit as decision 2 asks;
+  `42aef6a`, the rulebook): the mechanism wording in `MECHANISM_RULES` and the output section's kind bullet of
+  `scripts/run_independent_review.py` now counts "a step that is added or repeated (such as "again after every push")
+  and a second copy of a fact that must be kept current" as mechanisms; an initial review reports an unapproved
+  mechanism as a `defect`, not a `simpler_alternative`; a recheck re-raises a fix that adds one at the finding's
+  severity; a simpler alternative is a mechanism the owner approved. Both recheck wordings share the output section.
+  `AGENTS.md` says the same (Fixes stay within the agreed decisions, Report sections; Modes and prompts links to the
+  definition instead of repeating it). The stage checklists are not changed.
+- Decision concern 11 (`ed061ba`): the owner confirmed the stage-B budget of 85, so the hard stop (`BUDGETS["B"]`)
+  goes from 80 to 85, equal to the key's `budget: 85`. The runner checks the key's budget against the hard stop again,
+  besides the run's, so a plain `--run` works and round 2's `--budget` workaround is gone.
+- RC-3 again (`6627268`, `03c02c0`): calls 81 and 82 of 85, by a plain `--run` with `--case RC-3` and both recheck
+  configurations, under the pinned install of CLI 2.1.323 in a scratch folder whose canary is done; both completed at
+  the first try and re-raised R1-1 at high, verdict no, with no new finding (`recheck-A` USD 0.23, 0.3 minutes;
+  `recheck-B` USD 0.22, 0.2 minutes). The two re-raises were appended to the third export as `M147` and `M148`
+  without reshuffling its 146 rows; a fresh session, given only those two rows and the match rule, judged both a
+  match (decision concern 16 applies). Under R2-9 the recheck rows read 2 of 3 with RC-3 under R2-5's wording and 3
+  of 3 under decision concern 13's; the runner's own report counts both RC-3 runs and reads 3 of 4. The report
+  ([`benchmark_report.md`](../slices/poc-4-5-benchmark/benchmark_report.md)) says what this cannot show: the
+  wording's example is RC-3's own answer phrase, RC-3's reviewers got the base `e842e97`'s rulebook, which only
+  prefers removing a mechanism, and with one run per wording there is no rate; RC-2 and the initial cases did not run
+  under the new wording.
+- Tests first, rerun for this entry in a scratch clone of each parent commit with the commit's test file:
+  - Launcher (base `e2399c7`, `python3 -m pytest -q -p no:cacheprovider --tb=line
+    tests/tools/test_run_independent_review.py -k "<names>"`; 2 failed):
+    `test_each_review_asks_whether_the_change_or_a_fix_adds_a_mechanism` `:1635 assert 'a step that is added or
+    repeated (such as "again after every push")' in "Mechanisms: ask whether the change adds a mechanism …"`;
+    `test_a_simpler_alternative_is_only_a_mechanism_the_owner_approved` `:1662 AssertionError` (the narrowed
+    `simpler_alternative` bullet is not in the output section). The rulebook commit `42aef6a` is rule text only.
+  - Runner (base `42aef6a`, `python3 -m pytest -q -p no:cacheprovider --tb=line tests/tools/test_run_review_benchmark.py
+    -k "<names>"`; 3 failed): `test_stage_b_stops_at_its_budget_counting_retries_and_the_canary`
+    `:307 assert 80 == 85`; `test_a_key_whose_budget_is_above_the_hard_stop_is_refused_though_the_runs_budget_is_within_it`
+    `:1511 assert (0 == 2)` (the run naming `--budget 80` ran instead of being refused);
+    `test_the_committed_keys_budget_is_the_stage_b_hard_stop` `:1518 assert 85 == 80`.
+- Validation, local, on `03c02c0` (the commits after it change only `docs/`): `make qa-quality` passed (qa-trace in PR
+  mode against `origin/poc/agentic-sdlc`: requirements 170, architecture 34, design 131, tests 386, coverage gaps
+  113, 0 new; unit traceability with 28 mapped requirements, the unit guard over 357 tests, docs-check, test-lint, and
+  qa-deploy with 18 known violations and 22 warnings); `make tooling-test` 929 passed and 9 shell tests (with a
+  scratch shellcheck); `make lint` passed (0 new or worsened findings); `make unit-guard-check` and
+  `make gate-consistency` passed. Not run: the full E2E suite (`git diff --name-only e2399c7 03c02c0` lists
+  `AGENTS.md`, the launcher, the benchmark runner, their two tooling tests and the benchmark's report and result
+  files: no service, policy, compose, harness or CI file, and none since the last E2E run on `11667c5`; CI's `e2e` job
+  runs it on the PR), `make unit-trust`, `make unit-mutation` and `make unit-diff-cov` (no `services/` change), and CI
+  (the branch is not pushed).
+- Review: a review unit for these commits is next.
+
 ## 2026-11-14 Slice agentic-sdlc-poc 4: round 2, the owner's findings on review severity
 
 - Branch `poc/slice-4-implementation`, 15 commits `8a82388` to `c79ed96`: round 2 (R2-1 to R2-10), from the owner's
@@ -40,8 +93,8 @@ is first); every heading carries its date.
   6 and 8. RC-3 (a `fixed:` answer that adds a step) and RC-4 (a rejection citing a test that does not cover the
   scenario) ran on `recheck-A` and `recheck-B`, base `e842e97`: RC-4 re-raised by both, RC-3 accepted by both. Calls 77
   to 80 of the hard stop of 80, under a pinned install of CLI 2.1.323 in a scratch folder (the installed CLI had
-  updated itself to 2.1.325, which has no canary). The key keeps `budget: 85`; the runner checks the run's `--budget`
-  against the hard stop. Report: [`benchmark_report.md`](../slices/poc-4-5-benchmark/benchmark_report.md).
+  updated itself to 2.1.325, which has no canary). The key kept `budget: 85`; the runner checked the run's `--budget`
+  against the hard stop (until 2026-11-16, entry above). Report: [`benchmark_report.md`](../slices/poc-4-5-benchmark/benchmark_report.md).
 - Tests first, the failures on the base of each change:
   - Record check and brief (base `4316724`, `python3 -m pytest -q --tb=line tests/tools/test_check_review_records.py
     tests/tools/test_review_brief.py`; 13 failed): `…next_round_accepts_passes[medium]` `:299 assert False`;

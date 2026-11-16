@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-11-14. Update this page at the end of every slice (see `AGENTS.md`, slice workflow, handoff).
+Last updated: 2026-11-16. Update this page at the end of every slice (see `AGENTS.md`, slice workflow, handoff).
 Detailed history: [`docs/history/implementation_log.md`](history/implementation_log.md).
 
 ## Where the project stands
@@ -14,7 +14,8 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 - **Open PoC work, in "needed before" order:**
   1. now: slice 4 ([#33](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/33), sub-issues #38–#43), implemented on
      the branch `poc/slice-4-implementation` for one final PR: 4.1 to 4.6 implemented and reviewed; 4.5b's
-     benchmark ran (57 of 60 calls, then 76 under a budget raised to 85, then 80 of a hard stop of 80 in round 2;
+     benchmark ran (57 of 60 calls, then 76 under a budget raised to 85, then 80 of a hard stop of 80 in round 2,
+     and 82 of 85 since the owner confirmed the budget of 85 on 2026-11-16;
      [report](slices/poc-4-5-benchmark/benchmark_report.md)); one dry slice ran; the final review ended after
      round 2; the owner's growth of 2026-11-13 (rejections read like fixes, a `searched` list, the checklist
      question on findings) is implemented and reviewed (unit `growth`); the owner's decisions of 2026-11-13 on
@@ -26,7 +27,12 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
      files the fixes changed and quotes what each rejection rests on; the benchmark is re-scored with a medium match
      counted, and two more recheck cases ran. Its review (unit `round-2`) ran round 1 (not approvable: 2 high, 2
      medium, 3 low, all answered: 5 fixed, 1 to the owner as decision concern 16, 1 rejected); its recheck, round 2,
-     was approvable and the review ended (1 new low, fixed). Then the owner's open decisions on the decision page, the push and the final PR.
+     was approvable and the review ended (1 new low, fixed). On 2026-11-16 the owner decided decision concerns 11 and 13,
+     and both are implemented: the review prompt and `AGENTS.md` count a repeated step and a kept copy of a fact as
+     mechanisms, and a fix that adds one is re-raised, not filed as a simpler alternative; RC-3, run again on both
+     recheck wordings, was re-raised by both (one run each, on the case the wording was written from); the stage-B
+     hard stop is the confirmed 85. Their review unit is next. Then the owner's open decisions on the decision page,
+     the push and the final PR.
      Progress and the owner's decisions: [`slice_4_decisions.md`](slices/agentic-sdlc-poc/slice_4_decisions.md);
      Next, before slice 5: a slice of author prompts and their benchmark (owner, 2026-11-09: "let's
      continue this slice for just review, after this let's run a new slice of author prompts and
@@ -77,6 +83,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Last verification
 | Check | Date | Result |
 | --- | --- | --- |
+| `make qa-quality` (qa-trace in `--mode pr --base origin/poc/agentic-sdlc`, docs-check, test-lint, qa-deploy), `make tooling-test`, `make lint`, `make unit-guard-check`, `make gate-consistency` on `poc/slice-4-implementation` (`03c02c0`, the owner's decisions of 2026-11-16; the commits after it change only `docs/`) | 2026-11-16 | PASSED; gap gate: 0 new gaps, 113 coverage gaps remain; qa-deploy 18 known violations, 22 warnings; 929 pytest (with a scratch shellcheck), 9 shell; lint 0 new or worsened. The E2E suite was not run again: no service, policy, compose, harness or CI file changed |
 | `make qa-quality` (qa-trace in `--mode pr --base origin/poc/agentic-sdlc`, docs-check, test-lint, qa-deploy), `make tooling-test`, `make lint`, `make unit-guard-check`, `make gate-consistency` on `poc/slice-4-implementation` (`1f224d1`, round 2 with the fixes of its review's round 1, the answers and the brief's fix) | 2026-11-14 | PASSED; gap gate: 0 new gaps, 113 coverage gaps remain; qa-deploy 18 known violations, 22 warnings; 927 pytest (with a scratch shellcheck), 9 shell; lint 0 new or worsened. The E2E suite was not run again: round 2 changed no service, policy, compose, harness or CI file |
 | Full E2E suite, clean stack, `make e2e` on `poc/slice-4-implementation` (`11667c5`) | 2026-11-10 | 120/120 passed; 1 warning (M5-T55 env-gated skip); `make qa-evidence` PASSED (validated 119, skipped 1) |
 | `make qa-quality` (and qa-trace in `--mode pr --base origin/poc/agentic-sdlc`), `make lint`, `make tooling-test` on `poc/slice-4-implementation` | 2026-11-10 | PASSED; gap gate: 0 new gaps; 764 pytest (with a scratch shellcheck), 9 shell |
@@ -95,7 +102,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `poc/slice-4-implementation` | agentic-sdlc-poc slice 4: the six sub-issues (#38–#43), on the plans merged with PR #48 | Implemented and reviewed, local; the owner's decisions of 2026-11-13 implemented and reviewed; round 2 (R2-1 to R2-10, 2026-11-14) implemented, its review unit `round-2` ended after round 2 (approvable; decision concern 16 to the owner); one final PR into `poc/agentic-sdlc` when the owner pushes |
+| `poc/slice-4-implementation` | agentic-sdlc-poc slice 4: the six sub-issues (#38–#43), on the plans merged with PR #48 | Implemented and reviewed, local; the owner's decisions of 2026-11-13 implemented and reviewed; round 2 (R2-1 to R2-10, 2026-11-14) implemented, its review unit `round-2` ended after round 2 (approvable; decision concern 16 to the owner); the owner's decisions of 2026-11-16 (decision concerns 11 and 13) implemented, their review unit next; one final PR into `poc/agentic-sdlc` when the owner pushes |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
@@ -119,9 +126,10 @@ Full entries, root causes and lessons in [`docs/delivery_problem_log.md`](delive
 - **DPL-012** Slice 4's implementation run made claims and checks that did not hold; all fixed on the slice
   4 branch, closing it when slice 4 merges.
 - **DPL-013** Review severity decided what got fixed, a rejection could stand on the author's word, and fixes
-  grew the process; round 2's rules are on the slice 4 branch, closing it when slice 4 merges; open: both recheck
-  wordings accepted a fix that grows the process (RC-3, decision concern 13), and who confirms R2-9's new matches
-  (decision concern 16).
+  grew the process; round 2's rules are on the slice 4 branch, closing it when slice 4 merges; RC-3's miss is
+  answered by decision concern 13's wording (both rechecks re-raised it, one run each, on the case the wording was
+  written from); open: whether the wording holds beyond RC-3, and who confirms R2-9's new matches and RC-3's
+  re-raises (decision concern 16).
 - DPL-008 closed on 2026-11-04.
 
 ## Known gaps and debt

@@ -482,7 +482,8 @@ the author's own choice that makes it so. Before loosening a check, look at what
 ## DPL-013: Review severity decided what got fixed, a rejection could stand on the author's word, and fixes grew the process
 
 - Status: Open until slice 4's final PR merges; round 2's preventive actions (R2-1 to R2-8) are implemented on the
-  slice 4 branch, and RC-3's miss (decision concern 13 on the decision page) is the part still open
+  slice 4 branch; RC-3's miss is answered by decision concern 13's wording (2026-11-16), measured on RC-3 alone, and
+  what stays open is under Actions
 - Introduced: the review rules, where severity has decided what gets fixed since "everything else is advisory … not
   fixed by default", kept in four levels by slice 4.1 (S41-D6, S41-D12); the rule against growth has been rule text
   only since [DPL-007](#dpl-007-plan-review-answered-every-finding-by-adding-mechanisms)
@@ -540,9 +541,20 @@ Why review did not catch it:
   `make docs-check` and `make lint` only and broke a tooling test that pins its text; fixed, and every gate rerun on
   `1f224d1`, after which the commits change only `docs/` ([DPL-012](#dpl-012-slice-4s-implementation-run-made-claims-and-checks-that-did-not-hold)'s lesson:
   a claim is written from the check's output).
-- Open: RC-3's miss: R2-5's question did not make either wording re-raise a fix that works but grows the process
-  (decision concern 13); the process files leave out the benchmark runner, its key and the skills (decision concern
-  15); the plan list's question 8 still states the rule before R2-4 (growth proposal 14).
+- Corrective for RC-3's miss (decision concern 13, option B, the owner, 2026-11-16): the review prompt
+  (`MECHANISM_RULES` and the output section's kind bullet in `scripts/run_independent_review.py`) and `AGENTS.md`
+  (Fixes stay within the agreed decisions, Report sections) now count a step added or repeated and a second copy of a
+  fact that must be kept current as mechanisms; an initial review reports an unapproved mechanism as a defect, not a
+  simpler alternative, and a recheck re-raises a fix that adds one at the finding's severity. Run again once on each
+  recheck wording, RC-3 was re-raised at high by both. That shows little beyond RC-3: the wording's example ("again
+  after every push") is RC-3's own answer phrase, since the wording was written from that case; RC-3's reviewers got
+  a base rulebook that only prefers removing a mechanism, so their prompt held two definitions; and one run per
+  wording gives no rate.
+- Open: whether decision concern 13's wording catches growth other than RC-3's (a recheck case with another growth
+  fix would show it, for example DPL-007's base64 scan where changing the key format would do), still lets a recheck
+  accept answers that hold (RC-2 did not run under it) and keeps initial reviews from over-reporting mechanisms (no
+  initial case ran under it); the process files leave out the benchmark runner, its key and the skills (decision
+  concern 15); the plan list's question 8 still states the rule before R2-4 (growth proposal 14).
 
 ### Lesson
 Let a rule, not the reviewer's rating, decide what gets fixed; make a rejection rest on a fact the recheck must quote;
