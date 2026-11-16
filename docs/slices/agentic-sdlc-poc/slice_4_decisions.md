@@ -7,7 +7,7 @@ file current during the run and says in it what was decided on the owner's behal
 checklists, the benchmark counts, every decision concern, every parked unit, every process-growth proposal and
 every discovered issue with its disposition.
 
-Last updated: 2026-11-16: the owner's decisions on decision concerns 11 and 13 decided and implemented (`5941c56` to `03c02c0`): the mechanism wording of option B in the launcher and `AGENTS.md`, RC-3 run again on both recheck wordings (both re-raised its fix, calls 81 and 82), and the stage-B hard stop at the confirmed 85. Their review unit `owner-decisions-2` ran round 1 (approvable: 4 medium, 2 low), whose findings are answered (`10f2977` to `f22bb89`, and the records): an unapproved mechanism is a defect of at least medium; the mechanism definition loses its example "again after every push", so RC-3's two runs were of a wording no longer shipped; the leak search reads the whole prompt; decision concern 17 goes to the owner. Its recheck, round 2, is next. Before, on 2026-11-14: round 2 implemented (R2-1 to R2-10, `8a82388` to `c79ed96`); its review unit `round-2` ran round 1, whose findings are answered (`6d8de53` to `03ffc55`), and its recheck, round 2, was approvable, so the review ended; the brief is rebuilt under "Review outcome". Before, on 2026-11-13: the owner's decisions on decision concerns 2, 3, 4, 7, 8 and 10 implemented (small slices, the decision page, the second recheck case, the severity measurement, worse, nothing adopted) and reviewed (unit `owner-decisions`, ended after round 2), with decision 7, decision concern 11 and growth proposal 12 for the owner. Before that: every sub-issue implemented and reviewed, the benchmark run and its report reviewed, the dry slice and the final review run (2026-11-10).
+Last updated: 2026-11-16: the owner's decisions on decision concerns 11 and 13 decided and implemented (`5941c56` to `03c02c0`): the mechanism wording of option B in the launcher and `AGENTS.md`, RC-3 run again on both recheck wordings (both re-raised its fix, calls 81 and 82), and the stage-B hard stop at the confirmed 85. Their review unit `owner-decisions-2` ran round 1 (approvable: 4 medium, 2 low), whose findings are answered (`10f2977` to `f22bb89`, and the records): an unapproved mechanism is a defect of at least medium; the mechanism definition loses its example "again after every push", so RC-3's two runs were of a wording no longer shipped; the leak search reads the whole prompt; decision concern 17 goes to the owner. Its recheck, round 2, was approvable with no new finding, so the review ended; the brief is rebuilt under "Review outcome". Before, on 2026-11-14: round 2 implemented (R2-1 to R2-10, `8a82388` to `c79ed96`); its review unit `round-2` ran round 1, whose findings are answered (`6d8de53` to `03ffc55`), and its recheck, round 2, was approvable, so the review ended; the brief is rebuilt under "Review outcome". Before, on 2026-11-13: the owner's decisions on decision concerns 2, 3, 4, 7, 8 and 10 implemented (small slices, the decision page, the second recheck case, the severity measurement, worse, nothing adopted) and reviewed (unit `owner-decisions`, ended after round 2), with decision 7, decision concern 11 and growth proposal 12 for the owner. Before that: every sub-issue implemented and reviewed, the benchmark run and its report reviewed, the dry slice and the final review run (2026-11-10).
 
 ## Goal (the owner's, 2026-11-09)
 
@@ -96,7 +96,7 @@ Parked units, decision concerns and growth proposals collect below as the run go
 | Growth (2026-11-13) | Rejections read like fixes, a `searched` list, the checklist question on findings ([record](review_growth.md)) | Ended after round 2. Round 1: approvable; 1 high, 5 medium, 1 low; 6 fixed, the low rejected. Round 2: attempt 1 failed the read check (issue 17); attempt 2 approvable, all 7 answers accepted; 1 new low, fixed |
 | The owner's decisions (2026-11-13) | Implemented (`44a040c` to `ea4e100`): small slices, the decision page, RC-2, the budget, the severity measurement; then the fixes to their review (record `review_owner_decisions.md`) | Ended after round 2. Round 1: attempt 1 failed the read check (issue 21); attempt 2 not approvable: 1 blocking, 2 high, 5 medium, one of them a decision concern; fixed, or put to the owner (decision 7, decision concern 11). Round 2: attempt 1 failed the read check (issue 22); attempt 2 approvable, all 8 answers accepted, no new finding |
 | Round 2 (2026-11-14) | Implemented (`8a82388` to `c79ed96`): R2-1 to R2-10, as built in the section "Round 2" below; the fixes to its review's round 1 (`6d8de53` to `cdfce97`) | Review: unit `round-2`. Round 1: attempt 1 failed the read check (issue 36); attempt 2 not approvable: 0 blocking, 2 high, 2 medium, 3 low; 5 fixed, F4 to the owner (decision concern 16), F6 rejected. Round 2, the recheck (`round-2/c1/r2/A/1`, medium effort): approvable; all 7 answers accepted, F6's rejection with three quotes checked in the copy (R2-7's first live use); 1 new low (F8), fixed. Ended after round 2 |
-| The owner's decisions (2026-11-16) | Implemented (`5941c56` to `03c02c0`): decision concern 13's mechanism wording in the launcher's output section and `AGENTS.md` (option B), RC-3 run again on both recheck wordings, and decision concern 11's hard stop of 85, as the rows of decision concerns 11 and 13 below say; the fixes to its review's round 1 (`10f2977` to `f22bb89`) | Review: unit `owner-decisions-2`. Round 1 (`owner-decisions-2/c1/r1/A/1`, high effort): approvable; 0 blocking, 0 high, 4 medium, 2 low; F1 to F3 fixed, F4 to the owner (decision concern 17), F5 and F6 rejected. Round 2, the recheck, is next |
+| The owner's decisions (2026-11-16) | Implemented (`5941c56` to `03c02c0`): decision concern 13's mechanism wording in the launcher's output section and `AGENTS.md` (option B), RC-3 run again on both recheck wordings, and decision concern 11's hard stop of 85, as the rows of decision concerns 11 and 13 below say; the fixes to its review's round 1 (`10f2977` to `f22bb89`) | Review: unit `owner-decisions-2`. Round 1 (`owner-decisions-2/c1/r1/A/1`, high effort): approvable; 0 blocking, 0 high, 4 medium, 2 low; F1 to F3 fixed, F4 to the owner (decision concern 17), F5 and F6 rejected. Round 2 (`owner-decisions-2/c1/r2/A/1`, medium): approvable; all 6 answers accepted, F5's and F6's rejections with quotes the launcher checked in the copy; no new finding. Ended after round 2 |
 
 ## Decisions and their proof
 
@@ -506,6 +506,7 @@ No unit is parked.
 | 40 | Question 8 of `docs/review_checklists/plan-and-test-plan.md` asks whether a fix changes the upstream choice "before adding a mechanism", which now disagrees more clearly with the rules: since R2-4 a fix never adds a mechanism, and since decision concern 13 a repeated step and a kept copy of a fact count as mechanisms too | The 2026-11-16 decisions, by the author | Growth proposal 14 proposes the rewording; a list change needs the owner (`AGENTS.md`, Stage checklists) |
 | 41 | The mechanism definition has two separately worded homes, `AGENTS.md` (Fixes stay within the agreed decisions) and the launcher's `_MECHANISM`, and nothing ties them together, so a later edit to one may not reach the other; until this branch merges, a review's prompt also holds the base branch's older definition of a simpler alternative beside the output section's | The review of the owner's decisions of 2026-11-16 (unit `owner-decisions-2`, round 1, F5) | After the merge: the prompt must carry its own copy while this branch is unmerged, because the reviewer receives `AGENTS.md` from the PR's base branch, whose text lacks the definition; once this branch merges, the launcher's copy can point to the rules instead |
 | 42 | In a fresh checkout `make tooling-test` shows two `DeprecationWarning`s for invalid escape sequences, in `tests/tools/test_clean_stack.py:20` and `tests/tools/test_run_e2e.py:17`; they appear only when the files are first compiled, so a tree with cached bytecode does not show them, and every test passes | The gate rerun on `f22bb89` for the review of the owner's decisions of 2026-11-16, by the author | Pre-existing, outside the threat model; not fixed here, since it is a `tests/**` change outside the review's findings |
+| 43 | In the author's own reruns of `tests/tools/test_run_independent_review.py` and `tests/tools/test_run_review_benchmark.py` after the fixes of `owner-decisions-2` round 1, the first of five runs had one failure (`1 failed, 356 passed`) and the next four passed (`357 passed` each); the failing test was not captured, and another session may still have been running tests at the time | The author, verifying the fixer's report, 2026-11-16 | Recorded, not reproduced in four reruns; if a run fails again, capture the test with `-rf` before rerunning |
 
 ## The dry slice
 
@@ -539,7 +540,7 @@ ran every check it could without Docker. What the next user would trip on, with 
 
 ### Decision brief
 
-Built by `scripts/review_brief.py` from the review units this PR adds (head `05c08944f42d`, merge-base `3347754ef038`). The plans and records are worth reading where this brief points.
+Built by `scripts/review_brief.py` from the review units this PR adds (head `d53ae3f62f04`, merge-base `3347754ef038`). The plans and records are worth reading where this brief points.
 
 | Unit | Last verdict | Rounds | Blocking | High | Medium | Low | Open |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -547,6 +548,7 @@ Built by `scripts/review_brief.py` from the review units this PR adds (head `05c
 | `agentic-sdlc-poc` `growth` | yes | 2 | 0 | 1 | 5 | 2 | nothing open |
 | `agentic-sdlc-poc` `owner-decisions` | yes | 2 | 1 | 2 | 5 | 0 | 2 for the owner |
 | `agentic-sdlc-poc` `round-2` | yes | 2 | 0 | 2 | 2 | 4 | 1 for the owner |
+| `agentic-sdlc-poc` `owner-decisions-2` | yes | 2 | 0 | 0 | 4 | 2 | 1 for the owner |
 | `poc-4-1-review-prompts` `implementation` | yes | 2 | 0 | 2 | 6 | 5 | 1 for the owner |
 | `poc-4-2-review-inputs` `implementation` | yes | 2 | 0 | 3 | 4 | 4 | nothing open |
 | `poc-4-3-review-records` `implementation` | yes | 2 | 2 | 1 | 3 | 4 | 1 for the owner |
@@ -565,6 +567,7 @@ Built by `scripts/review_brief.py` from the review units this PR adds (head `05c
 **Decision concerns**
 
 - `agentic-sdlc-poc` `owner-decisions` F6 (medium): owner: docs/slices/agentic-sdlc-poc/slice_4_decisions.md (decision concern 11): the raise from 60 to 85 under the DC8 approval is put to the owner, recommendation confirm. Meanwhile the hard stop is lowered to the 76 calls used (`scripts/run_review_benchmark.py` `BUDGETS`, its test in `tests/tools/test_run_review_benchmark.py`), so no further stage-B call runs without a new decision; the Decisions-made DC4 row now says RC-2 ran as calls 60 and 61 after a canary for CLI 2.1.323; the report's Calls line and the author-decision budget row agree
+- `agentic-sdlc-poc` `owner-decisions-2` F4 (medium): owner: docs/slices/agentic-sdlc-poc/slice_4_decisions.md (decision concern 17): read literally, "a fix never adds a mechanism" with the widened definition makes a recheck re-raise good fixes that add what an existing rule already requires (a test for new behaviour, which the rules call high when missing; a handoff record such as a log entry), so they go to the owner under the one dispute round. Options: (a) a carve-out sentence in the rule and the prompt, "what an existing rule already requires of the fix, such as a test for new behaviour or a handoff record, is not an added mechanism"; (b) measure first: RC-2, whose `fixed:` answer adds tests, on both recheck wordings under the new wording, 2 calls; (c) both, and also RC-3 again under the shipped wording without its example (F2), 2 more calls: 4 calls, while 3 are left of 85, so the budget would go to 89; (d) neither now, leave both to slice 8. Recommendation: (c): add the carve-out first, then run RC-3 and RC-2 on both wordings (4 calls, about USD 1), because RC-3's result no longer covers the shipped wording and RC-2 is the only case that shows whether good fixes are now re-raised. It blocks nothing now
 - `poc-4-1-review-prompts` `implementation` R1-5 (medium): owner: docs/slices/agentic-sdlc-poc/slice_4_decisions.md (decision concern 1): S41-D8 limits the read check to files a `fixed:` answer names; extending it to every path any answer names changes an approved decision, so it is implemented as written and put to the owner with the recommendation to extend it
 - `poc-4-3-review-records` `implementation` R1-3 (high): owner: docs/slices/agentic-sdlc-poc/slice_4_decisions.md (decision concern 2): implemented within S43-D4's words, so a later round's `owner:` answer to the same finding ID (a re-raised finding keeps its ID) settles a rejected blocking or high finding without editing answers a recheck read; tests `test_rejected_finding_that_the_next_round_re_raises_still_fails` and `test_a_later_owner_answer_to_the_re_raised_finding_settles_the_rejection`. The owner confirms this reading or chooses another; the red check between the answers commit and the recheck stays, as the plan accepts
 - `poc-4-4-stage-checklists` `critique` C-2 (high): owner: docs/slices/agentic-sdlc-poc/slice_4_decisions.md: decision concern 4. S45-D5 fixes one recheck case, a false `fixed:`; the benchmark report will say that the recheck comparison measures only the acceptance of a false fix, not the re-raising of answers that hold. Recommendation: before choosing the recheck wording, run a second recheck case with a correct rejection (2 more runs, within the 60)
@@ -585,12 +588,13 @@ None.
 
 **Where findings started** (origin stage of each finding, against the review that found it: its `--stage` lists, or its unit when it had none)
 
-| Origin | critique | final | growth | implementation | mechanics | owner-decisions | report | round-2 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| architecture and interfaces | 0 | 0 | 0 | 3 | 2 | 1 | 0 | 0 |
-| discovery | 5 | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
-| implementation | 14 | 9 | 7 | 32 | 14 | 6 | 9 | 8 |
-| tests first | 3 | 1 | 1 | 10 | 4 | 1 | 1 | 0 |
+| Origin | critique | final | growth | implementation | mechanics | owner-decisions | owner-decisions-2 | report | round-2 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| architecture and interfaces | 0 | 0 | 0 | 3 | 2 | 1 | 0 | 0 | 0 |
+| discovery | 5 | 0 | 0 | 8 | 0 | 0 | 0 | 0 | 0 |
+| implementation | 14 | 9 | 7 | 32 | 14 | 6 | 5 | 9 | 8 |
+| requirements | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |
+| tests first | 3 | 1 | 1 | 10 | 4 | 1 | 0 | 1 | 0 |
 
 **The test-plan questions.** Slice 4's implementation reviews ran before the rule that they answer the three
 test-plan questions as findings (2026-11-13), so no finding is mapped to a question here; every finding is in its
@@ -600,7 +604,7 @@ questions' content: question 1 (a wrong failure that would still pass a new or c
 control that planted nothing, and F3, a quote check a recheck could pass without reading what it quotes; question 2
 (a key, socket or secret reaching a non-holder): no finding; question 3 (purpose comments and names): no finding.
 
-Round 2's review unit `round-2` ended after round 2, and the brief above was rebuilt after it (head `05c0894`).
+Round 2's review unit `round-2` ended after round 2, and so did the unit `owner-decisions-2` for the owner's decisions of 2026-11-16; the brief above was rebuilt after it (head `d53ae3f`).
 
 ## How the owner can check the work
 

@@ -103,7 +103,10 @@ is first); every heading carries its date.
   unit-guard-check` (357 passed) and `make gate-consistency` passed. Not run, as above: the full E2E suite (no
   service, policy, compose, harness or CI file changed), `make unit-trust`, `make unit-mutation`, `make unit-diff-cov`
   (no `services/` change), and CI (the branch is not pushed).
-- Review: round 2 of the unit `owner-decisions-2`, the recheck, is next.
+- Review: round 2 of the unit `owner-decisions-2`, the recheck (`owner-decisions-2/c1/r2/A/1`, medium): approvable; all
+  6 answers accepted, F5's and F6's rejections with quotes the launcher checked in the copy; no new finding; the review
+  ended. The brief, rebuilt on the decision page, builds over every unit. Discovered issue 43: one uncaptured test
+  failure in the first of five reruns of the launcher and benchmark tests, not reproduced in the next four.
 
 ## 2026-11-14 Slice agentic-sdlc-poc 4: round 2, the owner's findings on review severity
 
