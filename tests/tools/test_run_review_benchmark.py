@@ -188,8 +188,11 @@ def test_case_commit_holding_the_answer_key_directory_is_refused(repo: tuple[Rep
     assert "copy: tests/review_benchmark/" in bench.leak_hits(prepared, key)
 
 
-@pytest.mark.parametrize("where", ["copy", "rules", "task"])
-def test_problem_id_or_leak_term_in_the_inputs_is_refused(repo: tuple[Repo, str, str], tmp_path: Path, where: str) -> None:
+@pytest.mark.parametrize(("where", "found_in"), [("copy", "copy"), ("rules", "prompt"), ("task", "prompt")])
+def test_problem_id_or_leak_term_in_the_inputs_is_refused(repo: tuple[Repo, str, str], tmp_path: Path, where: str,
+                                                          found_in: str) -> None:
+    """The rules and the task are found where the reviewer gets them, in the built prompt (review `owner-decisions-2`,
+    F3)."""
     r, base, _commit = repo
     if where == "rules":  # a case's rules are its base's, as the launcher gives the base branch's rules
         _write(r.root, "AGENTS.md", "This mentions DPL-123 and SECRET-LEAK-TERM.\n")
@@ -202,7 +205,7 @@ def test_problem_id_or_leak_term_in_the_inputs_is_refused(repo: tuple[Repo, str,
     prepared, key = _prepared(repo, tmp_path, _case("C1", base, commit, problem="DPL-123", **extra))
     hits = bench.leak_hits(prepared, key)
     assert hits and all("DPL-123" in h or "SECRET-LEAK-TERM" in h for h in hits)
-    assert any(h.startswith(where) for h in hits)
+    assert any(h.startswith(found_in) for h in hits)
 
 
 def test_leak_term_only_in_a_configurations_prompt_refuses_the_case(repo: tuple[Repo, str, str]) -> None:
@@ -213,6 +216,27 @@ def test_leak_term_only_in_a_configurations_prompt_refuses_the_case(repo: tuple[
     assert _run(r) == 0
     assert r.calls() == 0
     assert [(line["case"], line["status"]) for line in r.results() if line["case"] != "CANARY"] == [("C1", "refused")]
+
+
+@pytest.mark.parametrize("where", ["initial output section", "recheck output section", "recheck answers"])
+def test_a_leak_term_only_in_a_part_of_the_prompt_the_launcher_builds_is_found(
+        repo: tuple[Repo, str, str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch, where: str) -> None:
+    """Review `owner-decisions-2`, F3: the leak search reads the whole prompt each configuration builds, which is what
+    the reviewer gets, so a leak term that only the launcher's own sections hold (the mode's mechanism rule) or only a
+    recheck case's answers hold is found, though no rule file, upstream item, task, prompt file or copy holds it. The
+    same case without the term passes."""
+    r, base, commit = repo
+    mode = where.split()[0]
+    names = ["recheck-A", "recheck-B"] if mode == "recheck" else ["short+list", "open+list"]
+    extra = {"kind": "recheck", "recheck": _recheck_inputs(r, REVIEWED)} if mode == "recheck" else {}
+    prepared, key = _prepared(repo, tmp_path, _case("C1", base, commit, configurations=names, **extra))
+    assert bench.leak_hits(prepared, key) == []  # the twin: the term is nowhere the reviewer looks
+    if where == "recheck answers":
+        answers = r.root / "tests/review_benchmark/recheck/answers.md"
+        answers.write_text(answers.read_text().replace("FALSE FIX TEXT", "SECRET-LEAK-TERM"))
+    else:
+        monkeypatch.setitem(launcher.MECHANISM_RULES, mode, launcher.MECHANISM_RULES[mode] + " SECRET-LEAK-TERM.")
+    assert bench.leak_hits(prepared, key) == [f"prompt ({name}): SECRET-LEAK-TERM" for name in names]
 
 
 @pytest.mark.parametrize("kind", ["planted", "recheck_holds"])

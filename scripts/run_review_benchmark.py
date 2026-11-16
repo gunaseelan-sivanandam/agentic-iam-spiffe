@@ -522,14 +522,15 @@ def case_prompt(prepared: PreparedCase, key: AnswerKey, name: str, checklist: st
 
 def leak_hits(prepared: PreparedCase, key: AnswerKey) -> list[str]:
     """Where a leak term, the problem ID, the plant marker or the answer key's directory appears in what the
-    reviewer gets."""
+    reviewer gets: the whole prompt of each configuration the case runs, as the launcher builds it (the mandate, the
+    rules, the list, the upstream items, a recheck's earlier report and answers, the task and the launcher's own
+    sections; review `owner-decisions-2`, F3), and the copy."""
     case = prepared.case
     terms = [t for t in [*case.leak_terms, case.problem] if t]
     if case.kind in ("planted", "decoy", "recheck", RECHECK_HOLDS):  # an author-written plant; a rebuilt real miss is not
         terms.append(PLANT_MARKER)
     names = case.configurations or list(STAGE_A_PROMPTS)
-    texts = {"rules": prepared.rules_text, "upstream items": prepared.upstream,
-             **{f"task ({name})": _prompt_text(key, name) + "\n" + case.task for name in names}}
+    texts = {f"prompt ({name})": case_prompt(prepared, key, name).prompt for name in names}
     hits = [hit for where, text in texts.items() for hit in _term_hits(where, text, terms)]
     if (prepared.copy_root / BENCHMARK_DIR).exists():
         hits.append(f"copy: {BENCHMARK_DIR}/")
@@ -537,15 +538,6 @@ def leak_hits(prepared: PreparedCase, key: AnswerKey) -> list[str]:
         text = path.read_text(encoding="utf-8", errors="replace")
         hits += _term_hits(f"copy {path.relative_to(prepared.copy_root)}", text, terms)
     return hits
-
-
-def _prompt_text(key: AnswerKey, name: str) -> str:
-    """The case-independent text a configuration or a stage-A prompt adds to the prompt: its mandate file and its
-    severity file, each whole."""
-    spec = CONFIGURATIONS.get(name, {})
-    mandate_file, severity_file = spec.get("mandate_file"), spec.get("severity_file")
-    return (key.prompts.get(Path(mandate_file).stem if mandate_file else name, "")
-            + (key.prompts.get(Path(severity_file).stem, "") if severity_file else ""))
 
 
 def _term_hits(where: str, text: str, terms: list[str]) -> list[str]:
