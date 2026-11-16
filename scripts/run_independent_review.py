@@ -132,14 +132,14 @@ QUOTE_RULE = ("For a `rejected:` answer you list as `accepted` or `re-raised`, `
 # part of the output section, which every mandate wording shares, so the benchmark's wordings all get it; the final
 # review keeps its open question (S41-D4) and gets none. Decision concern 13 (the owner, 2026-11-16): a step added or
 # repeated and a second copy of a fact kept current are mechanisms too, and one added without approval is a defect, or
-# re-raised in a recheck, not a simpler alternative.
+# re-raised in a recheck, not a simpler alternative. Its review (`owner-decisions-2`): such a defect is at least medium,
+# so it is fixed (R2-1, F1), and the definition is the owner's option B, without an example (F2).
 _MECHANISM = ("a mechanism is a gate, check, CI job, process step, document, register or field; a step that is added "
-              "or repeated (such as \"again after every push\") and a second copy of a fact that must be kept current "
-              "are mechanisms too")
+              "or repeated and a second copy of a fact that must be kept current are mechanisms too")
 MECHANISM_RULES = {
     "initial": (f"Mechanisms: {_MECHANISM}. Ask whether the change adds such a mechanism without the owner's approval "
-                "where changing a choice would do; if it does, report it as a `defect`, not as a "
-                "`simpler_alternative`."),
+                "where changing a choice would do; if it does, report it as a `defect` of at least `medium` severity, "
+                "not as a `simpler_alternative`."),
     "recheck": (f"Mechanisms: {_MECHANISM}. For each `fixed:` answer, ask whether the fix adds such a mechanism without "
                 "the owner's approval where changing or removing the choice that caused the finding would do; if it "
                 "does, re-raise the finding at its severity, and do not report the simpler choice as a "
@@ -526,8 +526,8 @@ def _output_section(severity_note: str = "", mode: str = "initial") -> str:
         f"checklist prompted it. A finding you re-raise keeps its earlier ID. {QUESTION_RULE}\n"
         "- `kind`: `defect`; `simpler_alternative` (a mechanism the owner approved, in a plan or the rules, that "
         "could be removed or simplified within the agreed decisions; a mechanism added without that approval is a "
-        "`defect`, and in a recheck a fix that adds one is re-raised); or `decision_concern` (an agreed decision "
-        "that itself seems to cause a problem; it goes to the owner).\n"
+        "`defect` of at least `medium` severity, and in a recheck a fix that adds one is re-raised); or "
+        "`decision_concern` (an agreed decision that itself seems to cause a problem; it goes to the owner).\n"
         "- `severity`: `blocking` meets the blocking criteria of the approved rules and holds the merge until it is "
         "fixed or the owner decides. `high` is a real defect or false claim below that bar, for example a misleading "
         "document, new behaviour without a test or an untested fail-closed path. `medium` has clear value "
