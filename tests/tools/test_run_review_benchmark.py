@@ -301,9 +301,10 @@ def test_a_changed_template_runs_again_and_does_not_count_the_earlier_result_as_
 def test_stage_b_stops_at_its_budget_counting_retries_and_the_canary(repo: tuple[Repo, str, str]) -> None:
     r, base, commit = repo
     limit = bench.BUDGETS["B"]
-    # raised from 60 to 85 on 2026-11-13 (decision concerns 4 and 8), lowered to the 76 used, then raised to 80 for
-    # round 2's two recheck cases on both recheck wordings (R2-10, the owner, 2026-11-14)
-    assert limit == 80
+    # raised from 60 to 85 on 2026-11-13 (decision concerns 4 and 8), lowered to the 76 used, raised to 80 for round
+    # 2's two recheck cases on both recheck wordings (R2-10, the owner, 2026-11-14), and to the key's 85 when the owner
+    # confirmed that budget (decision concern 11, 2026-11-16)
+    assert limit == 85
     r.key([_case(f"C{i}", base, commit) for i in range(limit // 2 + 1)], budget=limit)  # more calls than the budget
     r.canary_passed()  # 2 calls already used
     r.scenario({"result": {"is_error": True}, "exit": 1}, {})
@@ -1496,17 +1497,25 @@ def test_rating_agreement_tells_a_medium_detection_from_a_high_one() -> None:
     assert bench.severity_agreement([high, medium], key, bench.Confirmation()) == {"same": 0, "different": 1}
 
 
-# --- Round 2 of slice 4, R2-10: two recheck cases of false answers, and the hard stop at 80 ---------------------------
+# --- Round 2 of slice 4, R2-10: two recheck cases of false answers; the hard stop at the key's budget -----------------
 
 
-def test_a_run_within_the_hard_stop_runs_though_the_keys_budget_is_above_it(repo: tuple[Repo, str, str]) -> None:
-    """The key keeps budget 85 while the hard stop is 80 (decision concern 11 is the owner's), so a run names a budget
-    within the hard stop, and a plain run, which takes the key's budget, is refused before any call."""
+def test_a_key_whose_budget_is_above_the_hard_stop_is_refused_though_the_runs_budget_is_within_it(
+        repo: tuple[Repo, str, str]) -> None:
+    """The owner confirmed the key's budget of 85 (decision concern 11, 2026-11-16), so the hard stop equals it and the
+    check that the key's budget is within the hard stop is back: a key above it is refused before any call, whatever
+    budget the run names, and a key within it runs on a plain `--run`."""
     r, base, commit = repo
-    r.key([_case("C1", base, commit)], budget=bench.BUDGETS["B"] + 5)
+    r.key([_case("C1", base, commit)], budget=bench.BUDGETS["B"] + 1)
     r.canary_passed()
-    assert _run(r) == 2 and r.calls() == 0
-    assert _run(r, "--budget", str(bench.BUDGETS["B"])) == 0 and r.calls() == 2
+    assert _run(r, "--budget", str(bench.BUDGETS["B"])) == 2 and r.calls() == 0
+    r.key([_case("C1", base, commit)], budget=bench.BUDGETS["B"])
+    assert _run(r) == 0 and r.calls() == 2
+
+
+def test_the_committed_keys_budget_is_the_stage_b_hard_stop() -> None:
+    """A plain `--run` takes the key's budget, so the committed key must be within the hard stop (decision concern 11)."""
+    assert bench.load_key(ROOT).budget == bench.BUDGETS["B"]
 
 
 def _false_rejection_inputs(r: Repo) -> dict:

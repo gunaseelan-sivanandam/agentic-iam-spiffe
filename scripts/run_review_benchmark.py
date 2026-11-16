@@ -14,7 +14,7 @@ both with the stage checklist of the case's artifact type, and two wordings of t
 
 Usage (from the repository root):
     python3 scripts/run_review_benchmark.py --dry-run                       # leak search only, no reviewer call
-    python3 scripts/run_review_benchmark.py --run --budget N                # stage B, at most 80 reviewer calls
+    python3 scripts/run_review_benchmark.py --run [--budget N]              # stage B, at most 85 reviewer calls
     python3 scripts/run_review_benchmark.py --run --case <case>             # only the named cases (or --dry-run)
     python3 scripts/run_review_benchmark.py --run --configuration <name>    # only the named configurations
     python3 scripts/run_review_benchmark.py --report --stage B [--stage A]  # one stage, or two compared
@@ -60,10 +60,10 @@ RESULTS = {"A": Path("docs/slices/agentic-sdlc-poc/benchmark_results.jsonl"),
 # on 2026-11-13: the owner approved decision concern 8's measurement beyond the 60 ("complete it and do not wait for
 # my approval"); it needs a canary for CLI 2.1.323, which RC-2's two runs share. 76 were used (57 before, the canary 2,
 # RC-2 2, the measurement 15), and the hard stop was lowered to them (decision page, decision concern 11). Round 2 of
-# slice 4 (the owner, 2026-11-14), R2-10, raises it to 80 for two recheck cases on both recheck wordings, 4 calls. The
-# key keeps `budget: 85`, since decision concern 11 is the owner's; a run's budget above the hard stop is refused, so
-# a run names `--budget 80`, and a plain `--run`, which takes the key's 85, is refused before any call.
-BUDGETS = {"A": 26, "B": 80}
+# slice 4 (the owner, 2026-11-14), R2-10, raised it to 80 for two recheck cases on both recheck wordings, 4 calls. On
+# 2026-11-16 the owner confirmed the key's `budget: 85` (decision concern 11), so the hard stop is 85, and a run's
+# budget and the key's must both be within it.
+BUDGETS = {"A": 26, "B": 85}
 BENCH_OUT = Path("docs/slices/poc-4-5-benchmark")
 EXPORT_FILE = BENCH_OUT / "confirmation_export.jsonl"
 EXPORT_KEY_FILE = BENCH_OUT / "confirmation_key.jsonl"
@@ -996,7 +996,8 @@ def run_benchmark(repo: Path, key: AnswerKey, budget_limit: int, repeats: list[s
                   selection: Selection = Selection()) -> list[dict[str, Any]]:
     if key.stage == "A":
         raise BenchmarkRefusedError("stage A is closed; its results stay as committed")
-    check_budget(budget_limit, key.stage)  # the key's own budget may be above the hard stop (decision concern 11)
+    check_budget(budget_limit, key.stage)
+    check_budget(key.budget, key.stage)
     check_match_rule(key)
     check_lists_commit(key)
     check_repeats(key, repeats or [])
