@@ -130,13 +130,20 @@ QUOTE_RULE = ("For a `rejected:` answer you list as `accepted` or `re-raised`, `
               "copy, or holds no whole line of it.")
 # R2-5: the question at the pause point, asked of the change in an initial review and of each fix in a recheck. It is
 # part of the output section, which every mandate wording shares, so the benchmark's wordings all get it; the final
-# review keeps its open question (S41-D4) and gets none.
-_MECHANISM = "a mechanism (a gate, check, CI job, process step, document, register or field)"
-_WITHOUT_APPROVAL = "without the owner's approval where changing a choice would do"
+# review keeps its open question (S41-D4) and gets none. Decision concern 13 (the owner, 2026-11-16): a step added or
+# repeated and a second copy of a fact kept current are mechanisms too, and one added without approval is a defect, or
+# re-raised in a recheck, not a simpler alternative.
+_MECHANISM = ("a mechanism is a gate, check, CI job, process step, document, register or field; a step that is added "
+              "or repeated (such as \"again after every push\") and a second copy of a fact that must be kept current "
+              "are mechanisms too")
 MECHANISM_RULES = {
-    "initial": f"Mechanisms: ask whether the change adds {_MECHANISM} {_WITHOUT_APPROVAL}; if it does, report it.",
-    "recheck": (f"Mechanisms: for each `fixed:` answer, ask whether the fix adds {_MECHANISM} {_WITHOUT_APPROVAL}; "
-                "if it does, re-raise the finding. The evidence lists each process file changed since the reviewed "
+    "initial": (f"Mechanisms: {_MECHANISM}. Ask whether the change adds such a mechanism without the owner's approval "
+                "where changing a choice would do; if it does, report it as a `defect`, not as a "
+                "`simpler_alternative`."),
+    "recheck": (f"Mechanisms: {_MECHANISM}. For each `fixed:` answer, ask whether the fix adds such a mechanism without "
+                "the owner's approval where changing or removing the choice that caused the finding would do; if it "
+                "does, re-raise the finding at its severity, and do not report the simpler choice as a "
+                "`simpler_alternative` instead. The evidence lists each process file changed since the reviewed "
                 "round."),
 }
 CLAIMS_SECTION = "Claims to verify"
@@ -517,9 +524,10 @@ def _output_section(severity_note: str = "", mode: str = "initial") -> str:
         "- `findings`: every finding with `id`, `kind`, `severity`, `origin_stage`, `file`, `line` (0 when no line "
         "applies), `problem`, `evidence` and `failure_scenario`, and `question` where a question of the stage "
         f"checklist prompted it. A finding you re-raise keeps its earlier ID. {QUESTION_RULE}\n"
-        "- `kind`: `defect`; `simpler_alternative` (a mechanism that could be removed or simplified within the "
-        "agreed decisions); or `decision_concern` (an agreed decision that itself seems to cause a problem; it "
-        "goes to the owner).\n"
+        "- `kind`: `defect`; `simpler_alternative` (a mechanism the owner approved, in a plan or the rules, that "
+        "could be removed or simplified within the agreed decisions; a mechanism added without that approval is a "
+        "`defect`, and in a recheck a fix that adds one is re-raised); or `decision_concern` (an agreed decision "
+        "that itself seems to cause a problem; it goes to the owner).\n"
         "- `severity`: `blocking` meets the blocking criteria of the approved rules and holds the merge until it is "
         "fixed or the owner decides. `high` is a real defect or false claim below that bar, for example a misleading "
         "document, new behaviour without a test or an untested fail-closed path. `medium` has clear value "

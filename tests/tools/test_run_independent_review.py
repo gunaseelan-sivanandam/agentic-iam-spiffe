@@ -1625,12 +1625,21 @@ def test_a_recheck_after_no_process_file_change_says_so_and_an_initial_review_li
 
 def test_each_review_asks_whether_the_change_or_a_fix_adds_a_mechanism(fx: Fixture) -> None:
     """R2-5: the question at the pause point, in the output section every mandate wording shares; the final review
-    keeps its open question and gets none."""
+    keeps its open question and gets none. Decision concern 13 (the owner, 2026-11-16): a step added or repeated and a
+    second copy of a fact kept current are mechanisms too, and one added without approval is reported as a defect, or
+    re-raised in a recheck, never as a simpler alternative."""
     _first_round(fx)
     rules = launcher.MECHANISM_RULES
     for text in rules.values():
         assert "a gate, check, CI job, process step, document, register or field" in text
-        assert "without the owner's approval where changing a choice would do" in text
+        assert 'a step that is added or repeated (such as "again after every push")' in text
+        assert "a second copy of a fact that must be kept current are mechanisms too" in text
+    assert "without the owner's approval where changing a choice would do" in rules["initial"]
+    assert "report it as a `defect`, not as a `simpler_alternative`" in rules["initial"]
+    assert ("without the owner's approval where changing or removing the choice that caused the finding would do"
+            in rules["recheck"])
+    assert ("re-raise the finding at its severity, and do not report the simpler choice as a `simpler_alternative` "
+            "instead") in rules["recheck"]
     initial = _section(_prompt(fx), "Output")
     assert rules["initial"] in initial and rules["recheck"] not in initial
     commit = _answers(fx, "unit1/c1/r1/A/1", "| X1 | high | fixed: scripts/review_me.py: guarded |")
@@ -1643,6 +1652,17 @@ def test_each_review_asks_whether_the_change_or_a_fix_adds_a_mechanism(fx: Fixtu
     assert _run(fx, unit="final", record=final_record, commit=_commit_all(fx.work, "final record")) == 0
     final = _section(_prompt(fx), "Output")
     assert all(text not in final for text in rules.values()) and "final" not in rules
+
+
+def test_a_simpler_alternative_is_only_a_mechanism_the_owner_approved(fx: Fixture) -> None:
+    """Decision concern 13: the kind bullet of the output section, which every mode shares, narrows
+    `simpler_alternative` to a mechanism the owner approved; one added without approval is a `defect`."""
+    assert _run(fx) == 0
+    output = _section(_prompt(fx), "Output")
+    assert ("`simpler_alternative` (a mechanism the owner approved, in a plan or the rules, that could be removed or "
+            "simplified within the agreed decisions; a mechanism added without that approval is a `defect`, and in a "
+            "recheck a fix that adds one is re-raised)") in output
+    assert "`simpler_alternative` (a mechanism that could be removed" not in output
 
 
 def test_the_output_section_states_round_2s_severity_rule_and_the_quote_rule(fx: Fixture) -> None:
