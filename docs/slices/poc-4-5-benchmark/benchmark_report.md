@@ -105,6 +105,11 @@ own counting over the lines of that wording:
 
 The three defect cases of each recheck row did not run under one prompt: RC-1 ran before R2-5 (CLI 2.1.321), RC-4
 under R2-5's wording, and RC-3 under the wording its row names. Only RC-3 ran under decision concern 13's wording.
+In this report decision concern 13's wording is its first wording, whose mechanism definition had the example "such
+as "again after every push"", RC-3's own answer phrase. The review of the owner's decisions of 2026-11-16 (unit
+`owner-decisions-2`, F2) removed the example, so RC-3's two re-raises ran under a wording that is no longer shipped,
+and the shipped wording, without the example, is unmeasured; whether to measure it is the owner's (decision concern
+17 on the [decision page](../agentic-sdlc-poc/slice_4_decisions.md)).
 
 - **What R2-9 changes.** `short+list` gains FS-2, RM-3 and RM-4; `open+list` gains RM-3 (its RM-4 match is rated
   low, so it stays seen); `open-B+list` gains RM-3 and RM-4. No detection is lost. The confirmer upheld a medium match
@@ -153,10 +158,12 @@ under R2-5's wording, and RC-3 under the wording its row names. Only RC-3 ran un
       link to the head's checks would do), but did not re-raise R1-1, as the mechanism question asks (USD 0.24, 0.4
       minutes). `recheck-B` read `AGENTS.md` and the change and reported a new low finding about the same window
       (USD 0.22, 0.4 minutes).
-    - *Second runs, under decision concern 13's wording* (2026-11-16; a step added or repeated, such as "again after
-      every push", and a second copy of a fact that must be kept current are mechanisms too; a fix that adds one
+    - *Second runs, under decision concern 13's first wording* (2026-11-16; a step added or repeated, such as "again
+      after every push", and a second copy of a fact that must be kept current are mechanisms too; a fix that adds one
       without approval is re-raised at its severity, not reported as a simpler alternative; a simpler alternative is a
-      mechanism the owner approved). **Both wordings re-raised R1-1 under its ID, at high, so both detected it;** the
+      mechanism the owner approved). The example "again after every push" has since been removed (review
+      `owner-decisions-2`, F2), so these runs are of a wording that is no longer shipped; the shipped wording is
+      unmeasured (decision concern 17). **Both wordings re-raised R1-1 under its ID, at high, so both detected it;** the
       blind confirmer judged both a match. Each read `AGENTS.md` and the change, raised no other finding and gave the
       verdict "no". `recheck-A`: "The fix answers the timing problem by adding a repeated step (write the summary once
       CI has finished, then rewrite it after every push) and keeps a second copy of the CI conclusions, without owner
@@ -181,7 +188,8 @@ under R2-5's wording, and RC-3 under the wording its row names. Only RC-3 ran un
     choice as a low simpler alternative; under decision concern 13's wording both re-raised it at its severity and
     named the same simpler choice as the reason. So the runs show a recheck telling a false fact from a true one under
     both wordings, and re-raising a fix that grows the process only once the mechanism definition names a repeated
-    step and a kept copy and a simpler alternative no longer covers an unapproved mechanism.
+    step and a kept copy, with RC-3's own phrase as its example, and a simpler alternative no longer covers an
+    unapproved mechanism. Without the example, as the wording now ships, no case has run.
     - *What they can show:* on this one case, under this model, CLI and base, both recheck wordings went from
       accepting the fix to re-raising it at its severity, each in one run.
     - *What they cannot show:* a rate (one run per case and wording; earlier in this benchmark two runs of the same
@@ -191,8 +199,9 @@ under R2-5's wording, and RC-3 under the wording its row names. Only RC-3 ran un
       works on a mechanism other than RC-3's. Three confounds
       weaken even the one-case reading. RC-3 is the case the wording was written from, and its example "again after
       every push" is the answer's own phrase ("written again after every later push"), so a re-raise may show the
-      reviewer matching the example as much as applying the rule; the leak search passed because it checks the copy,
-      the rules, the upstream items and the task, not the output section, and no leak term is that phrase. RC-3's
+      reviewer matching the example as much as applying the rule; the leak search passed because it checked the copy,
+      the rules, the upstream items and the task, not the output section, and no leak term is that phrase (since the
+      review `owner-decisions-2`, F3, it reads the whole prompt the reviewer gets; a dry run over every case passes). RC-3's
       reviewers get the rulebook of its base `e842e97` (discovered issue 18), which says only that removing or
       changing a mechanism "is preferred over adding one" and that a simpler alternative is "non-blocking", not today's
       rule that a fix never adds one; the prompt's output section now defines a simpler alternative more narrowly than

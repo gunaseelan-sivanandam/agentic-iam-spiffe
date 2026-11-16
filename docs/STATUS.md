@@ -31,8 +31,12 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
      and both are implemented: the review prompt and `AGENTS.md` count a repeated step and a kept copy of a fact as
      mechanisms, and a fix that adds one is re-raised, not filed as a simpler alternative; RC-3, run again on both
      recheck wordings, was re-raised by both (one run each, on the case the wording was written from); the stage-B
-     hard stop is the confirmed 85. Their review unit is next. Then the owner's open decisions on the decision page,
-     the push and the final PR.
+     hard stop is the confirmed 85. Their review unit `owner-decisions-2` ran round 1 (approvable: 4 medium, 2 low,
+     all answered): an unapproved mechanism is now a defect of at least medium, the mechanism definition lost its
+     example "again after every push" (RC-3's runs had it, so the shipped wording is unmeasured), the benchmark's
+     leak search reads the whole prompt, and decision concern 17 (whether good fixes are now re-raised, and running
+     RC-3 and RC-2 under the shipped wording) goes to the owner; its recheck is next. Then the owner's open decisions
+     on the decision page, the push and the final PR.
      Progress and the owner's decisions: [`slice_4_decisions.md`](slices/agentic-sdlc-poc/slice_4_decisions.md);
      Next, before slice 5: a slice of author prompts and their benchmark (owner, 2026-11-09: "let's
      continue this slice for just review, after this let's run a new slice of author prompts and
@@ -83,6 +87,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Last verification
 | Check | Date | Result |
 | --- | --- | --- |
+| `make qa-quality` (qa-trace in `--mode pr --base origin/poc/agentic-sdlc`, docs-check, test-lint, qa-deploy), `make tooling-test`, `make lint`, `make unit-guard-check`, `make gate-consistency` on `poc/slice-4-implementation` (`f22bb89`, the fixes to round 1 of the review of the owner's decisions of 2026-11-16, in a clean worktree; the commits after it change only `docs/`) | 2026-11-16 | PASSED; gap gate: 0 new gaps, 113 coverage gaps remain; qa-deploy 18 known violations, 22 warnings; 932 pytest (with a scratch shellcheck; 2 pre-existing deprecation warnings), 9 shell; lint 0 new or worsened. The E2E suite was not run again: no service, policy, compose, harness or CI file changed |
 | `make qa-quality` (qa-trace in `--mode pr --base origin/poc/agentic-sdlc`, docs-check, test-lint, qa-deploy), `make tooling-test`, `make lint`, `make unit-guard-check`, `make gate-consistency` on `poc/slice-4-implementation` (`03c02c0`, the owner's decisions of 2026-11-16; the commits after it change only `docs/`) | 2026-11-16 | PASSED; gap gate: 0 new gaps, 113 coverage gaps remain; qa-deploy 18 known violations, 22 warnings; 929 pytest (with a scratch shellcheck), 9 shell; lint 0 new or worsened. The E2E suite was not run again: no service, policy, compose, harness or CI file changed |
 | `make qa-quality` (qa-trace in `--mode pr --base origin/poc/agentic-sdlc`, docs-check, test-lint, qa-deploy), `make tooling-test`, `make lint`, `make unit-guard-check`, `make gate-consistency` on `poc/slice-4-implementation` (`1f224d1`, round 2 with the fixes of its review's round 1, the answers and the brief's fix) | 2026-11-14 | PASSED; gap gate: 0 new gaps, 113 coverage gaps remain; qa-deploy 18 known violations, 22 warnings; 927 pytest (with a scratch shellcheck), 9 shell; lint 0 new or worsened. The E2E suite was not run again: round 2 changed no service, policy, compose, harness or CI file |
 | Full E2E suite, clean stack, `make e2e` on `poc/slice-4-implementation` (`11667c5`) | 2026-11-10 | 120/120 passed; 1 warning (M5-T55 env-gated skip); `make qa-evidence` PASSED (validated 119, skipped 1) |
@@ -102,7 +107,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `poc/slice-4-implementation` | agentic-sdlc-poc slice 4: the six sub-issues (#38–#43), on the plans merged with PR #48 | Implemented and reviewed, local; the owner's decisions of 2026-11-13 implemented and reviewed; round 2 (R2-1 to R2-10, 2026-11-14) implemented, its review unit `round-2` ended after round 2 (approvable; decision concern 16 to the owner); the owner's decisions of 2026-11-16 (decision concerns 11 and 13) implemented, their review unit next; one final PR into `poc/agentic-sdlc` when the owner pushes |
+| `poc/slice-4-implementation` | agentic-sdlc-poc slice 4: the six sub-issues (#38–#43), on the plans merged with PR #48 | Implemented and reviewed, local; the owner's decisions of 2026-11-13 implemented and reviewed; round 2 (R2-1 to R2-10, 2026-11-14) implemented, its review unit `round-2` ended after round 2 (approvable; decision concern 16 to the owner); the owner's decisions of 2026-11-16 (decision concerns 11 and 13) implemented, their review unit `owner-decisions-2` ran round 1 (approvable; F1 to F3 fixed, decision concern 17 to the owner), its recheck next; one final PR into `poc/agentic-sdlc` when the owner pushes |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
@@ -128,8 +133,9 @@ Full entries, root causes and lessons in [`docs/delivery_problem_log.md`](delive
 - **DPL-013** Review severity decided what got fixed, a rejection could stand on the author's word, and fixes
   grew the process; round 2's rules are on the slice 4 branch, closing it when slice 4 merges; RC-3's miss is
   answered by decision concern 13's wording (both rechecks re-raised it, one run each, on the case the wording was
-  written from); open: whether the wording holds beyond RC-3, and who confirms R2-9's new matches and RC-3's
-  re-raises (decision concern 16).
+  written from, under a first wording whose example has since been removed); open: whether the shipped wording holds
+  on RC-3 and beyond it, and whether it re-raises good fixes (decision concern 17), and who confirms R2-9's new
+  matches and RC-3's re-raises (decision concern 16).
 - DPL-008 closed on 2026-11-04.
 
 ## Known gaps and debt

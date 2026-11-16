@@ -550,11 +550,18 @@ Why review did not catch it:
   after every push") is RC-3's own answer phrase, since the wording was written from that case; RC-3's reviewers got
   a base rulebook that only prefers removing a mechanism, so their prompt held two definitions; and one run per
   wording gives no rate.
+- Found by the review of those decisions (unit `owner-decisions-2`, round 1, F2): the example went beyond the owner's
+  option B, which names none. It is removed from the launcher and `AGENTS.md`, so RC-3's two re-raises ran under a
+  wording that is no longer shipped, and the shipped wording is unmeasured (decision concern 17). The same review had
+  an unapproved mechanism rated a defect of at least medium, so it is fixed (F1), and the benchmark's leak search read
+  the whole prompt the reviewer gets, the output section included (F3).
 - Open: whether decision concern 13's wording catches growth other than RC-3's (a recheck case with another growth
   fix would show it, for example DPL-007's base64 scan where changing the key format would do), still lets a recheck
   accept answers that hold (RC-2 did not run under it) and keeps initial reviews from over-reporting mechanisms (no
-  initial case ran under it); the process files leave out the benchmark runner, its key and the skills (decision
-  concern 15); the plan list's question 8 still states the rule before R2-4 (growth proposal 14).
+  initial case ran under it); whether the rule makes a recheck re-raise good fixes that add what another rule
+  requires, such as a test for new behaviour, and whether to run RC-3 and RC-2 under the shipped wording (decision
+  concern 17); the process files leave out the benchmark runner, its key and the skills (decision concern 15); the
+  plan list's question 8 still states the rule before R2-4 (growth proposal 14).
 
 ### Lesson
 Let a rule, not the reviewer's rating, decide what gets fixed; make a rejection rest on a fact the recheck must quote;

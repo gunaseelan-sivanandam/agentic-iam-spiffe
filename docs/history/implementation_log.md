@@ -7,8 +7,8 @@ is first); every heading carries its date.
 
 ## 2026-11-16 Slice agentic-sdlc-poc 4: the owner's decisions on decision concerns 11 and 13
 
-- Branch `poc/slice-4-implementation`, 5 commits `5941c56` to `03c02c0`, then these records: the owner's decisions of
-  2026-11-16, in the owner's words on the [decision page](../slices/agentic-sdlc-poc/slice_4_decisions.md) ("okay go
+- Branch `poc/slice-4-implementation`, 5 commits `5941c56` to `03c02c0`, then their records; then the fixes to their
+  review's round 1, 3 commits `10f2977` to `f22bb89`, and these records: the owner's decisions of 2026-11-16, in the owner's words on the [decision page](../slices/agentic-sdlc-poc/slice_4_decisions.md) ("okay go
   ahead and also increase the review counts to 85", in reply to the author's explanation of decision concern 13, which
   recommended option B). Logged under
   [DPL-013](../delivery_problem_log.md#dpl-013-review-severity-decided-what-got-fixed-a-rejection-could-stand-on-the-authors-word-and-fixes-grew-the-process).
@@ -56,7 +56,54 @@ is first); every heading carries its date.
   files: no service, policy, compose, harness or CI file, and none since the last E2E run on `11667c5`; CI's `e2e` job
   runs it on the PR), `make unit-trust`, `make unit-mutation` and `make unit-diff-cov` (no `services/` change), and CI
   (the branch is not pushed).
-- Review: a review unit for these commits is next.
+- Review, unit `owner-decisions-2`, round 1 (attempt `owner-decisions-2/c1/r1/A/1`, Opus, high effort, on `f0eb19e`):
+  approvable; 0 blocking, 0 high, 4 medium, 2 low, each answered in the
+  [review record](../slices/agentic-sdlc-poc/review_owner_decisions_2.md):
+  - F1 (medium), fixed: a mechanism added without the owner's approval is a `defect` of at least `medium` severity, so
+    it is fixed (R2-1), in the launcher's `MECHANISM_RULES["initial"]` and the output section's kind bullet
+    (`10f2977`, wording only, in its own commit as decision 2 asks) and in `AGENTS.md` (Report sections, Modes and
+    prompts; `db39dd5`). Before, only the recheck half named a severity.
+  - F2 (medium), fixed: the mechanism definition's example, "again after every push", RC-3's own answer phrase, which
+    the owner's option B does not hold, is removed from `_MECHANISM` (`10f2977`) and from `AGENTS.md` (Fixes stay
+    within the agreed decisions; `db39dd5`). RC-3's two re-raises of 2026-11-16 (calls 81 and 82) ran with the
+    example, so the shipped wording is unmeasured; the benchmark report, decision concern 13 and DPL-013 say so, and
+    the stored results are unchanged.
+  - F3 (medium), fixed (`f22bb89`): the benchmark's `leak_hits` reads the whole prompt each configuration builds
+    (`case_prompt(...).prompt`, what the reviewer is sent) in place of the rules, the upstream items and the task with
+    its configuration's prompt files, which that prompt holds; the copy is scanned as before, and `_prompt_text` is
+    gone. This also covers a recheck case's earlier report and answers (discovered issue 28). `--dry-run` over every
+    case afterwards: 20 of 20 cases pass the leak search, 67 prompts built, as before the change; no case hits a leak
+    term.
+  - F4 (medium, decision concern): to the owner as decision concern 17 (good fixes that add what a rule requires may
+    be re-raised; RC-3 and RC-2 under the shipped wording, 4 calls, the budget to 89).
+  - F5 (low), rejected: the prompt carries its own copy of the definition while this branch is unmerged, since the
+    reviewer receives the base branch's `AGENTS.md`; discovered issue 41, after the merge.
+  - F6 (low, simpler alternative), rejected: the key's `budget` is part of the hashed answer key, and the two copies
+    are pinned equal by a test and checked before any call.
+- Tests first for the fixes, rerun in a scratch clone of each parent commit with the commit's test file:
+  - Launcher (base `f0eb19e`, `python3 -m pytest -q -p no:cacheprovider --tb=line
+    tests/tools/test_run_independent_review.py -k "<names>"`; 2 failed):
+    `test_each_review_asks_whether_the_change_or_a_fix_adds_a_mechanism` `:1636 assert 'a step that is added or
+    repeated and a second copy of a fact that must be kept current are mechanisms too' in "Mechanisms: a mecha…"`;
+    `test_a_simpler_alternative_is_only_a_mechanism_the_owner_approved` `:1665 AssertionError` (the kind bullet with
+    "of at least `medium` severity" is not in the output section). The rulebook commit `db39dd5` is rule text only.
+  - Runner (base `db39dd5`, `python3 -m pytest -q -p no:cacheprovider --tb=line tests/tools/test_run_review_benchmark.py
+    -k "<names>"`; 5 failed): the three cases of
+    `test_a_leak_term_only_in_a_part_of_the_prompt_the_launcher_builds_is_found` (a term only in the initial or the
+    recheck mechanism rule, or only in a recheck case's answers) `:239 AssertionError: assert [] == ['prompt (…):
+    SECRET-LEAK-TERM', …]`, after the twin's assertion that the case without the term passes (`:232`) held; and
+    `test_problem_id_or_leak_term_in_the_inputs_is_refused[rules-prompt]` and `[task-prompt]` `:208 assert False` (the
+    earlier search labelled such a hit `rules` or `task`, not `prompt`).
+- Validation of the fixes, local, on `f22bb89` in a clean worktree of that commit (the commits after it change only
+  `docs/`): `make qa-quality` passed (qa-trace in PR mode against `origin/poc/agentic-sdlc`: requirements 170,
+  architecture 34, design 131, tests 386, coverage gaps 113, 0 new; unit traceability with 28 mapped requirements, the
+  unit guard over 357 tests, docs-check over 15 live documents, test-lint, and qa-deploy with 18 known violations and
+  22 warnings); `make tooling-test` 932 passed, with 2 deprecation warnings of untouched tests (discovered issue 42),
+  and 9 shell tests (with a scratch shellcheck); `make lint` passed (0 new or worsened findings); `make
+  unit-guard-check` (357 passed) and `make gate-consistency` passed. Not run, as above: the full E2E suite (no
+  service, policy, compose, harness or CI file changed), `make unit-trust`, `make unit-mutation`, `make unit-diff-cov`
+  (no `services/` change), and CI (the branch is not pushed).
+- Review: round 2 of the unit `owner-decisions-2`, the recheck, is next.
 
 ## 2026-11-14 Slice agentic-sdlc-poc 4: round 2, the owner's findings on review severity
 
