@@ -144,3 +144,5 @@
 {"token": "M144", "verdict": "no match", "expected_id": null, "reason": "Finding is on scripts/test_lint.py about an exemption without expiry, not unit-trust.yml."}
 {"token": "M145", "verdict": "no match", "expected_id": null, "reason": "Line 52 is outside the 1240-2000 range and the finding describes an unvalidated milestone selector."}
 {"token": "M146", "verdict": "no match", "expected_id": null, "reason": "Finding is on compose about unauthenticated Redis, not diff_coverage_gate.sh."}
+{"token": "M147", "verdict": "match", "expected_id": "R1", "reason": "A high finding on AGENTS.md line 168 (inside 167-171) whose own problem text, not a quote, says the fix 'adds a repeated process step' and the summary could 'leave out' per-job conclusions, which hits the terms 'step' and 'leave out'."}
+{"token": "M148", "verdict": "match", "expected_id": "R1", "reason": "A high finding on AGENTS.md line 169 (inside 167-171) whose own problem text, not a quote, calls the repeated rewrite 'a repeated process step' and 'new mechanisms', which hits the terms 'step' and 'mechanism'."}

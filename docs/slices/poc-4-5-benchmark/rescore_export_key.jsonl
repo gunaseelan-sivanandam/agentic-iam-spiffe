@@ -144,3 +144,5 @@
 {"case": "RM-4", "configuration": "open+list+sev", "finding": "F8", "prompt_identity": "9914278c96c35b4b27719bcdac50be0e86655b7e218b1e392685a13efbbf4aec", "run": 1, "token": "M144"}
 {"case": "RM-2", "configuration": "open+list+sev", "finding": "F13", "prompt_identity": "292fbbc7a35d031689b420f97092e274147446ef75165c12d54cd4920a3862bf", "run": 1, "token": "M145"}
 {"case": "RM-5", "configuration": "open-B+list", "finding": "F11", "prompt_identity": "37c0a46346ce0e5050243e4fbc92e0e377d0b5ec3e2977ead5b6bb95be943a69", "run": 1, "token": "M146"}
+{"case": "RC-3", "configuration": "recheck-B", "finding": "R1-1", "prompt_identity": "978c5247da9a266daad40c89f46663e143e74c476f0563f02f0ca391e2e6219c", "run": 1, "token": "M147"}
+{"case": "RC-3", "configuration": "recheck-A", "finding": "R1-1", "prompt_identity": "10ab8d508b6fd716e41f551870ef1b95cdbc3ffc2e0b5df5eb2484d65bd2fb14", "run": 1, "token": "M148"}
