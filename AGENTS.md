@@ -365,10 +365,10 @@ All of the following, in the same change:
   launcher refuses answers that break a rule
   `make docs-check` applies to them. The prompt asks an initial review whether the change adds a
   mechanism (as [Fixes stay within the agreed decisions](#independent-review) defines it) without the
-  user's approval where changing a choice would do, which it reports as a defect, and a recheck the
-  same of each `fixed:` answer, which it re-raises at its severity if so. Whoever writes a task text
-  never makes a file list the scope, never says "only check X", and never asks a closed recheck
-  question.
+  user's approval where changing a choice would do, which it reports as a defect of at least medium
+  severity, and a recheck the same of each `fixed:` answer, which it re-raises at its severity if so.
+  Whoever writes a task text never makes a file list the scope, never says "only check X", and never
+  asks a closed recheck question.
 - **What the reviewer receives.** The launcher computes the review's inputs; the author does not
   choose or summarise them. The files under review come from the diff between the merge-base and
   the reviewed commit, deleted files apart; `--path` only puts files first and carries the
@@ -418,17 +418,17 @@ All of the following, in the same change:
   for each question, the IDs of the findings that answer it, or "no finding".
 - **Fixes stay within the agreed decisions** (the plan's decisions, or the request, and this file).
   A fix corrects the defect or changes the choice that caused it; it never adds a mechanism (a gate,
-  check, CI job, process step, document, register or field; a step added or repeated, such as one
-  done again after every push, and a second copy of a fact that must be kept current are mechanisms
-  too). A finding that only a new or wider mechanism would answer is answered `owner:` with a
-  one-line proposal, as [Ask before growing](#poc-scope-and-proportion) asks of every addition. A fix
-  that would change an agreed decision goes to the user as a question before it is applied.
+  check, CI job, process step, document, register or field; a step added or repeated and a second
+  copy of a fact that must be kept current are mechanisms too). A finding that only a new or wider
+  mechanism would answer is answered `owner:` with a one-line proposal, as
+  [Ask before growing](#poc-scope-and-proportion) asks of every addition. A fix that would change an
+  agreed decision goes to the user as a question before it is applied.
 - **Report sections.** Besides findings of each severity, every round may report *simpler
   alternatives* (a mechanism the user approved, in a plan or these rules, that could be removed or
   simplified within the agreed decisions; always low) and *decision concerns* (an agreed decision
   that itself seems to cause a problem; for the user, never applied by the author). A mechanism
-  added without that approval is a defect, not a simpler alternative, and a recheck re-raises a fix
-  that adds one at the finding's severity
+  added without that approval is a defect of at least medium severity, not a simpler alternative,
+  and a recheck re-raises a fix that adds one at the finding's severity
   ([Fixes stay within the agreed decisions](#independent-review)). The reviewer may check metadata
   of secret files (existence, owner, mode, readability), never their content.
 
