@@ -763,6 +763,21 @@ def test_rescore_writes_a_separate_output_and_leaves_stage_a_unchanged(repo: tup
     assert (r.root / bench.RESULTS["A"]).read_text() == before
 
 
+def test_rescore_a_applies_the_quote_rule_to_the_planted_line(repo: tuple[Repo, str, str],
+                                                               monkeypatch: pytest.MonkeyPatch) -> None:
+    """Discovered issue 57: stage A's re-score prepares each case for its expected lines, as stage B's does."""
+    r, base, commit = repo
+    _stage_a(r, base, commit, monkeypatch)
+    path = r.root / bench.RESULTS["A"]
+    lines = [{**json.loads(t), "findings": [_finding("X1", problem="this line: print('change')")]}
+             for t in path.read_text().splitlines()]
+    _write(r.root, str(bench.RESULTS["A"]), "".join(json.dumps(line) + "\n" for line in lines))
+    r.key([_case("C1", base, commit, expected=[_expected(terms=["change"])])])
+    assert bench.main(["--rescore", "A"], repo=r.root) == 0
+    out = [json.loads(line) for line in (r.root / bench.RESCORE_FILE).read_text().splitlines()]
+    assert [(o["score"]["detected"], o["score"]["location_only"]) for o in out] == [([], ["E1"]), ([], ["E1"])]
+
+
 def test_stage_a_results_are_read_as_before() -> None:
     old = bench.score(_key_case(), {"findings": [_finding("X1"), _finding("X2", kind="advisory", line=9)],
                                     "verdict": "no"})
@@ -1177,6 +1192,32 @@ def test_a_finding_that_only_quotes_the_planted_line_does_not_detect_it(repo: tu
     own_words = _new_finding("X2", "high", problem="the change prints instead of logging")
     assert bench.score(prepared.case, {"findings": [quoting]}, tuple(prepared.quoted))["detected"] == []
     assert bench.score(prepared.case, {"findings": [own_words]}, tuple(prepared.quoted))["detected"] == ["E1"]
+
+
+# Discovered issue 57 (the owner, 2026-11-17): a quoted part of a planted line is no match either, as the key's rule
+# says ("outside a verbatim quote of the expected lines"); the finding's own words are never removed.
+@pytest.mark.parametrize("quote", ["`{}`", '"{}"', "\u201c{}\u201d"], ids=["backticks", "straight", "curly"])
+def test_a_finding_that_quotes_part_of_the_planted_line_detects_it_only_by_its_own_words(
+        repo: tuple[Repo, str, str], tmp_path: Path, quote: str) -> None:
+    _r, base, commit = repo
+    prepared, _key = _prepared(repo, tmp_path, _case("C1", base, commit, expected=[_expected(terms=["change"])]))
+    part = quote.format("('change')")
+    quoting = _new_finding("X1", "high", problem=f"the call passes {part} to print")
+    own_words = _new_finding("X2", "high", problem=f"the change passes {part} to print")
+    result = bench.score(prepared.case, {"findings": [quoting]}, tuple(prepared.quoted))
+    assert result["detected"] == [] and result["location_only"] == ["E1"]
+    assert bench.score(prepared.case, {"findings": [own_words]}, tuple(prepared.quoted))["detected"] == ["E1"]
+
+
+@pytest.mark.parametrize(("span", "detected"), [("change'", ["E1"]), ("'change'", []), ("the change here", ["E1"])],
+                         ids=["below-quote-min", "at-quote-min", "not-in-an-expected-line"])
+def test_a_quoted_span_is_removed_from_quote_min_on_and_only_when_an_expected_line_holds_it(
+        repo: tuple[Repo, str, str], tmp_path: Path, span: str, detected: list) -> None:
+    _r, base, commit = repo
+    prepared, _key = _prepared(repo, tmp_path, _case("C1", base, commit, expected=[_expected(terms=["change"])]))
+    assert len("change'") == bench.QUOTE_MIN - 1 and prepared.quoted == ["print('change')"]
+    finding = _new_finding("X1", "high", problem=f"the argument `{span}` is new")
+    assert bench.score(prepared.case, {"findings": [finding]}, tuple(prepared.quoted))["detected"] == detected
 
 
 def test_identity_changes_with_the_planted_patch_and_the_recheck_inputs(repo: tuple[Repo, str, str], tmp_path: Path) -> None:
