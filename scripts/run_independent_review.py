@@ -270,8 +270,10 @@ def check_publishable(text: str, label: str) -> None:
 # --- Git ---------------------------------------------------------------------------------------
 
 
-def git(repo: Path, *args: str) -> str:
-    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=False)  # noqa: S603, S607 - fixed argv, no shell; the tool is found on PATH
+def git(repo: Path, *args: str, config: tuple[str, ...] = ()) -> str:
+    """Run a git command in `repo`, each `config` setting given as `-c` before it; refused when git fails."""
+    settings = [part for setting in config for part in ("-c", setting)]
+    result = subprocess.run(["git", "-C", str(repo), *settings, *args], capture_output=True, text=True, check=False)  # noqa: S603, S607 - fixed argv, no shell; the tool is found on PATH
     if result.returncode != 0:
         raise ReviewRefusedError(f"git {args[0]} failed: {result.stderr.strip()[:200]}")
     return result.stdout
@@ -484,10 +486,14 @@ def make_frozen_copy(repo: Path, commit: str, dest: Path, withheld: list[str], *
 
 
 def change_diff(repo: Path, diff_base: str, commit: str, withheld: list[str]) -> str:
-    """The change from the merge-base with `diff_base` to `commit`, without the withheld paths."""
+    """The change from the merge-base with `diff_base` to `commit`, without the withheld paths, in git's default format
+    whatever the repository configures, as `diff_places` reads it: no external diff or text conversion, no colour,
+    `a/` and `b/` prefixes, names unquoted, and a blank context line with its leading space."""
     merge_base = git(repo, "merge-base", diff_base, commit).strip()
     excludes = [f":(exclude){path}" for path in withheld]
-    return git(repo, "diff", merge_base, commit, "--", ".", *excludes)
+    return git(repo, "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--src-prefix=a/", "--dst-prefix=b/",
+               merge_base, commit, "--", ".", *excludes,
+               config=("core.quotePath=false", "diff.suppressBlankEmpty=false"))
 
 
 def review_mode(unit: str, round_no: int) -> str:

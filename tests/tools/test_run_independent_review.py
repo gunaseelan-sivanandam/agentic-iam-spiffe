@@ -220,6 +220,26 @@ def test_change_diff_leaves_out_the_withheld_files(fx: Fixture, tmp_path: Path) 
     assert not (copy / RECORD).exists()
 
 
+def test_change_diff_has_git_default_format_whatever_the_repository_configures(fx: Fixture) -> None:
+    """Decision concern 18 (b), review round-3 F6: `diff_places` reads git's default diff format, so `change_diff` fixes
+    it: a repository that configures no prefixes, mnemonic prefixes, colour, an external diff, blank context lines
+    without their space and quoted names gives the same diff as one without them, whose lines map to the files and
+    lines they show, a non-ASCII name included."""
+    _write(fx.work, "docs/blank.md", "one\n\nthree\n")
+    since = _commit_all(fx.work, "a file with an empty line")
+    _write(fx.work, "docs/blank.md", "one\n\nthree changed\n")
+    _write(fx.work, "docs/é.md", "première\n")
+    commit = _commit_all(fx.work, "a change next to an empty line, and a non-ASCII name")
+    plain = launcher.change_diff(fx.work, since, commit, [RECORD, LOG])
+    for key, value in (("diff.noprefix", "true"), ("diff.mnemonicPrefix", "true"), ("color.diff", "always"),
+                       ("diff.external", "true"), ("diff.suppressBlankEmpty", "true"), ("core.quotePath", "true")):
+        _git(fx.work, "config", key, value)
+    configured = launcher.change_diff(fx.work, since, commit, [RECORD, LOG])
+    assert configured == plain
+    assert sorted(set(launcher.diff_places(configured).values())) == [
+        ("docs/blank.md", 1), ("docs/blank.md", 2), ("docs/blank.md", 3), ("docs/é.md", 1)]
+
+
 def test_unknown_commit_is_refused_before_any_call(fx: Fixture) -> None:
     assert _run(fx, commit="0" * 40) == 2
     assert fx.calls() == []
