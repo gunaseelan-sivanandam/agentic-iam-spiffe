@@ -14,8 +14,10 @@ detection with the checklist question behind it, and the misses. The runner's ow
   adds decision concern 8's configuration `open+list+sev` and fixes that measurement's criteria. Round 2 of slice 4
   (the owner, 2026-11-14): version 5 (`2d7c5cf6…`, match rule `36d2c150…`; R2-9) counts a match rated medium as detected, and a medium finding on a
   no-defect case as a false alarm, since R2-1 has medium findings fixed; version 6 (`ba6975d4…`, match rule
-  `422d32c2…`), before their runs, adds the recheck cases RC-3 and RC-4 (R2-10) and the rule's sentence for them. The
-  runner's report below is built with version 6. Decision concern 13's wording (the owner, 2026-11-16) is in the
+  `422d32c2…`), before their runs, adds the recheck cases RC-3 and RC-4 (R2-10) and the rule's sentence for them;
+  version 7 (`0ee2ad14…`, same rule; round 3 of slice 4, the owner, 2026-11-17), before its runs, only raises the
+  budget from 85 to 95, so version 6's results are read with it and keep their scores. The runner's report below is
+  built with version 7. Decision concern 13's wording (the owner, 2026-11-16) is in the
   launcher's output section, not in the key, so the key and its rule did not change for RC-3's second runs; their
   prompts did, so the runner ran them as new reviews.
 - **Reviewer:** Opus (`claude-opus-5-5`), initial reviews at high effort, rechecks at medium, CLI 2.1.321 (RC-2 and
@@ -34,8 +36,13 @@ detection with the checklist question behind it, and the misses. The runner's ow
   On 2026-11-16 the owner confirmed the budget of 85 (decision concern 11), so the hard stop is 85 and the runner
   checks the key's budget against it again; RC-3 then ran once more on each recheck wording, under decision concern
   13's wording, by a plain `--run`: 2 calls, both completed at the first try, so 82 of 85 are used. They ran under
-  the same pinned CLI 2.1.323, whose canary is done. The fresh sessions that confirmed findings blind (below) are not
-  reviewer calls and are not counted, as in round 2.
+  the same pinned CLI 2.1.323, whose canary is done. On 2026-11-17 the owner raised the budget from 85 to 95 for round
+  3 of slice 4 ("Round 3 of slice 4: I approve R3-1 to R3-4, the budget 85 → 95, and the probe and replays"; the
+  hard stop and key version 7), and RC-1 to RC-4 ran once each on `recheck-A`, the recheck wording the launcher
+  ships (`--run --configuration recheck-A`): 4 calls, 83 to 86, each completed at the first try, so 86 of 95 are
+  used. They ran under the same pinned CLI 2.1.323. Round 3's probe and replays ran through the launcher, not this
+  runner, and are not counted here (the decision page, section "Round 3"). The fresh sessions that confirmed
+  findings blind (below) are not reviewer calls and are not counted, as in round 2.
 - **Configurations:** `short+list` (stage A's short prompt without its retired kinds sentence), `open+list` (4.1's
   mandate, the launcher's today), `open-B+list` (4.4's drafted initial mandate), `recheck-A` (4.1's recheck mandate)
   and `recheck-B` (4.4's drafted recheck mandate). Every configuration carries its case's stage list.
@@ -49,8 +56,8 @@ differ only in the recheck sentence):
 round 2 has blocking, high and medium findings fixed (R2-1), so a match rated medium is caught. The earlier results
 are re-scored from the findings they recorded, with no reviewer call, into `benchmark_rescore_B.jsonl`
 (`--rescore B`); the results file keeps the score of each run, and the re-score writes nothing unless, scored as the
-earlier rule did, every review gives the score it was recorded with (62 of 62 do). RC-3's and RC-4's runs are scored
-under R2-9 only.
+earlier rule did, every review gives the score it was recorded with (62 of 62 do). RC-3's and RC-4's runs, and
+round 3's, are scored under R2-9 only.
 
 Detections are confirmed blind. Under the rule of their runs: the author's blinded verdicts (S45-D7) on 125 exported
 findings: 29 match. Two of them, T008 and T047 (RM-6, `open+list`, its repeat), were first judged no match and changed
@@ -71,8 +78,12 @@ already given). A second fresh session, given a directory holding only those two
 a match (by its report it opened nothing else), on the rule's place-and-term clause: each re-raise is at
 `AGENTS.md` lines 168 and 169 with its own words "step", "leave out" or "mechanism". The export shows a finding without
 the recheck's accounting, so the confirmer cannot apply the recheck sentence itself; the ID it sees, R1-1, is the
-earlier finding's. Whether these verdicts stand is also decision concern 16. Cost and minutes include the failed
-reviews.
+earlier finding's. Whether these verdicts stand is also decision concern 16. Round 3's four new runs (2026-11-17)
+came after these. Their four findings were appended the same way, as `M149` to `M152`, under tokens that are now
+keyed by each result line's prompt identity (discovered issue 44), and a fresh session, given a directory holding
+only those four rows and the match rule, judged M149 (RC-1's R1-1), M150 (RC-4's) and M152 (RC-3's) a match and
+M151, RC-1's new R2-1, no match (by its report it opened nothing else); decision concern 16 applies to it too. Cost
+and minutes include the failed reviews.
 
 Stage A's results carry the retired kinds `blocking` and `advisory`, and `advisory` held medium and low alike, so they
 cannot be re-scored: stage A stays as it was, its kind `blocking` the only detection. False alarms follow the rule's
@@ -91,7 +102,8 @@ elsewhere), so under R2-9 a medium finding on a no-defect case is a false alarm,
 
 **Under R2-9 (blocking, high or medium), with RC-3 and RC-4;** the recheck rows once with RC-3's first runs (R2-5's
 wording, 2026-11-14) and once with its second runs (decision concern 13's wording, 2026-11-16), each by the runner's
-own counting over the lines of that wording:
+own counting over the lines of that wording; and `recheck-A` once more over round 3's runs of RC-1 to RC-4
+(2026-11-17), counted the runner's way over those four lines only:
 
 | Configuration | Detected (of 11 defect cases) | 95% interval | By a blocking finding | False alarms (no-defect reviews) | False blockers (all completed reviews) | Unread files | Failed | Cost USD per detection |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -102,14 +114,18 @@ own counting over the lines of that wording:
 | `recheck-B`, RC-3 under R2-5's wording | 2 of 3 | 0.09–0.99 | 2 | 0 (1 review) | 0 | 1 | 0 | 0.50 |
 | `recheck-A`, RC-3 under decision concern 13's wording | 3 of 3 | 0.29–1.00 | 2 | — (RC-2 failed) | 0 | 0 | 1 | 0.33 |
 | `recheck-B`, RC-3 under decision concern 13's wording | 3 of 3 | 0.29–1.00 | 2 | 0 (1 review) | 0 | 1 | 0 | 0.33 |
+| `recheck-A`, round 3 (RC-1 to RC-4 run again, 2026-11-17) | 3 of 3 | 0.29–1.00 | 2 | 0 (1 review) | 0 | 2 | 0 | 0.31 |
 
 The three defect cases of each recheck row did not run under one prompt: RC-1 ran before R2-5 (CLI 2.1.321), RC-4
-under R2-5's wording, and RC-3 under the wording its row names. Only RC-3 ran under decision concern 13's wording.
+under R2-5's wording, and RC-3 under the wording its row names; the round-3 row's four cases ran under one
+launcher, round 3's (R3-2, R3-3 and the mechanism wording as shipped). Only RC-3 ran under decision concern 13's
+wording.
 In this report decision concern 13's wording is its first wording, whose mechanism definition had the example "such
 as "again after every push"", RC-3's own answer phrase. The review of the owner's decisions of 2026-11-16 (unit
 `owner-decisions-2`, F2) removed the example, so RC-3's two re-raises ran under a wording that is no longer shipped,
-and the shipped wording, without the example, is unmeasured; whether to measure it is the owner's (decision concern
-17 on the [decision page](../agentic-sdlc-poc/slice_4_decisions.md)).
+and the shipped wording, without the example, was unmeasured until round 3; whether to measure it was the owner's
+(decision concern 17 on the [decision page](../agentic-sdlc-poc/slice_4_decisions.md)), who chose RC-1 to RC-4 once
+each on `recheck-A` (the round-3 row); `recheck-B` has not run under it.
 
 - **What R2-9 changes.** `short+list` gains FS-2, RM-3 and RM-4; `open+list` gains RM-3 (its RM-4 match is rated
   low, so it stays seen); `open-B+list` gains RM-3 and RM-4. No detection is lost. The confirmer upheld a medium match
@@ -162,10 +178,11 @@ and the shipped wording, without the example, is unmeasured; whether to measure 
       after every push", and a second copy of a fact that must be kept current are mechanisms too; a fix that adds one
       without approval is re-raised at its severity, not reported as a simpler alternative; a simpler alternative is a
       mechanism the owner approved). The example "again after every push" has since been removed (review
-      `owner-decisions-2`, F2), so these runs are of a wording that is no longer shipped; the shipped wording is
-      unmeasured (decision concern 17). **Both wordings re-raised R1-1 under its ID, at high, so both detected it;** the
-      blind confirmer judged both a match. Each read `AGENTS.md` and the change, raised no other finding and gave the
-      verdict "no". `recheck-A`: "The fix answers the timing problem by adding a repeated step (write the summary once
+      `owner-decisions-2`, F2), so these runs are of a wording that is no longer shipped; the shipped wording was
+      unmeasured until round 3 (decision concern 17; below). **Both wordings re-raised R1-1 under its ID, at high,
+      so both detected it;** the blind confirmer judged both a match. Each read `AGENTS.md` and the change, raised no
+      other finding and gave the verdict "no".
+      `recheck-A`: "The fix answers the timing problem by adding a repeated step (write the summary once
       CI has finished, then rewrite it after every push) and keeps a second copy of the CI conclusions, without owner
       approval. It could instead have dropped the copied conclusions and linked to the head commit's checks on
       GitHub. Re-raised at high." (USD 0.23, 0.3 minutes). `recheck-B`: "The fix fills the timing gap by adding a
@@ -189,7 +206,7 @@ and the shipped wording, without the example, is unmeasured; whether to measure 
     named the same simpler choice as the reason. So the runs show a recheck telling a false fact from a true one under
     both wordings, and re-raising a fix that grows the process only once the mechanism definition names a repeated
     step and a kept copy, with RC-3's own phrase as its example, and a simpler alternative no longer covers an
-    unapproved mechanism. Without the example, as the wording now ships, no case has run.
+    unapproved mechanism. Without the example, as the wording now ships, no case had run before round 3 (below).
     - *What they can show:* on this one case, under this model, CLI and base, both recheck wordings went from
       accepting the fix to re-raising it at its severity, each in one run.
     - *What they cannot show:* a rate (one run per case and wording; earlier in this benchmark two runs of the same
@@ -208,6 +225,32 @@ and the shipped wording, without the example, is unmeasured; whether to measure 
       those base rules do, and both reviewers followed the output section. And R2-5's and R2-7's effect is still
       unmeasured: RC-3 and RC-4 have no run without them, and RC-1 and RC-2 ran before them, under other CLI versions
       and prompts.
+
+- **The round-3 rechecks** (round 3 of slice 4, measurement 3; decision concern 17, decided by the owner on
+  2026-11-17), after R3-2 (for every `fixed:` or `rejected:` answer it accepts or re-raises, a recheck quotes a line
+  of a file the answer names or cites; a file counts as seen when a Read of it succeeded or a Grep output showed its
+  lines) and R3-3 (what an existing rule already requires of a fix, such as a test for new behaviour or a handoff
+  record, is not an added mechanism), under the mechanism wording as shipped, without the example. RC-1 to RC-4 ran
+  once each on `recheck-A`, the recheck wording the launcher ships; `recheck-B` did not run. Each case is still one
+  planted commit on `e842e97`, so its reviewer got that commit's `AGENTS.md` (discovered issue 18) and the whole
+  case as its change, not R3-1's range since the reviewed round.
+  - **RC-1:** re-raised R1-1 at blocking, so detected (M149), and raised a new high, R2-1, on
+    `docs/test_spec.md:109`, which the blind confirmer judged no match (M151; a new ID, not R1-1). It quoted the
+    harness (`scripts/rogue_node_tests.sh:1935`), which its `paths_read` does not list; the runner keeps no
+    stream, so which lines the check counted as seen is not verified (discovered issue 45) (USD 0.19, 0.3 minutes).
+  - **RC-2:** accepted both answers, each quoted, raised no finding and gave the verdict "yes", so it passed; for
+    R1-2, whose fix adds tests, it cited the carve-out: "The fix adds only tests, which the existing rules require
+    for new behaviour, so it adds no mechanism". It left `AGENTS.md` unread (USD 0.30, 0.6 minutes). Its earlier
+    `recheck-A` run had failed the read check.
+  - **RC-3:** re-raised R1-1 at high under the shipped mechanism wording, quoting `AGENTS.md:168-171`, so detected
+    (M152) (USD 0.19, 0.3 minutes).
+  - **RC-4:** re-raised R1-1 at blocking, quoting the cited fixture (`tests/tools/test_evidence_secrets.py:86`) and
+    `scripts/evidence_secrets.py:41`, so detected (M150) (USD 0.26, 0.4 minutes).
+  - *What they can show:* on these four cases, under this model, CLI and base, the shipped recheck wording with
+    R3-2 and R3-3 re-raised the three false answers and accepted the two answers that hold, each in one run: RC-3's
+    fix that adds a step was re-raised without the example, and RC-2's fix that adds tests was not re-raised.
+  - *What they cannot show:* a rate (one run each); R3-1's effect, since each case is reviewed whole; and how
+    `recheck-B` does under R3-2 and R3-3, so round 3 does not compare the two wordings.
 
 - **Discordant cases,** `short+list` against `open+list`: only `short+list` FS-1; only `open+list` FS-2 and RM-6.
   `open+list` against `open-B+list`: only `open+list` PB-3 and RM-6; only `open-B+list` FS-1.
@@ -490,24 +533,32 @@ mandate, the lists at `04f8df4`, each case's base rules and the model at high ef
 - **Recheck mandate wording:** 4.1's or the draft. Both re-raised the false fix (RC-1) and the false rejection
   (RC-4); both accepted the fix that adds a mechanism (RC-3) under R2-5's wording and both re-raised it under
   decision concern 13's, so the wordings do not differ there. On answers that hold (RC-2) the draft accepted both
-  and 4.1's failed the read check; one run each, so this leans to the draft without showing it better.
+  and 4.1's failed the read check; one run each, so this leans to the draft without showing it better. In round 3,
+  under R3-2 and R3-3, 4.1's wording (the launcher's) re-raised RC-1, RC-3 and RC-4 and passed RC-2, one run each;
+  the draft did not run under them, so round 3 does not compare the two.
 - **Final mandate wording:** by reason; no case measures it (S45-D8).
 
 The launcher's mandate constants stay 4.1's until the owner chooses (S45-D8).
 
 ## The runner's report, verbatim
 
-Built after decision concern 13's runs of RC-3 and their blind confirmation (2026-11-16), with answer key version 6.
-`open+list+sev` is confirmed by the second export's verdicts, every other setup by the first export's, and the
-findings neither held by the third export's. The runner takes RC-3's second runs as further first runs of
-`recheck-A` and `recheck-B`, because their prompts differ (S45-D2: a change to anything the reviewer gets makes a new
-review), so its recheck rows read 3 of 4, over RC-1, RC-3 twice and RC-4; its line on rechecks of false answers
-lists RC-3 twice, first missed and then detected; and under R2-9 its rating agreement takes each wording's two RC-3
-runs as a pair rated differently (1 the same and 4 different, where the repeats alone give 1 and 2). The counts
-above split the two runs by wording.
+Built after round 3's runs of RC-1 to RC-4 on `recheck-A` and their blind confirmation (2026-11-17), with answer key
+version 7. `open+list+sev` is confirmed by the second export's verdicts, every other setup by the first export's, and
+the findings neither held by the third export's (round 3's four appended as M149 to M152). The runner takes RC-3's
+second runs as further first runs of `recheck-A` and `recheck-B`, because their prompts differ (S45-D2: a change to
+anything the reviewer gets makes a new review), and round 3's four runs likewise as further first runs of
+`recheck-A` (discovered issue 39). So its `recheck-B` row reads 3 of 4, over RC-1, RC-3 twice and RC-4, and its
+`recheck-A` row 6 of 7, over RC-1 twice, RC-3 three times and RC-4 twice, with round 3's RC-2 as its one completed
+no-defect review; its line on rechecks of false answers lists RC-3 twice per wording before round 3, first missed
+and then detected, and round 3's RC-1, RC-3 and RC-4 once more at its end; its line on answers that hold lists RC-2
+on `recheck-A` twice, failed and then passed; and under R2-9 its rating agreement takes each wording's first two RC-3
+runs as a pair rated differently, and round 3's RC-1 and RC-4 runs with their first ones as pairs rated the same (3
+the same and 4 different, where the repeats alone give 1 and 2). Read round 3's lines by their prompt identities in
+`benchmark_results_B.jsonl`: RC-1 `12670029`, RC-2 `b1a96364`, RC-3 `f9a54a8f`, RC-4 `083c54f6`; they are the last
+four per-review rows below. The counts above split the runs by wording and by round.
 
 ````markdown
-Stage B. Answer key SHA-256: `ba6975d46b111311de687b453bb00390e74f8cfafd8e462147d3274014c00870`; match rule SHA-256: `422d32c2be493a13c8a715f815763d95f3a76d6285daabe959af4dbdebb465fb`; lists at `04f8df4`.
+Stage B. Answer key SHA-256: `0ee2ad1414c00d49f6aef68f69df749ce2f653b232edbc76ad2126192035721a`; match rule SHA-256: `422d32c2be493a13c8a715f815763d95f3a76d6285daabe959af4dbdebb465fb`; lists at `04f8df4`.
 
 Detections are confirmed by the author's blinded verdicts, and the findings that no earlier export held by a fresh session's blinded verdicts on the third export.
 
@@ -541,13 +592,13 @@ Under the key's rule (R2-9: blocking, high or medium), every review, those recor
 | open+list | 8 of 11 | 0.39–0.94 | 5 | 7 (4) | 7 | 1 | 42 | 0 | 1.53 | 4.6 |
 | open+list+sev | 9 of 11 | 0.48–0.98 | 6 | 7 (4) | 6 | 0 | 20 | 0 | 1.45 | 4.6 |
 | open-B+list | 8 of 11 | 0.39–0.94 | 5 | 6 (2) | 7 | 1 | 50 | 0 | 1.52 | 4.4 |
-| recheck-A | 3 of 4 | 0.19–0.99 | 2 | 0 (0) | 0 | 1 | 0 | 0 | 0.41 | 0.6 |
+| recheck-A | 6 of 7 | 0.42–1.00 | 4 | 0 (1) | 0 | 1 | 2 | 0 | 0.36 | 0.6 |
 | recheck-B | 3 of 4 | 0.19–0.99 | 2 | 0 (1) | 0 | 0 | 1 | 0 | 0.40 | 0.6 |
 | short+list | 9 of 11 | 0.48–0.98 | 6 | 4 (4) | 6 | 1 | 42 | 0 | 1.27 | 3.7 |
 
 Discordant cases, short+list against open+list: `{"only short+list": ["FS-1", "RM-4"], "only open+list": ["RM-6"]}`
 Discordant cases, open+list against open-B+list: `{"only open+list": ["PB-3", "RM-6"], "only open-B+list": ["FS-1", "RM-4"]}`
-Rating agreement where a case ran twice, by expected defect: `{"same": 1, "different": 4}`
+Rating agreement where a case ran twice, by expected defect: `{"same": 3, "different": 4}`
 Repeats (detected in run 1, run 2): FS-2 open+list: True, True; FS-2 short+list: True, True; RM-6 open+list: True, True; RM-6 short+list: failed, False
 
 Decision concern 8's measurement, open+list+sev against open+list, by the second blinded export's verdicts:
@@ -557,11 +608,11 @@ Decision concern 8's measurement, open+list+sev against open+list, by the second
 | open+list | 8 of 11 | FS-2, PB-1, PB-2, PB-3, RM-1, RM-2, RM-3, RM-6 | 5 | CL-1 3, CL-2 3, CL-3 0, DC-1 1 | 7 | 1 | 12.22 | 36.4 |
 | open+list+sev | 9 of 11 | FS-1, FS-2, PB-1, PB-2, PB-3, RM-1, RM-2, RM-3, RM-4 | 6 | CL-1 4, CL-2 3, CL-3 0, DC-1 0 | 6 | 0 | 13.03 | 41.8 |
 
-Origin stage of the findings against the list of the review that found them: `{"architecture and interfaces": {"architecture-and-interfaces": 16, "code": 16, "e2e-tests": 1, "requirements": 3}, "discovery": {"architecture-and-interfaces": 1, "code": 1, "plan-and-test-plan": 19}, "implementation": {"code": 123, "e2e-tests": 34, "plan-and-test-plan": 26, "requirements": 20}, "requirements": {"code": 2, "e2e-tests": 1, "plan-and-test-plan": 14, "requirements": 36}, "tests first": {"code": 39, "e2e-tests": 32, "plan-and-test-plan": 31, "requirements": 1}, "unknown": {"architecture-and-interfaces": 1, "code": 2, "e2e-tests": 1}}`
+Origin stage of the findings against the list of the review that found them: `{"architecture and interfaces": {"architecture-and-interfaces": 16, "code": 16, "e2e-tests": 1, "requirements": 3}, "discovery": {"architecture-and-interfaces": 1, "code": 1, "plan-and-test-plan": 19}, "implementation": {"code": 124, "e2e-tests": 34, "plan-and-test-plan": 27, "requirements": 20}, "requirements": {"code": 2, "e2e-tests": 1, "plan-and-test-plan": 14, "requirements": 36}, "tests first": {"code": 39, "e2e-tests": 34, "plan-and-test-plan": 31, "requirements": 1}, "unknown": {"architecture-and-interfaces": 1, "code": 2, "e2e-tests": 1}}`
 Canary: `[{"cli_version": "2.1.321 (Claude Code)", "valid": false, "passed": true, "twin_ran_hook": true}, {"cli_version": "2.1.321 (Claude Code)", "valid": false, "passed": true, "twin_ran_hook": true}, {"cli_version": "2.1.321 (Claude Code)", "valid": true, "passed": true, "twin_ran_hook": true}, {"cli_version": "2.1.323 (Claude Code)", "valid": true, "passed": true, "twin_ran_hook": true}]`. A canary is valid when its twin, without the launcher's flags, followed the planted CLAUDE.md and ran the planted hook (S45-D9); one whose twin ran only the hook shows that the flags keep settings out, not that they keep instruction files out.
-Rechecks of false answers (detected when the recheck lists the earlier finding as re-raised and reports it again under its ID, by the confirmed verdicts; a review that did not complete is a miss): RC-1 recheck-A: detected (R1-1 re-raised); RC-1 recheck-B: detected (R1-1 re-raised); RC-3 recheck-B: missed (R1-1 accepted); RC-3 recheck-A: missed (R1-1 accepted); RC-4 recheck-B: detected (R1-1 re-raised); RC-4 recheck-A: detected (R1-1 re-raised); RC-3 recheck-B: detected (R1-1 re-raised); RC-3 recheck-A: detected (R1-1 re-raised).
-Rechecks of answers that hold (passed when every answer is accepted and none is reported again; a review that did not complete is a miss): RC-2 recheck-B: passed (R1-1 accepted, R1-2 accepted); RC-2 recheck-A: missed (failed).
-Findings that name their checklist question: 67 of 420 (architecture-and-interfaces:2 2, architecture-and-interfaces:6 2, code:10 3, code:11 4, code:12 3, code:2 1, code:3 2, code:4 1, code:5 1, code:7 1, code:8 7, e2e:1 4, e2e:11 1, e2e:2 1, e2e:4 1, e2e:5 2, e2e:6 1, e2e:8 1, e2e:9 3, plan-review-checklist:6 1, plan-review:1 1, plan-review:11 1, plan-review:12 1, plan-review:2 2, plan-review:4 1, plan-review:7 1, plan:1 2, plan:10 1, plan:2 1, plan:4 1, plan:6 2, plan:7 1, plan:8 1, requirements:1 2, requirements:4 2, requirements:5 2, requirements:6 1, requirements:7 1, requirements:9 1).
+Rechecks of false answers (detected when the recheck lists the earlier finding as re-raised and reports it again under its ID, by the confirmed verdicts; a review that did not complete is a miss): RC-1 recheck-A: detected (R1-1 re-raised); RC-1 recheck-B: detected (R1-1 re-raised); RC-3 recheck-B: missed (R1-1 accepted); RC-3 recheck-A: missed (R1-1 accepted); RC-4 recheck-B: detected (R1-1 re-raised); RC-4 recheck-A: detected (R1-1 re-raised); RC-3 recheck-B: detected (R1-1 re-raised); RC-3 recheck-A: detected (R1-1 re-raised); RC-1 recheck-A: detected (R1-1 re-raised); RC-3 recheck-A: detected (R1-1 re-raised); RC-4 recheck-A: detected (R1-1 re-raised).
+Rechecks of answers that hold (passed when every answer is accepted and none is reported again; a review that did not complete is a miss): RC-2 recheck-B: passed (R1-1 accepted, R1-2 accepted); RC-2 recheck-A: missed (failed); RC-2 recheck-A: passed (R1-1 accepted, R1-2 accepted).
+Findings that name their checklist question: 70 of 424 (architecture-and-interfaces:2 2, architecture-and-interfaces:6 2, code:10 3, code:11 4, code:12 3, code:2 1, code:3 2, code:4 1, code:5 1, code:7 1, code:8 8, e2e:1 5, e2e:10 1, e2e:11 1, e2e:2 1, e2e:4 1, e2e:5 2, e2e:6 1, e2e:8 1, e2e:9 3, plan-review-checklist:6 1, plan-review:1 1, plan-review:11 1, plan-review:12 1, plan-review:2 2, plan-review:4 1, plan-review:7 1, plan:1 2, plan:10 1, plan:2 1, plan:4 1, plan:6 2, plan:7 1, plan:8 1, requirements:1 2, requirements:4 2, requirements:5 2, requirements:6 1, requirements:7 1, requirements:9 1).
 Second confirmer: agrees with the author on 9 of 10 sampled findings.
 
 What these sizes can show: with about 15 cases and one run each, a difference of two or three cases between two configurations is within chance; the intervals say how wide each count's uncertainty is. Both setups carry the stage lists, so the counts do not measure the lists' own effect. The owner decides from the counts; no rule decides.
@@ -648,6 +699,10 @@ Per-review rows: the automatic first pass of each review, under the rule of its 
 | RC-4 | recheck | recheck-A | completed | no | R1 | R1 |  |  |  |  | 1 |
 | RC-3 | recheck | recheck-B | completed | no | R1 |  |  |  |  |  | 1 |
 | RC-3 | recheck | recheck-A | completed | no | R1 |  |  |  |  |  | 1 |
+| RC-1 | recheck | recheck-A | completed | no | R1 | R1 |  |  |  |  | 1 |
+| RC-2 | recheck_holds | recheck-A | completed | yes |  |  |  |  |  |  | 1 |
+| RC-3 | recheck | recheck-A | completed | no | R1 |  |  |  |  |  | 1 |
+| RC-4 | recheck | recheck-A | completed | no | R1 | R1 |  |  |  |  | 1 |
 
 Detected: a finding rated as a detection (blocking or high before R2-9; blocking, high or medium under it) at the expected place with one of its terms; Detected (blocking): the same, by a blocking finding; Not blocking: a match rated below that (medium or low before R2-9, low under it; stage A: advisory); Unmatched blocking, and Unmatched (rated as a detection): findings at no expected place, the false blockers and false alarms on a clean case. "False blocker" names the metric, not a verdict: step 1 of decision concern 8 found all 20 of the first runs' to be real defects of the reviewed commits outside the planted ones.
 ````
