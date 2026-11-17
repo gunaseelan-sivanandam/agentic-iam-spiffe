@@ -355,13 +355,15 @@ All of the following, in the same change:
   and no task text removes or reorders a section, and the task text reaches the reviewer as claims to
   verify. A recheck gets the reviewer's own earlier report and the author's answers to it (only that
   section of the record, never the whole record); it lists every answer under `accounted` with the
-  files it opened for it (a file it only searched goes under `searched`), and the launcher fails it
-  when it leaves an answer out, names an opened file it did not read, or did not read a file that a
-  `fixed:` answer names or a `rejected:` answer cites. For every `rejected:` answer it accepts or
-  re-raises, it quotes the lines its decision rests on, with file and lines (`quotes`), at least one
-  quote from a file the answer cites when it cites one; the launcher fails it when such a quote is
-  missing, when a quote's file is not one it read, or when a quote's text is not at that place in the
-  copy or holds no whole line of it (whitespace aside, within two lines). Before the call, the
+  files it opened for it, and the launcher fails it when it leaves an answer out or did not see a
+  file that a `fixed:` answer names or a `rejected:` answer cites. A file is seen at the lines a Read
+  showed or a Grep printed in content mode; a Grep that lists files or counts shows none. For every
+  `fixed:` or `rejected:` answer it accepts or re-raises, it quotes the lines its decision rests on,
+  with file and lines (`quotes`), at least one quote from a file the answer names or cites when it
+  names or cites one, as the file is in the copy (a fix's quote comes from the change's diff only for
+  a named file the change deletes); the launcher fails it when such a quote is missing, or when a
+  quote's text is not at that place in the copy, holds no whole line of it, or was not shown to the
+  recheck (whitespace aside, within two lines). Before the call, the
   launcher refuses answers that break a rule
   `make docs-check` applies to them. The prompt asks an initial review whether the change adds a
   mechanism (as [Fixes stay within the agreed decisions](#independent-review) defines it) without the

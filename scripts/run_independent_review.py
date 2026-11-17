@@ -78,15 +78,22 @@ OPTIONAL_FINDING_FIELDS = {"question": str}
 ANSWER_STATUSES = ("accepted", "re-raised", "cannot determine")
 EVIDENCE_STATUSES = ("explained", "flagged")
 ACCOUNTED_FIELDS = {"item": str, "status": str, "note": str, "opened": list}
-# Owner-approved growth (2026-11-13): files a reviewer only searched (Grep, Glob) go here, so `opened` stays a claim
-# the launcher can check. Round 2 of slice 4 (the owner, 2026-11-14), R2-7: `quotes`, the lines a rejection the recheck
-# accepts or re-raises rests on, each checked at its place in the copy.
-OPTIONAL_ACCOUNTED_FIELDS = {"searched": list, "quotes": list}
+# Round 2 of slice 4 (the owner, 2026-11-14), R2-7: `quotes`, the lines a rejection the recheck accepts or re-raises
+# rests on, each checked at its place in the copy; R3-2 (the owner, 2026-11-17) extends it to fixes, removes
+# `searched` and keeps `opened` as the reviewer's note, unchecked.
+OPTIONAL_ACCOUNTED_FIELDS = {"quotes": list}
 QUOTE_FIELDS = {"file": str, "line": int, "end_line": int, "text": str}
 # R2-7: a quote counts at its place in the copy: whitespace aside, its text lies within the lines it names, or at most
 # this many lines before or after them (a miscounted line is not a wrong place).
 QUOTE_SLACK = 2
 READ_LINE_NUMBER = re.compile(r"^\s*\d+(?:\t|→)")  # the Read tool's line number, which a quoted line may keep
+# R3-2 (a): what a reviewer was shown. A Read's result names its window, or else numbers its lines. A Grep in content
+# mode prints `path:line:text` (a context line `path-line-text`, without the path when it searched one file) and names
+# its files nowhere else; a Grep that lists files or counts prints no line.
+READ_NUMBERED_LINE = re.compile(r"^\s*(\d+)(?:\t|→)", re.MULTILINE)
+GREP_PATH_LINE = re.compile(r"(?=([:-])(\d+)\1)")  # every place a path may end; the first that names a file counts
+GREP_FILE_LINE = re.compile(r"^(\d+)[:-]")
+GREP_OMITTED = ("[Omitted long matching line]", "[Omitted long context line]")
 ANSWER_WORDS = ("fixed", "deferred", "rejected", "owner")
 FINAL_UNIT = "final"
 PR_COMMENT_URL = re.compile(
@@ -185,7 +192,6 @@ REPORT_SCHEMA = {
                     "status": {"type": "string", "enum": [*ANSWER_STATUSES, *EVIDENCE_STATUSES]},
                     "note": _STRING,
                     "opened": {"type": "array", "items": _STRING},
-                    "searched": {"type": "array", "items": _STRING},
                     "quotes": {
                         "type": "array",
                         "items": {
@@ -671,12 +677,21 @@ class ToolCall:
     call_id: str
 
 
+@dataclass(frozen=True)
+class ToolOutput:
+    """What one tool call returned: its result's text, and the CLI's `tool_use_result` when the stream gives it."""
+
+    text: str
+    details: dict[str, Any]
+
+
 @dataclass
 class StreamSummary:
     tool_uses: list[ToolCall] = field(default_factory=list)
     denials: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
     denied_ids: set[str] = field(default_factory=set)
     failed_ids: set[str] = field(default_factory=set)  # calls whose result was an error: a failed Read read nothing
+    outputs: dict[str, ToolOutput] = field(default_factory=dict)  # R3-2: each call's output, by the call's ID
     offered: set[str] | None = None  # the tools the session's init event offers; None when it names none
     rate_limit: dict[str, Any] | None = None
     result: dict[str, Any] | None = None
@@ -703,6 +718,7 @@ def _add_event(summary: StreamSummary, event: dict[str, Any]) -> None:
         summary.tool_uses += _tool_uses(event)
     elif kind == "user":
         summary.failed_ids |= _failed_results(event)
+        summary.outputs.update(_tool_outputs(event))
     elif kind == "rate_limit_event":
         summary.rate_limit = event.get("rate_limit_info") or {}
     elif kind == "result":
@@ -729,6 +745,22 @@ def _failed_results(event: dict[str, Any]) -> set[str]:
     blocks = content if isinstance(content, list) else []
     return {str(b.get("tool_use_id")) for b in blocks
             if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("is_error")}
+
+
+def _tool_outputs(event: dict[str, Any]) -> dict[str, ToolOutput]:
+    """The output of each tool result in this message; the CLI's `tool_use_result` belongs to a message's only result."""
+    content = (event.get("message") or {}).get("content")
+    blocks = [b for b in (content if isinstance(content, list) else [])
+              if isinstance(b, dict) and b.get("type") == "tool_result"]
+    details = event.get("tool_use_result")
+    details = details if isinstance(details, dict) and len(blocks) == 1 else {}
+    return {str(b.get("tool_use_id")): ToolOutput(_result_text(b.get("content")), details) for b in blocks}
+
+
+def _result_text(content: Any) -> str:
+    if isinstance(content, list):
+        return "\n".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
+    return content if isinstance(content, str) else ""
 
 
 def tool_paths(name: str, args: dict[str, Any]) -> list[str]:
@@ -777,6 +809,64 @@ def summarise_paths(summary: StreamSummary, copy_root: Path) -> tuple[list[str],
         rels = [relative_to_copy(p, copy_root) for p in tool_paths(name, args)]
         denied.append({"tool": name, "path": "<outside the copy>" if None in rels else str(rels[0])})
     return sorted(read), denied, outside
+
+
+def lines_shown(summary: StreamSummary, copy_root: Path) -> dict[str, set[int]]:
+    """R3-2 (a): the files inside the copy the attempt saw, each with the lines it was shown: a Read that did not fail
+    sees its file at its window, a Grep in content mode the files whose lines it printed with their numbers."""
+    shown: dict[str, set[int]] = {}
+    for call in summary.tool_uses:
+        output = summary.outputs.get(call.call_id)
+        if output is None or call.call_id in summary.failed_ids:
+            continue
+        if call.name == "Read":
+            rel = relative_to_copy(str(call.args.get("file_path", "")), copy_root)
+            if rel is not None:
+                shown.setdefault(rel, set()).update(_read_window(output))
+        elif call.name == "Grep" and _prints_numbered_lines(call.args, output):
+            for rel, line in _grep_lines(call.args, output.text, copy_root):
+                shown.setdefault(rel, set()).add(line)
+    return shown
+
+
+def _read_window(output: ToolOutput) -> set[int]:
+    """The lines a Read showed: its window as the CLI names it (first line and count), or else its numbered lines."""
+    window = output.details.get("file")
+    if isinstance(window, dict) and isinstance(window.get("startLine"), int) and isinstance(window.get("numLines"), int):
+        return set(range(window["startLine"], window["startLine"] + window["numLines"]))
+    return {int(number) for number in READ_NUMBERED_LINE.findall(output.text)}
+
+
+def _prints_numbered_lines(args: dict[str, Any], output: ToolOutput) -> bool:
+    """A Grep prints lines only in content mode (its default lists files), and their numbers unless `-n` is false."""
+    mode = output.details.get("mode", args.get("output_mode", "files_with_matches"))
+    return mode == "content" and args.get("-n", True) is not False
+
+
+def _grep_lines(args: dict[str, Any], text: str, copy_root: Path) -> list[tuple[str, int]]:
+    """The file and line of every line a content Grep printed; a Grep of one file prints its lines without a path."""
+    target = relative_to_copy(str(args.get("path") or "."), copy_root)
+    if target is None:
+        return []
+    one_file = (copy_root / target).is_file()
+    found = [_file_line(line, target) if one_file else _path_line(line, copy_root) for line in text.splitlines()]
+    return [pair for pair in found if pair is not None]
+
+
+def _file_line(line: str, target: str) -> tuple[str, int] | None:
+    match = GREP_FILE_LINE.match(line)
+    return (target, int(match.group(1))) if match and line[match.end():] not in GREP_OMITTED else None
+
+
+def _path_line(line: str, copy_root: Path) -> tuple[str, int] | None:
+    """`path:line:text` or `path-line-text`: the first place the line can split after a path that names a file of
+    the copy (a path may hold `-<digits>-` itself); an omitted long line shows nothing."""
+    for match in GREP_PATH_LINE.finditer(line):
+        rel = relative_to_copy(line[:match.start()], copy_root) if match.start() else None
+        if rel is not None and (copy_root / rel).is_file():
+            rest = line[match.start() + len(match.group(2)) + 2:]
+            return None if rest in GREP_OMITTED else (rel, int(match.group(2)))
+    return None
 
 
 def _other_tools(summary: StreamSummary) -> dict[str, list[str]]:
@@ -860,9 +950,6 @@ def _accounted_problems(entry: Any, finding_ids: set[Any]) -> list[str]:
         return problems
     if not all(isinstance(path, str) for path in entry["opened"]):
         problems.append("opened holds a value that is not a path")
-    if "searched" in entry and not (isinstance(entry["searched"], list)
-                                    and all(isinstance(path, str) for path in entry["searched"])):
-        problems.append("searched is not a list of paths")
     problems += _quotes_shape_problems(entry.get("quotes", []))
     status, note = entry["status"], entry["note"]
     if status not in (*ANSWER_STATUSES, *EVIDENCE_STATUSES):
@@ -889,52 +976,48 @@ def _quotes_shape_problems(quotes: Any) -> list[str]:
 @dataclass(frozen=True)
 class Accounting:
     """What a report must account for (S41-D8): the items the prompt lists, each with the statuses it may take,
-    and the files the attempt must have read because a `fixed:` answer names them or a `rejected:` answer cites them
+    and the files the attempt must have seen because a `fixed:` answer names them or a `rejected:` answer cites them
     (owner-approved growth, 2026-11-13: an accepted rejection rests on what it cites); and the items answered
-    `rejected:`, each with the files its answer cites, which the report quotes when it accepts or re-raises them
-    (R2-7)."""
+    `fixed:` or `rejected:`, each with the files its answer names or cites, one of which the report quotes when it
+    accepts or re-raises them (R2-7, extended to fixes by R3-2)."""
 
     items: dict[str, tuple[str, ...]] = field(default_factory=dict)
     must_read: tuple[str, ...] = ()
     quoted: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
-def accounting_problems(report: dict[str, Any], accounting: Accounting, paths_read: list[str],
+def accounting_problems(report: dict[str, Any], accounting: Accounting, shown: dict[str, set[int]],
                         copy_root: Path) -> list[str]:
-    """Why a well-formed report still fails: an item left out, a path in `opened` the attempt never read, a file a
-    `fixed:` answer names that was not read."""
+    """Why a well-formed report still fails: an item left out, a file a `fixed:` answer names or a `rejected:` answer
+    cites that the attempt did not see (R3-2: `opened` is the reviewer's note, not checked), or a quote that fails."""
     entries = {e["item"]: e for e in report["accounted"]}
     problems = [f"{item} is not accounted" for item in accounting.items if item not in entries]
     problems += [f"{item} has status {entries[item]['status']}" for item, allowed in accounting.items.items()
                  if item in entries and entries[item]["status"] not in allowed]
-    read = set(paths_read)
-    for entry in report["accounted"]:
-        for path in entry["opened"]:
-            rel = relative_to_copy(path, copy_root)
-            if rel is None or rel not in read:
-                problems.append(f"{entry['item']} names an opened file the attempt did not read")
-    problems += [f"{path} is named in a fixed: or rejected: answer and was not read" for path in accounting.must_read
-                 if path not in read]
-    return problems + quote_problems(report, accounting, copy_root, read)
+    problems += [f"{path} is named in a fixed: or rejected: answer and was not seen" for path in accounting.must_read
+                 if path not in shown]
+    return problems + quote_problems(report, accounting, copy_root, shown)
 
 
-def quote_problems(report: dict[str, Any], accounting: Accounting, copy_root: Path, read: set[str]) -> list[str]:
-    """R2-7: every rejection the report accepts or re-raises quotes the lines its decision rests on, at least once from
-    a file its answer cites when it cites one; and every quote of the report is from a file the attempt read, at its
-    place in the copy."""
+def quote_problems(report: dict[str, Any], accounting: Accounting, copy_root: Path,
+                   shown: dict[str, set[int]]) -> list[str]:
+    """R2-7 and R3-2: every `fixed:` or `rejected:` answer the report accepts or re-raises quotes the lines its decision
+    rests on, at least once from a file its answer names or cites when it names or cites one; and every quote of the
+    report is of lines the attempt was shown, at their place in the copy."""
     entries = {e["item"]: e for e in report["accounted"]}
     problems = []
-    for item, cited in accounting.quoted.items():
+    for item, named in accounting.quoted.items():
         if entries.get(item, {}).get("status") not in ("accepted", "re-raised"):
             continue
         files = {relative_to_copy(q["file"], copy_root) for q in entries[item].get("quotes", [])}
         if not files:
-            problems.append(f"{item} accepts or re-raises a rejection without quoting the lines it rests on")
-        elif cited and not files & set(cited):
-            problems.append(f"{item} quotes none of the files its rejection cites ({', '.join(cited)})")
+            problems.append(f"{item} accepts or re-raises a fixed: or rejected: answer without quoting the lines it "
+                            "rests on")
+        elif named and not files & set(named):
+            problems.append(f"{item} quotes none of the files its answer names or cites ({', '.join(named)})")
     for entry in report["accounted"]:
         problems += [p for quote in entry.get("quotes", [])
-                     if (p := _quote_place_problem(entry["item"], quote, copy_root, read))]
+                     if (p := _quote_place_problem(entry["item"], quote, copy_root, shown))]
     return problems
 
 
@@ -942,24 +1025,29 @@ def _normalised(text: str) -> str:
     return " ".join(text.split())
 
 
-def _quote_place_problem(item: str, quote: dict[str, Any], copy_root: Path, read: set[str]) -> str | None:
-    """Why a quote is not at its place: its file is not in the copy or was not read with the Read tool, its lines
-    are not in the file, its text, whitespace aside and the Read tool's line numbers dropped, is not within those lines
-    (give or take QUOTE_SLACK), or it holds no whole non-blank line of them (a word found nearby is no quote)."""
+def _quote_place_problem(item: str, quote: dict[str, Any], copy_root: Path, shown: dict[str, set[int]]) -> str | None:
+    """Why a quote is not at its place: its file is not in the copy or was not seen, its lines are not in the file, its
+    text, whitespace aside and the Read tool's line numbers dropped, is not within those lines (give or take
+    QUOTE_SLACK), it holds no whole non-blank line of them (a word found nearby is no quote), or no whole line it holds
+    lies within QUOTE_SLACK lines of a line the attempt was shown (R3-2 (b))."""
     rel = relative_to_copy(quote["file"], copy_root)
     path = copy_root / rel if rel is not None else None
     if path is None or not path.is_file():
         return f"{item} quotes a file that is not in the copy"
-    if rel not in read:
-        return f"{item} quotes {rel}, which the attempt did not read"
+    if rel not in shown:
+        return f"{item} quotes {rel}, which the attempt did not see"
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    window = lines[max(quote["line"] - 1 - QUOTE_SLACK, 0):quote["end_line"] + QUOTE_SLACK]
+    first = max(quote["line"] - QUOTE_SLACK, 1)
+    window = lines[first - 1:quote["end_line"] + QUOTE_SLACK]
     text = _normalised(" ".join(READ_LINE_NUMBER.sub("", line) for line in quote["text"].splitlines()))
     place = f"{rel}:{quote['line']}-{quote['end_line']}"
     if quote["end_line"] > len(lines) or not text or text not in _normalised(" ".join(window)):
         return f"{item} quotes {place}, and the copy holds no such text there"
-    if not any(whole and f" {whole} " in f" {text} " for whole in map(_normalised, window)):
+    whole = [first + index for index, line in enumerate(map(_normalised, window)) if line and f" {line} " in f" {text} "]
+    if not whole:
         return f"{item} quotes {place} without one whole line of it"
+    if not any(number + offset in shown[rel] for number in whole for offset in range(-QUOTE_SLACK, QUOTE_SLACK + 1)):
+        return f"{item} quotes {place}, lines the attempt was not shown"
     return None
 
 
@@ -985,15 +1073,15 @@ def _paused_or_unfinished_call(summary: StreamSummary, returncode: int, stats: d
     return None
 
 
-def _confinement_failure(stats: dict[str, Any], review_paths: list[str]) -> str | None:
+def _confinement_failure(stats: dict[str, Any], review_paths: list[str], seen: set[str]) -> str | None:
     if stats["other_tools"]:
         return "a call used a tool other than Read, Grep and Glob"
     if stats["outside_calls"]:
         return "a call named a path outside the copy"
     if stats["denied"]:
         return "a call inside the copy was denied"
-    if review_paths and not set(stats["paths_read"]) & set(review_paths):  # R3-1: a recheck may have none
-        return "the review read none of the paths under review"
+    if review_paths and not seen & set(review_paths):  # R3-1: a recheck may have none; R3-2: seen, not only read
+        return "the review saw none of the paths under review"
     return None
 
 
@@ -1005,7 +1093,8 @@ def classify(summary: StreamSummary, returncode: int, copy_root: Path, review_pa
     unfinished = _paused_or_unfinished_call(summary, returncode, stats)
     if unfinished is not None:
         return unfinished
-    failure = _confinement_failure(stats, review_paths)
+    shown = lines_shown(summary, copy_root)
+    failure = _confinement_failure(stats, review_paths, set(shown))
     if failure:
         return CallOutcome("failed", failure, stats=stats)
     reply = structured_reply(summary.result or {})
@@ -1013,7 +1102,7 @@ def classify(summary: StreamSummary, returncode: int, copy_root: Path, review_pa
     if problems:  # the problems name fields and rules, never a value of the reply
         return CallOutcome("failed", "the reply does not match the report schema: " + "; ".join(problems[:5]),
                            stats=stats)
-    unaccounted = accounting_problems(reply, accounting or Accounting(), stats["paths_read"], copy_root)
+    unaccounted = accounting_problems(reply, accounting or Accounting(), shown, copy_root)
     if unaccounted:
         return CallOutcome("failed", "the report does not account for what it was given: " + "; ".join(unaccounted[:5]),
                            stats=stats)
@@ -1438,14 +1527,25 @@ def _row_against_finding(row: AnswerRow, finding: dict[str, Any]) -> list[str]:
 
 def recheck_accounting(rows: tuple[AnswerRow, ...] | list[AnswerRow], must_read: tuple[str, ...],
                        evidence_items: tuple[str, ...] = ()) -> Accounting:
-    """What a recheck's report accounts for: every answer and every evidence entry; it reads the files the answers
-    name or cite, and quotes what each rejection it accepts or re-raises rests on, from a file the rejection cites
-    when it cites one (R2-7). The launcher and the benchmark build it the same way. `check_answers` put every file a
-    rejection cites into `must_read` (the change's diff for one the change deletes), so the files are found there."""
+    """What a recheck's report accounts for: every answer and every evidence entry; it sees the files the answers
+    name or cite, and quotes what each fix and rejection it accepts or re-raises rests on, from a file the answer names
+    or cites when it names or cites one (R2-7, R3-2). The launcher and the benchmark build it the same way.
+    `check_answers` put every file a fix names and a rejection cites into `must_read` (the change's diff for one the
+    change deletes), so the files are found there."""
     items = {**{row.finding: ANSWER_STATUSES for row in rows}, **{item: EVIDENCE_STATUSES for item in evidence_items}}
     held = set(must_read).__contains__
-    quoted = {row.finding: _cited_and_held(row.answer, held) for row in rows if answer_word(row.answer) == "rejected"}
+    quoted = {row.finding: _quoted_files(row.answer, held) for row in rows
+              if answer_word(row.answer) in ("fixed", "rejected")}
     return Accounting(items, must_read, quoted)
+
+
+def _quoted_files(answer: str, held: Any) -> tuple[str, ...]:
+    """The files one quote for this answer must come from: those a `fixed:` answer names, as they are in the copy, with
+    the change's diff only for a named file the change deletes (R3-2 (c)); those a `rejected:` answer cites."""
+    if answer_word(answer) != "fixed":
+        return _cited_and_held(answer, held)
+    named = fixed_paths(answer)
+    return tuple([p for p in named if held(p)] + ([f"{INPUTS_DIR}/change.diff"] if not all(map(held, named)) else []))
 
 
 def _cited_and_held(answer: str, held: Any) -> tuple[str, ...]:
