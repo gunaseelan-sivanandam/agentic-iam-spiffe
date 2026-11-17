@@ -23,11 +23,15 @@
 # e842e97, as RC-1 and RC-2 are, so their reviewer gets that commit's AGENTS.md (discovered issue 18): a base with
 # R2-4's text would put this directory and the slice's records, which describe the cases, into the copy. No earlier
 # case or score changes; the results of versions 2 and 4 are re-scored as under version 5.
-version: 6
+# Version 7 (round 3 of slice 4; the owner, 2026-11-17: "Round 3 of slice 4: I approve R3-1 to R3-4, the budget
+# 85 → 95, and the probe and replays"), before its runs: the budget goes from 85 to 95, for RC-1 to RC-4 once each on
+# the recheck wording the launcher ships (82 calls were spent). Only the budget changes, so version 6's results are
+# read with this key (earlier_key_sha256) and keep their scores.
+version: 7
 stage: B
 model: claude-opus-5-5
 effort: high
-budget: 85
+budget: 95
 lists_commit: 04f8df4
 match_rule: 'A defect is detected by a finding rated blocking, high or medium (stage A: kind blocking) that names
   one of the defect''s files, a line inside one of that file''s ranges, and at least one of its terms
@@ -47,10 +51,11 @@ match_rule: 'A defect is detected by a finding rated blocking, high or medium (s
   configuration.'
 match_rule_sha256: 422d32c2be493a13c8a715f815763d95f3a76d6285daabe959af4dbdebb465fb
 # Versions 2 and 4 of this key: their results are kept with the score of their runs, and re-scored under this rule
-# apart (R2-9).
+# apart (R2-9). Version 6: its results were scored under this rule and keep their scores (version 7).
 earlier_key_sha256:
 - 7ef0a57963ff33c5b8397eedcf145cedbf3807c8b4a6b7ac09cd29ab4706f899
 - 5b9d6382a06918128102da1b98b9660dd1dad12d35819752adce288878376633
+- ba6975d46b111311de687b453bb00390e74f8cfafd8e462147d3274014c00870
 # Decision concern 8's measurement, fixed before its runs: the baseline, "better" and the outcomes, verbatim from
 # section 9 of the author's severity analysis (step 1).
 severity_measurement:
