@@ -11,7 +11,7 @@ The minimum questions for reviewing a slice's `plan.md` and `test_plan.md`, and 
 5. Which keys, sockets and secrets does the slice touch, and can any reach a service outside its holders in `security/invariants.yaml`? [S:stride]
 6. Is every fact outside the repository that a decision depends on recorded with the probe that showed it? [S:nasa-req]
 7. Do the decisions contradict each other, the requirements, the architecture or the approved threat model? [S:nasa-req]
-8. Where a fix answers a review finding, does it change the upstream choice that caused it before adding a mechanism? [S:google-looking-for]
+8. Where a fix answers a review finding, does it correct the defect or change the choice that caused it, without adding a mechanism? [S:google-looking-for]
 9. Can each success criterion be checked by someone other than the author, with what the plan names? [S:nasa-req]
 10. Does each new check, gate, document or process step state the failure it catches, its cost and the simpler alternative weighed, and does it solve a problem known now rather than one foreseen? [S:google-looking-for]
 11. Does the plan state the threat model it is judged against and keep it current with what the slice changes, and is every change to that model, wider or narrower, put to the user instead of made in the plan? [S:owasp-threat]
@@ -24,4 +24,5 @@ Besides the blocking criteria of every stage (`AGENTS.md`, Review findings), a f
 - a decision or new requirement has no test, gate or named review question that proves it;
 - a decision contradicts another, the requirements, the architecture or the threat model;
 - the plan lets a key, socket or secret reach a service outside its holders;
-- the plan changes the approved threat model without the user's approval.
+- the plan changes the approved threat model without the user's approval;
+- a plan that claims a small slice while one of the four conditions of `AGENTS.md` (Small slices) does not hold for the planned change.
