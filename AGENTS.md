@@ -427,8 +427,10 @@ All of the following, in the same change:
 - **Fixes stay within the agreed decisions** (the plan's decisions, or the request, and this file).
   A fix corrects the defect or changes the choice that caused it; it never adds a mechanism (a gate,
   check, CI job, process step, document, register or field; a step added or repeated and a second
-  copy of a fact that must be kept current are mechanisms too). A finding that only a new or wider
-  mechanism would answer is answered `owner:` with a one-line proposal, as
+  copy of a fact that must be kept current are mechanisms too). What an existing rule already
+  requires of the fix, such as a test for new behaviour or a handoff record, is not an added
+  mechanism. A finding that only a new or wider mechanism would answer is answered `owner:` with a
+  one-line proposal, as
   [Ask before growing](#poc-scope-and-proportion) asks of every addition. A fix that would change an
   agreed decision goes to the user as a question before it is applied.
 - **Report sections.** Besides findings of each severity, every round may report *simpler
