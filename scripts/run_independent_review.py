@@ -144,7 +144,9 @@ QUOTE_RULE = ("For a `fixed:` or `rejected:` answer you list as `accepted` or `r
 # review keeps its open question (S41-D4) and gets none. Decision concern 13 (the owner, 2026-11-16): a step added or
 # repeated and a second copy of a fact kept current are mechanisms too, and one added without approval is a defect, or
 # re-raised in a recheck, not a simpler alternative. Its review (`owner-decisions-2`): such a defect is at least medium,
-# so it is fixed (R2-1, F1), and the definition is the owner's option B, without an example (F2).
+# so it is fixed (R2-1, F1), and the definition is the owner's option B, without an example (F2). R3-3 (decision
+# concern 17, option (a)): what an existing rule already requires of a fix is not an added mechanism; it qualifies a
+# fix, so the recheck's question and the kind bullet carry it, and the initial question, asked of the change, does not.
 _MECHANISM = ("a mechanism is a gate, check, CI job, process step, document, register or field; a step that is added "
               "or repeated and a second copy of a fact that must be kept current are mechanisms too")
 MECHANISM_RULES = {
@@ -154,8 +156,9 @@ MECHANISM_RULES = {
     "recheck": (f"Mechanisms: {_MECHANISM}. For each `fixed:` answer, ask whether the fix adds such a mechanism without "
                 "the owner's approval where changing or removing the choice that caused the finding would do; if it "
                 "does, re-raise the finding at its severity, and do not report the simpler choice as a "
-                "`simpler_alternative` instead. The evidence lists each process file changed since the reviewed "
-                "round."),
+                "`simpler_alternative` instead. What an existing rule already requires of the fix, such as a test for "
+                "new behaviour or a handoff record, is not an added mechanism. The evidence lists each process file "
+                "changed since the reviewed round."),
 }
 CLAIMS_SECTION = "Claims to verify"
 SECTIONS = ("role", "mandate", "rules", "checklist", "upstream", "evidence", "paths", "claims", "earlier_report",
@@ -574,7 +577,9 @@ def _output_section(severity_note: str = "", mode: str = "initial") -> str:
         f"checklist prompted it. A finding you re-raise keeps its earlier ID. {QUESTION_RULE}\n"
         "- `kind`: `defect`; `simpler_alternative` (a mechanism the owner approved, in a plan or the rules, that "
         "could be removed or simplified within the agreed decisions; a mechanism added without that approval is a "
-        "`defect` of at least `medium` severity, and in a recheck a fix that adds one is re-raised); or "
+        "`defect` of at least `medium` severity, and in a recheck a fix that adds one is re-raised; what an existing "
+        "rule already requires of a fix, such as a test for new behaviour or a handoff record, is not an added "
+        "mechanism); or "
         "`decision_concern` (an agreed decision that itself seems to cause a problem; it goes to the owner).\n"
         "- `severity`: `blocking` meets the blocking criteria of the approved rules and holds the merge until it is "
         "fixed or the owner decides. `high` is a real defect or false claim below that bar, for example a misleading "
