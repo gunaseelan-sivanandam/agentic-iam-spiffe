@@ -1943,3 +1943,152 @@ def test_a_fix_quoted_only_from_the_change_diff_fails_unless_the_range_deletes_t
         assert status == 0 and end["status"] == "completed", end["reason"]
         return
     assert status == 1 and f"X1 quotes none of the files its answer names or cites ({REVIEWED})" in end["reason"]
+
+
+# --- Round 3 of slice 4, decision concern 18 (b): lines shown of the change's diff are seen lines of their files ---
+
+_DIFF = [
+    "diff --git a/scripts/kept.py b/scripts/kept.py",
+    "index 1111111..2222222 100644",
+    "--- a/scripts/kept.py",
+    "+++ b/scripts/kept.py",
+    "@@ -1,2 +1,6 @@",
+    " one",
+    "+a",
+    "+b",
+    "+c",
+    "+d",
+    " two",
+    "@@ -8,3 +12,2 @@ def f():",
+    " eight",
+    "-nine",
+    " ten",
+    "diff --git a/docs/new.md b/docs/new.md",
+    "new file mode 100644",
+    "index 0000000..3333333",
+    "--- /dev/null",
+    "+++ b/docs/new.md",
+    "@@ -0,0 +1,3 @@",
+    "+# New",
+    "+++ an added line that looks like a header",
+    "+last",
+    "diff --git a/scripts/old_name.py b/scripts/new_name.py",
+    "similarity index 80%",
+    "rename from scripts/old_name.py",
+    "rename to scripts/new_name.py",
+    "index 4444444..5555555 100644",
+    "--- a/scripts/old_name.py",
+    "+++ b/scripts/new_name.py",
+    "@@ -1,2 +1,2 @@",
+    "-old = 1",
+    "+new = 1",
+    " shared = 2",
+    "diff --git a/scripts/gone.py b/scripts/gone.py",
+    "deleted file mode 100644",
+    "index 6666666..0000000",
+    "--- a/scripts/gone.py",
+    "+++ /dev/null",
+    "@@ -1,3 +0,0 @@",
+    "-a = 1",
+    "--- a removed line that looks like a header",
+    "-c = 3",
+    "\\ No newline at end of file",
+]
+
+
+def _shown_of_the_diff(tmp_path: Path) -> dict[str, set[int]]:
+    """Two Reads of `_DIFF` as the copy's change.diff: lines 1 to 14, which end inside kept.py's second hunk after its
+    removed line, and lines 23 to the end, which start inside new.md's hunk at its second added line."""
+    root = tmp_path / "copy"
+    _write(root, "_review_inputs/change.diff", "\n".join(_DIFF) + "\n")
+    for rel in ("scripts/kept.py", "docs/new.md", "scripts/new_name.py"):
+        _write(root, rel, "x\n")
+    diff = f"{root}/_review_inputs/change.diff"
+    stream = [_use("r1", "Read", {"file_path": diff, "limit": 14}),
+              _result("r1", "x", {"type": "text", "file": {"filePath": diff, "startLine": 1, "numLines": 14}}),
+              _use("r2", "Read", {"file_path": diff, "offset": 23}),
+              _result("r2", "x", {"type": "text", "file": {"filePath": diff, "startLine": 23, "numLines": 23}})]
+    return launcher.lines_shown(launcher.parse_stream("\n".join(stream)), root)
+
+
+def test_a_shown_context_or_added_line_of_the_change_diff_is_a_seen_line_of_its_file_and_a_header_line_of_none(
+        tmp_path: Path) -> None:
+    """Decision concern 18 (b): a context or added line the attempt was shown counts at its file's new path and new
+    line, through new-file and rename headers; the diff's header lines (`diff --git`, `---`, `+++`, `@@`, a rename's)
+    count for no file, and an added line that looks like a header is an added line; a hunk shown only in part counts
+    only its shown lines, at either end of a window."""
+    shown = _shown_of_the_diff(tmp_path)
+    assert shown["_review_inputs/change.diff"] == set(range(1, 15)) | set(range(23, 46))
+    assert shown["scripts/kept.py"] == {1, 2, 3, 4, 5, 6, 12}  # 13 (" ten") lies past the first window
+    assert shown["docs/new.md"] == {2, 3}  # 1 ("+# New") lies before the second window
+    assert shown["scripts/new_name.py"] == {1, 2}
+    assert "scripts/old_name.py" not in shown and not any(rel.startswith("an ") for rel in shown)
+
+
+def test_a_shown_removed_line_is_a_seen_line_only_of_a_file_the_change_deletes_at_its_old_line(tmp_path: Path) -> None:
+    """Decision concern 18 (b): a removed line of a file that still exists (kept.py's old line 9, a renamed file's old
+    line 1) counts for nothing, while the removed lines of a file the diff deletes count at its old path and old
+    lines, a removed line that looks like a header included; the closing no-newline marker counts for nothing."""
+    shown = _shown_of_the_diff(tmp_path)
+    assert 9 not in shown["scripts/kept.py"]
+    assert shown["scripts/gone.py"] == {1, 2, 3}
+    assert set(shown) == {"_review_inputs/change.diff", "scripts/kept.py", "docs/new.md", "scripts/new_name.py",
+                          "scripts/gone.py"}
+
+
+@pytest.mark.parametrize(("line", "shown"), [(4, False), (5, True), (10, True), (13, True), (15, True), (16, False)],
+                         ids=["three-before-the-hunk", "two-before-the-hunk", "the-added-line",
+                              "the-last-context-line", "two-past-the-hunk", "three-past-the-hunk"])
+def test_a_fix_seen_only_as_hunks_of_the_change_diff_is_seen_and_quoted_only_at_the_lines_they_showed(
+        fx: Fixture, line: int, shown: bool) -> None:
+    """Decision concern 18 (b): the fix changes line 10 of a 20-line file that the recheck sees only in the change's
+    diff, whose hunk shows lines 7 to 13; the file counts as seen, and a quote of it counts within two lines of the
+    hunk (5 to 15), at its place in the copy, and not beyond."""
+    _write(fx.work, COVER, COVER_TEXT)
+    fx.commit = _commit_all(fx.work, "a covering check")
+    _first_round(fx)
+    _write(fx.work, REVIEWED, "print('fixed')\n")
+    fixed = COVER_TEXT.replace("check number 10 holds", "check number 10 is fixed")
+    _write(fx.work, COVER, fixed)
+    commit = _answers(fx, "unit1/c1/r1/A/1", f"| X1 | high | fixed: {REVIEWED}, {COVER}: guarded |")
+    quote = {"file": COVER, "line": line, "end_line": line, "text": fixed.splitlines()[line - 1]}
+    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[quote])], reads=[REVIEWED, "_review_inputs/change.diff"]))
+    status = _run(fx, round_no=2, commit=commit)
+    end = _ends(fx)[-1]
+    if shown:
+        assert status == 0 and end["status"] == "completed", end["reason"]
+        return
+    assert status == 1 and f"X1 quotes {COVER}:{line}-{line}, lines the attempt was not shown" in end["reason"]
+    assert "was not seen" not in end["reason"]
+
+
+@pytest.mark.parametrize(("diff_read", "quoted", "reason"), [
+    (False, "diff", "_review_inputs/change.diff is named in a fixed: or rejected: answer and was not seen"),
+    (True, "diff", None),
+    (True, "reviewed", "X1 quotes none of the files its answer names or cites (_review_inputs/change.diff)"),
+], ids=["diff-not-seen", "diff-seen-and-quoted", "diff-seen-quoted-elsewhere"])
+def test_a_rejection_citing_a_file_the_change_deletes_must_see_the_change_diff_and_quote_from_it(
+        fx: Fixture, diff_read: bool, quoted: str, reason: str | None) -> None:
+    """Discovered issue 51 (G2-1): a `rejected:` answer that cites a file the commits since the reviewed round delete
+    is checked through the change's diff: the recheck must see the diff, and its quote comes from the diff."""
+    _write(fx.work, "scripts/old.py", "print('old')\n")
+    _commit_all(fx.work, "a file the change will delete")
+    _git(fx.work, "push", "-q", "-f", "origin", "HEAD:poc/base")
+    _write(fx.work, REVIEWED, "print('changed again')\n")
+    fx.commit = _commit_all(fx.work, "the change")
+    _first_round(fx)
+    since = fx.log()[0]["commit"]
+    (fx.work / "scripts/old.py").unlink()
+    commit = _answers(fx, "unit1/c1/r1/A/1", "| X1 | high | rejected: the guard was scripts/old.py:1, now deleted |")
+    diff = launcher.change_diff(fx.work, since, commit, [RECORD, LOG]).splitlines()
+    at = diff.index("-print('old')") + 1
+    quote = ({"file": "_review_inputs/change.diff", "line": at, "end_line": at, "text": "-print('old')"}
+             if quoted == "diff" else CHANGED_AGAIN)
+    reads = [REVIEWED, "_review_inputs/change.diff"] if diff_read else [REVIEWED]
+    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[quote])], reads=reads))
+    status = _run(fx, round_no=2, commit=commit)
+    end = _ends(fx)[-1]
+    if reason is None:
+        assert status == 0 and end["status"] == "completed", end["reason"]
+        return
+    assert status == 1 and reason in end["reason"]
