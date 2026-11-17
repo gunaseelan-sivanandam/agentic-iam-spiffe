@@ -117,8 +117,24 @@ is first); every heading carries its date.
 - Discovered issue 64 is on the decision page: a `--run` that names no case or configuration selects 66 reviews, every
   configuration of every case but round 4's two, since their prompts changed after their recorded runs (probed with no
   reviewer call); low, recorded only.
-- Next: the review unit `owner-decisions-3` (R4-6) reviews round 4's change; the owner's decision 8 decides the
-  initial mandate.
+- Review: the unit `owner-decisions-3` (R4-6), round 1 (`owner-decisions-3/c1/r1/A/1`, Opus at high, CLI 2.1.327,
+  USD 3.22, reviewed commit `5f5b404`): approvable, 2 medium and 3 low (`14435c4`). Fixed in `ec4b2a4`: F1, DPL-015
+  records discovered issue 56 as a review miss and where the author looked for the same cause; F2, the records of
+  R4-4's blind confirmation say that a first confirmer pair was stopped before any verdict and that the committed rows
+  set `expected_id` to null on the 65 no-match rows; F4, decision 8's recommendation reads as the author's; F5, row 60
+  says issue 60's fix covers non-ASCII names and spaces only. F3 (low, the call range "86 to 105") rejected. The
+  answers and discovered issue 65 (the origin table, the question line and `_completed_reviews` still read replaced
+  lines) are `34d76f5`.
+- Review: round 2, the recheck (`owner-decisions-3/c1/r2/A/1`, Opus at medium, USD 0.53; its range `5f5b404` to
+  `34d76f5`), the first under round 4's recheck mandate: approvable, all five answers accepted, no new finding
+  (`e6f78d3`). With no blocking, high or medium finding open, the review ended after round 2. The brief is rebuilt on
+  the decision page with `python3 scripts/review_brief.py --base origin/poc/agentic-sdlc` (head `e6f78d3`; unit
+  `owner-decisions-3`: yes, 2 rounds, 0 blocking, 0 high, 2 medium, 3 low, nothing open), with F5 under the test-plan
+  question 1 by its content.
+- Next, the owner's: decision 8 (round 4's initial wording); decision concerns 16 and 19; growth proposal 12;
+  discovered issues 62 to 65 are recorded; the actions of decisions 3 (recreate the hidden issues, about 2026-11-23)
+  and 4 (remove the personal copy of the grill-me skill); and the push and the final PR, which the agent account
+  cannot write.
 
 ## 2026-11-17 Slice agentic-sdlc-poc 4: round 3, decision concern 18 (diff lines count as seen) and the second mechanics replay
 

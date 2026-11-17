@@ -54,10 +54,15 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
      criterion, and the launcher ships it with the final wording; `AGENTS.md`'s final review no longer states 4.1's
      question. The initial wording raised one more false alarm than the launcher's (8 against 7 in 4 no-defect
      reviews) while detecting 10 of 11 against 8, so the launcher keeps 4.1's initial wording until the owner decides
-     (decision 8). Next: round 4's review unit `owner-decisions-3`. Open for the owner before slice 4 closes, on the
-     decision page: decision 8; decision concerns 16 (R2-9's blind verdicts) and 19 (the `open+list` baseline ran
+     (decision 8). Its review unit `owner-decisions-3` ended after round 2: round 1 was approvable (2 medium, 3 low;
+     F1, F2, F4 and F5 fixed, among them DPL-015 for discovered issue 56; F3 rejected), and the recheck, the first
+     under round 4's recheck mandate, was approvable (all five answers accepted, no new finding); the brief is rebuilt
+     on the decision page. So round 4 is built, measured and reviewed. Open for the owner before slice 4 closes, on
+     the decision page: decision 8; decision concerns 16 (R2-9's blind verdicts) and 19 (the `open+list` baseline ran
      under an older CLI); growth proposal 12 (resuming a review that failed the read check); discovered issue 53, open
-     in part; and the owner's actions of decisions 3 and 4, outside the repository. Then the push and the final PR.
+     in part, and discovered issues 62 to 65, recorded; and the owner's actions of decisions 3 (recreate the hidden
+     issues, about 2026-11-23) and 4 (remove the personal copy of the grill-me skill), outside the repository. Then
+     the push and the final PR, which the owner does, since the agent account cannot write to GitHub.
      Progress and the owner's decisions: [`slice_4_decisions.md`](slices/agentic-sdlc-poc/slice_4_decisions.md);
      Next, before slice 5: a slice of author prompts and their benchmark (owner, 2026-11-09: "let's
      continue this slice for just review, after this let's run a new slice of author prompts and
@@ -108,6 +113,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Last verification
 | Check | Date | Result |
 | --- | --- | --- |
+| `make docs-check`, `make tooling-test` on `poc/slice-4-implementation` (round 4's review handoff on `e6f78d3`: the review unit `owner-decisions-3` ended, the brief rebuilt; docs only) | 2026-11-18 | PASSED; 1000 pytest (with a scratch shellcheck), 9 shell. Not run: the E2E suite and the other gates (no service, policy, compose, harness, script or CI file changed) |
 | `make docs-check`, `make qa-trace`, `make lint`, `make tooling-test` on `poc/slice-4-implementation` (round 4's handoff on `1f905a9`: discovered issues 56, 57 and 60 fixed, R4-4 measured, the recheck and final mandates shipped; docs only); at `1f905a9`, `make tooling-test`, `make docs-check`, `make lint` and `make gate-consistency`, as the commit records | 2026-11-18 | PASSED; qa-trace: 0 new gaps, 113 coverage gaps remain; lint 0 new or worsened; 1000 pytest (with a scratch shellcheck), 9 shell. Not run: the E2E suite (no service, policy, compose, harness or CI file changed; CI runs it on the PR) |
 | `make docs-check`, `make qa-trace`, `make lint`, `make test-lint`, `make unit-guard-check`, `make qa-deploy`, `make tooling-test` on `poc/slice-4-implementation` (round 3's handoff on `faa6df4`: the review unit `round-3` ended, the brief rebuilt; docs only) | 2026-11-17 | PASSED; qa-trace: 0 new gaps, 113 coverage gaps remain; lint 0 new or worsened; unit guard 357; qa-deploy 18 known violations, 22 warnings; 981 pytest (with a scratch shellcheck), 9 shell. Not run: the E2E suite and gate-consistency (no service, policy, compose, harness or CI file changed) |
 | `make lint`, `make docs-check`, `make qa-trace`, `make tooling-test` on `poc/slice-4-implementation` (`5627de7`, decision concern 18 built), as the build reported; `make qa-trace` and `make docs-check` rerun on its records | 2026-11-17 | PASSED; qa-trace: 0 new gaps, 113 coverage gaps remain. Not run: the E2E suite (no service, policy, compose, harness or CI file changed) and gate-consistency |
