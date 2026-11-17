@@ -1779,7 +1779,7 @@ def test_a_recheck_whose_commits_since_the_reviewed_round_change_no_file_still_r
 
 def test_each_review_asks_whether_the_change_or_a_fix_adds_a_mechanism(fx: Fixture) -> None:
     """R2-5: the question at the pause point, in the output section every mandate wording shares; the final review
-    keeps its open question and gets none. Decision concern 13 (the owner, 2026-11-16): a step added or repeated and a
+    gets none. Decision concern 13 (the owner, 2026-11-16): a step added or repeated and a
     second copy of a fact kept current are mechanisms too, and one added without approval is reported as a defect of at
     least medium severity, or re-raised in a recheck, never as a simpler alternative. The definition names no example:
     the owner's option B has none (review `owner-decisions-2`, F1 and F2)."""

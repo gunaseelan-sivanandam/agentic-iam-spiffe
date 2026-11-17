@@ -108,6 +108,7 @@ CONFIGURATIONS: dict[str, dict[str, Any]] = {
     "short+list": {"mode": "initial", "mandate_file": "prompts/short_list.md", "list": True},
     "open+list": {"mode": "initial", "mandate_file": None, "list": True},
     "open-B+list": {"mode": "initial", "mandate_file": "prompts/mandate_initial_b.md", "list": True},
+    # Since R4-1 the launcher's recheck mandate is recheck-R4's; recheck-A's recorded lines ran 4.1's (prompt_identity).
     "recheck-A": {"mode": "recheck", "mandate_file": None, "list": True},
     "recheck-B": {"mode": "recheck", "mandate_file": "prompts/mandate_recheck_b.md", "list": True},
     # Decision concern 8, step 3: `open+list` with a severity paragraph after the output section's `severity` bullet.

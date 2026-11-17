@@ -1598,7 +1598,8 @@ DECISIONS = ROOT / "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
 
 
 def _r4_mandate(label: str) -> str:
-    """R4-1's mandate under `label` (Initial, Recheck) on the decision page: its blockquote, one line per paragraph."""
+    """R4-1's mandate under `label` (Initial, Recheck, Final) on the decision page: its blockquote, one line per
+    paragraph."""
     lines = DECISIONS.read_text(encoding="utf-8").splitlines()
     section = next(i for i, line in enumerate(lines) if line.startswith("**R4-1 The mandates**"))
     start = lines.index(f"{label}:", section) + 2
@@ -1616,6 +1617,16 @@ def test_the_round_4_configurations_send_r4_1s_mandates_verbatim(name: str, mode
     config = bench.configuration(name, mandates)
     assert config.mandates[mode] == _r4_mandate(label)
     assert all(config.mandates[m] == launcher.MANDATES[m] for m in launcher.MODES if m != mode)
+
+
+@pytest.mark.parametrize(("mode", "label"), [("recheck", "Recheck"), ("final", "Final")])
+def test_the_launcher_ships_r4_1s_recheck_and_final_mandates(mode: str, label: str) -> None:
+    """R4-1, under R4-4's outcome: the launcher's recheck and final mandates are the decision page's text, and its
+    recheck mandate is byte for byte the one `recheck-R4` measured. The initial mandate stays 4.1's (decision 8)."""
+    assert launcher.MANDATES[mode] == _r4_mandate(label)
+    if mode == "recheck":
+        mandates, _hashes = bench._mandates(bench.load_key(ROOT), "recheck-R4")
+        assert mandates["recheck"] == launcher.MANDATES["recheck"]
 
 
 def _false_rejection_inputs(r: Repo) -> dict:

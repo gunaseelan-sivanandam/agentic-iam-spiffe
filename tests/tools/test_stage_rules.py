@@ -93,7 +93,7 @@ def test_agents_md_states_the_seven_stages_with_every_cell_filled() -> None:
     (lambda t: re.sub(r"\n\| Requirements \|[^\n]*", "", t, count=1), "stages are"),
     (lambda t: t.replace(DISCOVERY_EXIT, "|  |", 1), "an empty cell"),
     (lambda t: t.replace("list `code`", "list `kode`", 1), "no list kode"),
-    (lambda t: t.replace("final review, 4.1's final mode, no list", "the final review", 1), "names no list"),
+    (lambda t: t.replace("final review, final mode, no list", "the final review", 1), "names no list"),
     (lambda t: t.replace(HEADER, "| Stage | Output | Review | Checks | Exit |", 1), "no stage table"),
     (lambda t: t.replace("list `requirements`", "list `code`", 1), "not S46-D1's"),
 ], ids=["stage-missing", "empty-cell", "unknown-list", "review-without-list-or-mode", "no-table", "lists-swapped"])

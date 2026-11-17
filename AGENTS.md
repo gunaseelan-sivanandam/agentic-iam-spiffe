@@ -191,7 +191,7 @@ limit and ends as the [review loop](#poc-scope-and-proportion) says.
 | Architecture and interfaces | `ARCH` sections and the state inventory of `docs/architecture.md`, and `security/invariants.yaml` | architecture review, list `architecture-and-interfaces` | `make qa-trace`, `make qa-deploy` | the review has ended |
 | Tests first | unit and E2E tests from the reviewed test plan, and their `docs/test_spec.md` entries | tests-first review, lists `unit-tests` and `e2e-tests` | `make tooling-test`, `make test-lint`, `make unit-guard-check`, `make docs-check`: the new tests fail as planned, every other test and check passes | each new test fails on the base code for the reason it exists, and the review has ended |
 | Implementation | the code and configuration the plan approved, with what it retires removed | implementation review, list `code` | every gate of [Quality gates](#quality-gates), the full E2E suite on a clean stack, `make qa-evidence` | every gate's CI job passes on the PR, and the review has ended |
-| Final review | the record of the unit `final`; none for a small slice | final review, 4.1's final mode, no list | the decision brief, `scripts/review_brief.py` | the review has ended |
+| Final review | the record of the unit `final`; none for a small slice | final review, final mode, no list | the decision brief, `scripts/review_brief.py` | the review has ended |
 | Handoff | the decision page: the decision brief, the implementation review's findings on the test-plan questions, every discovered issue with its disposition; the PR body: the goal, what changed, a link to the page | the user's approval | the PR's required CI checks, which the user sees on the PR page | the user merges |
 
 ### Small slices
@@ -295,10 +295,12 @@ conditions; one is added only if a review ever accepts a wrong "small" claim.
 
 ### Final review
 
-- One unit `final` per slice (a small slice has none), run in 4.1's final mode: the open question
-  "What did everyone before you miss?", including any tracked document the change made false, with
-  all the evidence and no question list. Its finding history is the other units' review records,
-  which are in its copy. Its later rounds are rechecks.
+- One unit `final` per slice (a small slice has none), run in the final mode (round 4 of slice 4,
+  R4-1): it assesses the whole change against the approved plan and the user's recorded decisions,
+  then reads the review records to verify earlier conclusions against the change, and reports
+  defects, departures from the plan and documents the change made inaccurate; it gets all the
+  evidence and no question list, and need not raise a finding. Its finding history is the other
+  units' review records, which are in its copy. Its later rounds are rechecks.
 
 ### Handoff
 

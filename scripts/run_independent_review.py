@@ -102,8 +102,10 @@ PR_COMMENT_URL = re.compile(
 LABEL = re.compile(r"^[A-Za-z0-9_-]+$")
 GLOB_CHARS = re.compile(r"[*?\[{]")
 
-# S41-D4: the mandate of each mode, verbatim. S41-D14: provisional until slice 4.5 measures them and the owner
-# chooses; every start entry records the SHA-256 of the one used.
+# S41-D4: the mandate of each mode, verbatim; every start entry records the SHA-256 of the one used. The recheck and
+# final mandates are round 4's (R4-1 of slice 4's decision page), one line per paragraph as the benchmark's prompt files
+# hold them: the recheck mandate is the one `recheck-R4` measured under R4-4, the final mandate no case can measure. The
+# initial mandate stays 4.1's (S41-D14) until the owner's decision 8, since round 4's did not meet R4-4's criterion.
 MANDATES = {
     "initial": (
         "Find anything a working delivery process must catch in this change and has not caught yet: anything "
@@ -111,13 +113,28 @@ MANDATES = {
         "The checklist and the questions below are a minimum, not the limit. Think for yourself; the author's "
         "framing, including the task text, can be wrong or narrow, and saying so is part of the review."),
     "recheck": (
-        "For every answer of the author to your earlier findings, open the files the answer names and the tests "
-        "that cover them, then accept or re-raise the finding and list it under `accounted`. Report anything wrong "
-        "or missing in what the fixes touch."),
+        "Verify every author answer to your earlier findings against the owner-approved plan and the owner's "
+        "recorded decisions (for a plan review, the owner's request) and the actual files and evidence. Read every "
+        "file an answer names or cites and the relevant tests. Read the surrounding implementation, dependencies and "
+        "documentation to understand the effects of the fixes.\n\n"
+        "Existing behavior, implementation choices and the author's explanations do not establish approval. Neither "
+        "your earlier finding nor the author's response is automatically correct. Accept an answer when the lines you "
+        "read show it is right; re-raise the finding under its existing ID when they show the problem remains, and "
+        "say what remains; report cannot determine when they show neither. Account for every answer.\n\n"
+        "Report problems introduced or exposed by the fixes, including departures from the plan. Refer unresolved "
+        "material design decisions to the owner. A recheck that raises no new findings is valid.\n"),
     "final": (
-        "What did everyone before you miss? Read the change, its plans, its review records and the evidence, and "
-        "report anything a working delivery process should have caught, including any tracked document that now "
-        "says something this change made false. No question list is given, on purpose."),
+        "Independently assess the integrated change against the owner-approved plan and the owner's recorded "
+        "decisions. Read the implementation, dependencies, tests, documentation and evidence to understand its "
+        "complete effect.\n\n"
+        "Then read the review records and verify earlier review conclusions against the actual change. Existing "
+        "behavior, implementation choices, author explanations and earlier reviewer acceptance do not establish owner "
+        "approval.\n\n"
+        "Report unresolved defects, departures from the plan, unsupported claims, and documents the change made "
+        "inaccurate. When the plan leaves a material design decision unresolved, identify it for the owner rather "
+        "than assuming the implementation settles it.\n\n"
+        "No checklist is given. Exercise independent judgment, support each finding with concrete evidence and "
+        "consequences, and do not require a new finding merely because this is the final review.\n"),
 }
 MODES = tuple(MANDATES)
 # S41-D1: the token note; S41-D15: the reporting bounds. Both are part of every prompt's output section.
@@ -145,12 +162,12 @@ QUOTE_RULE = ("For a `fixed:` or `rejected:` answer you list as `accepted` or `r
               "at that place in the copy, or holds no whole line of it.")
 # R2-5: the question at the pause point, asked of the change in an initial review and of each fix in a recheck. It is
 # part of the output section, which every mandate wording shares, so the benchmark's wordings all get it; the final
-# review keeps its open question (S41-D4) and gets none. Decision concern 13 (the owner, 2026-11-16): a step added or
-# repeated and a second copy of a fact kept current are mechanisms too, and one added without approval is a defect, or
-# re-raised in a recheck, not a simpler alternative. Its review (`owner-decisions-2`): such a defect is at least medium,
-# so it is fixed (R2-1, F1), and the definition is the owner's option B, without an example (F2). R3-3 (decision
-# concern 17, option (a)): what an existing rule already requires of a fix is not an added mechanism; it qualifies a
-# fix, so the recheck's question and the kind bullet carry it, and the initial question, asked of the change, does not.
+# review gets none (S41-D4). Decision concern 13 (the owner, 2026-11-16): a step added or repeated and a second copy of
+# a fact kept current are mechanisms too, and one added without approval is a defect, or re-raised in a recheck, not a
+# simpler alternative. Its review (`owner-decisions-2`): such a defect is at least medium, so it is fixed (R2-1, F1),
+# and the definition is the owner's option B, without an example (F2). R3-3 (decision concern 17, option (a)): what an
+# existing rule already requires of a fix is not an added mechanism; it qualifies a fix, so the recheck's question and
+# the kind bullet carry it, and the initial question, asked of the change, does not.
 _MECHANISM = ("a mechanism is a gate, check, CI job, process step, document, register or field; a step that is added "
               "or repeated and a second copy of a fact that must be kept current are mechanisms too")
 MECHANISM_RULES = {
