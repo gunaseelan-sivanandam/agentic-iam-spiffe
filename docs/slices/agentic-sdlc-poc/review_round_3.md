@@ -510,3 +510,9 @@ No trace gap among the upstream items (python3 scripts/validate_traceability.py 
 }
 ```
 
+
+#### Answers to round-3/c1/r2/A/1
+
+| Finding | Severity | Answer |
+| --- | --- | --- |
+| N1 | low | fixed: scripts/review_inputs.py, scripts/run_independent_review.py, tests/tools/test_review_inputs.py, docs/history/implementation_log.md: git's default diff format is defined once in `review_inputs` (`DEFAULT_DIFF_OPTIONS` with F6's flags, `DEFAULT_DIFF_CONFIG` with its `-c` settings), its `_git` takes `config=` as the launcher's `git` does, and both `changed_lines` and `change_diff` use that definition (`test_changed_lines_reads_git_default_format_whatever_the_repository_configures`); `change_diff`'s git arguments are unchanged, and every distinct range of the attempt logs (78, recounted for this fix; F6's answer said 89, counted another way) gives the same bytes as before. Searched: every `git diff`, `git show` and `git log` call in `scripts/`; only `changed_lines` and `change_diff` parse diff hunks; the places that read git's file lists stay discovered issue 60 |

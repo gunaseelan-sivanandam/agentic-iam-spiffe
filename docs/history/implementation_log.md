@@ -66,7 +66,8 @@ is first); every heading carries its date.
   lines count as seen only in a recheck (`c105c9d`); F2, a recheck's rebuild and a retry in the same round take the range
   from every reviewer of the round, as the launcher does (`1d728fd`); F3, a test of tool results given as a list of
   blocks and of a content Grep outside the copy (`06857a7`); F6, `change_diff` runs `git diff` in git's default format
-  whatever the repository configures (`8ec83b6`; the 89 logged ranges give the same bytes). F4 and F5 (low) rejected.
+  whatever the repository configures (`8ec83b6`; every distinct range of the attempt logs, 78 by the recount of N1's
+  fix, gives the same bytes; F6's answer said 89, counted another way). F4 and F5 (low) rejected.
   Each new test's first failure on the code before it: F1's
   `test_an_initial_or_final_review_that_saw_its_only_path_under_review_only_as_a_hunk_of_the_change_diff_fails`
   `[initial]` and `[final]` `AssertionError: assert 0 == 1`, and the benchmark's
@@ -81,6 +82,14 @@ is first); every heading carries its date.
   docs-check` and `make tooling-test` (979 passed, 1 failed; shell 9 passed) failed only on the round's missing answers,
   which these records and the answers end. Discovered issue 60 (git file lists without `core.quotePath=false`) came from
   F6's search for the same cause.
+- Review: the unit `round-3`, round 2, the recheck (`round-3/c1/r2/A/1`, Opus at medium, CLI 2.1.326, USD 0.66; its
+  range `af9ba98` to `35dbead`, 5 files under review): approvable, all six answers accepted with quotes, one new low
+  finding, N1: `changed_lines` read `git diff -U0` under the repository's own git configuration. Fixed (`9e6b3e1`): git's
+  default diff format is defined once in `scripts/review_inputs.py` and used by `changed_lines` and `change_diff`;
+  `test_changed_lines_reads_git_default_format_whatever_the_repository_configures` failed on `b2cceb3` with `assert
+  set() == {2, 5, 6, 7}`. Gates at `9e6b3e1`: `make lint` and `make qa-trace` passed, `make tooling-test` 980 passed and
+  the one test that runs the record check failed only on the round's missing answers, as `make docs-check` did, until
+  these answers. With no blocking, high or medium finding open, the review ended after round 2.
 
 ## 2026-11-17 Slice agentic-sdlc-poc 4: round 3, rechecks that look before they accept
 
