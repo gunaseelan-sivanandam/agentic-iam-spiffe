@@ -40,9 +40,12 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
      commits since the reviewed round, quotes what it was shown from the files each answer names or cites, and is told
      that what an existing rule requires of a fix is not an added mechanism; the plan list asks the fix rule and blocks
      a false small-slice claim. Of its measurements, the replays of the three rechecks that failed the old read check
-     did not meet their criterion (the `mechanics` replay failed the new recheck: decision concern 18, open), and RC-1
-     to RC-4 on `recheck-A` met theirs on confirmed verdicts. Its review unit `round-3` waits for the owner's decision
-     on decision concern 18. Then the owner's open decisions on the decision page, the push and the final PR.
+     did not meet their criterion (the `mechanics` replay failed the new recheck: decision concern 18), and RC-1
+     to RC-4 on `recheck-A` met theirs on confirmed verdicts. The owner decided decision concern 18 as option (b) the
+     same day, and it is built: the lines of the change's diff a review was shown count as seen lines of their files;
+     the `mechanics` replay then ran once more and passed (completed, approvable, H1 re-raised; discovered issues 56 to
+     59). Its review unit `round-3` runs next. Then the owner's open decisions on the decision page, the push and the
+     final PR.
      Progress and the owner's decisions: [`slice_4_decisions.md`](slices/agentic-sdlc-poc/slice_4_decisions.md);
      Next, before slice 5: a slice of author prompts and their benchmark (owner, 2026-11-09: "let's
      continue this slice for just review, after this let's run a new slice of author prompts and
@@ -93,6 +96,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Last verification
 | Check | Date | Result |
 | --- | --- | --- |
+| `make lint`, `make docs-check`, `make qa-trace`, `make tooling-test` on `poc/slice-4-implementation` (`5627de7`, decision concern 18 built), as the build reported; `make qa-trace` and `make docs-check` rerun on its records | 2026-11-17 | PASSED; qa-trace: 0 new gaps, 113 coverage gaps remain. Not run: the E2E suite (no service, policy, compose, harness or CI file changed) and gate-consistency |
 | `make tooling-test` on `poc/slice-4-implementation` (`fa7953f`, round 3 built and measured, in a clean worktree); `make qa-trace`, `make docs-check`, `make lint`, `make test-lint`, `make unit-guard-check`, `make qa-deploy` on round 3's records | 2026-11-17 | PASSED; 963 pytest (with a scratch shellcheck; 2 pre-existing deprecation warnings), 9 shell; qa-trace: 0 new gaps, 113 coverage gaps remain; lint 0 new or worsened; unit guard 357; qa-deploy 18 known violations, 22 warnings. Not run for round 3: the E2E suite (no service, policy, compose, harness or CI file changed) and gate-consistency |
 | `make qa-quality` (qa-trace in `--mode pr --base origin/poc/agentic-sdlc`, docs-check, test-lint, qa-deploy), `make tooling-test`, `make lint`, `make unit-guard-check`, `make gate-consistency` on `poc/slice-4-implementation` (`f22bb89`, the fixes to round 1 of the review of the owner's decisions of 2026-11-16, in a clean worktree; the commits after it change only `docs/`) | 2026-11-16 | PASSED; gap gate: 0 new gaps, 113 coverage gaps remain; qa-deploy 18 known violations, 22 warnings; 932 pytest (with a scratch shellcheck; 2 pre-existing deprecation warnings), 9 shell; lint 0 new or worsened. The E2E suite was not run again: no service, policy, compose, harness or CI file changed |
 | `make qa-quality` (qa-trace in `--mode pr --base origin/poc/agentic-sdlc`, docs-check, test-lint, qa-deploy), `make tooling-test`, `make lint`, `make unit-guard-check`, `make gate-consistency` on `poc/slice-4-implementation` (`03c02c0`, the owner's decisions of 2026-11-16; the commits after it change only `docs/`) | 2026-11-16 | PASSED; gap gate: 0 new gaps, 113 coverage gaps remain; qa-deploy 18 known violations, 22 warnings; 929 pytest (with a scratch shellcheck), 9 shell; lint 0 new or worsened. The E2E suite was not run again: no service, policy, compose, harness or CI file changed |
@@ -114,7 +118,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `poc/slice-4-implementation` | agentic-sdlc-poc slice 4: the six sub-issues (#38–#43), on the plans merged with PR #48 | Implemented and reviewed, local; the owner's decisions of 2026-11-13 implemented and reviewed; round 2 (R2-1 to R2-10, 2026-11-14) implemented, its review unit `round-2` ended after round 2 (approvable; decision concern 16 to the owner); the owner's decisions of 2026-11-16 (decision concerns 11 and 13) implemented, their review unit `owner-decisions-2` ran round 1 (approvable; F1 to F3 fixed, decision concern 17 to the owner) and ended after its recheck, round 2; round 3 (R3-1 to R3-4, 2026-11-17) implemented and measured, its review unit `round-3` waiting for the owner's decision on decision concern 18; one final PR into `poc/agentic-sdlc` when the owner pushes |
+| `poc/slice-4-implementation` | agentic-sdlc-poc slice 4: the six sub-issues (#38–#43), on the plans merged with PR #48 | Implemented and reviewed, local; the owner's decisions of 2026-11-13 implemented and reviewed; round 2 (R2-1 to R2-10, 2026-11-14) implemented, its review unit `round-2` ended after round 2 (approvable; decision concern 16 to the owner); the owner's decisions of 2026-11-16 (decision concerns 11 and 13) implemented, their review unit `owner-decisions-2` ran round 1 (approvable; F1 to F3 fixed, decision concern 17 to the owner) and ended after its recheck, round 2; round 3 (R3-1 to R3-4, 2026-11-17) implemented and measured, then decision concern 18 decided by the owner (option (b)) and built, and the `mechanics` replay run once more (passed); its review unit `round-3` runs next; one final PR into `poc/agentic-sdlc` when the owner pushes |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).

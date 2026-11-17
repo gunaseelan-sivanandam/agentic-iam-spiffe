@@ -5,6 +5,57 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-11-17 Slice agentic-sdlc-poc 4: round 3, decision concern 18 (diff lines count as seen) and the second mechanics replay
+
+- Branch `poc/slice-4-implementation`, after the records of round 3 (`a6dfcce`): the owner's decision on decision
+  concern 18 recorded (`fd1b07e`, `4f5ea83`: option (b), "I choose your recommendation"), the benchmark report with
+  RC-1 to RC-4's runs (`2f2f1e2`), then (b) in `04a0ae3` (tests first), `753fc3e` and `5627de7`, then these records.
+  The [decision page](../slices/agentic-sdlc-poc/slice_4_decisions.md), section "Round 3", holds the as-built
+  paragraph and the replay's result.
+- What changed (`git diff --name-only 2f2f1e2 5627de7`: `AGENTS.md`, `scripts/run_independent_review.py`,
+  `tests/tools/test_run_independent_review.py`): `lines_shown` maps each line of `_review_inputs/change.diff` the
+  attempt was shown to the file line it shows (`diff_places`): a context or added line at its new path and line, a
+  removed line at its old path and line only for a file the diff deletes, a header line nowhere; the must-see check,
+  the quote's file rule and the place check use these lines too. `AGENTS.md` (Modes and prompts) says so, and the
+  output section's `SEEN_RULE` in its own commit (`5627de7`, wording only, decision 2). By the author's choice the
+  definition holds for every mode, so an initial review's empty-review rule counts diff lines too; the owner approved
+  (b) for rechecks and may restrict it.
+- Tests first (base `2f2f1e2`, the tests added in the working tree, each by ID with `python3 -m pytest -q
+  --tb=line`), with the first failure line:
+  `test_a_shown_context_or_added_line_of_the_change_diff_is_a_seen_line_of_its_file_and_a_header_line_of_none`
+  `E KeyError: 'scripts/kept.py'`;
+  `test_a_shown_removed_line_is_a_seen_line_only_of_a_file_the_change_deletes_at_its_old_line`
+  `E KeyError: 'scripts/kept.py'`;
+  `test_a_fix_seen_only_as_hunks_of_the_change_diff_is_seen_and_quoted_only_at_the_lines_they_showed`, the two cases
+  beyond two lines (`[three-before-the-hunk]`, `[three-past-the-hunk]`) `AssertionError: assert (1 == 1 and 'X1 quotes
+  scripts/cover.py:4-4, lines the attempt was not shown' in 'the report does not account for what it was given:
+  scripts/cover.py is named in a fixed: or rejected: answer and was not seen; ...')` (`:16-16` for the second), and
+  the four within (`[two-before-the-hunk]`, `[the-added-line]`, `[the-last-context-line]`, `[two-past-the-hunk]`)
+  `AssertionError: the report does not account for what it was given: scripts/cover.py is named in a fixed: or
+  rejected: answer and was not seen; X1 quotes scripts/cover.py, which the attempt did not see`. Not red, by design:
+  G2-1's test, `test_a_rejection_citing_a_file_the_change_deletes_must_see_the_change_diff_and_quote_from_it` (three
+  cases), passed on the unchanged code; the branch was right and the test pins it (discovered issue 51). The
+  commands and lines: `artifacts/work/round3_dc18_red.txt` (not tracked).
+- Measurement: the `mechanics` round-2 replay once more, on the launcher at `5627de7`, set up as the first replay
+  (one call, no retry, the pinned CLI 2.1.323, USD 1.37): completed and approvable, 15 answers accepted, 1 re-raised
+  (H1, high), 0 cannot determine, and two new findings (N1 medium, N2 high). Measurement 2's criterion, fixed before
+  the runs, was not met by the first replays; after the owner's decision 18 the failing replay ran once more and
+  passed. The counterfactual: the check of `3df47b7` on this attempt still gives the four "not seen" failures, the
+  check of `5627de7` none, and the check of `5627de7` on the first attempt still fails L1's misquote; so (b) passed
+  M4, and L1 passed because this reviewer quoted correctly. One run, and the evidence differed (4 entries instead of
+  5), so run-to-run variance cannot be separated. The analysis:
+  `artifacts/work/round3_replays/mechanics-dc18/analysis.md` (not tracked).
+- Validation, local: at `5627de7`, `make lint`, `make docs-check`, `make qa-trace` and `make tooling-test` passed, as
+  the build reported. On these records, rerun: `make qa-trace` passed (requirements 170, architecture 34, design 131,
+  tests 386, coverage gaps 113; gap gate against the merge-base of `origin/poc/agentic-sdlc`: 0 new) and `make
+  docs-check` passed. Not run: `make gate-consistency` (no CI job, Makefile target or Quality gates row changed), the
+  full E2E suite (no service, policy, compose, harness or CI file changed), `make unit-trust`, `make unit-mutation`
+  and `make unit-diff-cov` (no `services/` change), and CI (the branch is not pushed).
+- Discovered issues 56 to 59 are on the decision page: H1 (high) and N1 (medium) still hold at HEAD in slice 4.5's
+  runner and are open for the owner; N2 (high) no longer holds (both refusals are tested since `ea5697f`); the
+  evidence difference is not investigated. Discovered issue 51 (G2-1) has its test.
+- Review: the unit `round-3` runs next, under the recheck as (b) changed it.
+
 ## 2026-11-17 Slice agentic-sdlc-poc 4: round 3, rechecks that look before they accept
 
 - Branch `poc/slice-4-implementation`, 17 commits `292f270` to `fa7953f`, then these records: round 3, approved by the
