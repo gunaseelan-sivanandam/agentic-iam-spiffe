@@ -690,13 +690,59 @@ def test_user_base_keeps_its_place_under_home(monkeypatch: pytest.MonkeyPatch, t
     ("docs/slices/_template/plan.md", True), ("docs/review_checklists/code.md", True),  # templates, checklists
     ("scripts/run_independent_review.py", True), ("scripts/review_inputs.py", True),  # the launcher and the brief
     ("scripts/review_records.py", True), ("scripts/review_brief.py", True),
+    ("scripts/run_review_benchmark.py", True), ("tests/review_benchmark/answer_key.yaml", True),  # decision concern 15
+    (".claude/skills/grill-me/SKILL.md", True),
+    ("tests/review_benchmark/prompts/mandate_recheck_b.md", False),
     ("scripts/rogue_node_tests.sh", False), ("tests/tools/test_review_inputs.py", False),  # tests, the E2E harness
     ("tests/unit/test_issuer.py", False), ("services/tool-b/server.py", False), ("docs/slices/demo/plan.md", False),
     ("docs/requirements.md", False), ("docs/AGENTS.md", False), ("README.md", False),
-    ("scripts/run_review_benchmark.py", False), ("scripts/varambu_audit.py", False),
+    ("scripts/varambu_audit.py", False),
 ])
 def test_process_files_are_the_rulebook_gates_ci_templates_checklists_and_the_launcher(path: str, process: bool) -> None:
     assert inputs_module.is_process_file(path) is process
+
+
+def test_process_file_evidence_lists_a_changed_skill_and_the_benchmark_runner_with_its_answer_key(
+        fx: base.Fixture) -> None:
+    """Decision concern 15 (the owner, 2026-11-17, folded into R3-1): a recheck shows a change to a skill, the benchmark
+    runner or its answer key, as it shows a change to the rulebook or a gate."""
+    earlier = fx.commit
+    base._write(fx.work, ".claude/skills/grill-me/SKILL.md", "---\nname: grill-me\n---\n# Grill me\n")
+    base._write(fx.work, "scripts/run_review_benchmark.py", "print('runner')\n")
+    base._write(fx.work, "tests/review_benchmark/answer_key.yaml", "# The answer key.\ncases: []\n")
+    commit = base._commit_all(fx.work, "a skill, the benchmark runner and its answer key")
+    evidence = inputs_module.Evidence()
+    inputs_module.process_file_evidence(evidence, fx.work, (earlier,), commit)
+    span = f"({earlier[:12]} to {commit[:12]}; {inputs_module.PROCESS_COMMAND})"
+    assert evidence.entries == [
+        f"EV1: process file changed since the reviewed round: .claude/skills/grill-me/SKILL.md, +4 -0 lines {span}",
+        f"EV2: process file changed since the reviewed round: scripts/run_review_benchmark.py, +1 -0 lines {span}",
+        f"EV3: process file changed since the reviewed round: tests/review_benchmark/answer_key.yaml, +2 -0 lines {span}"]
+
+
+def test_a_recheck_takes_upstream_items_and_evidence_from_the_commits_since_the_reviewed_round(ev: base.Fixture) -> None:
+    """R3-1: in a recheck the sections and test entries the change edits, the trace links of its files, the changed
+    lines and the trace gaps come from the commits since the reviewed round, a gap marked against that round's commit;
+    the governing plan stays."""
+    _change(ev, **{"scripts/tool.py": TOOL_CHANGED, "docs/requirements.md": REQUIREMENTS.replace("Text.", "New.", 1)})
+    ev.scenario(base._reply())
+    base._run(ev)
+    items = _items(base._prompt(ev))
+    ev.scenario(base._reply([base._finding("X1")], [base._accounted(i, "explained", note="fine") for i in items], "no"))
+    assert base._run(ev) == 0
+    reviewed = ev.commit
+    requirements = (ev.work / "docs/requirements.md").read_text()
+    base._write(ev.work, "docs/requirements.md", requirements + "\n## REQ-T-R3 — A new unproved thing\n\nText.\n")
+    base._write(ev.work, "docs/architecture.md", ARCHITECTURE.replace("REQ-T-R2", "REQ-T-R2, REQ-T-R3"))
+    commit = base._answers(ev, "unit1/c1/r1/A/2", "| X1 | high | fixed: docs/requirements.md: REQ-T-R3 added |")
+    ev.scenario(base._reply())
+    base._run(ev, round_no=2, commit=commit)
+    upstream, evidence = base._section(base._prompt(ev), "Upstream items"), _evidence_section(base._prompt(ev))
+    assert "docs/slices/demo/plan.md (the governing plan: the bundle of the review record)" in upstream
+    assert "REQ-T-R3 (found: the change edits its section in docs/requirements.md)" in upstream
+    assert "REQ-T-R1 (found" not in upstream and "scripts/tool.py" not in upstream  # edited before round 1
+    assert f"trace gap requirements_without_proof:REQ-T-R3 (new, against the reviewed round's commit {reviewed[:12]}" in evidence
+    assert "scripts/tool.py" not in evidence and "against the merge-base" not in evidence
 
 
 def test_process_file_evidence_lists_line_counts_and_shows_a_comparison_that_cannot_run_as_failed(fx: base.Fixture) -> None:

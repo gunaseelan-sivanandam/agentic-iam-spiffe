@@ -87,6 +87,7 @@ def fx(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Fixture:
         path.mkdir()
     subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)  # noqa: S603, S607 - test git
     _git(work, "init", "-q", "-b", "main")
+    (work / ".git" / "info" / "exclude").write_text("artifacts/\nuntracked_secret.txt\n")  # stay untracked, as in the repo
     _write(work, "AGENTS.md", "BASE RULE SENTENCE v1\n")
     _write(work, "tests/unit/AGENTS.md", "UNIT BASE RULE\n")
     _write(work, REVIEWED, "print('base')\n")
@@ -1036,12 +1037,12 @@ def test_answer_the_recheck_cannot_verify_is_refused_before_any_call(fx: Fixture
 
 def test_fixed_answer_naming_a_file_the_change_deletes_is_accepted_and_needs_the_diff_read(fx: Fixture) -> None:
     _write(fx.work, "scripts/old.py", "print('old')\n")
-    _commit_all(fx.work, "a file the change will delete")
+    _commit_all(fx.work, "a file the fix will delete")
     _git(fx.work, "push", "-q", "-f", "origin", "HEAD:poc/base")
-    (fx.work / "scripts/old.py").unlink()
     _write(fx.work, REVIEWED, "print('changed again')\n")
-    fx.commit = _commit_all(fx.work, "delete the old file")
+    fx.commit = _commit_all(fx.work, "the change")
     _first_round(fx)
+    (fx.work / "scripts/old.py").unlink()  # the fix deletes it, so it is in the recheck's change (R3-1)
     commit = _answers(fx, "unit1/c1/r1/A/1", "| X1 | high | fixed: `scripts/old.py`, scripts/review_me.py:1: removed |")
     fx.scenario(_reply(accounted=[_accounted("X1")]))
     assert _run(fx, round_no=2, commit=commit) == 1
@@ -1069,7 +1070,8 @@ def test_answers_table_with_every_answer_word_is_accepted(fx: Fixture) -> None:
     (_reply(accounted=[_accounted("X1", opened=("AGENTS.md",))]), "names an opened file the attempt did not read"),
     (_reply(accounted=[_accounted("X1", opened=())], reads=["AGENTS.md", "scripts/review_me.py"]), None),
     (_reply(accounted=[_accounted("X1", opened=("AGENTS.md",))], reads=["AGENTS.md", "tests/unit/AGENTS.md"]),
-     "the review read none of the paths under review"),  # the fixed-file check itself: the test below
+     "scripts/review_me.py is named in a fixed: or rejected: answer and was not read"),  # R3-1: answers only, so no
+    # path is under review; a recheck's paths rule is in the range test below
     (_reply(accounted=[_accounted("X1", "explained")]), "X1 has status explained"),
 ], ids=["answer-missing", "opened-not-read", "control-complete", "nothing-under-review-read",
      "evidence-status-for-answer"])
@@ -1621,6 +1623,93 @@ def test_a_recheck_after_no_process_file_change_says_so_and_an_initial_review_li
     assert _run(fx, round_no=2, commit=commit) == 0
     evidence = _section(_prompt(fx), "Evidence")
     assert "No entries: nothing to account for." in evidence and "No process file changed since the reviewed round" in evidence
+
+
+def _diff_sha(fx: Fixture, since: str, commit: str) -> str:
+    """The SHA-256 of the diff from `since` to `commit` without the review files, as `change.diff` holds it."""
+    return launcher.sha256_text(launcher.git(fx.work, "diff", since, commit, "--", ".", f":(exclude){RECORD}",
+                                             f":(exclude){LOG}"))
+
+
+def _role(fx: Fixture) -> str:
+    """The prompt's opening role section, before its first `## ` heading."""
+    return _prompt(fx).split("\n## ", 1)[0]
+
+
+def test_an_initial_review_gets_the_branch_and_a_recheck_only_the_commits_since_the_reviewed_round(fx: Fixture) -> None:
+    """R3-1 (the owner, 2026-11-17): round 1 reviews the change from the merge-base; its recheck's `change.diff` and
+    files under review cover only the commits since the commit round 1 reviewed, and the copy still holds the whole
+    branch."""
+    _first_round(fx)
+    assert fx.log()[0]["diff_sha256"] == _diff_sha(fx, f"{fx.commit}~1", fx.commit)  # the merge-base is the base
+    assert "change.diff is the change: the diff from the merge-base with" in _role(fx)
+    assert "- AGENTS.md" in _section(_prompt(fx), "Paths under review")
+    _write(fx.work, "scripts/fix.py", "print('fix')\n")
+    commit = _answers(fx, "unit1/c1/r1/A/1", "| X1 | high | fixed: scripts/fix.py: guarded |")
+    fx.scenario(_reply(accounted=[_accounted("X1", opened=(REVIEWED,))], reads=[REVIEWED]))
+    assert _run(fx, round_no=2, commit=commit) == 1  # the hint is outside the range: only scripts/fix.py counts
+    assert _ends(fx)[-1]["reason"] == "the review read none of the paths under review"
+    fx.scenario(_reply(accounted=[_accounted("X1", opened=("scripts/fix.py",))], reads=["scripts/fix.py", REVIEWED]))
+    assert _run(fx, round_no=2, commit=commit) == 0
+    recheck = fx.log()[-2]
+    assert recheck["diff_sha256"] == _diff_sha(fx, fx.commit, commit)
+    assert (f"change.diff is the change since the reviewed round: the diff from {fx.commit[:12]}, the commit the "
+            "previous round reviewed, to the reviewed commit") in _role(fx)
+    paths = _section(_prompt(fx), "Paths under review")
+    assert "- scripts/fix.py" in paths and "- AGENTS.md" not in paths and f"- {REVIEWED}" not in paths
+    assert list(recheck["paths_sha256"]) == ["scripts/fix.py"] and recheck["path_hints"] == []
+    assert {"AGENTS.md", REVIEWED} <= set(fx.calls()[-1]["files"])  # the copy holds the whole branch
+
+
+def test_a_recheck_whose_reviewed_round_commit_is_not_an_ancestor_is_refused_before_any_call(
+        fx: Fixture, capsys: pytest.CaptureFixture[str]) -> None:
+    """R3-1: a rewritten branch has no range since the reviewed round, so the recheck is refused."""
+    _first_round(fx)
+    answered = _answers(fx, "unit1/c1/r1/A/1", "| X1 | high | fixed: scripts/review_me.py: guarded |")
+    rewritten = _git(fx.work, "commit-tree", f"{answered}^{{tree}}", "-p", f"{fx.commit}~1", "-m", "branch rewritten")
+    calls = len(fx.calls())
+    assert _run(fx, round_no=2, commit=rewritten) == 2
+    assert (f"the commit the previous round reviewed, {fx.commit[:12]}, is not an ancestor of the reviewed commit "
+            f"{rewritten[:12]}") in capsys.readouterr().err
+    assert len(fx.calls()) == calls and [e["round"] for e in fx.log() if e["event"] == "start"] == [1]
+
+
+def test_a_recheck_whose_reviewers_reviewed_different_commits_starts_at_their_common_ancestor(fx: Fixture) -> None:
+    """R3-1: when the reviewers of the round before reviewed different commits, the range starts at their common
+    ancestor, so it holds the commits since each one; another review keeps its inputs."""
+    _write(fx.work, "scripts/later.py", "print('later')\n")
+    later = _commit_all(fx.work, "a later commit one reviewer reviewed")
+    _write(fx.work, "scripts/fix.py", "print('fix')\n")
+    commit = _commit_all(fx.work, "the fix")
+    inputs = launcher.resolve_inputs(fx.work, commit, "poc/base", [REVIEWED], [RECORD, LOG])
+    rechecked = launcher.recheck_inputs(fx.work, inputs, (later, fx.commit))
+    assert rechecked.since == fx.commit == rechecked.change_base
+    assert list(rechecked.review_paths) == ["scripts/fix.py", "scripts/later.py"] and rechecked.hints == ()
+    assert launcher.recheck_inputs(fx.work, inputs, ()) is inputs and inputs.change_base == inputs.merge_base
+
+
+def _run_without_path(fx: Fixture, **kwargs: object) -> int:
+    return launcher.main([a for a in _args(fx, **kwargs) if a not in ("--path", REVIEWED)], repo=fx.work)  # type: ignore[arg-type]
+
+
+def test_a_recheck_whose_commits_since_the_reviewed_round_change_no_file_still_runs(fx: Fixture) -> None:
+    """R3-1: when the author only answered (the review files are withheld), the range is empty and the recheck still
+    runs: a `--path` outside the range is dropped, not refused, and without a file to open the empty-review rule has
+    nothing to apply to."""
+    _first_round(fx)
+    commit = _answers(fx, "unit1/c1/r1/A/1", f"| X1 | high | rejected: the scenario does not happen, {FACT} |")
+    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[QUOTE])]))
+    assert _run(fx, round_no=2, commit=commit) == 0
+    recheck = fx.log()[-2]
+    assert recheck["diff_sha256"] == launcher.sha256_text("")
+    assert recheck["paths_sha256"] == {} and recheck["path_hints"] == []
+    assert "- none: the commits since the reviewed round add, modify or rename no file" in _section(
+        _prompt(fx), "Paths under review")
+    fx.scenario(_reply([_finding("X1")], verdict="no"))
+    assert _run_without_path(fx, unit="unit2") == 0
+    commit = _answers(fx, "unit2/c1/r1/A/1", f"| X1 | high | rejected: the scenario does not happen, {FACT} |")
+    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[QUOTE])]))
+    assert _run_without_path(fx, round_no=2, commit=commit, unit="unit2") == 0
 
 
 def test_each_review_asks_whether_the_change_or_a_fix_adds_a_mechanism(fx: Fixture) -> None:
