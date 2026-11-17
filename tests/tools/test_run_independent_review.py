@@ -1726,7 +1726,7 @@ def test_each_review_asks_whether_the_change_or_a_fix_adds_a_mechanism(fx: Fixtu
         assert "a gate, check, CI job, process step, document, register or field" in text
         assert ("a step that is added or repeated and a second copy of a fact that must be kept current are mechanisms "
                 "too") in text
-        assert "after every push" not in text and "such as" not in text
+        assert "after every push" not in text and "such as" not in text.replace(CARVE_OUT.capitalize(), "")
     assert "without the owner's approval where changing a choice would do" in rules["initial"]
     assert "report it as a `defect` of at least `medium` severity, not as a `simpler_alternative`" in rules["initial"]
     assert ("without the owner's approval where changing or removing the choice that caused the finding would do"
@@ -1755,8 +1755,38 @@ def test_a_simpler_alternative_is_only_a_mechanism_the_owner_approved(fx: Fixtur
     output = _section(_prompt(fx), "Output")
     assert ("`simpler_alternative` (a mechanism the owner approved, in a plan or the rules, that could be removed or "
             "simplified within the agreed decisions; a mechanism added without that approval is a `defect` of at least "
-            "`medium` severity, and in a recheck a fix that adds one is re-raised)") in output
+            "`medium` severity, and in a recheck a fix that adds one is re-raised; what an existing rule already "
+            "requires of a fix, such as a test for new behaviour or a handoff record, is not an added mechanism)") in output
     assert "`simpler_alternative` (a mechanism that could be removed" not in output
+
+
+# R3-3, decision concern 17, option (a) (the owner, 2026-11-17): the carve-out of the mechanism rule, as row 17 words it.
+CARVE_OUT = ("what an existing rule already requires of the fix, such as a test for new behaviour or a handoff record, "
+             "is not an added mechanism")
+
+
+def test_what_an_existing_rule_requires_of_a_fix_is_not_an_added_mechanism(fx: Fixture) -> None:
+    """R3-3: a recheck that read "never adds a mechanism" literally re-raised good fixes that add what an existing rule
+    requires of them, such as a test for new behaviour. In the prompt the carve-out sits in the recheck's mechanism
+    question and in the kind bullet every mode shares; the initial question asks of the change, not of a fix, and keeps
+    its wording."""
+    rules = launcher.MECHANISM_RULES
+    assert CARVE_OUT.capitalize() + "." in rules["recheck"]
+    assert "already requires" not in rules["initial"]
+    assert _run(fx) == 0
+    output = _section(_prompt(fx), "Output")
+    assert output.count("already requires") == 1
+
+
+def test_the_fix_rule_in_agents_md_says_what_an_existing_rule_requires_is_not_an_added_mechanism() -> None:
+    """R3-3: the carve-out follows the mechanism definition in the rule it qualifies; the other places in `AGENTS.md`
+    that speak of mechanisms link to this rule rather than repeat the definition."""
+    fixes = (ROOT / "AGENTS.md").read_text().split("- **Fixes stay within the agreed decisions**", 1)[1]
+    fixes = " ".join(fixes.split("\n- **", 1)[0].split())
+    assert ("it never adds a mechanism (a gate, check, CI job, process step, document, register or field; a step added "
+            "or repeated and a second copy of a fact that must be kept current are mechanisms too). What an existing "
+            "rule already requires of the fix, such as a test for new behaviour or a handoff record, is not an added "
+            "mechanism.") in fixes
 
 
 def test_the_output_section_states_round_2s_severity_rule_and_the_quote_rule(fx: Fixture) -> None:

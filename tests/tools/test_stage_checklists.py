@@ -130,6 +130,24 @@ def test_the_two_questions_for_what_is_missing_sit_where_the_misses_happen() -> 
     assert {t for t, text in texts.items() if CI_QUESTION in text} == {"plan-and-test-plan", "code"}
 
 
+def test_the_plan_lists_question_8_asks_the_fix_rule_since_r2_4() -> None:
+    """R3-4 (the owner, 2026-11-17): growth proposal 14 rewords question 8 to the rule since R2-4 (a fix adds no
+    mechanism at all); the list keeps its 12 questions."""
+    text = (LISTS / "plan-and-test-plan.md").read_text()
+    questions = dict(m.groups() for line in text.splitlines() if (m := QUESTION.match(line)))
+    assert len(questions) == 12
+    assert questions["8"] == ("Where a fix answers a review finding, does it correct the defect or change the choice "
+                              "that caused it, without adding a mechanism? [S:google-looking-for]")
+
+
+def test_a_false_small_slice_claim_blocks_at_the_plan_review() -> None:
+    """R3-4, decision 7, option (a): a Blocks bullet rather than a 13th question, so the question limit holds."""
+    text = (LISTS / "plan-and-test-plan.md").read_text()
+    blocks = text.split("## Blocks at this stage", 1)[1]
+    assert ("\n- a plan that claims a small slice while one of the four conditions of `AGENTS.md` (Small slices) does "
+            "not hold for the planned change") in blocks
+
+
 def test_the_code_list_repeats_no_coding_rule() -> None:
     code = (LISTS / "code.md").read_text().lower()
     for rule in ("eval(", "except exception", "pkcs#8", "hardcoded secret", "validate and reject"):
