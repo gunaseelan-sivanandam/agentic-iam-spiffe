@@ -49,7 +49,14 @@ is first); every heading carries its date.
   calls (`open-R4+list` on the 15 initial cases, `recheck-R4` on RC-1 to RC-4), one call each without retries, CLI
   2.1.323, USD 13.58, 105 of 120 calls used; FS-1's line is withheld by the publication check. `78116f7`: the 85 new
   judged findings exported as M153 to M237 (seed 45). `6add324`: two fresh sessions judged them blind, each given half
-  of the export and the match rule only: 20 matches. Under R2-9 `open-R4+list` detects 10 of the 11 defect cases
+  of the export and the match rule only: 20 matches. They were the second pair: a first pair, started with a prompt
+  that added a test beyond the match rule (whether each finding actually describes the expected defect), was stopped
+  after about a minute; by their session transcripts (not kept in the repository) each had made three read-only calls,
+  listing its folder and the match rule and printing export rows, and written no verdict, so the author's removal of
+  any verdict file in their folders before the relaunch removed nothing. The second pair was asked only to apply the
+  rule. The committed rows differ from the sessions' output in one field: `expected_id` is null on the 65 no-match
+  rows, as in the earlier rows, where the sessions had named `E1` or `R1` (`read_verdicts` reads only `token` and
+  `verdict`). Under R2-9 `open-R4+list` detects 10 of the 11 defect cases
   against `open+list`'s 8, with 8 false alarms in 4 no-defect reviews against 7; under blocking or high, 9 against 7
   detections and 2 against 2 false alarms. `recheck-R4` re-raised RC-1's, RC-3's and RC-4's false answers, each
   re-raise confirmed, and accepted RC-2's. The criterion's outcome: the recheck wording meets it and ships; the

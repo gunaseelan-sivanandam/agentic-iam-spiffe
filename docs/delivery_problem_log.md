@@ -614,3 +614,73 @@ Why review did not catch it:
 ### Lesson
 A key that joins a verdict to a result must name everything that makes the result distinct, including what a later
 rerun changes.
+
+## DPL-015: A review run again under another prompt was counted beside the run it replaced, and two rechecks accepted the fix that left it
+
+- Status: Open until slice 4's final PR merges; fixed on the slice 4 branch (`02281b0`, R4-3)
+- Introduced: slice 4.5's runner, where stage-B results are only appended (`append_result`) and counted by case,
+  configuration and run (`configuration_counts`), never by prompt identity; it first showed when RC-3 ran again on
+  both recheck wordings (2026-11-16)
+- Found: the effect on 2026-11-16, by the author (discovered issue 39); the cause on 2026-11-17, by round 3's second
+  mechanics replay, H1 (high, re-raised) ([decision page](slices/agentic-sdlc-poc/slice_4_decisions.md), discovered
+  issue 56)
+
+### What happened
+- A case is run again as a new `run: 1` line when its prompt identity changes (S45-D2). The runner counted the new
+  line beside the one it replaced: after RC-3's reruns on both recheck wordings and round 3's runs of RC-1 to RC-4 on
+  `recheck-A`, its stage-B report read, under R2-9, `recheck-B` 3 of 4 and `recheck-A` 6 of 7, where each case's last
+  run gives 3 of 3 on both.
+- Discovered issue 39 recorded the effect and left the runner unchanged; the benchmark report gave the counts per
+  wording beside the runner's. Until R4-3, decision 2's options to the owner quoted the runner's wrong `3 of 4`, and
+  the benchmark report its `recheck-A` 6 of 7.
+- A finding of 4.5's mechanics review was answered by a fix that made the prompt identity cover the whole prompt and
+  the commit, so a changed input runs again. Its recheck (A/2) and round 3's first mechanics replay accepted the fix;
+  the second replay's H1 re-raised it: a changed input ran again, but the counts still held the line it replaced.
+
+### Root causes
+Why it happened:
+- RC1: results are only appended and keyed by case, configuration and run, with no allowance for a rerun under a new
+  prompt identity: the root of DPL-014, whose corrective action widened only the token key.
+- RC2: when the effect showed (discovered issue 39), the author corrected the numbers in the report by hand, not the
+  count in the runner, so the runner's numbers stayed wrong and were quoted to the owner.
+
+Why review did not catch it earlier:
+- RC3: the recheck A/2 and the first mechanics replay checked that a changed input runs again, which the fix did, not
+  what the counts did with the line the rerun replaced; no test had two `run: 1` lines of one case and configuration.
+
+### Actions
+- Corrective: `02281b0` (R4-3): `rule_views` keeps, in both views, the last line in file order of each case,
+  configuration and run (`current_lines`); results stay append-only. Under R2-9 `recheck-A` and `recheck-B` read 3 of
+  3. `ebdb0e8` puts the rebuilt report in the benchmark report and corrects decision 2's options.
+- Preventive: `test_a_review_run_again_under_another_prompt_replaces_the_earlier_line_in_the_counts` and
+  `test_a_recheck_run_again_under_another_prompt_is_listed_once` (`tests/tools/test_run_review_benchmark.py`), each
+  failing on the code before the fix.
+- Same cause, searched on 2026-11-18 (review unit `owner-decisions-3`, F1) in every place of
+  `scripts/run_review_benchmark.py` that groups, counts or keys result lines, and in the attempt-log readers of
+  `scripts/review_brief.py` and `scripts/run_independent_review.py`. The committed stage-B results hold six replaced
+  lines, five of them completed, all on `recheck-A` or `recheck-B`:
+  - `configuration_counts`, `severity_agreement`, `repeats_table`, `measurement_rows`, `false_answer_line` and
+    `holds_line` read a view's current lines only (`rule_views`), so no replaced line reaches them in the view under
+    the key's rule. The view under the earlier rule takes the last line among the lines recorded under that rule, so
+    it keeps RC-1's and RC-2's first `recheck-A` lines, which round 3's runs under the key's rule replaced; its title
+    scopes it to the reviews recorded before the key's rule.
+  - `origin_table` and `question_line` read every line: the five replaced completed lines' 7 findings (of 538; one
+    names its question) are in the stage-B report's origin table and question line. `02281b0` left both unchanged
+    (discovered issue 56); whether they should count each review once is not decided here.
+  - `report_rows` lists every run, the replaced ones too, as the benchmark report says.
+  - `--export-rescore` (`export_rescore`) exports the findings of every completed defect-case line that no export
+    holds, a replaced line's too, and `--rescore B` (`rescore_stage_b`) re-scores every completed line recorded under
+    an earlier rule, RC-1's replaced `recheck-A` line among its 62 rows. Neither reaches a count: a verdict counts only
+    through a current line's token key, and a re-score only through a current line's `review_id`, both holding the
+    prompt identity. Round 4's 85 exported rows come from its 13 completed defect-case lines, none replaced.
+  - `_completed_reviews`, read by `--export-measurement` and stage A's comparison, keeps the first completed line of
+    each case and configuration (or prompt), so a rerun would be read in place of the current line. No committed line
+    reaches it: no stage-A case and prompt, and no `open+list` or `open+list+sev` case, has a second completed line.
+    Latent; not changed.
+  - `previous_state` sums every line's calls, the replaced ones too, as the budget should.
+  - `finding_counts` and `last_verdicts` in `review_brief.py` and the launcher's `_round_state` key attempts by their
+    unique attempt ID, round and reviewer; no attempt replaces another's line, so the cause does not apply.
+
+### Lesson
+When results are only appended, decide once which line is current and read every count through that rule. When a
+count is seen to be wrong, fix it at its source, not the numbers in the report.

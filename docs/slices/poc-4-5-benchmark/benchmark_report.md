@@ -576,7 +576,12 @@ Built again in round 4 of slice 4 (R4-4, 2026-11-17) after the 19 runs of round 
 on the 15 initial cases, and `recheck-R4`, its recheck wording, on RC-1 to RC-4. Their 85 findings to judge were
 exported blind as M153 to M237 (`78116f7`); two fresh sessions, each given a folder holding only half of the export
 and the committed match rule and asked only to apply the rule to each line, opened nothing else and found 20 matches,
-appended to `rescore_confirmation.jsonl`, so no line is left not yet confirmed. Under R2-9, `open-R4+list` detects 10
+appended to `rescore_confirmation.jsonl`, so no line is left not yet confirmed. They were the second pair: a first
+pair, started with a prompt that added a test beyond the match rule, was stopped after about a minute, and by their
+session transcripts (not kept in the repository) each had only listed its folder and read rows and wrote no verdict.
+The committed rows differ from the sessions' output in one field: `expected_id` is null on the 65 no-match rows, as
+in the earlier rows, where the sessions had named an expected ID; the runner reads only the token and the verdict.
+Under R2-9, `open-R4+list` detects 10
 of 11 against `open+list`'s 8, with 8 false alarms in 4 no-defect reviews (CL-1 3, CL-2 4, CL-3 0, DC-1 1) against 7
 (3, 3, 0, 1), and 1 failed review each (FS-1, withheld by the publication check). Under blocking or high only, the
 rule of the earlier runs, for which the report has no `open-R4+list` row, computed from the confirmed matches and their
