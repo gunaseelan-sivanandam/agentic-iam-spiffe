@@ -487,13 +487,12 @@ def make_frozen_copy(repo: Path, commit: str, dest: Path, withheld: list[str], *
 
 def change_diff(repo: Path, diff_base: str, commit: str, withheld: list[str]) -> str:
     """The change from the merge-base with `diff_base` to `commit`, without the withheld paths, in git's default format
-    whatever the repository configures, as `diff_places` reads it: no external diff or text conversion, no colour,
-    `a/` and `b/` prefixes, names unquoted, and a blank context line with its leading space."""
+    whatever the repository configures (`DEFAULT_DIFF_OPTIONS` and `DEFAULT_DIFF_CONFIG` of review_inputs), as
+    `diff_places` reads it."""
     merge_base = git(repo, "merge-base", diff_base, commit).strip()
     excludes = [f":(exclude){path}" for path in withheld]
-    return git(repo, "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--src-prefix=a/", "--dst-prefix=b/",
-               merge_base, commit, "--", ".", *excludes,
-               config=("core.quotePath=false", "diff.suppressBlankEmpty=false"))
+    return git(repo, "diff", *_INPUTS.DEFAULT_DIFF_OPTIONS, merge_base, commit, "--", ".", *excludes,
+               config=_INPUTS.DEFAULT_DIFF_CONFIG)
 
 
 def review_mode(unit: str, round_no: int) -> str:

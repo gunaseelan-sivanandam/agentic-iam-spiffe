@@ -772,3 +772,17 @@ def test_process_file_evidence_lists_line_counts_and_shows_a_comparison_that_can
     nothing = inputs_module.Evidence()
     inputs_module.process_file_evidence(nothing, fx.work, (), commit)  # not a recheck: nothing to compare
     assert (nothing.entries, nothing.notes, nothing.status) == ([], [], {})
+
+
+def test_changed_lines_reads_git_default_format_whatever_the_repository_configures(fx: base.Fixture) -> None:
+    """Review round-3 N1: `changed_lines` reads hunk headers of git's default diff format, so it fixes that format as
+    `change_diff` does: a repository that configures colour, an external diff and no prefixes gives the same changed
+    lines as one without them, and they are the lines the change adds or edits."""
+    base._write(fx.work, "scripts/tool.py", "one\ntwo\nthree\nfour\nfive\nsix\n")
+    since = base._commit_all(fx.work, "a script")
+    base._write(fx.work, "scripts/tool.py", "one\ntwo changed\nthree\nfour\nfive changed\nsix changed\nseven\n")
+    commit = base._commit_all(fx.work, "lines edited and added")
+    plain = inputs_module.changed_lines(fx.work, since, commit, "scripts/tool.py")
+    for key, value in (("color.diff", "always"), ("diff.external", "true"), ("diff.noprefix", "true")):
+        base._git(fx.work, "config", key, value)
+    assert inputs_module.changed_lines(fx.work, since, commit, "scripts/tool.py") == plain == {2, 5, 6, 7}

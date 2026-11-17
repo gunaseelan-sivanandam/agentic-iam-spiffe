@@ -51,6 +51,11 @@ DECISION_ROW = re.compile(r"^\|\s*((?:[A-Z][A-Z0-9]*-)?D\d+)\s*\|")
 REQ_HEADING = re.compile(r"^#{2,3}\s+(REQ-[A-Z0-9.-]+)\s+—")
 ARCH_HEADING = re.compile(r"^##\s+(ARCH-\d{3})\b")
 HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+# Git's default diff format whatever the repository configures, as `changed_lines` and the launcher's `diff_places`
+# read it: settings given with `-c` (names unquoted, a blank context line with its leading space) and options of
+# `git diff` (no external diff or text conversion, no colour, `a/` and `b/` prefixes).
+DEFAULT_DIFF_CONFIG = ("core.quotePath=false", "diff.suppressBlankEmpty=false")
+DEFAULT_DIFF_OPTIONS = ("--no-ext-diff", "--no-textconv", "--no-color", "--src-prefix=a/", "--dst-prefix=b/")
 GITHUB_REMOTE = re.compile(r"github\.com[:/]([\w.-]+)/([\w.-]+?)(?:\.git)?$")
 TIMEOUT_S = 600
 # R2-6 (the owner, 2026-11-14): the process files are those that check everyone else's work (AGENTS.md, Small slices,
@@ -71,8 +76,10 @@ PROCESS_FILES = (
 PROCESS_COMMAND = "git diff --numstat --no-renames <earlier attempt's commit> <commit>"
 
 
-def _git(repo: Path, *args: str) -> str:
-    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=False)  # noqa: S603, S607 - fixed argv, no shell
+def _git(repo: Path, *args: str, config: tuple[str, ...] = ()) -> str:
+    """Run a git command in `repo`, each `config` setting given as `-c` before it; a ValueError when git fails."""
+    settings = [part for setting in config for part in ("-c", setting)]
+    result = subprocess.run(["git", "-C", str(repo), *settings, *args], capture_output=True, text=True, check=False)  # noqa: S603, S607 - fixed argv, no shell
     if result.returncode != 0:
         raise ValueError(f"git {args[0]} failed: {result.stderr.strip()[:200]}")
     return result.stdout
@@ -330,9 +337,11 @@ def _run(argv: list[str], scratch: Scratch) -> subprocess.CompletedProcess[str]:
 
 
 def changed_lines(repo: Path, merge_base: str, commit: str, path: str) -> set[int]:
-    """The lines of `path` at the commit that the change adds or edits."""
+    """The lines of `path` at the commit that the change adds or edits, read from the hunk headers of git's default diff
+    format whatever the repository configures."""
     lines: set[int] = set()
-    for line in _git(repo, "diff", "-U0", merge_base, commit, "--", path).splitlines():
+    diff = _git(repo, "diff", *DEFAULT_DIFF_OPTIONS, "-U0", merge_base, commit, "--", path, config=DEFAULT_DIFF_CONFIG)
+    for line in diff.splitlines():
         match = HUNK.match(line)
         if match:
             start, count = int(match.group(1)), int(match.group(2) if match.group(2) is not None else 1)
