@@ -146,3 +146,7 @@
 {"case": "RM-5", "configuration": "open-B+list", "finding": "F11", "prompt_identity": "37c0a46346ce0e5050243e4fbc92e0e377d0b5ec3e2977ead5b6bb95be943a69", "run": 1, "token": "M146"}
 {"case": "RC-3", "configuration": "recheck-B", "finding": "R1-1", "prompt_identity": "978c5247da9a266daad40c89f46663e143e74c476f0563f02f0ca391e2e6219c", "run": 1, "token": "M147"}
 {"case": "RC-3", "configuration": "recheck-A", "finding": "R1-1", "prompt_identity": "10ab8d508b6fd716e41f551870ef1b95cdbc3ffc2e0b5df5eb2484d65bd2fb14", "run": 1, "token": "M148"}
+{"case": "RC-1", "configuration": "recheck-A", "finding": "R1-1", "prompt_identity": "12670029d78a29ae76209c2935472bba87eb0b49b597468c39e0a19b821e0e99", "run": 1, "token": "M149"}
+{"case": "RC-4", "configuration": "recheck-A", "finding": "R1-1", "prompt_identity": "083c54f6f8d873d8af6e4efa57adb3a29e344854125c2ed3b78b211b371cda7c", "run": 1, "token": "M150"}
+{"case": "RC-1", "configuration": "recheck-A", "finding": "R2-1", "prompt_identity": "12670029d78a29ae76209c2935472bba87eb0b49b597468c39e0a19b821e0e99", "run": 1, "token": "M151"}
+{"case": "RC-3", "configuration": "recheck-A", "finding": "R1-1", "prompt_identity": "f9a54a8ff180ea1af05403522ce3ec72574f928bfb28245492ac9d53e69a1cba", "run": 1, "token": "M152"}
