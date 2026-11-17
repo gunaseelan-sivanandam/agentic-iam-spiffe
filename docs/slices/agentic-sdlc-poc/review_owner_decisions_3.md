@@ -278,3 +278,13 @@ No trace gap among the upstream items (python3 scripts/validate_traceability.py 
 }
 ```
 
+
+#### Answers to owner-decisions-3/c1/r1/A/1
+
+| Finding | Severity | Answer |
+| --- | --- | --- |
+| F1 | medium | fixed: docs/delivery_problem_log.md, docs/slices/agentic-sdlc-poc/slice_4_decisions.md: DPL-015 records discovered issue 56 (the miss by A/2 and the first mechanics replay, the wrong runner counts quoted in decision 2's options until R4-3, the root shared with DPL-014, the fix `02281b0` and its tests) and where the author looked for the same cause: every function of `scripts/run_review_benchmark.py` that groups, counts or keys result lines (the view under the key's rule, the view under the earlier rule, `report_rows`, `--export-rescore`, `--rescore B`, `_completed_reviews`, `previous_state`), `scripts/review_brief.py` and the launcher's round state; it is open until slice 4's final PR merges, as DPL-014; the two places that still read replaced lines (the origin table and question line, 7 of 538 findings; `_completed_reviews`, latent) are discovered issue 65 on the decision page, left for the owner, since no count of R4-4's criterion reads them |
+| F2 | medium | fixed: docs/slices/poc-4-5-benchmark/benchmark_report.md, docs/slices/agentic-sdlc-poc/slice_4_decisions.md, docs/history/implementation_log.md: each record now says that a first pair of confirmer sessions, whose prompt added a test beyond the match rule, was stopped after about a minute and by its session transcripts (not kept in the repository) wrote no verdict, that the second pair, asked only to apply the rule, wrote the committed verdicts, and that the committed rows set `expected_id` to null on the 65 no-match rows as the earlier rows hold it (the 20 match rows are the sessions' output unchanged) |
+| F3 | low | rejected: R4-4 is the owner-approved decision record, and "19 calls (86 to 105 of the 120 now allowed)" gives the stage's count of used calls before and after the 19 (86 used before round 4, 105 after), as the measurement paragraph of the same section and the commit `660f57b` state; the approved text is left as the owner approved it |
+| F4 | low | fixed: docs/slices/agentic-sdlc-poc/slice_4_decisions.md: decision 8's Recommendation cell now opens "The author recommends (a), and the owner decides:" |
+| F5 | low | fixed: docs/slices/agentic-sdlc-poc/slice_4_decisions.md: row 60 says the fix covers non-ASCII names and spaces only (git still quotes a double quote, a backslash, a tab and a newline), that no tracked file name holds one, and that the code is not changed |
