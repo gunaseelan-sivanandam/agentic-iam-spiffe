@@ -1836,7 +1836,7 @@ def _use(call_id: str, name: str, args: dict) -> str:
         {"type": "tool_use", "id": call_id, "name": name, "input": args}]}})
 
 
-def _result(call_id: str, content: str, shown: dict | None = None, is_error: bool = False) -> str:
+def _result(call_id: str, content: str | list, shown: dict | None = None, is_error: bool = False) -> str:
     event = {"type": "user", "message": {"content": [
         {"type": "tool_result", "tool_use_id": call_id, "is_error": is_error, "content": content}]}}
     return json.dumps({**event, **({"tool_use_result": shown} if shown is not None else {})})
@@ -1884,6 +1884,29 @@ def test_the_lines_shown_come_from_read_windows_and_the_lines_a_content_grep_pri
     shown = launcher.lines_shown(launcher.parse_stream("\n".join(lines)), root)
     assert shown == {"scripts/cover.py": {9, 10, 11, 12, 13, 14}, "docs/plan.md": {3, 4, 9}, "docs/empty.md": set(),
                      "scripts/two-1-x.sh": {3}, "scripts/single.py": {4, 5}}
+
+
+def test_a_tool_result_given_as_a_list_of_blocks_shows_the_lines_of_its_text_blocks(tmp_path: Path) -> None:
+    """R3-2 (a), review round-3 F3: the CLI may give a tool result's content as a list of blocks; the text of its text
+    blocks, one after the other, is what a Read (its numbered lines, without a window) or a content Grep (its printed
+    lines) showed, and a block without text or a part that is no block adds nothing. A content Grep whose path lies
+    outside the copy shows no file of it."""
+    root = tmp_path / "copy"
+    for rel in ("docs/plan.md", "scripts/a.py", "docs/b.md"):
+        _write(root, rel, "x\n")
+    lines = [
+        _use("r1", "Read", {"file_path": "docs/plan.md"}),
+        _result("r1", [{"type": "text", "text": "     3\tline three"}, {"type": "image", "source": {}}, "no block",
+                       {"type": "text", "text": "     4\tline four"}]),
+        _use("g1", "Grep", {"pattern": "hit", "output_mode": "content", "-C": 1}),
+        _result("g1", [{"type": "text", "text": "scripts/a.py:2:hit\nscripts/a.py-3-after"},
+                       {"type": "text", "text": "docs/b.md:5:hit"}],
+                {"mode": "content", "numFiles": 0, "filenames": []}),
+        _use("g2", "Grep", {"pattern": "hit", "path": str(tmp_path / "elsewhere"), "output_mode": "content"}),
+        _grep_result("g2", "docs/b.md:7:hit"),
+    ]
+    shown = launcher.lines_shown(launcher.parse_stream("\n".join(lines)), root)
+    assert shown == {"docs/plan.md": {3, 4}, "scripts/a.py": {2, 3}, "docs/b.md": {5}}
 
 
 @pytest.mark.parametrize(("line", "shown"), [(7, False), (8, True), (9, True), (15, True), (16, True), (17, False)],
