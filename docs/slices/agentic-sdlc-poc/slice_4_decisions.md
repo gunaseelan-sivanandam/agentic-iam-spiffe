@@ -464,6 +464,22 @@ rechecks re-raised none of 94 answers, and slice 2 accepted a column that did no
    and reports each call.
 4. The review unit `round-3`: an initial review at high effort and its recheck, under the new recheck.
 
+**The probe's result (2026-11-17).** One recheck, on the launcher at `292f270`, of a scratch record whose round 1 was
+written without a call (USD 0.49, CLI 2.1.326, Opus at medium). It accepted the real fix (F1), quoting nothing, and
+re-raised the false rejection (F2) at high, quoting the cited test's request and its assertion. It never searched
+the harness: it read the 70 lines around the `:3076` the answer cites, of 4,626. The launcher's checks passed. Four
+facts set R3-2's details: a read counts the whole file even when the reviewer saw 70 lines of it, and the launcher
+does not check that a quote lies in what was shown; a stream records each read's window (first line and count); a
+content search shows lines as `path:line:text`, while a search that lists files or counts shows none; and a quote
+from `change.diff` passes the place check today. So R3-2's details, chosen by the author: (a) a file is seen at the
+lines a successful read or a content search showed it, and a search listing only files or counts makes nothing
+seen; (b) a quote counts only where its lines were shown (within two lines, as the place check allows), so a quote
+copied from the author's answer, or of a line the reviewer never saw, fails; this is the author's reading of "a file
+counts as seen", which the owner may narrow back to whole files; (c) a fix's quote comes from a file the answer
+names, as it is in the copy, not from `change.diff`, except for a named file the range deletes; (d) a rejection that
+cites only a test ID or a gate keeps today's rule, a quote from any file it saw, and stays unmeasured. The analysis:
+`artifacts/work/round3_probe/analysis.md` (not tracked).
+
 **Stop rule.** The results are reported, not tuned on this branch. When `round-3`'s review ends, slice 4 closes.
 
 **Not in round 3.** Rewording the recheck mandate to start from each finding's failure scenario: an unmeasured
