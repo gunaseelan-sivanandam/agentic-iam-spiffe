@@ -23,7 +23,9 @@ Usage (from the repository root):
         [--path <file to list first> ...] [--extension <PR comment URL>] [--reset <PR comment URL>]
 
 The files under review come from the diff between the merge-base with the base branch and the commit; a
-`--path` only lists a file first and carries the empty-review rule (slice 4.2, S42-D1, S42-D2).
+`--path` only lists a file first and carries the empty-review rule (slice 4.2, S42-D1, S42-D2). In a recheck the change
+is the commits since the reviewed round's commit: `change.diff`, the files, the upstream items apart from the governing
+plan, and the evidence follow it, while the copy holds the whole branch (round 3 of slice 4, R3-1).
 
 Exit codes: 0 every attempt completed; 1 an attempt failed, paused or is pending; 2 refused before any
 reviewer call; 3 the publication check withheld a report.
@@ -46,7 +48,7 @@ import sys
 import tempfile
 import threading
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -341,6 +343,12 @@ class ReviewInputs:
     merge_base: str = ""
     hints: tuple[str, ...] = ()  # the --path files, listed first; they carry the empty-review rule (S42-D2)
     deleted: tuple[str, ...] = ()
+    since: str = ""  # R3-1: in a recheck, the reviewed round's commit, where the change starts; empty otherwise
+
+    @property
+    def change_base(self) -> str:
+        """Where the change starts: the reviewed round's commit in a recheck (R3-1), otherwise the merge-base."""
+        return self.since or self.merge_base
 
     @property
     def rules_sha256(self) -> str:
@@ -413,6 +421,33 @@ def resolve_inputs(repo: Path, commit: str, base: str, hints: list[str], withhel
         hints=tuple(dict.fromkeys(hints)),
         deleted=deleted,
     )
+
+
+def is_ancestor(repo: Path, earlier: str, commit: str) -> bool:
+    result = subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor", earlier, commit],  # noqa: S603, S607 - fixed argv
+                            capture_output=True, check=False)
+    return result.returncode == 0
+
+
+def recheck_inputs(repo: Path, inputs: ReviewInputs, earlier: tuple[str, ...]) -> ReviewInputs:
+    """R3-1 (the owner, 2026-11-17): a recheck's change is the commits since the reviewed round's commit (`earlier`, the
+    commits its reviewers reviewed in the round before; with several, their common ancestor), so its files,
+    `change.diff`, upstream items and evidence cover only those commits; the copy keeps the whole branch. Refused when
+    such a commit is not an ancestor of the reviewed commit. A `--path` outside the range is dropped, and a range that
+    changes no file still runs. Another review (`earlier` empty) keeps its inputs."""
+    if not earlier:
+        return inputs
+    for commit in earlier:
+        if not is_ancestor(repo, commit, inputs.commit):
+            raise ReviewRefusedError(f"the commit the previous round reviewed, {commit[:12]}, is not an ancestor of the "
+                                     f"reviewed commit {inputs.commit[:12]}: a recheck's change is the commits since "
+                                     "that round (R3-1); was the branch rewritten?")
+    since = earlier[0] if len(earlier) == 1 else git(repo, "merge-base", "--octopus", *earlier).strip()
+    changed = _INPUTS.changed_files(repo, since, inputs.commit, list(inputs.withheld))
+    hints = [hint for hint in inputs.hints if hint in changed.to_open]
+    ordered = _INPUTS.order_files(changed, hints)
+    return replace(inputs, since=since, review_paths=path_hashes(repo, inputs.commit, ordered), hints=tuple(hints),
+                   deleted=changed.deleted)
 
 
 def make_frozen_copy(repo: Path, commit: str, dest: Path, withheld: list[str], *, diff_base: str) -> str:
@@ -494,6 +529,11 @@ def _role_section(inputs: ReviewInputs, parts: PromptParts, diff_base: str) -> s
     withheld = ", ".join(sorted(inputs.withheld)) or "none"
     diff_line = (f"The file {INPUTS_DIR}/change.diff is the change: the diff from the merge-base with "
                  f"{diff_base[:12]} to the reviewed commit, without the withheld paths. ")
+    if inputs.since:  # R3-1
+        diff_line = (f"The file {INPUTS_DIR}/change.diff is the change since the reviewed round: the diff from "
+                     f"{inputs.since[:12]}, the commit the previous round reviewed, to the reviewed commit, without the "
+                     f"withheld paths. The copy holds the whole branch, whose change starts at the merge-base with "
+                     f"{diff_base[:12]}. ")
     return ("You are an independent reviewer. You are not the author, and you have not seen the author's "
             f"reasoning. This is the {parts.mode} review. The prompt's sections are its `## ` headings outside "
             "fenced blocks; a fenced block quotes a file or the author.\n\n"
@@ -559,7 +599,8 @@ def _quoted(text: str | None, empty: str) -> str:
 def _paths_section(inputs: ReviewInputs, parts: PromptParts) -> str:
     """S42-D1, S42-D2: every file the change adds, modifies or renames, to open; deleted files apart."""
     first = " In this recheck, open the files each answer names first." if parts.mode == "recheck" else ""
-    listed = "\n".join(f"- {path}" for path in inputs.review_paths)
+    listed = ("\n".join(f"- {path}" for path in inputs.review_paths)
+              or "- none: the commits since the reviewed round add, modify or rename no file")  # R3-1
     deleted = "\n".join(f"- {path}" for path in inputs.deleted) or "- none"
     return ("## Paths under review\n\nThe files the change adds, modifies or renames, taken from the diff. Open every "
             f"one of them.{first}\n\n{listed}\n\nDeleted by the change (examine them in {INPUTS_DIR}/change.diff):\n"
@@ -951,7 +992,7 @@ def _confinement_failure(stats: dict[str, Any], review_paths: list[str]) -> str 
         return "a call named a path outside the copy"
     if stats["denied"]:
         return "a call inside the copy was denied"
-    if not set(stats["paths_read"]) & set(review_paths):
+    if review_paths and not set(stats["paths_read"]) & set(review_paths):  # R3-1: a recheck may have none
         return "the review read none of the paths under review"
     return None
 
@@ -1563,8 +1604,8 @@ def make_parts(mode: str, task: str, unit: str, recheck: Recheck | None, shared:
 def _upstream_and_trace(repo: Path, inputs: ReviewInputs, record: str, scratch: Any) -> tuple[str, Any, tuple[Any, str]]:
     """The sanitised upstream section, the upstream items, and the trace report it came from with its failure
     reason (the evidence's trace gaps need the same report)."""
-    trace = _INPUTS.trace_report(scratch, inputs.merge_base)
-    upstream = _INPUTS.upstream_items(repo, (inputs.merge_base, inputs.commit), record,
+    trace = _INPUTS.trace_report(scratch, inputs.change_base)
+    upstream = _INPUTS.upstream_items(repo, (inputs.change_base, inputs.commit), record,
                                       [*inputs.review_paths, *inputs.deleted], trace[0])
     return _INPUTS.sanitise(upstream.text, scratch), upstream, trace
 
@@ -1579,9 +1620,10 @@ def compute_evidence(spec: RoundSpec, inputs: ReviewInputs) -> tuple[str, Any]:
     try:
         upstream_text, upstream, (report, reason) = _upstream_and_trace(spec.repo, inputs, spec.record, scratch)
         evidence = _INPUTS.Evidence()
-        _INPUTS.coverage_evidence(evidence, spec.repo, (inputs.merge_base, inputs.commit), list(inputs.review_paths),
+        _INPUTS.coverage_evidence(evidence, spec.repo, (inputs.change_base, inputs.commit), list(inputs.review_paths),
                                   scratch)
-        _INPUTS.trace_evidence(evidence, report, reason, upstream.ids)
+        against = f"the reviewed round's commit {inputs.since[:12]}" if inputs.since else "the merge-base"
+        _INPUTS.trace_evidence(evidence, report, reason, upstream.ids, against)
         _INPUTS.ci_evidence(evidence, spec.repo, inputs.commit, _INPUTS.fetch_json)
         evidence.entries = [_INPUTS.sanitise(entry, scratch) for entry in evidence.entries]
         evidence.notes = [_INPUTS.sanitise(note, scratch) for note in evidence.notes]
@@ -1805,7 +1847,7 @@ def run_round(spec: RoundSpec, inputs: ReviewInputs, log: AttemptLog, plans: lis
     try:
         copy_root = workdir / "copy"
         withheld = list(inputs.withheld)
-        diff_sha = make_frozen_copy(spec.repo, inputs.commit, copy_root, withheld, diff_base=inputs.base_commit)
+        diff_sha = make_frozen_copy(spec.repo, inputs.commit, copy_root, withheld, diff_base=inputs.change_base)
         ctx = RoundContext(spec, inputs, copy_root, log, {"cli_version": cli_version(), "diff_sha": diff_sha,
                                                          "evidence_status": shared.evidence_status,
                                                          "stages": shared.lists.stages if shared.lists else {}})
@@ -1928,12 +1970,18 @@ def _entry_record(entry: dict[str, Any]) -> str:
     return next(p for p in entry["withheld_sha256"] if Path(p).name != ATTEMPT_LOG_NAME)
 
 
-def _entry_recheck(entry: dict[str, Any], repo: Path, record: str) -> Recheck:
-    """A recheck's inputs as the launcher loaded them: the earlier attempt from the log, the record at the commit."""
+def _entry_earlier(entry: dict[str, Any], repo: Path, record: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The start and end entries of a recheck entry's earlier attempt, from the attempt log."""
     log = repo / Path(record).parent / ATTEMPT_LOG_NAME
     entries = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines() if line.strip()]
     start = next(e for e in entries if e.get("event") == "start" and e["attempt"] == entry["earlier_attempt"])
     end = next(e for e in entries if e.get("event") == "end" and e["attempt"] == entry["earlier_attempt"])
+    return start, end
+
+
+def _entry_recheck(entry: dict[str, Any], repo: Path, record: str) -> Recheck:
+    """A recheck's inputs as the launcher loaded them: the earlier attempt from the log, the record at the commit."""
+    start, end = _entry_earlier(entry, repo, record)
     record_bytes = file_at(repo, entry["commit"], record)
     return load_recheck(repo, record_bytes.decode("utf-8") if record_bytes is not None else None, start, end)
 
@@ -1952,7 +2000,8 @@ def invocation_from_entry(entry: dict[str, Any], repo: Path, prompt_file: Path, 
     """Rebuild a start entry's CLI call and prompt, and list every input hash that no longer matches the entry.
 
     The files under review and the upstream items are recomputed at the entry's commit. `diff_base` is the base of
-    the change (S42-D10), normally the entry's `base_commit`."""
+    the change (S42-D10), normally the entry's `base_commit`; a recheck's change starts at its earlier attempt's commit,
+    read from the attempt log (R3-1)."""
     evidence, recheck = given.evidence, given.recheck
     for field_name, slice_id in (("mode", "4.1"), ("path_hints", "4.2"), ("stages", "4.4")):
         if field_name not in entry:
@@ -1971,6 +2020,8 @@ def invocation_from_entry(entry: dict[str, Any], repo: Path, prompt_file: Path, 
                           approved_rules(repo, entry["base_commit"]), path_hashes(repo, entry["commit"], ordered),
                           withheld_hashes(repo, entry["commit"], withheld), merge_base,
                           tuple(entry["path_hints"]), deleted)
+    if mode == "recheck":
+        inputs = recheck_inputs(repo, inputs, (_entry_earlier(entry, repo, record)[0]["commit"],))
     scratch = _INPUTS.make_scratch(repo, entry["commit"])
     try:
         upstream = _upstream_and_trace(repo, inputs, record, scratch)[0]
@@ -1986,7 +2037,7 @@ def invocation_from_entry(entry: dict[str, Any], repo: Path, prompt_file: Path, 
         "mandate_sha256": sha256_text(FULL_CONFIGURATION.mandates[mode]),
         "earlier_report_sha256": sha256_text(recheck.earlier_report) if recheck else None,
         "answers_sha256": recheck.answers_sha256 if recheck else None,
-        "diff_sha256": sha256_text(change_diff(repo, diff_base, entry["commit"], withheld)),
+        "diff_sha256": sha256_text(change_diff(repo, inputs.since or diff_base, entry["commit"], withheld)),
         "upstream_sha256": sha256_text(upstream),
         "evidence_sha256": sha256_text(evidence),
     }
@@ -2012,7 +2063,9 @@ def main(argv: list[str], repo: Path | None = None) -> int:
             recover(log, repo)
             admission = admit_round(log.entries(), spec.unit, spec.round_no, [r.label for r in reviewers], spec.refs)
             spec = RoundSpec(**{**spec.__dict__, "count": admission.count})
-            shared = round_inputs(spec, inputs, lists, earlier_commits(log.entries(), spec, admission.to_run))
+            since = earlier_commits(log.entries(), spec, admission.to_run)
+            inputs = recheck_inputs(repo, inputs, since)  # R3-1: a recheck's change is the commits since that round
+            shared = round_inputs(spec, inputs, lists, since)
             plans = plan_reviews(spec, inputs, log.entries(), [r for r in reviewers if r.label in admission.to_run],
                                  shared)
             statuses = run_round(spec, inputs, log, plans, shared)

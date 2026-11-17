@@ -2,7 +2,9 @@
 
 Three things the author no longer chooses or summarises:
 - the files under review, taken from the diff between the merge-base and the reviewed commit (deleted files
-  in their own list), with `--path` only ordering them;
+  in their own list), with `--path` only ordering them; in a recheck, the change starts at the reviewed round's commit
+  instead, and the files, the upstream items apart from the governing plan, and the evidence follow it (round 3 of
+  slice 4, R3-1);
 - the upstream items the change traces to: the governing plan and its decisions, the plans of other bundles
   it touches, and the requirement, architecture and test items the trace model links to it;
 - the evidence, computed in a scratch clone of the reviewed commit with a minimal environment: the changed
@@ -36,7 +38,7 @@ import yaml
 
 COVERAGE_COMMAND = ("python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch "
                     "--cov-report=json:<scratch>/coverage.json")
-TRACE_COMMAND = ("python3 scripts/validate_traceability.py --mode pr --base <merge-base> "
+TRACE_COMMAND = ("python3 scripts/validate_traceability.py --mode pr --base <base> "
                  "--report-json <scratch>/trace.json --design-report-json <scratch>/design.json")
 CI_COMMAND = "GET https://api.github.com/repos/<owner>/<repo>/actions/runs?head_sha=<commit> (no token)"
 SUBPROCESS_NOTE = ("A script the tooling tests run only as a subprocess shows as not run here, because coverage is "
@@ -54,7 +56,8 @@ TIMEOUT_S = 600
 # R2-6 (the owner, 2026-11-14): the process files are those that check everyone else's work (AGENTS.md, Small slices,
 # condition 2) apart from the tests and the E2E harness, which a fix changes as a matter of course: the rulebook, the
 # gates with their QA tooling, CI, the slice templates, the review checklists, and the review launcher with its modules
-# and the brief. Patterns as `fnmatch` reads them, so `*` also matches `/`.
+# and the brief. Decision concern 15 (the owner, 2026-11-17, folded into R3-1) adds the benchmark runner with its answer
+# key and the skills. Patterns as `fnmatch` reads them, so `*` also matches `/`.
 PROCESS_FILES = (
     "AGENTS.md", "tests/unit/AGENTS.md",  # the rulebook
     "Makefile", "ruff_changed_files.toml", "scripts/check_*", "scripts/validate_*", "scripts/*_gate.*",  # gates
@@ -63,6 +66,7 @@ PROCESS_FILES = (
     ".github/*", "docs/slices/_template/*", "docs/review_checklists/*",  # CI, templates, checklists
     "scripts/run_independent_review.py", "scripts/review_inputs.py", "scripts/review_records.py",  # the launcher
     "scripts/review_brief.py",
+    "scripts/run_review_benchmark.py", "tests/review_benchmark/answer_key.yaml", ".claude/skills/*",  # benchmark, skills
 )
 PROCESS_COMMAND = "git diff --numstat --no-renames <earlier attempt's commit> <commit>"
 
@@ -398,12 +402,13 @@ def coverage_evidence(evidence: Evidence, repo: Path, commits: tuple[str, str], 
     evidence.status["coverage"] = "failed" if failing else "ok"
 
 
-def trace_report(scratch: Scratch, merge_base: str) -> tuple[dict[str, Any] | None, str]:
-    """The trace model at the reviewed commit, compared with the merge-base; None and the reason when it fails."""
+def trace_report(scratch: Scratch, base: str) -> tuple[dict[str, Any] | None, str]:
+    """The trace model at the reviewed commit, compared with `base` (the merge-base, or in a recheck the reviewed round's
+    commit); None and the reason when it fails."""
     if not (scratch.clone / "scripts" / "validate_traceability.py").is_file():
         return None, "scripts/validate_traceability.py does not exist at this commit"
     report = scratch.root / "trace.json"
-    argv = [sys.executable, "scripts/validate_traceability.py", "--mode", "pr", "--base", merge_base,
+    argv = [sys.executable, "scripts/validate_traceability.py", "--mode", "pr", "--base", base,
             "--report-json", str(report), "--design-report-json", str(scratch.root / "design.json")]
     try:
         run = _run(argv, scratch)
@@ -414,8 +419,9 @@ def trace_report(scratch: Scratch, merge_base: str) -> tuple[dict[str, Any] | No
     return json.loads(report.read_text(encoding="utf-8")), ""
 
 
-def trace_evidence(evidence: Evidence, report: dict[str, Any] | None, reason: str, ids: frozenset[str]) -> None:
-    """(b) the trace gaps among the upstream items, each marked new, existing or accepted."""
+def trace_evidence(evidence: Evidence, report: dict[str, Any] | None, reason: str, ids: frozenset[str],
+                   against: str = "the merge-base") -> None:
+    """(b) the trace gaps among the upstream items, each marked new, existing or accepted `against` the report's base."""
     if report is None:
         evidence.add(f"failed: {TRACE_COMMAND}: {reason}")
         evidence.status["trace"] = "failed"
@@ -426,7 +432,7 @@ def trace_evidence(evidence: Evidence, report: dict[str, Any] | None, reason: st
             for item in items if item in ids]
     for gap in gaps:
         mark = "accepted" if gap in accepted else "new" if gap in new else "existing"
-        evidence.add(f"trace gap {gap} ({mark}, against the merge-base; {TRACE_COMMAND})")
+        evidence.add(f"trace gap {gap} ({mark}, against {against}; {TRACE_COMMAND})")
     if not gaps:
         evidence.notes.append(f"No trace gap among the upstream items ({TRACE_COMMAND}).")
     evidence.status["trace"] = "ok"

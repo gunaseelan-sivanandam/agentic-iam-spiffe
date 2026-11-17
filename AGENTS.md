@@ -379,11 +379,17 @@ All of the following, in the same change:
   clone of the reviewed commit with only `PATH`, `LANG` and a scratch `HOME` (which links only the
   interpreter's user site-packages): the changed script lines and branches the tooling tests do not
   run, the trace gaps among the upstream items, and the CI results of the reviewed commit from the
-  public API; in a recheck, also each rulebook, gate, CI, template, checklist or launcher file
-  (`PROCESS_FILES` in `scripts/review_inputs.py`) that the commits since the reviewed round changed,
-  with its line counts. A command that cannot run is shown as failed, and the reviewer accounts for
-  every numbered evidence entry under `accounted`, as `explained` or `flagged` with the finding it
-  raised.
+  public API; in a recheck, also each rulebook, gate, CI, template, checklist, launcher, benchmark
+  or skill file (`PROCESS_FILES` in `scripts/review_inputs.py`) that the commits since the reviewed
+  round changed, with its line counts. A command that cannot run is shown as failed, and the reviewer
+  accounts for every numbered evidence entry under `accounted`, as `explained` or `flagged` with the
+  finding it raised. In a recheck, the change is only the commits since the reviewed round's commit
+  (the commit the unit's previous round reviewed, as its attempt log records it), while the copy
+  holds the whole branch: `change.diff`, the files under review, the upstream items except the
+  governing plan, the changed script lines and the trace gaps (marked new against that commit) come
+  from those commits; the CI results stay those of the reviewed commit. The launcher refuses a
+  recheck whose reviewed round's commit is not an ancestor of the reviewed commit, drops a `--path`
+  outside those commits, and runs a recheck whose commits change no file.
 - **Stage checklists.** Each review gets its stage's list from
   [`docs/review_checklists/`](docs/review_checklists/) as the minimum, never the limit: `--stage
   <type>` reads the list from the base commit, so a change cannot rewrite the list it is reviewed
