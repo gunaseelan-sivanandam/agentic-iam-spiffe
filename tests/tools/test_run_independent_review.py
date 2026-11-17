@@ -2092,3 +2092,40 @@ def test_a_rejection_citing_a_file_the_change_deletes_must_see_the_change_diff_a
         assert status == 0 and end["status"] == "completed", end["reason"]
         return
     assert status == 1 and reason in end["reason"]
+
+
+def _section_of_the_reviewed_file(fx: Fixture) -> tuple[int, list[str]]:
+    """The 1-based line of the change diff's `diff --git` header of the reviewed file, and the diff from there on, as an
+    initial review's copy holds it (the change from the base commit, the change's parent, the review files withheld)."""
+    diff = launcher.change_diff(fx.work, f"{fx.commit}~1", fx.commit, [RECORD, LOG]).splitlines()
+    start = diff.index(f"diff --git a/{REVIEWED} b/{REVIEWED}")
+    return start + 1, diff[start:]
+
+
+def test_an_initial_review_that_saw_its_only_path_under_review_only_as_a_hunk_of_the_change_diff_completes(
+        fx: Fixture) -> None:
+    """Decision concern 18 (b), for every mode by the author's choice: an initial review's empty-review rule counts the
+    lines of the change's diff it was shown, so a review that read its one path under review only through that path's
+    headers and hunk in the diff (`+print('change')`, line 1 of the file) saw it, and completes."""
+    start, section = _section_of_the_reviewed_file(fx)
+    window = {"file_path": "_review_inputs/change.diff", "offset": start, "limit": section.index("+print('change')") + 1}
+    fx.scenario({"reads": [window]})
+    assert _run(fx) == 0, _ends(fx)[-1].get("reason")
+    end = _ends(fx)[-1]
+    assert end["status"] == "completed" and end["paths_read"] == ["_review_inputs/change.diff"]
+
+
+def test_an_initial_review_that_saw_neither_its_path_under_review_nor_a_hunk_line_of_it_in_the_change_diff_fails(
+        fx: Fixture) -> None:
+    """Decision concern 18 (b): the diff's header lines of the path under review (`diff --git`, index, `---`, `+++`,
+    `@@`) show no line of it, so an initial review that read only those, and not the file, saw none of the paths under
+    review: it fails and releases no report."""
+    start, section = _section_of_the_reviewed_file(fx)
+    window = {"file_path": "_review_inputs/change.diff", "offset": start, "limit": section.index("-print('base')")}
+    assert section[window["limit"] - 1].startswith("@@ ")  # the window ends at the hunk header, before its first line
+    fx.scenario({"reads": [window]})
+    assert _run(fx) == 1
+    end = _ends(fx)[-1]
+    assert end["status"] == "failed" and end["reason"] == "the review saw none of the paths under review"
+    assert end["paths_read"] == ["_review_inputs/change.diff"]
+    assert not _report(fx, fx.log()[0]).exists()
