@@ -326,9 +326,10 @@ def test_stage_b_stops_at_its_budget_counting_retries_and_the_canary(repo: tuple
     r, base, commit = repo
     limit = bench.BUDGETS["B"]
     # raised from 60 to 85 on 2026-11-13 (decision concerns 4 and 8), lowered to the 76 used, raised to 80 for round
-    # 2's two recheck cases on both recheck wordings (R2-10, the owner, 2026-11-14), and to the key's 85 when the owner
-    # confirmed that budget (decision concern 11, 2026-11-16)
-    assert limit == 85
+    # 2's two recheck cases on both recheck wordings (R2-10, the owner, 2026-11-14), to the key's 85 when the owner
+    # confirmed that budget (decision concern 11, 2026-11-16), and to 95 for round 3's four recheck cases (the owner,
+    # 2026-11-17: "the budget 85 → 95")
+    assert limit == 95
     r.key([_case(f"C{i}", base, commit) for i in range(limit // 2 + 1)], budget=limit)  # more calls than the budget
     r.canary_passed()  # 2 calls already used
     r.scenario({"result": {"is_error": True}, "exit": 1}, {})
@@ -1010,7 +1011,7 @@ def test_repeats_table_reads_the_confirmed_verdicts_and_shows_a_failed_run() -> 
     failed = {"case": "RM", "configuration": "open+list", "status": "failed", "run": 1}
     again = {**_rated(2, [], [], [], ()), "case": "RM", "configuration": "open+list"}
     confirmation = bench.Confirmation({"T1": "match", "T2": "no match"},
-                                      {("RM", "short+list", 1, "F1"): "T1", ("RM", "short+list", 2, "F9"): "T2"})
+                                      {("RM", "short+list", "", 1, "F1"): "T1", ("RM", "short+list", "", 2, "F9"): "T2"})
     table = bench.repeats_table([first, second, failed, again], confirmation)
     assert "RM short+list: True, False" in table and "RM open+list: failed, False" in table
 
@@ -1500,8 +1501,9 @@ def test_the_third_export_holds_only_findings_no_earlier_export_holds_and_confir
     r.scenario(_reply([_new_finding("X1", "medium"), _new_finding("X2", "high", line=99, problem="unrelated")]))
     assert _run(r) == 0
     # the first export ran before R2-9: it holds the high finding only, which was judged no match
+    identity = next(line["prompt_identity"] for line in r.results() if line.get("configuration"))
     _write(r.root, str(bench.EXPORT_KEY_FILE), json.dumps({"token": "T001", "case": "C1", "configuration": "open+list",
-                                                          "run": 1, "finding": "X2"}) + "\n")
+                                                          "prompt_identity": identity, "run": 1, "finding": "X2"}) + "\n")
     _write(r.root, str(bench.VERDICT_FILES["author"]), json.dumps({"token": "T001", "verdict": "no match"}) + "\n")
     report = bench.report_stage_b(r.root, bench.load_key(r.root))
     row = _report_row(report, "open+list")
@@ -1531,8 +1533,8 @@ def test_rating_agreement_tells_a_medium_detection_from_a_high_one() -> None:
 
 def test_a_key_whose_budget_is_above_the_hard_stop_is_refused_though_the_runs_budget_is_within_it(
         repo: tuple[Repo, str, str]) -> None:
-    """The owner confirmed the key's budget of 85 (decision concern 11, 2026-11-16), so the hard stop equals it and the
-    check that the key's budget is within the hard stop is back: a key above it is refused before any call, whatever
+    """The hard stop equals the key's budget (decision concern 11, 2026-11-16; 95 since round 3, 2026-11-17), so the
+    check that the key's budget is within the hard stop holds: a key above it is refused before any call, whatever
     budget the run names, and a key within it runs on a plain `--run`."""
     r, base, commit = repo
     r.key([_case("C1", base, commit)], budget=bench.BUDGETS["B"] + 1)
@@ -1542,9 +1544,10 @@ def test_a_key_whose_budget_is_above_the_hard_stop_is_refused_though_the_runs_bu
     assert _run(r) == 0 and r.calls() == 2
 
 
-def test_the_committed_keys_budget_is_the_stage_b_hard_stop() -> None:
-    """A plain `--run` takes the key's budget, so the committed key must be within the hard stop (decision concern 11)."""
-    assert bench.load_key(ROOT).budget == bench.BUDGETS["B"]
+def test_the_committed_keys_budget_is_the_stage_b_hard_stop_of_95() -> None:
+    """A plain `--run` takes the key's budget, so the committed key must be within the hard stop (decision concern 11);
+    round 3 raised both to 95 (the owner, 2026-11-17: "the budget 85 → 95")."""
+    assert bench.load_key(ROOT).budget == bench.BUDGETS["B"] == 95
 
 
 def _false_rejection_inputs(r: Repo) -> dict:
@@ -1599,3 +1602,70 @@ def test_each_recheck_of_a_false_answer_is_reported_detected_or_missed() -> None
     unjudged = bench.Confirmation({"T1": "match"}, {})
     assert "RC recheck-A: detected, not yet confirmed (R1-1 re-raised)" in bench.false_answer_line(lines, key, unjudged)[0]
     assert bench.false_answer_line(lines, _key_with(_key_case(case_id="RC")), bench.Confirmation()) == []
+
+
+# --- Round 3 of slice 4: a confirmation belongs to its result line ------------------------------------------------------
+
+
+def _two_runs_of_one_case_under_two_prompts(r: Repo, base: str, commit: str) -> tuple[dict, dict]:
+    """C1's short+list run twice as `run: 1`: the second after a changed template, so under another prompt identity
+    (S45-D2), each detecting E1 by its finding X1, as a new RC-1 run that re-raises R1-1 again would."""
+    r.key([_case("C1", base, commit, configurations=["short+list"])])
+    r.canary_passed()
+    r.scenario(_reply([_new_finding("X1", "high")]))
+    assert _run(r) == 0
+    _write(r.root, "tests/review_benchmark/prompts/short_list.md", "A CHANGED SHORT LIST PROMPT.\n")
+    r.scenario(_reply([_new_finding("X1", "high")]))
+    assert _run(r) == 0
+    first, second = [line for line in r.results() if line.get("configuration")]
+    assert first["prompt_identity"] != second["prompt_identity"] and first["run"] == second["run"] == 1
+    assert first["score"]["matches"] == second["score"]["matches"] == {"E1": ["X1"]}
+    return first, second
+
+
+def test_a_new_line_under_another_prompt_takes_no_earlier_lines_token_and_its_findings_are_exported(
+        repo: tuple[Repo, str, str]) -> None:
+    """A result line takes only the confirmations its own findings were given: a later line of the same case,
+    configuration and run under another prompt waits for its own blind verdict, and the third export holds its finding,
+    while the earlier line keeps its token and verdict."""
+    r, base, commit = repo
+    first, second = _two_runs_of_one_case_under_two_prompts(r, base, commit)
+    _write(r.root, str(bench.EXPORT_KEY_FILE), json.dumps({"token": "T001", "case": "C1", "configuration": "short+list",
+                                                          "prompt_identity": first["prompt_identity"], "run": 1,
+                                                          "finding": "X1"}) + "\n")
+    _write(r.root, str(bench.VERDICT_FILES["author"]), json.dumps({"token": "T001", "verdict": "match"}) + "\n")
+    confirmation = bench.Confirmation(bench.read_verdicts(r.root, "author"), bench.read_tokens(r.root))
+    assert confirmation.confirmed(first) == {"E1"} and confirmation.unjudged(first) == 0
+    assert confirmation.confirmed(second) == set() and confirmation.unjudged(second) == 1
+    assert bench.main(["--export-rescore"], repo=r.root) == 0
+    private = [json.loads(t) for t in (r.root / bench.RESCORE_EXPORT_KEY_FILE).read_text().splitlines()]
+    assert [(p["token"], p["finding"], p["prompt_identity"]) for p in private] == [
+        ("M001", "X1", second["prompt_identity"])]
+
+
+def test_the_third_export_keeps_its_rows_and_tokens_and_adds_a_new_lines_findings_after_the_last(
+        repo: tuple[Repo, str, str]) -> None:
+    """A later `--export-rescore` keeps every row the third export holds, with its token, so the verdicts already given
+    stay joined to their lines, and gives only the findings no export holds the next tokens."""
+    r, base, commit = repo
+    r.key([_case("C1", base, commit, configurations=["short+list"])])
+    r.canary_passed()
+    r.scenario(_reply([_new_finding("X1", "high")]))
+    assert _run(r) == 0
+    assert bench.main(["--export-rescore"], repo=r.root) == 0
+    rows = (r.root / bench.RESCORE_EXPORT_FILE).read_text(), (r.root / bench.RESCORE_EXPORT_KEY_FILE).read_text()
+    _write(r.root, str(bench.VERDICT_FILES["rescore"]), json.dumps({"token": "M001", "verdict": "match"}) + "\n")
+    assert bench.main(["--export-rescore"], repo=r.root) == 0  # nothing new: the files stay as they are
+    assert ((r.root / bench.RESCORE_EXPORT_FILE).read_text(), (r.root / bench.RESCORE_EXPORT_KEY_FILE).read_text()) == rows
+    _write(r.root, "tests/review_benchmark/prompts/short_list.md", "A CHANGED SHORT LIST PROMPT.\n")
+    r.scenario(_reply([_new_finding("X1", "high")]))
+    assert _run(r) == 0
+    first, second = [line for line in r.results() if line.get("configuration")]
+    assert bench.main(["--export-rescore"], repo=r.root) == 0
+    export, private = ((r.root / f).read_text() for f in (bench.RESCORE_EXPORT_FILE, bench.RESCORE_EXPORT_KEY_FILE))
+    assert export.startswith(rows[0]) and private.startswith(rows[1])
+    assert [(p["token"], p["prompt_identity"]) for p in map(json.loads, private.splitlines())] == [
+        ("M001", first["prompt_identity"]), ("M002", second["prompt_identity"])]
+    confirmation = bench.Confirmation(bench.read_verdicts(r.root, "rescore"),
+                                      bench.read_tokens(r.root, bench.RESCORE_EXPORT_KEY_FILE))
+    assert confirmation.confirmed(first) == {"E1"} and confirmation.unjudged(second) == 1
