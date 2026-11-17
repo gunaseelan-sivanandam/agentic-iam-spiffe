@@ -144,7 +144,7 @@ def test_a_false_small_slice_claim_blocks_at_the_plan_review() -> None:
     """R3-4, decision 7, option (a): a Blocks bullet rather than a 13th question, so the question limit holds."""
     text = (LISTS / "plan-and-test-plan.md").read_text()
     blocks = text.split("## Blocks at this stage", 1)[1]
-    assert ("\n- a plan that claims a small slice while one of the four conditions of `AGENTS.md` (Small slices) does "
+    assert ("\n- the plan claims a small slice while one of the four conditions of `AGENTS.md` (Small slices) does "
             "not hold for the planned change") in blocks
 
 

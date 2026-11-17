@@ -25,4 +25,4 @@ Besides the blocking criteria of every stage (`AGENTS.md`, Review findings), a f
 - a decision contradicts another, the requirements, the architecture or the threat model;
 - the plan lets a key, socket or secret reach a service outside its holders;
 - the plan changes the approved threat model without the user's approval;
-- a plan that claims a small slice while one of the four conditions of `AGENTS.md` (Small slices) does not hold for the planned change.
+- the plan claims a small slice while one of the four conditions of `AGENTS.md` (Small slices) does not hold for the planned change.
