@@ -243,7 +243,7 @@ def test_fenced_snippet_inside_an_answers_section_is_not_a_block(fx: base.Fixtur
 def test_answers_changed_after_the_recheck_read_them_fail(fx: base.Fixture) -> None:
     _completed(fx, base._finding("X1"))
     commit = base._answers(fx, "unit1/c1/r1/A/1", "| X1 | high | fixed: scripts/review_me.py: guarded |")
-    fx.scenario(base._reply(accounted=[base._accounted("X1"), base._accounted("EV1", "explained")]))
+    fx.scenario(base._reply(accounted=[base._accounted("X1", quotes=[QUOTE]), base._accounted("EV1", "explained")]))
     assert base._run(fx, round_no=2, commit=commit) == 0
     assert _problems(fx) == []
     _edit(fx, "fixed: scripts/review_me.py: guarded", "fixed: scripts/review_me.py: guarded twice")
@@ -430,7 +430,7 @@ def _re_raised_after(fx: base.Fixture, severity: str, first_answer: str) -> None
     """Round 1 with X1 at `severity` answered `first_answer`; the recheck re-raises X1 at the same severity."""
     _completed(fx, base._finding("X1", severity=severity))
     commit = base._answers(fx, "unit1/c1/r1/A/1", f"| X1 | {severity} | {first_answer} |")
-    quotes = [QUOTE] if first_answer.startswith("rejected:") else None  # R2-7: a re-raised rejection is quoted
+    quotes = [QUOTE] if first_answer.startswith(("rejected:", "fixed:")) else None  # R2-7, R3-2: re-raised, so quoted
     fx.scenario(base._reply([base._finding("X1", severity=severity)], verdict="no", accounted=[
         base._accounted("X1", "re-raised", quotes=quotes), base._accounted("EV1", "explained")]))
     assert base._run(fx, round_no=2, commit=commit) == 0
@@ -573,3 +573,14 @@ def test_a_re_raised_rejection_keeps_its_id_so_its_fix_or_owner_row_is_accepted(
     assert [f["id"] for f in report["findings"]] == ["X1"]
     base._answers(fx, "unit1/c1/r2/A/1", "| X1 | high | fixed: scripts/review_me.py: guarded after all |")
     assert _problems(fx) == []
+
+
+# --- Round 3 of slice 4, R3-2 ----------------------------------------------------------------------------------------
+
+
+def test_the_repository_records_released_with_searched_and_unquoted_fixes_still_pass_the_record_check() -> None:
+    """R3-2 changes the report schema and what a recheck must quote, not the record check: the released reports of
+    earlier rounds, which hold `searched` and accept fixes without a quote, stay valid records."""
+    texts = [path.read_text(encoding="utf-8") for path in sorted((ROOT / "docs" / "slices").rglob("review_*.md"))]
+    assert any('"searched"' in text for text in texts)
+    assert check.check_review_records(ROOT) == []

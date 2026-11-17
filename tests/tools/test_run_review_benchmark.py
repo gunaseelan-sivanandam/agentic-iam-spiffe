@@ -532,14 +532,17 @@ def _holds_case(r: Repo, base: str, commit: str) -> dict:
 
 
 RULES_QUOTE = {"file": "AGENTS.md", "line": 1, "end_line": 1, "text": "Rules."}  # what the rejection of R1-1 rests on
+FIX_QUOTE = {"file": REVIEWED, "line": 1, "end_line": 1, "text": "print('change')"}  # the file a fix names, at the case
 
 
 def _accounted(r1: str, r2: str, opened: tuple[str, ...] = ("AGENTS.md", REVIEWED), quote: bool = True) -> list[dict]:
-    """R1-1 is a rejection: a recheck that accepts or re-raises it quotes the line it rests on (R2-7)."""
+    """R1-1 is a rejection and R1-2 a fix: a recheck that accepts or re-raises either quotes the line it rests on
+    (R2-7, R3-2)."""
     entries = [{"item": item, "status": status, "note": "n", "opened": list(opened)}
                for item, status in (("R1-1", r1), ("R1-2", r2))]
-    if quote and r1 in ("accepted", "re-raised"):
-        entries[0]["quotes"] = [RULES_QUOTE]
+    for entry, quoted in zip(entries, (RULES_QUOTE, FIX_QUOTE)):
+        if quote and entry["status"] in ("accepted", "re-raised"):
+            entry["quotes"] = [quoted]
     return entries
 
 
@@ -1285,7 +1288,8 @@ def test_a_re_raise_at_medium_in_the_recheck_case_is_exported(repo: tuple[Repo, 
     r.canary_passed()
     r.scenario({"reads": [REVIEWED], "result": {"structured_output": {
         "findings": [_new_finding("R1-1", "medium")],
-        "accounted": [{"item": "R1-1", "status": "re-raised", "note": "n", "opened": [REVIEWED]}], "verdict": "no"}}})
+        "accounted": [{"item": "R1-1", "status": "re-raised", "note": "n", "opened": [REVIEWED], "quotes": [FIX_QUOTE]}],
+        "verdict": "no"}}})
     assert _run(r) == 0
     assert bench.main(["--export-confirmation"], repo=r.root) == 0
     export = [json.loads(line) for line in (r.root / bench.EXPORT_FILE).read_text().splitlines()]
@@ -1404,8 +1408,8 @@ def test_the_mechanism_question_reaches_both_recheck_wordings_and_every_initial_
         assert launcher.MECHANISM_RULES["initial"] in prompt and launcher.MECHANISM_RULES["recheck"] not in prompt
 
 
-def test_a_benchmark_recheck_that_accepts_a_rejection_without_a_quote_fails(repo: tuple[Repo, str, str]) -> None:
-    """R2-7 holds in the benchmark too: its rechecks are judged by the launcher's accounting, quotes included."""
+def test_a_benchmark_recheck_that_accepts_a_rejection_or_a_fix_without_a_quote_fails(repo: tuple[Repo, str, str]) -> None:
+    """R2-7 and R3-2 hold in the benchmark too: its rechecks are judged by the launcher's accounting, quotes included."""
     r, base, commit = repo
     r.key([_holds_case(r, base, commit)])
     r.canary_passed()
@@ -1414,7 +1418,8 @@ def test_a_benchmark_recheck_that_accepts_a_rejection_without_a_quote_fails(repo
     assert _run(r) == 0
     line = next(line for line in r.results() if line.get("configuration") == "recheck-A")
     assert line["status"] == "failed"
-    assert "R1-1 accepts or re-raises a rejection without quoting the lines it rests on" in line["reason"]
+    assert "R1-1 accepts or re-raises a fixed: or rejected: answer without quoting the lines it rests on" in line["reason"]
+    assert "R1-2 accepts or re-raises a fixed: or rejected: answer without quoting the lines it rests on" in line["reason"]
 
 
 def test_a_benchmark_recheck_whose_rejection_cites_no_checkable_fact_is_refused(repo: tuple[Repo, str, str],

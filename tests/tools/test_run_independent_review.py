@@ -37,6 +37,7 @@ REVIEWED = "scripts/review_me.py"
 PR_COMMENT = "https://github.com/owner/repo/pull/7#issuecomment-123"
 FACT = "scripts/review_me.py:1"  # a checkable fact (R2-2); the fake reviewer reads the file by default
 QUOTE = {"file": REVIEWED, "line": 1, "end_line": 1, "text": "print('change')"}  # line 1 of the reviewed file (R2-7)
+CHANGED_AGAIN = {**QUOTE, "text": "print('changed again')"}  # line 1 of the reviewed file where a test changes it again
 
 
 @dataclass
@@ -518,7 +519,7 @@ def test_round_five_with_an_extension_runs_and_the_log_keeps_the_reference(fx: F
     _write(fx.work, LOG, "".join(json.dumps(e) + "\n" for e in entries))
     _write(fx.work, RECORD, f"# record\n\n### Attempt unit1/c1/r4/A/1\n\n#### Report\n\n```json\n{report}```\n")
     commit = _answers(fx, "unit1/c1/r4/A/1", "| X1 | high | fixed: scripts/review_me.py: guarded |")
-    fx.scenario(_reply(accounted=[_accounted("X1")]))
+    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[QUOTE])]))
     assert _run(fx, round_no=5, commit=commit) == 2
     assert _run(fx, "--extension", PR_COMMENT, round_no=5, commit=commit) == 0
     assert fx.log()[-2]["extension"] == PR_COMMENT and fx.log()[-2]["round"] == 5
@@ -636,7 +637,7 @@ def test_failed_read_of_the_only_path_under_review_does_not_count(fx: Fixture) -
     fx.scenario({"reads": [REVIEWED, "AGENTS.md"], "read_errors": [REVIEWED]})
     assert _run(fx) == 1
     end = _ends(fx)[0]
-    assert end["status"] == "failed" and end["reason"] == "the review read none of the paths under review"
+    assert end["status"] == "failed" and end["reason"] == "the review saw none of the paths under review"
     assert end["paths_read"] == ["AGENTS.md"]
 
 
@@ -834,7 +835,8 @@ def test_output_section_holds_the_reporting_bounds_and_the_credential_note_verba
             in output)
     assert f'"{launcher.CLAIMS_SECTION}"' in output and launcher.CLAIMS_SECTION == "Claims to verify"
     assert launcher.CREDENTIAL_NOTE in output and "`<token>`" in launcher.CREDENTIAL_NOTE
-    assert launcher.OPENED_RULE in output and "only searched with Grep or Glob goes under `searched`" in launcher.OPENED_RULE
+    assert launcher.SEEN_RULE in output and "a Grep that lists files or counts shows none" in launcher.SEEN_RULE
+    assert "`searched`" not in output  # R3-2: the field is gone from the schema and the prompt
     assert launcher.QUESTION_RULE in output and "`code:10`" in launcher.QUESTION_RULE
 
 
@@ -931,7 +933,7 @@ def test_recheck_prompt_holds_its_earlier_report_and_only_its_answers_section(fx
     commit = _recheck(fx, "| X1 | high | fixed: scripts/review_me.py: ANSWER MARKER |",
                       extra="\n#### Answers to unit1/c1/r1/B/1\n\nOTHER ANSWERS MARKER\n")
     report_text = _report(fx, fx.log()[0]).read_text()
-    fx.scenario(_reply(accounted=[_accounted("X1")]))
+    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[QUOTE])]))
     assert _run(fx, round_no=2, commit=commit) == 0
     prompt = _prompt(fx)
     assert report_text.rstrip("\n") in _section(prompt, "Your earlier report")
@@ -1047,7 +1049,7 @@ def test_fixed_answer_naming_a_file_the_change_deletes_is_accepted_and_needs_the
     fx.scenario(_reply(accounted=[_accounted("X1")]))
     assert _run(fx, round_no=2, commit=commit) == 1
     assert "_review_inputs/change.diff is named" in _ends(fx)[-1]["reason"]
-    fx.scenario(_reply(accounted=[_accounted("X1")], reads=[REVIEWED, "_review_inputs/change.diff"]))
+    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[CHANGED_AGAIN])], reads=[REVIEWED, "_review_inputs/change.diff"]))
     assert _run(fx, round_no=2, commit=commit) == 0
 
 
@@ -1057,7 +1059,7 @@ def test_answers_table_with_every_answer_word_is_accepted(fx: Fixture) -> None:
     commit = _recheck(fx, "| `X1` | High | fixed: ./scripts/review_me.py:3-4: guarded |",
                       "| X2 | medium | rejected: covered by `make docs-check` |", "| X3 | low | deferred: #12 |",
                       f"| X4 | medium | owner: {PR_COMMENT} |", findings=findings)
-    accounted = [_accounted("X1"), _accounted("X2", quotes=[QUOTE]), _accounted("X3"),
+    accounted = [_accounted("X1", quotes=[QUOTE]), _accounted("X2", quotes=[QUOTE]), _accounted("X3"),
                  _accounted("X4", "cannot determine", note="needs the owner")]
     fx.scenario(_reply(accounted=accounted))
     assert _run(fx, round_no=2, commit=commit) == 0
@@ -1067,14 +1069,12 @@ def test_answers_table_with_every_answer_word_is_accepted(fx: Fixture) -> None:
 
 @pytest.mark.parametrize(("scenario", "reason"), [
     (_reply(accounted=[]), "X1 is not accounted"),
-    (_reply(accounted=[_accounted("X1", opened=("AGENTS.md",))]), "names an opened file the attempt did not read"),
-    (_reply(accounted=[_accounted("X1", opened=())], reads=["AGENTS.md", "scripts/review_me.py"]), None),
+    (_reply(accounted=[_accounted("X1", opened=(), quotes=[QUOTE])], reads=["AGENTS.md", "scripts/review_me.py"]), None),
     (_reply(accounted=[_accounted("X1", opened=("AGENTS.md",))], reads=["AGENTS.md", "tests/unit/AGENTS.md"]),
-     "scripts/review_me.py is named in a fixed: or rejected: answer and was not read"),  # R3-1: answers only, so no
+     "scripts/review_me.py is named in a fixed: or rejected: answer and was not seen"),  # R3-1: answers only, so no
     # path is under review; a recheck's paths rule is in the range test below
     (_reply(accounted=[_accounted("X1", "explained")]), "X1 has status explained"),
-], ids=["answer-missing", "opened-not-read", "control-complete", "nothing-under-review-read",
-     "evidence-status-for-answer"])
+], ids=["answer-missing", "control-complete", "nothing-under-review-seen", "evidence-status-for-answer"])
 def test_recheck_that_does_not_account_for_every_answer_fails(fx: Fixture, scenario: dict, reason: str | None) -> None:
     commit = _recheck(fx, "| X1 | high | fixed: scripts/review_me.py: guarded |")
     fx.scenario(scenario)
@@ -1087,13 +1087,13 @@ def test_recheck_that_does_not_account_for_every_answer_fails(fx: Fixture, scena
     assert not _report(fx, fx.log()[-2]).exists()
 
 
-def test_fixed_file_that_was_not_read_fails_even_when_a_path_under_review_was(fx: Fixture) -> None:
+def test_fixed_file_that_was_not_seen_fails_even_when_a_path_under_review_was(fx: Fixture) -> None:
     _write(fx.work, "scripts/fix.py", "print('fix')\n")
     fx.commit = _commit_all(fx.work, "a second file")
     commit = _recheck(fx, "| X1 | high | fixed: scripts/fix.py: guarded |")
     fx.scenario(_reply(accounted=[_accounted("X1")]))
     assert _run(fx, round_no=2, commit=commit) == 1
-    assert "scripts/fix.py is named in a fixed: or rejected: answer and was not read" in _ends(fx)[-1]["reason"]
+    assert "scripts/fix.py is named in a fixed: or rejected: answer and was not seen" in _ends(fx)[-1]["reason"]
 
 
 # --- Owner-approved growth of 2026-11-13: rejections read, searched files, checklist questions ---------------------
@@ -1104,7 +1104,7 @@ def test_fixed_file_that_was_not_read_fails_even_when_a_path_under_review_was(fx
     ("rejected: already covered by `scripts/cover.py::test_x`", [REVIEWED, "scripts/cover.py"], False),
     ("rejected: the scenario does not happen, as `make docs-check` shows", [REVIEWED], False),
 ], ids=["cited-file-not-read", "cited-file-read", "no-file-cited"])
-def test_a_rejection_counts_only_when_the_files_it_cites_were_read(fx: Fixture, answer: str, reads: list[str],
+def test_a_rejection_counts_only_when_the_files_it_cites_were_seen(fx: Fixture, answer: str, reads: list[str],
                                                                     fails: bool) -> None:
     """Decision concern 1, resolved by the owner (2026-11-13): an accepted rejection rests on what it cites."""
     _write(fx.work, "scripts/cover.py", "def test_x():\n    pass\n")
@@ -1114,7 +1114,7 @@ def test_a_rejection_counts_only_when_the_files_it_cites_were_read(fx: Fixture, 
     fx.scenario(_reply(accounted=[_accounted("X1", quotes=[cover if "cover.py" in answer else QUOTE])], reads=reads))
     status = _run(fx, round_no=2, commit=commit)
     reason = _ends(fx)[-1].get("reason", "")
-    assert (status, "scripts/cover.py is named in a fixed: or rejected: answer and was not read" in reason) == (
+    assert (status, "scripts/cover.py is named in a fixed: or rejected: answer and was not seen" in reason) == (
         (1, True) if fails else (0, False))
 
 
@@ -1127,11 +1127,11 @@ def test_cited_paths_find_files_with_and_without_a_directory_and_name_missing_pa
         ["tests/tools/test_a.py", "docs/b.md", "AGENTS.md", "Makefile"], ["docs/gone.md"])  # and/or is prose (G2-1)
 
 
-def test_a_rejection_citing_a_root_level_file_must_read_it(fx: Fixture) -> None:
+def test_a_rejection_citing_a_root_level_file_must_see_it(fx: Fixture) -> None:
     commit = _recheck(fx, "| X1 | high | rejected: outside the threat model, see AGENTS.md:1 (PoC scope) |")
     fx.scenario(_reply(accounted=[_accounted("X1")]))
     assert _run(fx, round_no=2, commit=commit) == 1
-    assert "AGENTS.md is named in a fixed: or rejected: answer and was not read" in _ends(fx)[-1]["reason"]
+    assert "AGENTS.md is named in a fixed: or rejected: answer and was not seen" in _ends(fx)[-1]["reason"]
 
 
 def test_a_rejection_citing_a_path_the_copy_lacks_is_refused_before_any_call(fx: Fixture,
@@ -1143,15 +1143,11 @@ def test_a_rejection_citing_a_path_the_copy_lacks_is_refused_before_any_call(fx:
     assert len(fx.calls()) == calls
 
 
-@pytest.mark.parametrize(("where", "status"), [("searched", 0), ("opened", 1)])
-def test_a_searched_file_need_not_be_read_but_an_opened_one_must(fx: Fixture, where: str, status: int) -> None:
-    """The reviewer can report a Grep honestly under `searched`; `opened` stays a checked claim."""
+def test_an_opened_file_the_attempt_did_not_read_no_longer_fails(fx: Fixture) -> None:
+    """R3-2 (the owner, 2026-11-17): `opened` is the reviewer's note; what the launcher checks is what it saw."""
     commit = _recheck(fx, "| X1 | high | rejected: the scenario does not happen, as `make docs-check` shows |")
-    entry = ({**_accounted("X1", quotes=[QUOTE]), "searched": ["docs/not_read.md"]} if where == "searched"
-             else _accounted("X1", opened=(REVIEWED, "docs/not_read.md"), quotes=[QUOTE]))
-    fx.scenario(_reply(accounted=[entry]))
-    assert _run(fx, round_no=2, commit=commit) == status
-    assert ("X1 names an opened file the attempt did not read" in _ends(fx)[-1].get("reason", "")) is (status == 1)
+    fx.scenario(_reply(accounted=[_accounted("X1", opened=(REVIEWED, "docs/not_read.md"), quotes=[QUOTE])]))
+    assert _run(fx, round_no=2, commit=commit) == 0, _ends(fx)[-1].get("reason")
 
 
 @pytest.mark.parametrize(("question", "problem"), [
@@ -1164,18 +1160,18 @@ def test_a_finding_may_name_the_checklist_question_that_prompted_it(question: ob
     assert (problems == []) if problem is None else any(problem in p for p in problems), problems
 
 
-@pytest.mark.parametrize("searched", ["docs/x.md", ["docs/x.md", 3]], ids=["a-string", "a-list-with-a-number"])
-def test_a_searched_field_that_is_not_a_list_of_paths_fails(searched: object) -> None:
-    """Growth review, G1-6."""
+@pytest.mark.parametrize("searched", [["docs/x.md"], []], ids=["a-list-of-paths", "an-empty-list"])
+def test_a_report_with_a_searched_field_is_refused_by_the_schema(searched: object) -> None:
+    """R3-2: `searched` is removed; a Grep that showed lines makes its file seen without a field of its own."""
     report = {"findings": [], "accounted": [{**_accounted("EV1", "explained"), "searched": searched}], "verdict": "yes"}
-    assert any("searched is not a list of paths" in p for p in launcher.validate_report(report))
+    assert launcher.validate_report(report) == ["accounted 0: fields differ from the schema"]
 
 
-def test_the_schema_offers_the_question_and_searched_fields_as_optional() -> None:
+def test_the_schema_offers_the_question_field_as_optional_and_no_searched_field() -> None:
     finding = launcher.REPORT_SCHEMA["properties"]["findings"]["items"]
     accounted = launcher.REPORT_SCHEMA["properties"]["accounted"]["items"]
     assert "question" in finding["properties"] and "question" not in finding["required"]
-    assert "searched" in accounted["properties"] and "searched" not in accounted["required"]
+    assert "searched" not in accounted["properties"] and "opened" in accounted["required"]
 
 
 def test_an_entry_logged_with_an_earlier_schema_is_not_rebuilt(fx: Fixture) -> None:
@@ -1267,7 +1263,7 @@ def test_end_entry_counts_each_severity_with_zeros(fx: Fixture) -> None:
 
 def test_recheck_prompt_is_rebuilt_from_its_entry_and_a_changed_answers_section_mismatches(fx: Fixture) -> None:
     commit = _recheck(fx, "| X1 | high | fixed: scripts/review_me.py: guarded |")
-    fx.scenario(_reply(accounted=[_accounted("X1")]))
+    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[QUOTE])]))
     assert _run(fx, round_no=2, commit=commit) == 0
     start = fx.log()[-2]
     logged = launcher._RECORDS.parse_record((fx.work / RECORD).read_text())[0][start["attempt"]].blocks["evidence"]
@@ -1445,7 +1441,7 @@ def test_a_rejection_the_recheck_did_not_accept_is_fixed_or_goes_to_the_owner_be
     """R2-3: one dispute round. A finding the recheck could not determine is not in its findings, yet its answer row
     is accepted (S43-D4's gap): it is fixed or goes to the owner."""
     commit = _third_round(fx, status, row)
-    fx.scenario(_reply(accounted=[_accounted("X1")]))
+    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[QUOTE])]))
     status_code = _run(fx, round_no=3, commit=commit)
     if refused is None:
         assert status_code == 0 and _ends(fx)[-1]["status"] == "completed"
@@ -1494,20 +1490,25 @@ def test_a_quote_counts_only_at_its_place_in_the_copy(fx: Fixture, quote: dict, 
 
 @pytest.mark.parametrize(("answer", "status", "quotes", "reason"), [
     (f"rejected: the scenario does not happen, {FACT}", "accepted", None,
-     "X1 accepts or re-raises a rejection without quoting the lines it rests on"),
+     "X1 accepts or re-raises a fixed: or rejected: answer without quoting the lines it rests on"),
     (f"rejected: the scenario does not happen, {FACT}", "accepted", [], "without quoting the lines it rests on"),
     (f"rejected: the scenario does not happen, {FACT}", "re-raised", None, "without quoting the lines it rests on"),
     (f"rejected: the scenario does not happen, {FACT}", "cannot determine", None, None),
     ("rejected: style", "accepted", None, "without quoting the lines it rests on"),
-    ("fixed: scripts/review_me.py: guarded", "accepted", None, None),
+    ("fixed: scripts/review_me.py: guarded", "accepted", None,
+     "X1 accepts or re-raises a fixed: or rejected: answer without quoting the lines it rests on"),
+    ("fixed: scripts/review_me.py: guarded", "re-raised", None, "without quoting the lines it rests on"),
+    ("fixed: scripts/review_me.py: guarded", "cannot determine", None, None),
+    ("fixed: scripts/review_me.py: guarded", "accepted", [QUOTE], None),
     ("fixed: scripts/review_me.py: guarded", "accepted", [{**QUOTE, "text": "print('base')"}],
      f"X1 quotes {REVIEWED}:1-1, and the copy holds no such text there"),
 ], ids=["accepted-rejection-unquoted", "accepted-rejection-empty-quotes", "re-raised-rejection-unquoted",
-        "undetermined-rejection-needs-no-quote", "low-rejection-unquoted", "fix-needs-no-quote",
-        "any-quote-is-checked"])
-def test_every_rejection_the_recheck_accepts_or_re_raises_is_quoted(fx: Fixture, answer: str, status: str,
-                                                                     quotes: list[dict] | None, reason: str | None) -> None:
-    """R2-7, as written: every rejection, whatever its severity; a quote given anywhere is checked."""
+        "undetermined-rejection-needs-no-quote", "low-rejection-unquoted", "accepted-fix-unquoted",
+        "re-raised-fix-unquoted", "undetermined-fix-needs-no-quote", "accepted-fix-quoted", "any-quote-is-checked"])
+def test_every_fix_and_rejection_the_recheck_accepts_or_re_raises_is_quoted(
+        fx: Fixture, answer: str, status: str, quotes: list[dict] | None, reason: str | None) -> None:
+    """R2-7, extended to fixes by R3-2: every `fixed:` and `rejected:` answer, whatever its severity; a quote given
+    anywhere is checked."""
     severity = "low" if answer == "rejected: style" else "high"
     commit = _recheck(fx, f"| X1 | {severity} | {answer} |", findings=(_finding("X1", severity=severity),))
     findings = [_finding("X1", severity=severity)] if status == "re-raised" else []
@@ -1522,10 +1523,10 @@ RULE_QUOTE = {"file": "AGENTS.md", "line": 1, "end_line": 1, "text": "BASE RULE 
 
 @pytest.mark.parametrize(("answer", "reads", "quotes", "reason"), [
     (f"rejected: the scenario does not happen, {FACT}", [REVIEWED], [QUOTE, RULE_QUOTE],
-     "X1 quotes AGENTS.md, which the attempt did not read"),
+     "X1 quotes AGENTS.md, which the attempt did not see"),
     (f"rejected: the scenario does not happen, {FACT}", [REVIEWED, "AGENTS.md"], [QUOTE, RULE_QUOTE], None),
     (f"rejected: covered by {COVER}:10-11", [REVIEWED, COVER], [QUOTE],
-     f"X1 quotes none of the files its rejection cites ({COVER})"),
+     f"X1 quotes none of the files its answer names or cites ({COVER})"),
     (f"rejected: covered by {COVER}:10-11", [REVIEWED, COVER],
      [QUOTE, {"file": COVER, "line": 10, "end_line": 10, "text": "check number 10 holds"}], None),
     ("rejected: covered by M5-T49", [REVIEWED], [QUOTE], None),
@@ -1608,7 +1609,8 @@ def test_a_recheck_accounts_for_each_process_file_changed_since_the_reviewed_rou
     assert f"EV2: process file changed since the reviewed round: AGENTS.md, +1 -0 lines {span}" in evidence
     assert REVIEWED not in evidence and "review_demo.md" not in evidence
     assert "EV1 is not accounted" in _ends(fx)[-1]["reason"]
-    fx.scenario(_reply(accounted=[_accounted("X1"), _accounted("EV1", "explained"),
+    fixed = {**QUOTE, "text": "print('fixed')"}
+    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[fixed]), _accounted("EV1", "explained"),
                                   _accounted("EV2", "explained", opened=(REVIEWED, "AGENTS.md"))],
                        reads=[REVIEWED, "AGENTS.md"]))
     assert _run(fx, round_no=2, commit=commit) == 0
@@ -1619,7 +1621,7 @@ def test_a_recheck_after_no_process_file_change_says_so_and_an_initial_review_li
     _first_round(fx)
     assert "process file" not in _section(_prompt(fx), "Evidence")
     commit = _answers(fx, "unit1/c1/r1/A/1", "| X1 | high | fixed: scripts/review_me.py: guarded |")
-    fx.scenario(_reply(accounted=[_accounted("X1")]))
+    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[QUOTE])]))
     assert _run(fx, round_no=2, commit=commit) == 0
     evidence = _section(_prompt(fx), "Evidence")
     assert "No entries: nothing to account for." in evidence and "No process file changed since the reviewed round" in evidence
@@ -1648,8 +1650,8 @@ def test_an_initial_review_gets_the_branch_and_a_recheck_only_the_commits_since_
     commit = _answers(fx, "unit1/c1/r1/A/1", "| X1 | high | fixed: scripts/fix.py: guarded |")
     fx.scenario(_reply(accounted=[_accounted("X1", opened=(REVIEWED,))], reads=[REVIEWED]))
     assert _run(fx, round_no=2, commit=commit) == 1  # the hint is outside the range: only scripts/fix.py counts
-    assert _ends(fx)[-1]["reason"] == "the review read none of the paths under review"
-    fx.scenario(_reply(accounted=[_accounted("X1", opened=("scripts/fix.py",))], reads=["scripts/fix.py", REVIEWED]))
+    assert _ends(fx)[-1]["reason"] == "the review saw none of the paths under review"
+    fx.scenario(_reply(accounted=[_accounted("X1", opened=("scripts/fix.py",), quotes=[{"file": "scripts/fix.py", "line": 1, "end_line": 1, "text": "print('fix')"}])], reads=["scripts/fix.py", REVIEWED]))
     assert _run(fx, round_no=2, commit=commit) == 0
     recheck = fx.log()[-2]
     assert recheck["diff_sha256"] == _diff_sha(fx, fx.commit, commit)
@@ -1734,7 +1736,7 @@ def test_each_review_asks_whether_the_change_or_a_fix_adds_a_mechanism(fx: Fixtu
     initial = _section(_prompt(fx), "Output")
     assert rules["initial"] in initial and rules["recheck"] not in initial
     commit = _answers(fx, "unit1/c1/r1/A/1", "| X1 | high | fixed: scripts/review_me.py: guarded |")
-    fx.scenario(_reply(accounted=[_accounted("X1")]))
+    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[QUOTE])]))
     assert _run(fx, round_no=2, commit=commit) == 0
     recheck = _section(_prompt(fx), "Output")
     assert rules["recheck"] in recheck and rules["initial"] not in recheck and "re-raise" in rules["recheck"]
@@ -1764,3 +1766,150 @@ def test_the_output_section_states_round_2s_severity_rule_and_the_quote_rule(fx:
     assert "Blocking, high and medium findings are fixed" in output and "deferred with a tracking issue" not in output
     assert "unless the owner defers it" not in output and "`low` (style, preference) is the author's choice" in output
     assert launcher.QUOTE_RULE in output and "`quotes`" in launcher.QUOTE_RULE
+
+
+# --- Round 3 of slice 4, R3-2: a recheck quotes what it was shown ---------------------------------------------------
+
+
+def _use(call_id: str, name: str, args: dict) -> str:
+    return json.dumps({"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "id": call_id, "name": name, "input": args}]}})
+
+
+def _result(call_id: str, content: str, shown: dict | None = None, is_error: bool = False) -> str:
+    event = {"type": "user", "message": {"content": [
+        {"type": "tool_result", "tool_use_id": call_id, "is_error": is_error, "content": content}]}}
+    return json.dumps({**event, **({"tool_use_result": shown} if shown is not None else {})})
+
+
+def _grep_result(call_id: str, printed: str) -> str:
+    """A content Grep's result: its text is what it printed, also under `content` (the probe's stream)."""
+    return _result(call_id, printed, {"mode": "content", "numFiles": 0, "filenames": [], "content": printed})
+
+
+def test_the_lines_shown_come_from_read_windows_and_the_lines_a_content_grep_printed(tmp_path: Path) -> None:
+    """R3-2 (a), with the shapes of the probe's stream and of the CLI's Grep: a Read shows its window (`startLine`,
+    `numLines`, or the numbered lines of its result), a content Grep the lines it printed (`path:line:text`, context
+    `path-line-text`, no path for a single file); a failed Read, a Grep that lists files or counts, a Grep without line
+    numbers and an omitted long line show nothing."""
+    root = tmp_path / "copy"
+    for rel in ("scripts/cover.py", "docs/plan.md", "docs/empty.md", "scripts/two-1-x.sh", "scripts/single.py",
+                "scripts/listed.py", "AGENTS.md"):
+        _write(root, rel, "x\n")
+    lines = [
+        _use("r1", "Read", {"file_path": f"{root}/scripts/cover.py", "offset": 10, "limit": 5}),
+        _result("r1", "10\tx", {"type": "text", "file": {"filePath": f"{root}/scripts/cover.py", "startLine": 10,
+                                                        "numLines": 5, "totalLines": 20}}),
+        _use("r2", "Read", {"file_path": "docs/plan.md"}),
+        _result("r2", "     3\tline three\n     4\tline four"),
+        _use("r3", "Read", {"file_path": "AGENTS.md"}),
+        _result("r3", "File does not exist.", is_error=True),
+        _use("r4", "Read", {"file_path": "docs/empty.md"}),
+        _result("r4", "", {"type": "text", "file": {"filePath": "docs/empty.md", "startLine": 1, "numLines": 0,
+                                                    "totalLines": 0}}),
+        _use("g1", "Grep", {"pattern": "number", "path": f"{root}/scripts", "output_mode": "content", "-C": 1}),
+        _grep_result("g1", "\n".join([
+            "scripts/cover.py-9-check number 9 holds", "scripts/cover.py:10:check number 10 holds", "--",
+            "scripts/two-1-x.sh:3:echo 3-4-5", f"{root}/docs/plan.md:9:nine", "/elsewhere/x.py:4:outside",
+            "scripts/listed.py:7:[Omitted long matching line]"])),
+        _use("g2", "Grep", {"pattern": "hit", "path": "scripts/single.py", "output_mode": "content", "-A": 1}),
+        _grep_result("g2", "4:hit four\n5-ctx five"),
+        _use("g3", "Grep", {"pattern": "hit", "path": "scripts"}),
+        _result("g3", "x", {"mode": "files_with_matches", "numFiles": 1, "filenames": ["scripts/listed.py"]}),
+        _use("g4", "Grep", {"pattern": "hit", "path": "scripts", "output_mode": "count"}),
+        _result("g4", "x", {"mode": "count", "numFiles": 1, "filenames": [], "content": "scripts/listed.py:2"}),
+        _use("g5", "Grep", {"pattern": "hit", "path": "scripts", "output_mode": "content", "-n": False}),
+        _grep_result("g5", "scripts/listed.py:12:hit"),
+    ]
+    shown = launcher.lines_shown(launcher.parse_stream("\n".join(lines)), root)
+    assert shown == {"scripts/cover.py": {9, 10, 11, 12, 13, 14}, "docs/plan.md": {3, 4, 9}, "docs/empty.md": set(),
+                     "scripts/two-1-x.sh": {3}, "scripts/single.py": {4, 5}}
+
+
+@pytest.mark.parametrize(("line", "shown"), [(7, False), (8, True), (9, True), (15, True), (16, True), (17, False)],
+                         ids=["start-minus-3", "start-minus-2", "start-minus-1", "end-plus-1", "end-plus-2",
+                              "end-plus-3"])
+def test_a_quote_counts_only_within_the_lines_the_attempt_was_shown(fx: Fixture, line: int, shown: bool) -> None:
+    """R3-2 (b): a Read of lines 10 to 14 shows them; a quoted whole line counts within two lines of them (8 to 16),
+    the place check's tolerance, and not beyond, even though the line is in the copy at the place it names."""
+    _write(fx.work, COVER, COVER_TEXT)
+    fx.commit = _commit_all(fx.work, "a covering check")
+    commit = _recheck(fx, f"| X1 | high | rejected: covered by {COVER}:10-11 |")
+    quote = {"file": COVER, "line": line, "end_line": line, "text": f"check number {line} holds"}
+    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[quote])],
+                       reads=[REVIEWED, {"file_path": COVER, "offset": 10, "limit": 5}]))
+    status = _run(fx, round_no=2, commit=commit)
+    end = _ends(fx)[-1]
+    if shown:
+        assert status == 0 and end["status"] == "completed", end["reason"]
+        return
+    assert status == 1 and f"X1 quotes {COVER}:{line}-{line}, lines the attempt was not shown" in end["reason"]
+
+
+_CONTENT = {"mode": "content", "numFiles": 0, "filenames": []}
+
+
+@pytest.mark.parametrize(("grep", "result", "seen"), [
+    ({"pattern": "number 10", "path": "{cwd}/scripts", "output_mode": "content"},
+     {**_CONTENT, "content": f"{COVER}:10:check number 10 holds"}, True),
+    ({"pattern": "number 10", "path": COVER, "output_mode": "content", "-C": 1},
+     {**_CONTENT, "content": "9-check number 9 holds\n10:check number 10 holds\n11-check number 11 holds"}, True),
+    ({"pattern": "number 10", "path": "scripts"},
+     {"mode": "files_with_matches", "numFiles": 1, "filenames": [COVER]}, False),
+    ({"pattern": "number 10", "path": "scripts", "output_mode": "count"},
+     {"mode": "count", "numFiles": 1, "filenames": [], "content": f"{COVER}:1"}, False),
+], ids=["content-on-a-directory", "content-on-the-file-with-context", "files-with-matches", "count"])
+def test_a_file_seen_only_by_a_content_grep_counts_as_seen_and_one_only_listed_or_counted_does_not(
+        fx: Fixture, grep: dict, result: dict, seen: bool) -> None:
+    """R3-2 (a): a rejection's cited file is seen when a Grep printed its lines, which the quote may then come from; a
+    Grep that only lists the file or counts its matches shows none of it."""
+    _write(fx.work, COVER, COVER_TEXT)
+    fx.commit = _commit_all(fx.work, "a covering check")
+    commit = _recheck(fx, f"| X1 | high | rejected: covered by {COVER}:10-11 |")
+    quote = {"file": COVER, "line": 10, "end_line": 10, "text": "check number 10 holds"}
+    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[quote])], reads=[REVIEWED],
+                       tool_uses=[["Grep", grep, result]]))
+    status = _run(fx, round_no=2, commit=commit)
+    end = _ends(fx)[-1]
+    if seen:
+        assert status == 0 and end["status"] == "completed", end["reason"]
+        return
+    assert status == 1 and f"{COVER} is named in a fixed: or rejected: answer and was not seen" in end["reason"]
+
+
+def test_a_review_that_saw_its_only_path_under_review_through_a_content_grep_completes(fx: Fixture) -> None:
+    """R3-2: the rule that a review saw at least one path under review counts what a content Grep printed."""
+    grep = {"pattern": "change", "path": REVIEWED, "output_mode": "content"}
+    fx.scenario({"reads": [], "tool_uses": [["Grep", grep, {**_CONTENT, "content": "1:print('change')"}]]})
+    assert _run(fx) == 0, _ends(fx)[-1].get("reason")
+
+
+@pytest.mark.parametrize("named", ["in-the-copy", "deleted-by-the-range"])
+def test_a_fix_quoted_only_from_the_change_diff_fails_unless_the_range_deletes_the_named_file(
+        fx: Fixture, named: str) -> None:
+    """R3-2 (c): a fix's quote comes from a file the answer names, as it is in the copy; the change's diff stands in only
+    for a named file the commits since the reviewed round delete."""
+    _write(fx.work, "scripts/old.py", "print('old')\n")
+    _commit_all(fx.work, "a file the fix may delete")
+    _git(fx.work, "push", "-q", "-f", "origin", "HEAD:poc/base")
+    _write(fx.work, REVIEWED, "print('changed again')\n")
+    fx.commit = _commit_all(fx.work, "the change")
+    _first_round(fx)
+    since = fx.log()[0]["commit"]
+    if named == "in-the-copy":
+        _write(fx.work, REVIEWED, "print('fixed')\n")
+        path, diff_line = REVIEWED, "+print('fixed')"
+    else:
+        (fx.work / "scripts/old.py").unlink()
+        path, diff_line = "scripts/old.py", "-print('old')"
+    commit = _answers(fx, "unit1/c1/r1/A/1", f"| X1 | high | fixed: `{path}`: guarded |")
+    diff = launcher.change_diff(fx.work, since, commit, [RECORD, LOG]).splitlines()
+    at = diff.index(diff_line) + 1
+    quote = {"file": "_review_inputs/change.diff", "line": at, "end_line": at, "text": diff_line}
+    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[quote])], reads=[REVIEWED, "_review_inputs/change.diff"]))
+    status = _run(fx, round_no=2, commit=commit)
+    end = _ends(fx)[-1]
+    if named == "deleted-by-the-range":
+        assert status == 0 and end["status"] == "completed", end["reason"]
+        return
+    assert status == 1 and f"X1 quotes none of the files its answer names or cites ({REVIEWED})" in end["reason"]

@@ -189,7 +189,7 @@ def test_recheck_paths_section_says_to_open_the_answered_files_first(fx: base.Fi
 def test_review_that_opened_none_of_the_hint_files_fails_even_when_it_opened_other_listed_files(fx: base.Fixture) -> None:
     fx.scenario({"reads": ["AGENTS.md"]})
     assert base._run(fx) == 1
-    assert base._ends(fx)[0]["reason"] == "the review read none of the paths under review"
+    assert base._ends(fx)[0]["reason"] == "the review saw none of the paths under review"
     args = [a for a in base._args(fx, unit="unit2") if a not in ("--path", base.REVIEWED)]
     assert launcher.main(args, repo=fx.work) == 0  # without --path, any listed file counts
 
