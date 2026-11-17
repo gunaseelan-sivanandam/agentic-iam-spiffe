@@ -1901,7 +1901,7 @@ def test_the_lines_shown_come_from_read_windows_and_the_lines_a_content_grep_pri
         _use("g5", "Grep", {"pattern": "hit", "path": "scripts", "output_mode": "content", "-n": False}),
         _grep_result("g5", "scripts/listed.py:12:hit"),
     ]
-    shown = launcher.lines_shown(launcher.parse_stream("\n".join(lines)), root)
+    shown = launcher.lines_shown(launcher.parse_stream("\n".join(lines)), root, "initial")
     assert shown == {"scripts/cover.py": {9, 10, 11, 12, 13, 14}, "docs/plan.md": {3, 4, 9}, "docs/empty.md": set(),
                      "scripts/two-1-x.sh": {3}, "scripts/single.py": {4, 5}}
 
@@ -1925,7 +1925,7 @@ def test_a_tool_result_given_as_a_list_of_blocks_shows_the_lines_of_its_text_blo
         _use("g2", "Grep", {"pattern": "hit", "path": str(tmp_path / "elsewhere"), "output_mode": "content"}),
         _grep_result("g2", "docs/b.md:7:hit"),
     ]
-    shown = launcher.lines_shown(launcher.parse_stream("\n".join(lines)), root)
+    shown = launcher.lines_shown(launcher.parse_stream("\n".join(lines)), root, "initial")
     assert shown == {"docs/plan.md": {3, 4}, "scripts/a.py": {2, 3}, "docs/b.md": {5}}
 
 
@@ -2070,8 +2070,8 @@ _DIFF = [
 
 
 def _shown_of_the_diff(tmp_path: Path) -> dict[str, set[int]]:
-    """Two Reads of `_DIFF` as the copy's change.diff: lines 1 to 14, which end inside kept.py's second hunk after its
-    removed line, and lines 23 to the end, which start inside new.md's hunk at its second added line."""
+    """Two Reads by a recheck of `_DIFF` as the copy's change.diff: lines 1 to 14, which end inside kept.py's second hunk
+    after its removed line, and lines 23 to the end, which start inside new.md's hunk at its second added line."""
     root = tmp_path / "copy"
     _write(root, "_review_inputs/change.diff", "\n".join(_DIFF) + "\n")
     for rel in ("scripts/kept.py", "docs/new.md", "scripts/new_name.py"):
@@ -2081,7 +2081,7 @@ def _shown_of_the_diff(tmp_path: Path) -> dict[str, set[int]]:
               _result("r1", "x", {"type": "text", "file": {"filePath": diff, "startLine": 1, "numLines": 14}}),
               _use("r2", "Read", {"file_path": diff, "offset": 23}),
               _result("r2", "x", {"type": "text", "file": {"filePath": diff, "startLine": 23, "numLines": 23}})]
-    return launcher.lines_shown(launcher.parse_stream("\n".join(stream)), root)
+    return launcher.lines_shown(launcher.parse_stream("\n".join(stream)), root, "recheck")
 
 
 def test_a_shown_context_or_added_line_of_the_change_diff_is_a_seen_line_of_its_file_and_a_header_line_of_none(
@@ -2175,17 +2175,28 @@ def _section_of_the_reviewed_file(fx: Fixture) -> tuple[int, list[str]]:
     return start + 1, diff[start:]
 
 
-def test_an_initial_review_that_saw_its_only_path_under_review_only_as_a_hunk_of_the_change_diff_completes(
-        fx: Fixture) -> None:
-    """Decision concern 18 (b), for every mode by the author's choice: an initial review's empty-review rule counts the
-    lines of the change's diff it was shown, so a review that read its one path under review only through that path's
-    headers and hunk in the diff (`+print('change')`, line 1 of the file) saw it, and completes."""
+@pytest.mark.parametrize("unit", ["unit1", "final"], ids=["initial", "final"])
+def test_an_initial_or_final_review_that_saw_its_only_path_under_review_only_as_a_hunk_of_the_change_diff_fails(
+        fx: Fixture, unit: str) -> None:
+    """Decision concern 18 (b) holds for rechecks only (the owner, 2026-11-17, review round-3 F1): in an initial or a
+    final review the lines of the change's diff it was shown are seen lines of no file, so a review that read its one
+    path under review only through that path's headers and hunk in the diff (`+print('change')`, line 1 of the file)
+    saw none of the paths under review: it fails and releases no report. The final review's own record is withheld
+    from the copy, so its change diff is the initial review's."""
+    where = {}
+    if unit == "final":
+        _write(fx.work, "docs/slices/demo/review_final.md", "# final\n")
+        where = {"unit": unit, "record": "docs/slices/demo/review_final.md",
+                 "commit": _commit_all(fx.work, "final record")}
     start, section = _section_of_the_reviewed_file(fx)
     window = {"file_path": "_review_inputs/change.diff", "offset": start, "limit": section.index("+print('change')") + 1}
     fx.scenario({"reads": [window]})
-    assert _run(fx) == 0, _ends(fx)[-1].get("reason")
-    end = _ends(fx)[-1]
-    assert end["status"] == "completed" and end["paths_read"] == ["_review_inputs/change.diff"]
+    assert _run(fx, **where) == 1
+    start_entry, end = fx.log()[-2], _ends(fx)[-1]
+    assert start_entry["mode"] == ("final" if unit == "final" else "initial")
+    assert end["status"] == "failed" and end["reason"] == "the review saw none of the paths under review"
+    assert end["paths_read"] == ["_review_inputs/change.diff"]
+    assert not _report(fx, start_entry).exists()
 
 
 def test_an_initial_review_that_saw_neither_its_path_under_review_nor_a_hunk_line_of_it_in_the_change_diff_fails(

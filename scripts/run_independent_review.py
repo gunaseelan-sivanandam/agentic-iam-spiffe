@@ -828,10 +828,11 @@ def summarise_paths(summary: StreamSummary, copy_root: Path) -> tuple[list[str],
     return sorted(read), denied, outside
 
 
-def lines_shown(summary: StreamSummary, copy_root: Path) -> dict[str, set[int]]:
+def lines_shown(summary: StreamSummary, copy_root: Path, mode: str) -> dict[str, set[int]]:
     """R3-2 (a): the files inside the copy the attempt saw, each with the lines it was shown: a Read that did not fail
-    sees its file at its window, a Grep in content mode the files whose lines it printed with their numbers; and a line
-    of the change's diff it was shown sees the file line that line shows (decision concern 18 (b))."""
+    sees its file at its window, a Grep in content mode the files whose lines it printed with their numbers; and, in a
+    recheck only, a line of the change's diff it was shown sees the file line that line shows (decision concern 18 (b),
+    the owner, 2026-11-17: in an initial or final review a diff line sees no file)."""
     shown: dict[str, set[int]] = {}
     for call in summary.tool_uses:
         output = summary.outputs.get(call.call_id)
@@ -844,7 +845,7 @@ def lines_shown(summary: StreamSummary, copy_root: Path) -> dict[str, set[int]]:
         elif call.name == "Grep" and _prints_numbered_lines(call.args, output):
             for rel, line in _grep_lines(call.args, output.text, copy_root):
                 shown.setdefault(rel, set()).add(line)
-    return _with_diff_lines(shown, copy_root)
+    return _with_diff_lines(shown, copy_root) if mode == "recheck" else shown
 
 
 def _with_diff_lines(shown: dict[str, set[int]], copy_root: Path) -> dict[str, set[int]]:
@@ -1066,11 +1067,13 @@ class Accounting:
     and the files the attempt must have seen because a `fixed:` answer names them or a `rejected:` answer cites them
     (owner-approved growth, 2026-11-13: an accepted rejection rests on what it cites); and the items answered
     `fixed:` or `rejected:`, each with the files its answer names or cites, one of which the report quotes when it
-    accepts or re-raises them (R2-7, extended to fixes by R3-2)."""
+    accepts or re-raises them (R2-7, extended to fixes by R3-2); and the review's mode, since only a recheck sees files
+    through the lines of the change's diff it was shown (decision concern 18 (b))."""
 
     items: dict[str, tuple[str, ...]] = field(default_factory=dict)
     must_read: tuple[str, ...] = ()
     quoted: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    mode: str = "initial"
 
 
 def accounting_problems(report: dict[str, Any], accounting: Accounting, shown: dict[str, set[int]],
@@ -1180,7 +1183,8 @@ def classify(summary: StreamSummary, returncode: int, copy_root: Path, review_pa
     unfinished = _paused_or_unfinished_call(summary, returncode, stats)
     if unfinished is not None:
         return unfinished
-    shown = lines_shown(summary, copy_root)
+    accounting = accounting or Accounting()
+    shown = lines_shown(summary, copy_root, accounting.mode)
     failure = _confinement_failure(stats, review_paths, set(shown))
     if failure:
         return CallOutcome("failed", failure, stats=stats)
@@ -1189,7 +1193,7 @@ def classify(summary: StreamSummary, returncode: int, copy_root: Path, review_pa
     if problems:  # the problems name fields and rules, never a value of the reply
         return CallOutcome("failed", "the reply does not match the report schema: " + "; ".join(problems[:5]),
                            stats=stats)
-    unaccounted = accounting_problems(reply, accounting or Accounting(), shown, copy_root)
+    unaccounted = accounting_problems(reply, accounting, shown, copy_root)
     if unaccounted:
         return CallOutcome("failed", "the report does not account for what it was given: " + "; ".join(unaccounted[:5]),
                            stats=stats)
@@ -1623,7 +1627,7 @@ def recheck_accounting(rows: tuple[AnswerRow, ...] | list[AnswerRow], must_read:
     held = set(must_read).__contains__
     quoted = {row.finding: _quoted_files(row.answer, held) for row in rows
               if answer_word(row.answer) in ("fixed", "rejected")}
-    return Accounting(items, must_read, quoted)
+    return Accounting(items, must_read, quoted, "recheck")
 
 
 def _quoted_files(answer: str, held: Any) -> tuple[str, ...]:
@@ -1857,7 +1861,7 @@ def plan_reviews(spec: RoundSpec, inputs: ReviewInputs, entries: list[dict[str, 
     plans = []
     for reviewer in reviewers:
         task = reviewer.prompt_file.read_bytes().decode("utf-8")  # no newline translation: prompt_sha256 is of the bytes
-        recheck, accounting = None, Accounting({item: EVIDENCE_STATUSES for item in evidence_items})
+        recheck, accounting = None, Accounting({item: EVIDENCE_STATUSES for item in evidence_items}, mode=mode)
         if view is not None:
             recheck, accounting = plan_recheck(entries, spec, reviewer.label, view, evidence_items)
         parts = make_parts(mode, task, spec.unit, recheck, shared)

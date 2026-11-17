@@ -495,6 +495,7 @@ def test_recheck_prompt_holds_the_earlier_report_and_the_false_fix(repo: tuple[R
     assert launcher.MANDATES["recheck"] in a.prompt and "DRAFT RECHECK MANDATE." in b.prompt
     assert "FALSE FIX TEXT" in a.prompt and '"R1-1"' in a.prompt
     assert a.accounting.must_read == (REVIEWED,) and "R1-1" in a.accounting.items and a.mode == "recheck"
+    assert a.accounting.mode == "recheck"  # review round-3 F1: the launcher counts diff lines as seen in rechecks only
 
 
 def test_recheck_that_fails_the_read_check_is_a_miss_and_not_retried(repo: tuple[Repo, str, str]) -> None:
