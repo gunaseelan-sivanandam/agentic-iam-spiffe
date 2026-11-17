@@ -1690,6 +1690,36 @@ def test_a_recheck_whose_reviewers_reviewed_different_commits_starts_at_their_co
     assert launcher.recheck_inputs(fx.work, inputs, ()) is inputs and inputs.change_base == inputs.merge_base
 
 
+def test_a_recheck_of_reviewers_who_reviewed_different_commits_is_rebuilt_from_its_entry_with_no_mismatch(
+        fx: Fixture) -> None:
+    """R3-1, review round-3 F2: round 1's reviewers completed at different commits (one failed and ran again at a later
+    commit), so round 2's range starts at their common ancestor; the rebuild of each reviewer's start entry computes
+    the same range, so no input hash mismatches."""
+    report = _reply([_finding("X1")], verdict="no")
+    fx.scenario({**report, "reads": []}, report)  # the first call sees nothing and fails; the other completes
+    assert _run(fx, labels=("A", "B")) == 1
+    _write(fx.work, "scripts/later.py", "print('later')\n")
+    later = _commit_all(fx.work, "a later commit the failed reviewer reviews")
+    fx.scenario(report)
+    assert _run(fx, labels=("A", "B"), commit=later) == 0
+    done = {e["attempt"] for e in _ends(fx) if e["status"] == "completed"}
+    reviewed = {s["attempt"]: s["commit"] for s in fx.log() if s["event"] == "start" and s["attempt"] in done}
+    assert sorted(reviewed.values()) == sorted([fx.commit, later])
+    commit = ""
+    for attempt in sorted(reviewed):
+        commit = _answers(fx, attempt, "| X1 | high | fixed: scripts/review_me.py: guarded |")
+    fx.scenario(_reply(accounted=[_accounted("X1", quotes=[QUOTE])], reads=["scripts/later.py", REVIEWED]))
+    assert _run(fx, round_no=2, labels=("A", "B"), commit=commit) == 0
+    rechecks = [s for s in fx.log() if s["event"] == "start" and s["round"] == 2]
+    assert len(rechecks) == 2 and {s["diff_sha256"] for s in rechecks} == {_diff_sha(fx, fx.commit, commit)}
+    blocks = launcher._RECORDS.parse_record((fx.work / RECORD).read_text())[0]
+    for start in rechecks:
+        given = launcher.GivenInputs(blocks[start["attempt"]].blocks["evidence"])
+        mismatches = launcher.invocation_from_entry(start, fx.work, fx.prompt, diff_base=start["base_commit"],
+                                                    given=given)[1]
+        assert (start["earlier_attempt"], mismatches) == (start["earlier_attempt"], [])
+
+
 def _run_without_path(fx: Fixture, **kwargs: object) -> int:
     return launcher.main([a for a in _args(fx, **kwargs) if a not in ("--path", REVIEWED)], repo=fx.work)  # type: ignore[arg-type]
 

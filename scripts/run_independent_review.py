@@ -1830,13 +1830,15 @@ def round_inputs(spec: RoundSpec, inputs: ReviewInputs, lists: StageLists | None
     return RoundInputs(records, upstream, evidence.text(), tuple(evidence.items), dict(evidence.status), lists)
 
 
-def earlier_commits(entries: list[dict[str, Any]], spec: RoundSpec, labels: list[str]) -> tuple[str, ...]:
-    """R2-6: the commits a recheck's reviewers reviewed in the round before, once each; none for another review. A
-    reviewer without its earlier attempt is refused here, as `plan_recheck` would refuse it."""
-    if review_mode(spec.unit, spec.round_no) != "recheck":
+def earlier_commits(entries: list[dict[str, Any]], unit: str, count: int, round_no: int,
+                    labels: list[str]) -> tuple[str, ...]:
+    """R2-6: the commits a recheck's reviewers (`labels`, every reviewer of the round, also when an invocation runs only
+    some of them again) reviewed in the round before, once each; none for another review. The launcher and
+    `invocation_from_entry` both take the range from here. A reviewer without its earlier attempt is refused here, as
+    `plan_recheck` would refuse it."""
+    if review_mode(unit, round_no) != "recheck":
         return ()
-    return tuple(dict.fromkeys(earlier_attempt(entries, spec.unit, spec.count, spec.round_no, label)[0]["commit"]
-                               for label in labels))
+    return tuple(dict.fromkeys(earlier_attempt(entries, unit, count, round_no, label)[0]["commit"] for label in labels))
 
 
 def plan_reviews(spec: RoundSpec, inputs: ReviewInputs, entries: list[dict[str, Any]],
@@ -2151,10 +2153,15 @@ def _entry_record(entry: dict[str, Any]) -> str:
     return next(p for p in entry["withheld_sha256"] if Path(p).name != ATTEMPT_LOG_NAME)
 
 
+def _logged_entries(repo: Path, record: str) -> list[dict[str, Any]]:
+    """The entries of the attempt log next to a review record."""
+    log = repo / Path(record).parent / ATTEMPT_LOG_NAME
+    return [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
 def _entry_earlier(entry: dict[str, Any], repo: Path, record: str) -> tuple[dict[str, Any], dict[str, Any]]:
     """The start and end entries of a recheck entry's earlier attempt, from the attempt log."""
-    log = repo / Path(record).parent / ATTEMPT_LOG_NAME
-    entries = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines() if line.strip()]
+    entries = _logged_entries(repo, record)
     start = next(e for e in entries if e.get("event") == "start" and e["attempt"] == entry["earlier_attempt"])
     end = next(e for e in entries if e.get("event") == "end" and e["attempt"] == entry["earlier_attempt"])
     return start, end
@@ -2181,8 +2188,8 @@ def invocation_from_entry(entry: dict[str, Any], repo: Path, prompt_file: Path, 
     """Rebuild a start entry's CLI call and prompt, and list every input hash that no longer matches the entry.
 
     The files under review and the upstream items are recomputed at the entry's commit. `diff_base` is the base of
-    the change (S42-D10), normally the entry's `base_commit`; a recheck's change starts at its earlier attempt's commit,
-    read from the attempt log (R3-1)."""
+    the change (S42-D10), normally the entry's `base_commit`; a recheck's change starts where the launcher starts it,
+    from the commits the round's reviewers reviewed in the round before, read from the attempt log (R3-1)."""
     evidence, recheck = given.evidence, given.recheck
     for field_name, slice_id in (("mode", "4.1"), ("path_hints", "4.2"), ("stages", "4.4")):
         if field_name not in entry:
@@ -2202,7 +2209,9 @@ def invocation_from_entry(entry: dict[str, Any], repo: Path, prompt_file: Path, 
                           withheld_hashes(repo, entry["commit"], withheld), merge_base,
                           tuple(entry["path_hints"]), deleted)
     if mode == "recheck":
-        inputs = recheck_inputs(repo, inputs, (_entry_earlier(entry, repo, record)[0]["commit"],))
+        since = earlier_commits(_logged_entries(repo, record), entry["unit"], entry["count"], entry["round"],
+                                list(entry["round_reviewers"]))
+        inputs = recheck_inputs(repo, inputs, since)
     scratch = _INPUTS.make_scratch(repo, entry["commit"])
     try:
         upstream = _upstream_and_trace(repo, inputs, record, scratch)[0]
@@ -2244,7 +2253,8 @@ def main(argv: list[str], repo: Path | None = None) -> int:
             recover(log, repo)
             admission = admit_round(log.entries(), spec.unit, spec.round_no, [r.label for r in reviewers], spec.refs)
             spec = RoundSpec(**{**spec.__dict__, "count": admission.count})
-            since = earlier_commits(log.entries(), spec, admission.to_run)
+            since = earlier_commits(log.entries(), spec.unit, spec.count, spec.round_no,
+                                    [r.label for r in spec.reviewers])
             inputs = recheck_inputs(repo, inputs, since)  # R3-1: a recheck's change is the commits since that round
             shared = round_inputs(spec, inputs, lists, since)
             plans = plan_reviews(spec, inputs, log.entries(), [r for r in reviewers if r.label in admission.to_run],
