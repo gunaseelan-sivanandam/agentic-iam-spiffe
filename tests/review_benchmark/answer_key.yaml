@@ -27,11 +27,15 @@
 # 85 → 95, and the probe and replays"), before its runs: the budget goes from 85 to 95, for RC-1 to RC-4 once each on
 # the recheck wording the launcher ships (82 calls were spent). Only the budget changes, so version 6's results are
 # read with this key (earlier_key_sha256) and keep their scores.
-version: 7
+# Version 8 (round 4 of slice 4, R4-4; the owner, 2026-11-17: "approve the texts, budget 120, criterion fine"), before
+# its runs: the budget goes from 95 to 120, the configuration open-R4+list (R4-1's initial mandate) is added to the 15
+# initial-review cases and recheck-R4 (R4-1's recheck mandate) to RC-1 to RC-4, 19 calls (86 were spent). The match
+# rule and every earlier case and score stay, so version 7's results are read with this key (earlier_key_sha256).
+version: 8
 stage: B
 model: claude-opus-5-5
 effort: high
-budget: 95
+budget: 120
 lists_commit: 04f8df4
 match_rule: 'A defect is detected by a finding rated blocking, high or medium (stage A: kind blocking) that names
   one of the defect''s files, a line inside one of that file''s ranges, and at least one of its terms
@@ -51,11 +55,12 @@ match_rule: 'A defect is detected by a finding rated blocking, high or medium (s
   configuration.'
 match_rule_sha256: 422d32c2be493a13c8a715f815763d95f3a76d6285daabe959af4dbdebb465fb
 # Versions 2 and 4 of this key: their results are kept with the score of their runs, and re-scored under this rule
-# apart (R2-9). Version 6: its results were scored under this rule and keep their scores (version 7).
+# apart (R2-9). Versions 6 and 7: their results were scored under this rule and keep their scores (versions 7 and 8).
 earlier_key_sha256:
 - 7ef0a57963ff33c5b8397eedcf145cedbf3807c8b4a6b7ac09cd29ab4706f899
 - 5b9d6382a06918128102da1b98b9660dd1dad12d35819752adce288878376633
 - ba6975d46b111311de687b453bb00390e74f8cfafd8e462147d3274014c00870
+- 0ee2ad1414c00d49f6aef68f69df749ce2f653b232edbc76ad2126192035721a
 # Decision concern 8's measurement, fixed before its runs: the baseline, "better" and the outcomes, verbatim from
 # section 9 of the author's severity analysis (step 1).
 severity_measurement:
@@ -115,6 +120,7 @@ cases:
   - open+list
   - open-B+list
   - open+list+sev
+  - open-R4+list
 - id: RM-2
   kind: real_miss
   problem: DPL-002
@@ -477,6 +483,7 @@ cases:
   configurations:
   - recheck-A
   - recheck-B
+  - recheck-R4
   task: 'Recheck of the M1-T2 fix: the author answered the earlier finding.'
   paths:
   - docs/test_spec.md
@@ -507,6 +514,7 @@ cases:
   configurations:
   - recheck-A
   - recheck-B
+  - recheck-R4
   task: 'Recheck of the test-lint change (an outcome guard ending in `|| :` swallows failure like `|| true`): the
     author answered both earlier findings.'
   paths:
@@ -533,6 +541,7 @@ cases:
   configurations:
   - recheck-A
   - recheck-B
+  - recheck-R4
   task: 'Recheck of the handoff-summary rule (the PR body opens with a summary for the user): the author answered the
     earlier finding.'
   paths:
@@ -569,6 +578,7 @@ cases:
   configurations:
   - recheck-A
   - recheck-B
+  - recheck-R4
   task: 'Recheck of the secret-check change (a value in a Markdown code span is prose, so the rule''s own lines in the
     rulebook pass): the author answered the earlier finding.'
   paths:
@@ -627,6 +637,7 @@ cases:
   - short+list
   - open+list
   - open+list+sev
+  - open-R4+list
   task: 'README: fix the path of the network segmentation diagram.'
   paths:
   - README.md

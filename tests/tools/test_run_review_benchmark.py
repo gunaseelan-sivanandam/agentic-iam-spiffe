@@ -327,9 +327,10 @@ def test_stage_b_stops_at_its_budget_counting_retries_and_the_canary(repo: tuple
     limit = bench.BUDGETS["B"]
     # raised from 60 to 85 on 2026-11-13 (decision concerns 4 and 8), lowered to the 76 used, raised to 80 for round
     # 2's two recheck cases on both recheck wordings (R2-10, the owner, 2026-11-14), to the key's 85 when the owner
-    # confirmed that budget (decision concern 11, 2026-11-16), and to 95 for round 3's four recheck cases (the owner,
-    # 2026-11-17: "the budget 85 → 95")
-    assert limit == 95
+    # confirmed that budget (decision concern 11, 2026-11-16), to 95 for round 3's four recheck cases (the owner,
+    # 2026-11-17: "the budget 85 → 95"), and to 120 for round 4's 19 calls on R4-1's mandates (R4-4; the owner,
+    # 2026-11-17: "approve the texts, budget 120, criterion fine")
+    assert limit == 120
     r.key([_case(f"C{i}", base, commit) for i in range(limit // 2 + 1)], budget=limit)  # more calls than the budget
     r.canary_passed()  # 2 calls already used
     r.scenario({"result": {"is_error": True}, "exit": 1}, {})
@@ -1575,7 +1576,7 @@ def test_rating_agreement_tells_a_medium_detection_from_a_high_one() -> None:
 
 def test_a_key_whose_budget_is_above_the_hard_stop_is_refused_though_the_runs_budget_is_within_it(
         repo: tuple[Repo, str, str]) -> None:
-    """The hard stop equals the key's budget (decision concern 11, 2026-11-16; 95 since round 3, 2026-11-17), so the
+    """The hard stop equals the key's budget (decision concern 11, 2026-11-16; 120 since round 4, 2026-11-17), so the
     check that the key's budget is within the hard stop holds: a key above it is refused before any call, whatever
     budget the run names, and a key within it runs on a plain `--run`."""
     r, base, commit = repo
@@ -1586,10 +1587,35 @@ def test_a_key_whose_budget_is_above_the_hard_stop_is_refused_though_the_runs_bu
     assert _run(r) == 0 and r.calls() == 2
 
 
-def test_the_committed_keys_budget_is_the_stage_b_hard_stop_of_95() -> None:
+def test_the_committed_keys_budget_is_the_stage_b_hard_stop_of_120() -> None:
     """A plain `--run` takes the key's budget, so the committed key must be within the hard stop (decision concern 11);
-    round 3 raised both to 95 (the owner, 2026-11-17: "the budget 85 → 95")."""
-    assert bench.load_key(ROOT).budget == bench.BUDGETS["B"] == 95
+    round 3 raised both to 95 (the owner, 2026-11-17: "the budget 85 → 95"), round 4 to 120 (R4-4; the owner,
+    2026-11-17: "approve the texts, budget 120, criterion fine")."""
+    assert bench.load_key(ROOT).budget == bench.BUDGETS["B"] == 120
+
+
+DECISIONS = ROOT / "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+
+
+def _r4_mandate(label: str) -> str:
+    """R4-1's mandate under `label` (Initial, Recheck) on the decision page: its blockquote, one line per paragraph."""
+    lines = DECISIONS.read_text(encoding="utf-8").splitlines()
+    section = next(i for i, line in enumerate(lines) if line.startswith("**R4-1 The mandates**"))
+    start = lines.index(f"{label}:", section) + 2
+    end = next(i for i in range(start, len(lines)) if not lines[i].startswith(">"))
+    text = "\n".join(line[1:].strip() for line in lines[start:end])
+    return "\n\n".join(paragraph.replace("\n", " ") for paragraph in text.split("\n\n")) + "\n"
+
+
+@pytest.mark.parametrize(("name", "mode", "label"), [("open-R4+list", "initial", "Initial"),
+                                                     ("recheck-R4", "recheck", "Recheck")])
+def test_the_round_4_configurations_send_r4_1s_mandates_verbatim(name: str, mode: str, label: str) -> None:
+    """R4-4 measures R4-1's words, so the mandate each round-4 configuration puts in the prompt, where the launcher
+    writes it under `## Mandate`, is the decision page's text, and the other modes keep the launcher's."""
+    mandates, _hashes = bench._mandates(bench.load_key(ROOT), name)
+    config = bench.configuration(name, mandates)
+    assert config.mandates[mode] == _r4_mandate(label)
+    assert all(config.mandates[m] == launcher.MANDATES[m] for m in launcher.MODES if m != mode)
 
 
 def _false_rejection_inputs(r: Repo) -> dict:

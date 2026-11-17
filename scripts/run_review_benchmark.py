@@ -14,7 +14,7 @@ both with the stage checklist of the case's artifact type, and two wordings of t
 
 Usage (from the repository root):
     python3 scripts/run_review_benchmark.py --dry-run                       # leak search only, no reviewer call
-    python3 scripts/run_review_benchmark.py --run [--budget N]              # stage B, at most 95 reviewer calls
+    python3 scripts/run_review_benchmark.py --run [--budget N]              # stage B, at most 120 reviewer calls
     python3 scripts/run_review_benchmark.py --run --case <case>             # only the named cases (or --dry-run)
     python3 scripts/run_review_benchmark.py --run --configuration <name>    # only the named configurations
     python3 scripts/run_review_benchmark.py --report --stage B [--stage A]  # one stage, or two compared
@@ -64,8 +64,10 @@ RESULTS = {"A": Path("docs/slices/agentic-sdlc-poc/benchmark_results.jsonl"),
 # slice 4 (the owner, 2026-11-14), R2-10, raised it to 80 for two recheck cases on both recheck wordings, 4 calls. On
 # 2026-11-16 the owner confirmed the key's `budget: 85` (decision concern 11), so the hard stop is 85, and a run's
 # budget and the key's must both be within it. Round 3 of slice 4 raised both to 95 for RC-1 to RC-4 on the shipped
-# recheck wording (the owner, 2026-11-17: "the budget 85 → 95"); 82 were spent before it.
-BUDGETS = {"A": 26, "B": 95}
+# recheck wording (the owner, 2026-11-17: "the budget 85 → 95"); 82 were spent before it. Round 4 of slice 4 raised
+# both to 120 for R4-4's measurement of R4-1's mandates, 19 calls (the owner, 2026-11-17: "approve the texts, budget
+# 120, criterion fine"); 86 were spent before it.
+BUDGETS = {"A": 26, "B": 120}
 BENCH_OUT = Path("docs/slices/poc-4-5-benchmark")
 EXPORT_FILE = BENCH_OUT / "confirmation_export.jsonl"
 EXPORT_KEY_FILE = BENCH_OUT / "confirmation_key.jsonl"
@@ -111,6 +113,9 @@ CONFIGURATIONS: dict[str, dict[str, Any]] = {
     # Decision concern 8, step 3: `open+list` with a severity paragraph after the output section's `severity` bullet.
     "open+list+sev": {"mode": "initial", "mandate_file": None, "list": True,
                       "severity_file": "prompts/severity_scenario.md"},
+    # Round 4 of slice 4, R4-1 and R4-4: the owner's initial and recheck mandates, measured before they ship.
+    "open-R4+list": {"mode": "initial", "mandate_file": "prompts/mandate_initial_r4.md", "list": True},
+    "recheck-R4": {"mode": "recheck", "mandate_file": "prompts/mandate_recheck_r4.md", "list": True},
     "canary": {"mode": "initial", "mandate_file": None, "list": False},
 }
 QUOTE_MIN = 8  # an expected line, or a quoted part of one, this long or longer, quoted verbatim names no defect
