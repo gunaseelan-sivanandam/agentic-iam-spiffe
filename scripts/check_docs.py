@@ -124,7 +124,7 @@ def _link_problem(doc: Path, doc_text: str, target: str) -> str | None:
 def tracked_files(root: Path, subdir: str) -> list[Path]:
     """Files git tracks directly in `subdir`, so local untracked renders do not count."""
     out = subprocess.run(  # nosec B603 B607 - fixed argv
-        ["git", "-C", str(root), "ls-files", "--", subdir],
+        ["git", "-C", str(root), "-c", "core.quotePath=false", "ls-files", "--", subdir],  # names unquoted
         check=True,
         capture_output=True,
         text=True,

@@ -88,8 +88,10 @@ class Unit:
         return [a for a in self.attempts if a.completed and a.report is not None]
 
 
-def git(repo: Path, *args: str) -> str:
-    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=False)  # noqa: S603, S607 - fixed argv, no shell
+def git(repo: Path, *args: str, config: tuple[str, ...] = ()) -> str:
+    """Run a git command in `repo`, each `config` setting given as `-c` before it; a BriefError when git fails."""
+    settings = [part for setting in config for part in ("-c", setting)]
+    result = subprocess.run(["git", "-C", str(repo), *settings, *args], capture_output=True, text=True, check=False)  # noqa: S603, S607 - fixed argv, no shell
     if result.returncode != 0:
         raise BriefError(f"git {args[0]} failed: {result.stderr.strip()[:200]}")
     return result.stdout
@@ -100,7 +102,8 @@ def _entries(text: str) -> list[dict[str, Any]]:
 
 
 def changed_logs(repo: Path, merge_base: str, head: str) -> list[str]:
-    names = git(repo, "diff", "--name-only", merge_base, head, "--", "docs/slices").split()
+    names = git(repo, "diff", "--name-only", merge_base, head, "--", "docs/slices",
+                config=launcher._INPUTS.DEFAULT_DIFF_CONFIG).splitlines()
     return sorted(n for n in names if Path(n).name == LOG_NAME and (repo / n).is_file())
 
 

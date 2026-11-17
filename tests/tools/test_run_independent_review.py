@@ -938,6 +938,19 @@ def test_final_review_reads_the_merged_plan_reviews_of_the_bundles_the_change_to
     assert "- docs/slices/sub/plan_review.md" in mandate and "untouched" not in mandate
 
 
+def test_final_records_keep_non_ascii_names_whatever_the_repository_configures(fx: Fixture) -> None:
+    """Discovered issue 60 (the owner, 2026-11-17): git quotes a non-ASCII name in a file list unless
+    core.quotePath=false, so `final_records` reads its lists with git's default diff settings: the record of a bundle
+    whose name is not ASCII, and a record with such a name in the final review's own bundle, are both read."""
+    since = fx.commit
+    _write(fx.work, "docs/slices/démo/review_impl.md", "# a bundle the change touches\n")
+    _write(fx.work, "docs/slices/demo/review_é.md", "# a record of the final review's own bundle\n")
+    commit = _commit_all(fx.work, "records with non-ASCII names")
+    _git(fx.work, "config", "core.quotePath", "true")
+    assert launcher.final_records(fx.work, commit, RECORD, since, [RECORD, LOG]) == (
+        "docs/slices/demo/review_é.md", "docs/slices/démo/review_impl.md")
+
+
 # --- Recheck inputs ---
 
 

@@ -103,8 +103,10 @@ class ChangedFiles:
 
 
 def changed_files(repo: Path, merge_base: str, commit: str, withheld: list[str]) -> ChangedFiles:
+    """The change's files from the merge-base to the commit, names unquoted (`DEFAULT_DIFF_CONFIG`) whatever the
+    repository configures."""
     to_open, deleted = [], []
-    for line in _git(repo, "diff", "--name-status", "-M", merge_base, commit).splitlines():
+    for line in _git(repo, "diff", "--name-status", "-M", merge_base, commit, config=DEFAULT_DIFF_CONFIG).splitlines():
         fields = line.split("\t")
         status, paths = fields[0], fields[1:]
         if status.startswith("R"):
@@ -513,7 +515,7 @@ def process_file_evidence(evidence: Evidence, repo: Path, since: tuple[str, ...]
     for earlier in since:
         span = f"({earlier[:12]} to {commit[:12]}; {PROCESS_COMMAND})"
         try:
-            numstat = _git(repo, "diff", "--numstat", "--no-renames", earlier, commit)
+            numstat = _git(repo, "diff", "--numstat", "--no-renames", earlier, commit, config=DEFAULT_DIFF_CONFIG)
         except ValueError:
             evidence.add(f"failed: {PROCESS_COMMAND}: git cannot compare {earlier[:12]} with {commit[:12]}")
             evidence.status["process"] = "failed"

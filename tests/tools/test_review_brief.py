@@ -196,3 +196,16 @@ def test_the_brief_holds_no_ci_result_and_reads_no_network(fx: base.Fixture, mon
     text = _brief(fx)
     assert text.startswith("### Decision brief") and "| `demo` `unit1` |" in text
     assert "CI of" not in text and "not a pass" not in text
+
+
+def test_changed_logs_keep_non_ascii_names_and_spaces_whatever_the_repository_configures(fx: base.Fixture) -> None:
+    """Discovered issue 60 (the owner, 2026-11-17): git quotes a non-ASCII name in a file list unless
+    core.quotePath=false, and a name may hold a space, so the brief reads the changed logs one name per line with git's
+    default diff settings: the log of a bundle named `démo` or `my demo` is a log the PR changed."""
+    since = fx.commit
+    for bundle in ("démo", "my demo"):
+        base._write(fx.work, f"docs/slices/{bundle}/review_attempts.jsonl", '{"event": "start"}\n')
+    commit = base._commit_all(fx.work, "logs of bundles with a non-ASCII name and a space")
+    base._git(fx.work, "config", "core.quotePath", "true")
+    assert brief_module.changed_logs(fx.work, since, commit) == [
+        "docs/slices/démo/review_attempts.jsonl", "docs/slices/my demo/review_attempts.jsonl"]

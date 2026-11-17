@@ -1723,10 +1723,12 @@ def final_records(repo: Path, commit: str, record: str, diff_base: str, withheld
     change touches, also records merged before the change, such as the plan reviews of a slice whose sub-issues shared
     one plan PR (S46-D3; final review of slice 4, FR-3)."""
     merge_base = git(repo, "merge-base", diff_base, commit).strip()
-    changed = git(repo, "diff", "--name-only", "--diff-filter=AMR", merge_base, commit, "--", "docs/slices").splitlines()
+    changed = git(repo, "diff", "--name-only", "--diff-filter=AMR", merge_base, commit, "--", "docs/slices",
+                  config=_INPUTS.DEFAULT_DIFF_CONFIG).splitlines()
     bundles = {str(Path(record).parent)} | {"/".join(p.split("/")[:3]) for p in changed if p.count("/") >= 3}
     candidates = {p for bundle in sorted(bundles)
-                  for p in git(repo, "ls-tree", "-r", "--name-only", commit, "--", bundle).splitlines()}
+                  for p in git(repo, "ls-tree", "-r", "--name-only", commit, "--", bundle,
+                               config=_INPUTS.DEFAULT_DIFF_CONFIG).splitlines()}
     return tuple(sorted(p for p in candidates if p not in withheld and _is_record(p)))
 
 
@@ -2120,8 +2122,9 @@ def stage_lists(repo: Path, base_commit: str, names: list[str], unit: str) -> St
     """The lists named by `--stage`, from the base commit, so a change cannot rewrite the list it is reviewed against.
     Refused: a name with no list at the base; a final review with a stage; any other review without one when the
     base has lists. A base without lists gives none, and the prompt says so."""
-    listed = git(repo, "ls-tree", "--name-only", f"{base_commit}:{LISTS_DIR}") if _has_lists_dir(repo, base_commit) else ""
-    available = sorted(Path(name).stem for name in listed.split() if name.endswith(".md"))
+    listed = (git(repo, "ls-tree", "--name-only", f"{base_commit}:{LISTS_DIR}", config=_INPUTS.DEFAULT_DIFF_CONFIG)
+              if _has_lists_dir(repo, base_commit) else "")
+    available = sorted(Path(name).stem for name in listed.splitlines() if name.endswith(".md"))
     if unit == FINAL_UNIT and names:
         raise ReviewRefusedError("the final review takes no --stage: it gets no question list (S41-D4)")
     if not available:

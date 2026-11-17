@@ -276,3 +276,16 @@ def test_a_base_without_lists_says_so_in_the_prompt_and_the_start_entry(fx: base
     start = fx.log()[0]
     assert start["stages"] == {} and start["checklist_sha256"] == launcher.sha256_text(
         f"No checklist at base {start['base_commit'][:12]}: the base branch has no `docs/review_checklists/`.")
+
+
+def test_a_list_whose_name_is_not_ascii_or_holds_a_space_is_found_whatever_the_repository_configures(
+        fx: base.Fixture) -> None:
+    """Discovered issue 60 (the owner, 2026-11-17): git quotes a non-ASCII name in a file list unless
+    core.quotePath=false, and a name may hold a space, so `stage_lists` reads the base's lists one name per line with
+    git's default diff settings."""
+    _lists_at_base(fx, **{"é": "# É\n\nNON-ASCII QUESTION\n", "two words": "# Two words\n\nSPACED QUESTION\n"})
+    base._git(fx.work, "config", "core.quotePath", "true")
+    base_commit = base._git(fx.work, "rev-parse", "HEAD~1")  # the lists at the base, before the change
+    lists = launcher.stage_lists(fx.work, base_commit, ["é", "two words"], "unit1")
+    assert "NON-ASCII QUESTION" in lists.text and "SPACED QUESTION" in lists.text
+    assert set(lists.stages) == {"é", "two words"}

@@ -786,3 +786,28 @@ def test_changed_lines_reads_git_default_format_whatever_the_repository_configur
     for key, value in (("color.diff", "always"), ("diff.external", "true"), ("diff.noprefix", "true")):
         base._git(fx.work, "config", key, value)
     assert inputs_module.changed_lines(fx.work, since, commit, "scripts/tool.py") == plain == {2, 5, 6, 7}
+
+
+def test_changed_files_keep_a_non_ascii_name_whatever_the_repository_configures(fx: base.Fixture) -> None:
+    """Discovered issue 60 (the owner, 2026-11-17): git quotes a non-ASCII name in a file list unless
+    core.quotePath=false, so `changed_files` reads its list with git's default diff settings, as `change_diff` does: a
+    changed `docs/é.md` is a file to open under its own name."""
+    since = fx.commit
+    base._write(fx.work, "docs/é.md", "première\n")
+    commit = base._commit_all(fx.work, "a non-ASCII name")
+    base._git(fx.work, "config", "core.quotePath", "true")
+    assert inputs_module.changed_files(fx.work, since, commit, []) == inputs_module.ChangedFiles(("docs/é.md",), ())
+
+
+def test_process_file_evidence_keeps_a_non_ascii_name_whatever_the_repository_configures(fx: base.Fixture) -> None:
+    """Discovered issue 60 (the owner, 2026-11-17): a recheck lists a changed skill whose path holds a non-ASCII name,
+    with its line counts, in a repository that quotes such names."""
+    earlier = fx.commit
+    base._write(fx.work, ".claude/skills/é/SKILL.md", "---\nname: é\n---\n# É\n")
+    commit = base._commit_all(fx.work, "a skill with a non-ASCII name")
+    base._git(fx.work, "config", "core.quotePath", "true")
+    evidence = inputs_module.Evidence()
+    inputs_module.process_file_evidence(evidence, fx.work, (earlier,), commit)
+    span = f"({earlier[:12]} to {commit[:12]}; {inputs_module.PROCESS_COMMAND})"
+    assert evidence.entries == [
+        f"EV1: process file changed since the reviewed round: .claude/skills/é/SKILL.md, +4 -0 lines {span}"]
