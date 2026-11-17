@@ -123,20 +123,22 @@ MODES = tuple(MANDATES)
 CREDENTIAL_NOTE = ("Write `<token>` for any credential value, even a made-up example, because the publication check "
               "withholds a report that holds one.")
 ABSENCE_RULE = "A finding about something missing states \"X has no Y; searched A, B, C\"."
-# S41-D8 counts a file as opened only when the stream shows a Read of it; the prompt says so (first live recheck).
-OPENED_RULE = ("`opened` lists the files you read with the Read tool for that item; a file you only searched with Grep "
-               "or Glob goes under `searched`. The launcher fails a report whose `opened` names a file it did not Read, "
-               "and a recheck that did not Read every file a `fixed:` answer names or a `rejected:` answer cites.")
+# R3-2 (the owner, 2026-11-17): what a recheck must have seen, as the launcher checks it; `opened` is the reviewer's note.
+SEEN_RULE = ("`opened` lists the files you opened for that item, as your note. The launcher fails a recheck that did not "
+             "see every file a `fixed:` answer names or a `rejected:` answer cites: a file is seen at the lines a Read "
+             "showed or a Grep printed in content mode, and a Grep that lists files or counts shows none.")
 QUESTION_RULE = ("When a question of the stage checklist prompted a finding, name it in `question` as the list's name "
                  "and the question's number, for example `code:10`; leave `question` out otherwise.")
 GATE_RULE = "do not report what a passing gate already checks; do report defects in the gates themselves"
-# Round 2 of slice 4 (the owner, 2026-11-14), R2-7: what a recheck quotes, and that the launcher checks it.
-QUOTE_RULE = ("For a `rejected:` answer you list as `accepted` or `re-raised`, `quotes` holds the lines your decision "
-              "rests on, each with `file`, `line` and `end_line` (the lines in the copy) and `text` copied from them: "
-              "whole lines of a file you read with the Read tool, and, when the answer cites files, at least one quote "
-              "from one of them. The launcher fails a recheck that quotes nothing for such an answer or none of the "
-              "files it cites, and any report whose quote is from a file it did not Read, is not at that place in the "
-              "copy, or holds no whole line of it.")
+# Round 2 of slice 4 (the owner, 2026-11-14), R2-7: what a recheck quotes, and that the launcher checks it; R3-2
+# extends it to fixes and to the lines the recheck was shown.
+QUOTE_RULE = ("For a `fixed:` or `rejected:` answer you list as `accepted` or `re-raised`, `quotes` holds the lines your "
+              "decision rests on, each with `file`, `line` and `end_line` (the lines in the copy) and `text` copied "
+              "from them: whole lines you were shown, and, when the answer names or cites files, at least one quote "
+              "from one of them as it is in the copy; a fix's quote comes from `_review_inputs/change.diff` only for "
+              "a named file the change deletes. The launcher fails a recheck that quotes nothing for such an answer or "
+              "none of the files it names or cites, and any report whose quote is of lines it was not shown, is not "
+              "at that place in the copy, or holds no whole line of it.")
 # R2-5: the question at the pause point, asked of the change in an initial review and of each fix in a recheck. It is
 # part of the output section, which every mandate wording shares, so the benchmark's wordings all get it; the final
 # review keeps its open question (S41-D4) and gets none. Decision concern 13 (the owner, 2026-11-16): a step added or
@@ -583,7 +585,7 @@ def _output_section(severity_note: str = "", mode: str = "initial") -> str:
         f"- `origin_stage`: the stage where the problem arose: {', '.join(f'`{s}`' for s in ORIGIN_STAGES)}.\n"
         "- `accounted`: one entry for every item this prompt asks you to account for (each answer of the author "
         "in a recheck, each evidence entry), with `item` (the finding ID or the evidence entry), `status`, `note` "
-        f"and `opened`, and `searched` where you only searched a file. {OPENED_RULE} {QUOTE_RULE} "
+        f"and `opened`. {SEEN_RULE} {QUOTE_RULE} "
         "For an answer, `status` is `accepted`, `re-raised` (the "
         "finding is also in `findings`, with the same ID) or `cannot determine` (the note says why; it goes to "
         "the owner). For an evidence entry, `status` is `explained` (the note says why it is fine) or `flagged` "
