@@ -1711,3 +1711,42 @@ def test_the_third_export_keeps_its_rows_and_tokens_and_adds_a_new_lines_finding
     confirmation = bench.Confirmation(bench.read_verdicts(r.root, "rescore"),
                                       bench.read_tokens(r.root, bench.RESCORE_EXPORT_KEY_FILE))
     assert confirmation.confirmed(first) == {"E1"} and confirmation.unjudged(second) == 1
+
+
+# --- Round 4 of slice 4, R4-3 (discovered issue 56): a review run again under another prompt counts once ---------------
+
+
+def test_a_review_run_again_under_another_prompt_replaces_the_earlier_line_in_the_counts(
+        repo: tuple[Repo, str, str]) -> None:
+    """Results are only appended, so a case, configuration and run reviewed again under another prompt has two lines;
+    stage B's counts take the last one in file order, so the earlier line's confirmed detection no longer counts and
+    the later line's detection waits for its own verdict."""
+    r, base, commit = repo
+    first, _second = _two_runs_of_one_case_under_two_prompts(r, base, commit)
+    _write(r.root, str(bench.EXPORT_KEY_FILE), json.dumps({"token": "T001", "case": "C1", "configuration": "short+list",
+                                                          "prompt_identity": first["prompt_identity"], "run": 1,
+                                                          "finding": "X1"}) + "\n")
+    _write(r.root, str(bench.VERDICT_FILES["author"]), json.dumps({"token": "T001", "verdict": "match"}) + "\n")
+    report = bench.report_stage_b(r.root, bench.load_key(r.root))
+    row = _report_row(report, "short+list")
+    assert row[1] == "0 of 1" and row[_header(report).index("Not yet confirmed")] == "1"
+
+
+def test_a_recheck_run_again_under_another_prompt_is_listed_once(repo: tuple[Repo, str, str]) -> None:
+    """A recheck case run again after a changed recheck mandate, so under another prompt identity, is one first run of
+    its configuration: the counts and the false-answers line take its last line, which re-raised the finding the
+    earlier line accepted."""
+    r, base, commit = repo
+    r.key([_case("RC", base, commit, kind="recheck", configurations=["recheck-B"], recheck=_false_rejection_inputs(r))])
+    r.canary_passed()
+    r.scenario(_recheck_reply("accepted", RULES_QUOTE))
+    assert _run(r) == 0
+    _write(r.root, "tests/review_benchmark/prompts/mandate_recheck_b.md", "A CHANGED RECHECK MANDATE.\n")
+    r.scenario(_recheck_reply("re-raised", RULES_QUOTE))
+    assert _run(r) == 0
+    first, second = [line for line in r.results() if line.get("configuration")]
+    assert first["prompt_identity"] != second["prompt_identity"] and first["run"] == second["run"] == 1
+    report = bench.report_stage_b(r.root, bench.load_key(r.root))
+    assert _report_row(report, "recheck-B")[1] == "1 of 1"
+    false_answers = next(line for line in report.splitlines() if line.startswith("Rechecks of false answers"))
+    assert false_answers.endswith(": RC recheck-B: detected (R1-1 re-raised).")

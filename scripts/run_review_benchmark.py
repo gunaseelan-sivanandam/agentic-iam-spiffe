@@ -1679,19 +1679,30 @@ def rule_section(view: RuleView, key: AnswerKey) -> list[str]:
         repeats_table(lines, confirmation), "", *measurement_rows(lines, key, measured), ""]
 
 
+def current_lines(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Discovered issue 56 (R4-3): the last line in file order of each case, configuration and run, so a review run
+    again under another prompt identity replaces its earlier line, since results are only appended; a line without a
+    configuration (a canary, a confirmation) stays."""
+    last = {(line["case"], line["configuration"], line.get("run", 1)): i
+            for i, line in enumerate(lines) if line.get("configuration")}
+    return [line for i, line in enumerate(lines)
+            if not line.get("configuration") or last[(line["case"], line["configuration"], line.get("run", 1))] == i]
+
+
 def rule_views(repo: Path, key: AnswerKey, lines: list[dict[str, Any]]) -> list[RuleView]:
     """R2-9: the results recorded under an earlier rule, scored as they ran (when there are any), and every result
-    under the key's rule, the earlier ones re-scored. The third export's verdicts join both families of verdicts."""
+    under the key's rule, the earlier ones re-scored; in both, a review run again counts by its last line (R4-3). The
+    third export's verdicts join both families of verdicts."""
     extra, extra_tokens = read_verdicts(repo, "rescore"), read_tokens(repo, RESCORE_EXPORT_KEY_FILE)
     confirmation = Confirmation({**read_verdicts(repo, "author"), **extra}, {**read_tokens(repo), **extra_tokens})
     measured = Confirmation({**read_verdicts(repo, "measurement"), **extra},
                             {**read_tokens(repo, MEASURE_KEY_FILE), **extra_tokens})
-    earlier = [line for line in lines if under_earlier_rule(line, key)]
+    earlier = current_lines([line for line in lines if under_earlier_rule(line, key)])
     views = [RuleView("Under the rule of their runs (blocking or high), the reviews recorded before the key's rule, "
                       "each with the score of its run:", earlier, confirmation, measured)] if earlier else []
     title = "Under the key's rule (R2-9: blocking, high or medium), every review" + (
         ", those recorded under an earlier rule re-scored by `--rescore B`:" if earlier else ":")
-    return [*views, RuleView(title, rescored(repo, key, lines), confirmation, measured)]
+    return [*views, RuleView(title, rescored(repo, key, current_lines(lines)), confirmation, measured)]
 
 
 def report_stage_b(repo: Path, key: AnswerKey) -> str:
