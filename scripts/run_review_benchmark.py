@@ -1072,24 +1072,25 @@ def export_confirmation(repo: Path, key: AnswerKey, seed: int) -> int:
             items.append(({"case": line["case"], "expected": cases[line["case"]].expected, "finding": finding},
                           {"configuration": line["configuration"], "prompt_identity": line["prompt_identity"],
                            "run": line.get("run", 1), "finding": finding["id"]}))
-    count = _write_export(repo, items, seed, "T", (EXPORT_FILE, EXPORT_KEY_FILE))
+    count = _write_export(items, seed, "T", (repo / EXPORT_FILE, repo / EXPORT_KEY_FILE))
     print(f"[benchmark] exported {count} findings to {EXPORT_FILE}; match rule: {key.match_rule_sha256}")
     return 0
 
 
-def _write_export(repo: Path, items: list[tuple[dict[str, Any], dict[str, Any]]], seed: int, prefix: str,
-                  files: tuple[Path, Path]) -> int:
-    """Shuffle the items with the seed, give each a token, and write what the confirmer sees and the private map."""
+def _write_export(items: list[tuple[dict[str, Any], dict[str, Any]]], seed: int, prefix: str, files: tuple[Path, Path],
+                  kept: tuple[list[dict[str, Any]], list[dict[str, Any]]] = ([], [])) -> int:
+    """Shuffle the items with the seed, give each a token after the kept rows' (an export's rows already written, which
+    keep their tokens and so their verdicts), and write what the confirmer sees and the private map."""
     random.Random(seed).shuffle(items)  # noqa: S311 - a fixed shuffle for blinding, not for security
-    export, private = [], []
-    for index, (shown, hidden) in enumerate(items, start=1):
+    export, private = list(kept[0]), list(kept[1])
+    for index, (shown, hidden) in enumerate(items, start=len(private) + 1):
         token = f"{prefix}{index:03d}"
         export.append({"token": token, **shown})
         private.append({"token": token, "case": shown["case"], **hidden})
     for path, rows in zip(files, (export, private)):
-        (repo / path).parent.mkdir(parents=True, exist_ok=True)
-        (repo / path).write_text("".join(json.dumps(r, sort_keys=True) + "\n" for r in rows), encoding="utf-8")
-    return len(export)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("".join(json.dumps(r, sort_keys=True) + "\n" for r in rows), encoding="utf-8")
+    return len(items)
 
 
 def export_measurement(repo: Path, key: AnswerKey, seed: int, configurations: list[str]) -> int:
@@ -1108,7 +1109,7 @@ def export_measurement(repo: Path, key: AnswerKey, seed: int, configurations: li
                "finding": finding["id"]})
              for (case_id, name), line in _completed_reviews(lines).items()
              for finding in line.get("findings", []) if is_detection(finding)]
-    count = _write_export(repo, items, seed, "S", (MEASURE_EXPORT_FILE, MEASURE_KEY_FILE))
+    count = _write_export(items, seed, "S", (repo / MEASURE_EXPORT_FILE, repo / MEASURE_KEY_FILE))
     print(f"[benchmark] exported {count} findings to {MEASURE_EXPORT_FILE}, tokens in {MEASURE_KEY_FILE}")
     return 0
 
@@ -1116,21 +1117,23 @@ def export_measurement(repo: Path, key: AnswerKey, seed: int, configurations: li
 def export_rescore(repo: Path, key: AnswerKey, seed: int) -> int:
     """R2-9: every finding that confirmation judges under the key's rule, from every completed defect-case review,
     that neither earlier export holds: the medium findings, which the first two exports left out, and every finding
-    of a review run after the first export (the later rechecks). Shuffled under fresh tokens, without the
-    configuration; the first two exports and their verdicts stay as they are."""
+    of a review run after the first export (the later rechecks), and of a review run after this export (a new line,
+    whatever its case, configuration and run). Shuffled under tokens after the last, without the configuration; the
+    rows this export already holds keep their tokens, and the first two exports and their verdicts stay as they are."""
     check_match_rule(key)
-    held = set(read_tokens(repo)) | set(read_tokens(repo, MEASURE_KEY_FILE))
+    held = {k for path in (EXPORT_KEY_FILE, MEASURE_KEY_FILE, RESCORE_EXPORT_KEY_FILE) for k in read_tokens(repo, path)}
     cases = {c.case_id: c for c in key.cases}
     items = []
     for line in load_results(repo, key):
         if line.get("status") != "completed" or line.get("kind") not in DEFECT_KINDS:
             continue
         for finding in _exported_findings(line, cases[line["case"]]):
-            if (line["case"], line["configuration"], line.get("run", 1), finding["id"]) not in held:
+            if token_key(line, finding["id"]) not in held:
                 items.append(({"case": line["case"], "expected": cases[line["case"]].expected, "finding": finding},
                               {"configuration": line["configuration"], "prompt_identity": line["prompt_identity"],
                                "run": line.get("run", 1), "finding": finding["id"]}))
-    count = _write_export(repo, items, seed, "M", (RESCORE_EXPORT_FILE, RESCORE_EXPORT_KEY_FILE))
+    files = (repo / RESCORE_EXPORT_FILE, repo / RESCORE_EXPORT_KEY_FILE)
+    count = _write_export(items, seed, "M", files, (_read_jsonl(files[0]), _read_jsonl(files[1])))
     print(f"[benchmark] exported {count} findings to {RESCORE_EXPORT_FILE}, tokens in {RESCORE_EXPORT_KEY_FILE}")
     return 0
 
@@ -1198,12 +1201,22 @@ def read_verdicts(repo: Path, who: str) -> dict[str, str]:
     return {r["token"]: r["verdict"] for r in rows}
 
 
-def read_tokens(repo: Path, key_file: Path = EXPORT_KEY_FILE) -> dict[tuple[str, str, int, str], str]:
+TokenKey = tuple[str, str, str, int, str]
+
+
+def token_key(line: dict[str, Any], finding_id: str) -> TokenKey:
+    """Which result line's finding a token stands for: its case, configuration, prompt identity, run and finding ID. A
+    line run again under another prompt (S45-D2) has the same case, configuration and run, so without its prompt
+    identity it would take the confirmation the earlier line's finding was given."""
+    return line["case"], line["configuration"], line.get("prompt_identity", ""), line.get("run", 1), finding_id
+
+
+def read_tokens(repo: Path, key_file: Path = EXPORT_KEY_FILE) -> dict[TokenKey, str]:
     path = repo / key_file
     if not path.exists():
         return {}
     rows = (json.loads(t) for t in path.read_text(encoding="utf-8").splitlines() if t.strip())
-    return {(r["case"], r["configuration"], r.get("run", 1), r["finding"]): r["token"] for r in rows}
+    return {token_key(r, r["finding"]): r["token"] for r in rows}
 
 
 # --- Report (S45-D8) ----------------------------------------------------------------------------
@@ -1353,7 +1366,7 @@ class Confirmation:
     """The author's blinded verdicts and the tokens that join them back to results; empty before confirmation."""
 
     verdicts: dict[str, str] = field(default_factory=dict)
-    tokens: dict[tuple[str, str, int, str], str] = field(default_factory=dict)
+    tokens: dict[TokenKey, str] = field(default_factory=dict)
 
     def confirmed(self, line: dict[str, Any]) -> set[str]:
         """The expected IDs a review detected and confirmation upheld: an expected finding counts when a finding that
@@ -1363,20 +1376,17 @@ class Confirmation:
         if not self.verdicts:
             return detected
         matches = score_.get("matches", {})
-        run = line.get("run", 1)
-        return {eid for eid in detected if any(
-            self.verdicts.get(self.tokens.get((line["case"], line["configuration"], run, fid), "")) == "match"
-            for fid in matches.get(eid, []))}
+        return {eid for eid in detected if any(self.verdicts.get(self.tokens.get(token_key(line, fid), "")) == "match"
+                                               for fid in matches.get(eid, []))}
 
     def unjudged(self, line: dict[str, Any]) -> int:
         """Detections none of whose matching findings has a verdict: the review came after the export, or its export
         has not been judged yet."""
         if not self.verdicts:
             return 0
-        matches, run = line.get("score", {}).get("matches", {}), line.get("run", 1)
+        matches = line.get("score", {}).get("matches", {})
         return sum(1 for fids in matches.values()
-                   if not any(self.tokens.get((line["case"], line["configuration"], run, fid)) in self.verdicts
-                              for fid in fids))
+                   if not any(self.tokens.get(token_key(line, fid)) in self.verdicts for fid in fids))
 
 
 def _count_line(c: ConfigurationCounts, line: dict[str, Any], case: Case, confirmation: Confirmation) -> None:
