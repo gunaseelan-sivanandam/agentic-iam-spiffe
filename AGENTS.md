@@ -357,7 +357,10 @@ All of the following, in the same change:
   section of the record, never the whole record); it lists every answer under `accounted` with the
   files it opened for it, and the launcher fails it when it leaves an answer out or did not see a
   file that a `fixed:` answer names or a `rejected:` answer cites. A file is seen at the lines a Read
-  showed or a Grep printed in content mode; a Grep that lists files or counts shows none. For every
+  showed or a Grep printed in content mode, and at the lines of the change's diff the recheck was
+  shown, each at its place in the file: a context or added line at its new line, a removed line only
+  of a file the change deletes, at its old line, and a header line nowhere; a Grep that lists files
+  or counts shows none. For every
   `fixed:` or `rejected:` answer it accepts or re-raises, it quotes the lines its decision rests on,
   with file and lines (`quotes`), at least one quote from a file the answer names or cites when it
   names or cites one, as the file is in the copy (a fix's quote comes from the change's diff only for

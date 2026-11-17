@@ -92,6 +92,7 @@ READ_LINE_NUMBER = re.compile(r"^\s*\d+(?:\t|→)")  # the Read tool's line numb
 # its files nowhere else; a Grep that lists files or counts prints no line.
 READ_NUMBERED_LINE = re.compile(r"^\s*(\d+)(?:\t|→)", re.MULTILINE)
 GREP_PATH_LINE = re.compile(r"(?=([:-])(\d+)\1)")  # every place a path may end; the first that names a file counts
+DIFF_HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")  # a hunk header: old and new start, count
 GREP_FILE_LINE = re.compile(r"^(\d+)[:-]")
 GREP_OMITTED = ("[Omitted long matching line]", "[Omitted long context line]")
 ANSWER_WORDS = ("fixed", "deferred", "rejected", "owner")
@@ -820,7 +821,8 @@ def summarise_paths(summary: StreamSummary, copy_root: Path) -> tuple[list[str],
 
 def lines_shown(summary: StreamSummary, copy_root: Path) -> dict[str, set[int]]:
     """R3-2 (a): the files inside the copy the attempt saw, each with the lines it was shown: a Read that did not fail
-    sees its file at its window, a Grep in content mode the files whose lines it printed with their numbers."""
+    sees its file at its window, a Grep in content mode the files whose lines it printed with their numbers; and a line
+    of the change's diff it was shown sees the file line that line shows (decision concern 18 (b))."""
     shown: dict[str, set[int]] = {}
     for call in summary.tool_uses:
         output = summary.outputs.get(call.call_id)
@@ -833,7 +835,76 @@ def lines_shown(summary: StreamSummary, copy_root: Path) -> dict[str, set[int]]:
         elif call.name == "Grep" and _prints_numbered_lines(call.args, output):
             for rel, line in _grep_lines(call.args, output.text, copy_root):
                 shown.setdefault(rel, set()).add(line)
+    return _with_diff_lines(shown, copy_root)
+
+
+def _with_diff_lines(shown: dict[str, set[int]], copy_root: Path) -> dict[str, set[int]]:
+    """Decision concern 18 (b): the lines of the copy's change diff the attempt was shown are also seen lines of the
+    files they belong to, at the places `diff_places` gives them."""
+    diff = f"{INPUTS_DIR}/change.diff"
+    path = copy_root / diff
+    if diff not in shown or not path.is_file():
+        return shown
+    places = diff_places(path.read_text(encoding="utf-8", errors="replace"))
+    for rel, line in [places[number] for number in sorted(shown[diff]) if number in places]:
+        shown.setdefault(rel, set()).add(line)
     return shown
+
+
+@dataclass
+class _DiffCursor:
+    """Where a git diff is while it is read line by line: the file pair of its last headers and the open hunk's next
+    old and new line and the lines it has left on each side."""
+
+    old_path: str | None = None
+    new_path: str | None = None
+    old: int = 0
+    new: int = 0
+    old_left: int = 0
+    new_left: int = 0
+
+    def header(self, line: str) -> None:
+        """A line outside a hunk: `diff --git` starts a file, `---` and `+++` name its old and new path (`/dev/null`
+        for none), `@@` opens a hunk; every other header (index, mode, rename, similarity) changes nothing."""
+        hunk = DIFF_HUNK.match(line)
+        if line.startswith("diff --git "):
+            self.old_path = self.new_path = None
+        elif line.startswith(("--- ", "+++ ")):
+            name = line[4:].rstrip("\t")  # git ends a name that holds a space with a tab
+            path = None if name == "/dev/null" else name[2:] if name.startswith(("a/", "b/")) else name
+            self.old_path, self.new_path = (path, self.new_path) if line[0] == "-" else (self.old_path, path)
+        elif hunk:
+            self.old, self.old_left = int(hunk[1]), int(hunk[2] or 1)
+            self.new, self.new_left = int(hunk[3]), int(hunk[4] or 1)
+
+    def hunk_line(self, line: str) -> tuple[str, int] | None:
+        """The place a line of the open hunk shows, advancing the hunk: a context or added line its new path's new
+        line, a removed line its old path's old line only when the diff deletes the file; the no-newline marker none."""
+        kind = line[:1]
+        old_side, new_side = int(kind in (" ", "-")), int(kind in (" ", "+"))
+        place = None
+        if new_side and self.new_path is not None:
+            place = (self.new_path, self.new)
+        elif kind == "-" and self.new_path is None and self.old_path is not None:
+            place = (self.old_path, self.old)
+        self.old, self.old_left = self.old + old_side, self.old_left - old_side
+        self.new, self.new_left = self.new + new_side, self.new_left - new_side
+        return place
+
+
+def diff_places(text: str) -> dict[int, tuple[str, int]]:
+    """Decision concern 18 (b): the file and line each line of a git diff shows, by the line's number in the diff. A line
+    belongs to a hunk only while the hunk's counts last, so a removed `--- x` or an added `+++ x` is no header; header
+    lines show nothing, and neither does a removed line of a file that still exists (it is not in the copy)."""
+    cursor, places = _DiffCursor(), {}
+    for number, line in enumerate(text.split("\n"), start=1):
+        if cursor.old_left > 0 or cursor.new_left > 0:
+            place = cursor.hunk_line(line)
+            if place is not None:
+                places[number] = place
+        else:
+            cursor.header(line)
+    return places
 
 
 def _read_window(output: ToolOutput) -> set[int]:
