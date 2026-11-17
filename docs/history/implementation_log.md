@@ -5,6 +5,114 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-11-18 Slice agentic-sdlc-poc 4: round 4, the review mandates and the runner fixes
+
+- Branch `poc/slice-4-implementation`, 11 commits after round 3's handoff (`96e3b22`): `8ab80e5` (discovered issue
+  60), `4fb578d` (issue 57), `f5321cc` (the owner's decisions on the decision page), `02281b0` (issues 56 and 61),
+  `ebdb0e8` (the report and the page after issue 56; new issues 62 and 63), `90a15ed` (R4-2), `831b47a`, `660f57b`,
+  `78116f7` and `6add324` (R4-4), `1f905a9` (R4-1 and R4-5), then these records. The owner's decisions of 2026-11-17
+  ("Decision 1, 3, 4  and 5 - accept, I want to revisit the decision 2 again, fix the issue 56, 57 and 60.") and the
+  approval of round 4 ("approve the texts, budget 120, criterion fine.") are on the
+  [decision page](../slices/agentic-sdlc-poc/slice_4_decisions.md), section "Round 4", with R4-1 to R4-6 and the
+  measurement's result.
+- R4-1 (`1f905a9`): the launcher's recheck and final mandates (`MANDATES` in `scripts/run_independent_review.py`) are
+  R4-1's texts verbatim, one line per paragraph as the benchmark's prompt files hold them. The recheck mandate is byte
+  for byte the one `recheck-R4` measured: on RC-1 to RC-4 the launcher's recheck prompt (`recheck-A`) equals
+  `recheck-R4`'s, and `recheck-R4`'s prompt identity equals the measured runs'. The final mandate, which no case can
+  measure, was approved as written. The initial mandate stays 4.1's: round 4's did not meet R4-4's criterion, and the
+  owner decides (decision 8). The benchmark notes that `recheck-A` now means the new recheck text while its recorded
+  lines ran 4.1's.
+- R4-2 (`90a15ed`): the "Review prompt" section of slice 4.4's research record
+  ([`research.md`](../slices/poc-4-4-stage-checklists/research.md)) holds the words of R4-1's mandates that rest on
+  research, their 29 sources with verbatim quotes checked against the downloaded copies, the gaps the research leaves,
+  and the options considered and left out.
+- R4-3, the fixes, tests first:
+  - Discovered issue 60 (`8ab80e5`): every place that reads a git file list without `-z` passes the diff's `-c`
+    settings (`DEFAULT_DIFF_CONFIG` of `scripts/review_inputs.py`, `core.quotePath=false` among them), so git no longer
+    quotes a non-ASCII name: `changed_files` and `process_file_evidence` in `scripts/review_inputs.py`, `final_records`
+    and `stage_lists` in the launcher, `changed_logs` in `scripts/review_brief.py`, and `tracked_files` in
+    `scripts/check_docs.py`; `stage_lists` and `changed_logs` read one name per line, so a name with a space holds.
+  - Discovered issue 57 (`4fb578d`): after the whole-line removal, the scorer also removes each quoted span (backticks,
+    straight or curly double quotes) of `QUOTE_MIN` characters or more that occurs verbatim in an expected line, never
+    the finding's own words; stage A's rescore prepares each case's expected lines as stage B's does
+    (`rescore_quoted`). On the committed data `--rescore B` and `--report --stage B` gave the same bytes before and
+    after, and the 10 stage-A reviews kept their detections; the key's rule text and hash are unchanged.
+  - Discovered issue 56 (`02281b0`): `rule_views` keeps only the last line in file order of each case, configuration
+    and run (`current_lines`), in both views; results stay append-only. Under R2-9 `recheck-A` reads 3 of 3 (was 6 of
+    7) and `recheck-B` 3 of 3 (was 3 of 4). Discovered issue 61, in the same commit: `benchmark_rescore_B.jsonl`
+    refreshed by `--rescore B` (no reviewer call), key hash `ba6975d46b11` to `0ee2ad1414c0` on all 62 rows, every
+    other field unchanged. `ebdb0e8` keeps the rebuilt stage-B report verbatim in the benchmark report and records
+    discovered issues 62 and 63.
+- R4-4, the measurement: `831b47a` adds the configurations `open-R4+list` and `recheck-R4` (R4-1's initial and
+  recheck mandates verbatim, pinned by a test to the decision page), answer key version 8, the stage-B hard stop of
+  120 and, before the runs, decision concern 19 (the `open+list` baseline ran under CLI 2.1.321). `660f57b`: the 19
+  calls (`open-R4+list` on the 15 initial cases, `recheck-R4` on RC-1 to RC-4), one call each without retries, CLI
+  2.1.323, USD 13.58, 105 of 120 calls used; FS-1's line is withheld by the publication check. `78116f7`: the 85 new
+  judged findings exported as M153 to M237 (seed 45). `6add324`: two fresh sessions judged them blind, each given half
+  of the export and the match rule only: 20 matches. Under R2-9 `open-R4+list` detects 10 of the 11 defect cases
+  against `open+list`'s 8, with 8 false alarms in 4 no-defect reviews against 7; under blocking or high, 9 against 7
+  detections and 2 against 2 false alarms. `recheck-R4` re-raised RC-1's, RC-3's and RC-4's false answers, each
+  re-raise confirmed, and accepted RC-2's. The criterion's outcome: the recheck wording meets it and ships; the
+  initial wording raised one more false alarm (a medium finding on CL-2), so it does not ship and the owner decides
+  (decision 8).
+- R4-5 (`1f905a9`): `AGENTS.md`'s Final review and stage table no longer state 4.1's question "What did everyone
+  before you miss?"; S46-D5 stays as recorded.
+- Tests first, each new or changed test run by ID on its fix commit's parent with only that commit's test files
+  copied in (`python3 -m pytest -q -p no:cacheprovider --tb=line <file>::<test>`), with its first failure line. The
+  lines of `8ab80e5`, `4fb578d` and `831b47a` were not recorded and are re-derived for these records in a scratch
+  worktree, since removed; those of `02281b0` and `1f905a9` are as their commit messages record them.
+  - Issue 60 (base `96e3b22`), one test per place, each setting `core.quotePath=true` in its scratch repository:
+    `test_check_docs.py::test_images_unreferenced_render_with_a_non_ascii_name_is_reported`
+    `tests/tools/test_check_docs.py:155: AssertionError: assert [] == ['images: doc...ive document']`;
+    `test_review_brief.py::test_changed_logs_keep_non_ascii_names_and_spaces_whatever_the_repository_configures`
+    `tests/tools/test_review_brief.py:210: AssertionError: assert [] == ['docs/slices...tempts.jsonl']`;
+    `test_review_inputs.py::test_changed_files_keep_a_non_ascii_name_whatever_the_repository_configures`
+    `tests/tools/test_review_inputs.py:799: assert ChangedFiles(...), deleted=()) == ChangedFiles(...), deleted=())`
+    (`to_open: ('"docs/\\303\\251.md"',) != ('docs/é.md',)`);
+    `test_review_inputs.py::test_process_file_evidence_keeps_a_non_ascii_name_whatever_the_repository_configures`
+    `tests/tools/test_review_inputs.py:812: assert [] == ['EV1: proces...t> <commit>)']`;
+    `test_run_independent_review.py::test_final_records_keep_non_ascii_names_whatever_the_repository_configures`
+    `tests/tools/test_run_independent_review.py:950: AssertionError: assert () == ('docs/slices...view_impl.md')`;
+    `test_stage_checklists.py::test_a_list_whose_name_is_not_ascii_or_holds_a_space_is_found_whatever_the_repository_configures`
+    `scripts/run_independent_review.py:2133: run_independent_review.ReviewRefusedError: --stage é names no list at the
+    base; the lists are: words`.
+  - Issue 57 (base `8ab80e5`, `tests/tools/test_run_review_benchmark.py`):
+    `test_a_finding_that_quotes_part_of_the_planted_line_detects_it_only_by_its_own_words`, `[backticks]`,
+    `[straight]` and `[curly]`, each `tests/tools/test_run_review_benchmark.py:1208: AssertionError: assert (['E1'] ==
+    []`; `test_a_quoted_span_is_removed_from_quote_min_on_and_only_when_an_expected_line_holds_it[at-quote-min]`
+    `tests/tools/test_run_review_benchmark.py:1220: AssertionError: assert ['E1'] == []`;
+    `test_rescore_a_applies_the_quote_rule_to_the_planted_line` `tests/tools/test_run_review_benchmark.py:778:
+    AssertionError: assert [(['E1'], []), (['E1'], [])] == [([], ['E1']), ([], ['E1'])]`. The twins
+    `[below-quote-min]` and `[not-in-an-expected-line]` passed on the base, by design.
+  - Issue 56 (base `f5321cc`): `test_a_review_run_again_under_another_prompt_replaces_the_earlier_line_in_the_counts`
+    `E AssertionError: assert ('1 of 2' == '0 of 1'`; `test_a_recheck_run_again_under_another_prompt_is_listed_once`
+    `E AssertionError: assert '1 of 2' == '1 of 1'`.
+  - R4-4 (base `90a15ed`): `test_the_committed_keys_budget_is_the_stage_b_hard_stop_of_120` (renamed from `_of_95`)
+    `tests/tools/test_run_review_benchmark.py:1594: assert 95 == 120`;
+    `test_the_round_4_configurations_send_r4_1s_mandates_verbatim[open-R4+list-initial-Initial]`
+    `scripts/run_review_benchmark.py:424: run_review_benchmark.BenchmarkRefusedError: unknown configuration
+    'open-R4+list'; the runner knows short+list, open+list, open-B+list, recheck-A, recheck-B, open+list+sev, canary`,
+    and `[recheck-R4-recheck-Recheck]` the same for `'recheck-R4'`.
+  - R4-1 and R4-5 (base `6add324`):
+    `test_run_review_benchmark.py::test_the_launcher_ships_r4_1s_recheck_and_final_mandates[recheck-Recheck]`
+    `AssertionError: assert 'For every an... fixes touch.' == 'Verify every...s is valid.\n'` and `[final-Final]`
+    `AssertionError: assert 'What did eve..., on purpose.' == 'Independentl...nal review.\n'`; the changed
+    `test_stage_rules.py::test_the_stage_table_check_fails_on_each_kind_of_violation[review-without-list-or-mode]`,
+    unchanged, on the new `AGENTS.md`: `AssertionError: []` (its edit no longer matched the stage table's row).
+- Validation, local: at `1f905a9`, `make tooling-test` (1000 passed; shell 9 passed), `make docs-check`, `make lint`
+  and `make gate-consistency` passed, as the commit records. On these records (docs only): `make docs-check`, `make
+  qa-trace` (requirements 170, architecture 34, design 131, tests 386, coverage gaps 113; gap gate against the
+  merge-base of `origin/poc/agentic-sdlc`: 0 new), `make lint` (0 new or worsened) and `make tooling-test` (1000
+  passed, with a scratch shellcheck; shell 9 passed) passed.
+- Not run: the full E2E suite (no service, policy, compose, harness or CI file changed, so no runtime change; CI runs
+  it on the PR), `make unit-trust`, `make unit-mutation` and `make unit-diff-cov` (no `services/` change), and CI (the
+  branch is not pushed).
+- Discovered issue 64 is on the decision page: a `--run` that names no case or configuration selects 66 reviews, every
+  configuration of every case but round 4's two, since their prompts changed after their recorded runs (probed with no
+  reviewer call); low, recorded only.
+- Next: the review unit `owner-decisions-3` (R4-6) reviews round 4's change; the owner's decision 8 decides the
+  initial mandate.
+
 ## 2026-11-17 Slice agentic-sdlc-poc 4: round 3, decision concern 18 (diff lines count as seen) and the second mechanics replay
 
 - Branch `poc/slice-4-implementation`, after the records of round 3 (`a6dfcce`): the owner's decision on decision

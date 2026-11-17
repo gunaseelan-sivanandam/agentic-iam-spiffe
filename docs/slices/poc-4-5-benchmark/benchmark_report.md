@@ -541,8 +541,15 @@ mandate, the lists at `04f8df4`, each case's base rules and the model at high ef
   under R3-2 and R3-3, 4.1's wording (the launcher's) re-raised RC-1, RC-3 and RC-4 and passed RC-2, one run each;
   the draft did not run under them, so round 3 does not compare the two.
 - **Final mandate wording:** by reason; no case measures it (S45-D8).
+- **Round 4 (R4-1, R4-4):** the owner's recheck wording (`recheck-R4`) re-raised RC-1's, RC-3's and RC-4's false
+  answers and accepted RC-2's, one run each, so it met the criterion, and the launcher ships it since `1f905a9`, with
+  the owner's final wording, which no case measures. The owner's initial wording (`open-R4+list`) detected 10 of 11
+  against `open+list`'s 8 under R2-9 (9 against 7 under blocking or high) but raised 8 false alarms in 4 no-defect
+  reviews against 7 (one more medium finding, on CL-2; 2 against 2 under blocking or high), so it failed the criterion
+  by one false alarm; the owner decides ([decision 8](../agentic-sdlc-poc/slice_4_decisions.md#decisions-to-make)).
 
-The launcher's mandate constants stay 4.1's until the owner chooses (S45-D8).
+The launcher's initial mandate stays 4.1's until the owner chooses (S45-D8, decision 8); since `1f905a9` its recheck
+and final mandates are round 4's (R4-1).
 
 ## The runner's report, verbatim
 

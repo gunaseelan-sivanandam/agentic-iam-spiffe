@@ -15,7 +15,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
   1. now: slice 4 ([#33](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/33), sub-issues #38–#43), implemented on
      the branch `poc/slice-4-implementation` for one final PR: 4.1 to 4.6 implemented and reviewed; 4.5b's
      benchmark ran (57 of 60 calls, then 76 under a budget raised to 85, then 80 of a hard stop of 80 in round 2,
-     82 of 85 since the owner confirmed the budget of 85 on 2026-11-16, and 86 of 95 in round 3;
+     82 of 85 since the owner confirmed the budget of 85 on 2026-11-16, 86 of 95 in round 3, and 105 of 120 in round 4;
      [report](slices/poc-4-5-benchmark/benchmark_report.md)); one dry slice ran; the final review ended after
      round 2; the owner's growth of 2026-11-13 (rejections read like fixes, a `searched` list, the checklist
      question on findings) is implemented and reviewed (unit `growth`); the owner's decisions of 2026-11-13 on
@@ -47,10 +47,17 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
      59). Its review unit `round-3` ended after round 2: round 1 was approvable (3 medium, 3 low; F1, F2, F3 and F6
      fixed, F1 by the owner's decision "Rechecks only", F4 and F5 rejected), and the recheck, the first under round 3's
      whole recheck, was approvable (all six answers accepted with quotes; one new low, N1, fixed); the brief is rebuilt
-     on the decision page. So round 3 is built, measured and reviewed. Open for the owner before slice 4 closes, on the
-     decision page: decisions 1 to 5 under "Decisions to make"; decision concern 16 (R2-9's blind verdicts); growth
-     proposal 12 (resuming a review that failed the read check); and the discovered issues open for the owner, 56, 57
-     and 60 (53 is open in part). Then the push and the final PR.
+     on the decision page. So round 3 is built, measured and reviewed.
+     Round 4, from the owner's decisions of 2026-11-17 (decisions 1, 3, 4 and 5 accepted, decision 2 revisited; R4-1
+     to R4-6), is built and measured: discovered issues 56, 57 and 60 are fixed, tests first; the research record of
+     the mandates is written; R4-4's 19 calls ran (105 of 120) and were confirmed blind. The recheck wording met its
+     criterion, and the launcher ships it with the final wording; `AGENTS.md`'s final review no longer states 4.1's
+     question. The initial wording raised one more false alarm than the launcher's (8 against 7 in 4 no-defect
+     reviews) while detecting 10 of 11 against 8, so the launcher keeps 4.1's initial wording until the owner decides
+     (decision 8). Next: round 4's review unit `owner-decisions-3`. Open for the owner before slice 4 closes, on the
+     decision page: decision 8; decision concerns 16 (R2-9's blind verdicts) and 19 (the `open+list` baseline ran
+     under an older CLI); growth proposal 12 (resuming a review that failed the read check); discovered issue 53, open
+     in part; and the owner's actions of decisions 3 and 4, outside the repository. Then the push and the final PR.
      Progress and the owner's decisions: [`slice_4_decisions.md`](slices/agentic-sdlc-poc/slice_4_decisions.md);
      Next, before slice 5: a slice of author prompts and their benchmark (owner, 2026-11-09: "let's
      continue this slice for just review, after this let's run a new slice of author prompts and
@@ -101,6 +108,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Last verification
 | Check | Date | Result |
 | --- | --- | --- |
+| `make docs-check`, `make qa-trace`, `make lint`, `make tooling-test` on `poc/slice-4-implementation` (round 4's handoff on `1f905a9`: discovered issues 56, 57 and 60 fixed, R4-4 measured, the recheck and final mandates shipped; docs only); at `1f905a9`, `make tooling-test`, `make docs-check`, `make lint` and `make gate-consistency`, as the commit records | 2026-11-18 | PASSED; qa-trace: 0 new gaps, 113 coverage gaps remain; lint 0 new or worsened; 1000 pytest (with a scratch shellcheck), 9 shell. Not run: the E2E suite (no service, policy, compose, harness or CI file changed; CI runs it on the PR) |
 | `make docs-check`, `make qa-trace`, `make lint`, `make test-lint`, `make unit-guard-check`, `make qa-deploy`, `make tooling-test` on `poc/slice-4-implementation` (round 3's handoff on `faa6df4`: the review unit `round-3` ended, the brief rebuilt; docs only) | 2026-11-17 | PASSED; qa-trace: 0 new gaps, 113 coverage gaps remain; lint 0 new or worsened; unit guard 357; qa-deploy 18 known violations, 22 warnings; 981 pytest (with a scratch shellcheck), 9 shell. Not run: the E2E suite and gate-consistency (no service, policy, compose, harness or CI file changed) |
 | `make lint`, `make docs-check`, `make qa-trace`, `make tooling-test` on `poc/slice-4-implementation` (`5627de7`, decision concern 18 built), as the build reported; `make qa-trace` and `make docs-check` rerun on its records | 2026-11-17 | PASSED; qa-trace: 0 new gaps, 113 coverage gaps remain. Not run: the E2E suite (no service, policy, compose, harness or CI file changed) and gate-consistency |
 | `make tooling-test` on `poc/slice-4-implementation` (`fa7953f`, round 3 built and measured, in a clean worktree); `make qa-trace`, `make docs-check`, `make lint`, `make test-lint`, `make unit-guard-check`, `make qa-deploy` on round 3's records | 2026-11-17 | PASSED; 963 pytest (with a scratch shellcheck; 2 pre-existing deprecation warnings), 9 shell; qa-trace: 0 new gaps, 113 coverage gaps remain; lint 0 new or worsened; unit guard 357; qa-deploy 18 known violations, 22 warnings. Not run for round 3: the E2E suite (no service, policy, compose, harness or CI file changed) and gate-consistency |
@@ -124,7 +132,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `poc/slice-4-implementation` | agentic-sdlc-poc slice 4: the six sub-issues (#38–#43), on the plans merged with PR #48 | Implemented and reviewed, local; the owner's decisions of 2026-11-13 implemented and reviewed; round 2 (R2-1 to R2-10, 2026-11-14) implemented, its review unit `round-2` ended after round 2 (approvable; decision concern 16 to the owner); the owner's decisions of 2026-11-16 (decision concerns 11 and 13) implemented, their review unit `owner-decisions-2` ran round 1 (approvable; F1 to F3 fixed, decision concern 17 to the owner) and ended after its recheck, round 2; round 3 (R3-1 to R3-4, 2026-11-17) implemented and measured, then decision concern 18 decided by the owner (option (b)) and built, and the `mechanics` replay run once more (passed); its review unit `round-3` ended after round 2 (approvable; F1, F2, F3 and F6 fixed, F4 and F5 rejected; the recheck's one new low fixed); open for the owner: decisions 1 to 5, decision concern 16, growth proposal 12, discovered issues 56, 57 and 60; one final PR into `poc/agentic-sdlc` when the owner pushes |
+| `poc/slice-4-implementation` | agentic-sdlc-poc slice 4: the six sub-issues (#38–#43), on the plans merged with PR #48 | Implemented and reviewed, local; the owner's decisions of 2026-11-13 implemented and reviewed; round 2 (R2-1 to R2-10, 2026-11-14) implemented, its review unit `round-2` ended after round 2 (approvable; decision concern 16 to the owner); the owner's decisions of 2026-11-16 (decision concerns 11 and 13) implemented, their review unit `owner-decisions-2` ran round 1 (approvable; F1 to F3 fixed, decision concern 17 to the owner) and ended after its recheck, round 2; round 3 (R3-1 to R3-4, 2026-11-17) implemented and measured, then decision concern 18 decided by the owner (option (b)) and built, and the `mechanics` replay run once more (passed); its review unit `round-3` ended after round 2 (approvable; F1, F2, F3 and F6 fixed, F4 and F5 rejected; the recheck's one new low fixed); the owner's decisions of 2026-11-17 recorded (decisions 1, 3, 4 and 5 accepted, decision 2 revisited as round 4); round 4 (R4-1 to R4-6) built and measured: discovered issues 56, 57 and 60 fixed, the recheck and final mandates shipped, the initial mandate waiting for the owner's decision 8; its review unit `owner-decisions-3` next; open for the owner: decision 8, decision concerns 16 and 19, growth proposal 12; one final PR into `poc/agentic-sdlc` when the owner pushes |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
