@@ -290,3 +290,223 @@ No trace gap among the upstream items (python3 scripts/validate_traceability.py 
 | F4 | low | rejected: the mapping of a deleted file's removed lines to its old path and line is part of the owner's decision concern 18, option (b) ("the old side for a deleted file", docs/slices/agentic-sdlc-poc/slice_4_decisions.md:672); removing it would change an approved choice, as the finding itself notes |
 | F5 | low | rejected: `paths_read` and `paths_not_read` record the paths under review that the attempt opened with Read, as S42-D2 defines them and their names say (scripts/run_independent_review.py:1989); no check reads them, since the checks use the seen lines; and the benchmark keeps its own copy of the field and counts it as "Unread files" in every earlier result line (scripts/run_review_benchmark.py:783, scripts/run_review_benchmark.py:1396), so counting seen lines there would change what the recorded counts mean |
 | F6 | low | fixed: scripts/run_independent_review.py, tests/tools/test_run_independent_review.py, docs/slices/agentic-sdlc-poc/slice_4_decisions.md, docs/history/implementation_log.md: `change_diff` runs `git diff` with `--no-ext-diff --no-textconv --no-color --src-prefix=a/ --dst-prefix=b/`, `core.quotePath=false` and `diff.suppressBlankEmpty=false`, so the diff is in git's default format whatever the repository configures (`test_change_diff_has_git_default_format_whatever_the_repository_configures`); the 89 logged ranges give the same bytes as before, so no recorded hash changes. Searched: three places read git's file lists the same way (`changed_files`, `final_records`, `process_file_evidence`), a false refusal of a non-ASCII name rather than a false green, recorded as discovered issue 60 |
+
+## Round 2
+
+### Attempt round-3/c1/r2/A/1
+
+Reviewer `A`: `claude-opus-5-5`, effort medium, mode recheck, commit `35dbead10e2d`, base `3347754ef038`.
+
+Status: completed; approvable within the threat model: yes.
+
+#### Prompt
+
+```markdown
+# Recheck of round 3 of slice 4, review unit round-3
+
+The intent is unchanged from round 1: the owner's approved round 3, the decision page
+`docs/slices/agentic-sdlc-poc/slice_4_decisions.md`, section "Round 3: rechecks that look before they accept
+(2026-11-17)", with the "Decisions made" rows of 2026-11-17 and decision concern 18, option (b). One owner decision is
+new since round 1: asked about F1, the owner chose "Rechecks only" (the decision page, "Decisions made", 2026-11-17):
+decision concern 18 (b) counts lines of `change.diff` as seen lines only in a recheck, as approved, and the author's
+choice to apply it to every mode is reversed, so an initial or final review that saw its paths only as hunks of
+`change.diff` fails the empty-review rule again.
+
+Round 1's report and the author's answers to every one of its findings are below; the fixes are what the reviewed
+commit adds after `af9ba98`, round 1's commit. Among them: the owner's decision on F1 recorded (`a6943e6`); F2, a
+recheck's rebuild and a reviewer run again in the same round take the range from every reviewer of the round
+(`1d728fd`); F3, a test of tool results given as a list of blocks (`06857a7`); F6, `change_diff` runs `git diff` in
+git's default format (`8ec83b6`); F1, diff lines count as seen lines in rechecks only (`c105c9d`); and the answers with
+the records of the fixes (`35dbead`). F4 and F5 are answered `rejected:`. This is the recheck of the unit `round-3`
+(measurement 4 of the section), run by the launcher at the reviewed commit.
+
+The author's claims to verify: each new test's first failure on the code before it is in the implementation log's
+entry for this review (F3's test passed there, which the entry states); at `c105c9d`, `make lint` and `make qa-trace`
+passed, and `make docs-check` and `make tooling-test` failed only on the round's missing answers, which the reviewed
+commit's answers end; F6's change gives the same bytes for the 89 ranges the attempt logs record, so no recorded hash
+changes; F6's search for the same cause found discovered issue 60.
+```
+
+#### Evidence
+
+```text
+Each numbered entry must be listed under `accounted`.
+
+EV1: no CI run for this commit (GET https://api.github.com/repos/<owner>/<repo>/actions/runs?head_sha=<commit> (no token))
+EV2: process file changed since the reviewed round: scripts/run_independent_review.py, +45 -25 lines (af9ba98cb1f8 to 35dbead10e2d; git diff --numstat --no-renames <earlier attempt's commit> <commit>)
+
+Every changed line and branch run by the tooling tests: scripts/run_independent_review.py.
+A script the tooling tests run only as a subprocess shows as not run here, because coverage is measured in-process (issue #44).
+No trace gap among the upstream items (python3 scripts/validate_traceability.py --mode pr --base <base> --report-json <scratch>/trace.json --design-report-json <scratch>/design.json).
+```
+
+#### Report
+
+```json
+{
+  "accounted": [
+    {
+      "item": "F1",
+      "note": "`lines_shown` adds diff lines only when the mode is recheck. `recheck_accounting` sets the mode to recheck, `plan_reviews` passes the round's mode, and `classify` defaults to initial. The benchmark's non-recheck cases pass no accounting, so they take the initial mode, which matches the owner's 'Rechecks only'. The test was turned round and parametrised for initial and final. The owner's decision is recorded in the Decisions made table. One remnant: row 18 of the discovered-issues table (:672) still says 'for every mode by the author's choice'. It is a done-history note, and the As built text at :579-583 states the reversal, so I raise no finding.",
+      "opened": [
+        "scripts/run_independent_review.py",
+        "tests/tools/test_run_independent_review.py",
+        "tests/tools/test_run_review_benchmark.py",
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+        "docs/history/implementation_log.md",
+        "scripts/run_review_benchmark.py",
+        "_review_inputs/change.diff"
+      ],
+      "quotes": [
+        {
+          "end_line": 848,
+          "file": "scripts/run_independent_review.py",
+          "line": 848,
+          "text": "    return _with_diff_lines(shown, copy_root) if mode == \"recheck\" else shown"
+        },
+        {
+          "end_line": 1630,
+          "file": "scripts/run_independent_review.py",
+          "line": 1630,
+          "text": "    return Accounting(items, must_read, quoted, \"recheck\")"
+        }
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "F2",
+      "note": "`invocation_from_entry` now calls `earlier_commits` over the entry's `round_reviewers`. That field is required on every start entry, since `_round_state` reads it. `main` passes every reviewer of the round, and `admit_round` already makes them equal to the round's reviewers. A new test rebuilds both rechecks of reviewers who reviewed different commits and asserts no mismatch.",
+      "opened": [
+        "scripts/run_independent_review.py",
+        "tests/tools/test_run_independent_review.py",
+        "_review_inputs/change.diff"
+      ],
+      "quotes": [
+        {
+          "end_line": 2223,
+          "file": "scripts/run_independent_review.py",
+          "line": 2223,
+          "text": "                                list(entry[\"round_reviewers\"]))"
+        },
+        {
+          "end_line": 2267,
+          "file": "scripts/run_independent_review.py",
+          "line": 2267,
+          "text": "                                    [r.label for r in spec.reviewers])"
+        }
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "F3",
+      "note": "The new test sends Read and Grep results whose content is a list of blocks: text blocks, an image block and a part that is no block. It also runs a content Grep outside the copy, and it asserts the exact lines shown. The implementation log says the test passed on the earlier code, by design.",
+      "opened": [
+        "tests/tools/test_run_independent_review.py",
+        "docs/history/implementation_log.md",
+        "_review_inputs/change.diff"
+      ],
+      "quotes": [
+        {
+          "end_line": 1928,
+          "file": "tests/tools/test_run_independent_review.py",
+          "line": 1928,
+          "text": "    shown = launcher.lines_shown(launcher.parse_stream(\"\\n\".join(lines)), root, \"initial\")"
+        }
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "F4",
+      "note": "The rejection holds. The old-side mapping for a deleted file is written into option (b), which the owner chose, and my finding was only a simpler alternative that needs the owner.",
+      "opened": [
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+      ],
+      "quotes": [
+        {
+          "end_line": 672,
+          "file": "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+          "line": 672,
+          "text": "| 18 | Decision concern, decided, done | Round 3 | The replay of 4.5's `mechanics` round 2 failed the new recheck on two causes. (1) M4's `fixed:` answer names seven files; the reviewer read three and saw the other four (`PB-2.patch`, `RC-1.patch`, `DC-1.patch` and `RM-6.patch` of `tests/review_benchmark/plants/`) only as their hunks in `change.diff` (lines 898 to 1015, within the lines 1 to 1099 it read), which under R3-1 holds exactly the fix; the rule that every file an answer names must be seen (kept from before R3-2, where it said \"read\") fails it. The original retry passed because its reviewer read all six patches. (2) L1's quote of `docs/slices/README.md:21` carries 2026-11-09, the date the author's answer gives for the decision file, where the file says 2026-11-08; the acceptance was right, the quote false, and the quote check failed it as R3-2 means it to, the first live case. So measurement 2's criterion is not met, and the stop rule says the results are reported, not tuned on this branch | Options: (a) keep R3-2 as built and close slice 4 by the stop rule, carrying (b) to the next slice's plan; (b) count the lines a recheck read in `change.diff` as seen lines of the files they belong to (each hunk's new-side line numbers; the old side for a deleted file), so a fix seen in the diff counts as seen, while a quote still names the file and its text must be at that place; then replay `mechanics` once more (about USD 1.7) and report whatever it shows (L1's misquote may fail it again); this changes R3-2's approved \"seen\" and the stop rule, so it is the owner's; (c) report a misquote instead of failing the attempt: not recommended, since a quote is the evidence an acceptance rests on. Recommendation: (b), because R3-1 made the diff the fix itself, so the diff is where a recheck looks, and each such look would otherwise cost a failed session; it changes a choice (what \"seen\" covers) and adds no mechanism. Decided by the owner on 2026-11-17: (b), the author's recommendation (\"I choose your recommendation\"); the `mechanics` replay runs once more after it is built. Done: (b) built (`04a0ae3` tests first, `753fc3e`, `5627de7`; section \"Round 3\", As built), for every mode by the author's choice; the `mechanics` replay ran once more and passed the new recheck (completed, approvable; 15 accepted, H1 re-raised), and on that attempt the earlier check still fails M4 while the new one does not (section \"Round 3\", measurement 2) |"
+        }
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "F5",
+      "note": "The rejection holds. `paths_not_read` is the S42-D2 diagnostic of Reads, and no check reads it. The benchmark's 'Unread files' counts depend on what the field means now. The finding was low.",
+      "opened": [
+        "scripts/run_independent_review.py",
+        "scripts/run_review_benchmark.py"
+      ],
+      "quotes": [
+        {
+          "end_line": 1989,
+          "file": "scripts/run_independent_review.py",
+          "line": 1989,
+          "text": "        outcome.stats[\"paths_not_read\"] = [path for path in ctx.inputs.review_paths if path not in read]  # S42-D2"
+        },
+        {
+          "end_line": 1396,
+          "file": "scripts/run_review_benchmark.py",
+          "line": 1396,
+          "text": "    c.unread_files += len(stats.get(\"paths_not_read\", []))"
+        }
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "F6",
+      "note": "`change_diff` now pins git's default format with flags and `-c` settings. The new test sets every conflicting configuration and asserts the same bytes and the same places, a non-ASCII name included. I cannot verify the claim that the 89 logged ranges give the same bytes, because the copy has no git metadata. The same-cause search missed `changed_lines` in review_inputs.py, raised as N1 (low).",
+      "opened": [
+        "scripts/run_independent_review.py",
+        "tests/tools/test_run_independent_review.py",
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+        "docs/history/implementation_log.md",
+        "scripts/review_inputs.py",
+        "_review_inputs/change.diff"
+      ],
+      "quotes": [
+        {
+          "end_line": 494,
+          "file": "scripts/run_independent_review.py",
+          "line": 494,
+          "text": "    return git(repo, \"diff\", \"--no-ext-diff\", \"--no-textconv\", \"--no-color\", \"--src-prefix=a/\", \"--dst-prefix=b/\","
+        }
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "EV1",
+      "note": "This commit has no CI run, because the branch is not pushed. The local gate runs in the implementation log are a diagnosis only. CI must still run on the PR. Disclosed, so no finding.",
+      "opened": [
+        "docs/history/implementation_log.md"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV2",
+      "note": "I reviewed the process-file change to run_independent_review.py in full through change.diff: the mode in Accounting, the `git` config parameter, `change_diff` flags, and `earlier_commits` over the round's reviewers. The evidence says every changed line and branch is run by the tooling tests. The only problem I found is N1, in a neighbouring file.",
+      "opened": [
+        "scripts/run_independent_review.py",
+        "_review_inputs/change.diff"
+      ],
+      "status": "explained"
+    }
+  ],
+  "findings": [
+    {
+      "evidence": "review_inputs.py:335 `for line in _git(repo, \"diff\", \"-U0\", merge_base, commit, \"--\", path).splitlines():`, then `HUNK.match(line)`. run_independent_review.py:494 now passes `--no-ext-diff --no-textconv --no-color --src-prefix=a/ --dst-prefix=b/` for `change_diff` only. The F6 answer's 'Searched' names `changed_files`, `final_records` and `process_file_evidence`, not `changed_lines`.",
+      "failure_scenario": "An author's git sets `diff.external` or `color.diff=always`. The hunk headers then do not match `HUNK`, so `changed_lines` returns an empty set. The evidence line 'Every changed line and branch run by the tooling tests' could then be vacuously true. This needs an unusual local git configuration, so it is low. The fix is to pass the same flags as `change_diff`, or to record it with issue 60.",
+      "file": "scripts/review_inputs.py",
+      "id": "N1",
+      "kind": "defect",
+      "line": 335,
+      "origin_stage": "implementation",
+      "problem": "F6's search for the same cause missed one place. `changed_lines` parses hunk headers from `git diff -U0 merge_base commit -- path` under the repository's own git configuration, with no `--no-ext-diff`, `--no-color` or `core.quotePath=false`. That is the cause F6 fixed in `change_diff`. The author's search listed only the three readers of git file lists (issue 60).",
+      "severity": "low"
+    }
+  ],
+  "verdict": "yes"
+}
+```
+
