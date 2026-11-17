@@ -54,6 +54,13 @@ is first); every heading carries its date.
 - Discovered issues 56 to 59 are on the decision page: H1 (high) and N1 (medium) still hold at HEAD in slice 4.5's
   runner and are open for the owner; N2 (high) no longer holds (both refusals are tested since `ea5697f`); the
   evidence difference is not investigated. Discovered issue 51 (G2-1) has its test.
+- The author's choice (one definition of "seen", so an initial review's empty-review rule also counts diff lines)
+  got its test after these records (`f75bc7a`): `test_an_initial_review_that_saw_its_only_path_under_review_only_as_a_hunk_of_the_change_diff_completes`
+  fails on the launcher of `3df47b7` with `tests/tools/test_run_independent_review.py:2113: AssertionError: the
+  review saw none of the paths under review`; its twin,
+  `test_an_initial_review_that_saw_neither_its_path_under_review_nor_a_hunk_line_of_it_in_the_change_diff_fails`,
+  passes on both, by design. Then, at `f75bc7a`: `make lint`, `make docs-check`, `make qa-trace`, `make test-lint`,
+  `make unit-guard-check` (357), `make qa-deploy` and `make tooling-test` (976 passed; shell 9 passed) passed.
 - Review: the unit `round-3` runs next, under the recheck as (b) changed it.
 
 ## 2026-11-17 Slice agentic-sdlc-poc 4: round 3, rechecks that look before they accept

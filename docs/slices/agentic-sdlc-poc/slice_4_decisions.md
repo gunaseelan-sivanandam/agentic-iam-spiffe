@@ -574,8 +574,8 @@ unchanged code. G2-1's test, `test_a_rejection_citing_a_file_the_change_deletes_
 author's choice, stated as such:** one definition of "seen" for every mode. `classify` takes the lines `lines_shown`
 gives for every mode, so an initial review's empty-review rule (a review that saw none of the paths under review
 fails; `_confinement_failure`) also counts diff lines, and an initial review that saw a path under review only as
-hunks of `change.diff` no longer fails it. The new tests run `lines_shown` alone and a recheck; none runs an initial
-review. The owner approved (b) for rechecks and may restrict it to them, which would take a flag through the launcher
+hunks of `change.diff` no longer fails it. Two tests pin it (`f75bc7a`): `test_an_initial_review_that_saw_its_only_path_under_review_only_as_a_hunk_of_the_change_diff_completes`
+(red on the launcher of `3df47b7`) and its twin, which fails a review that saw neither the path nor a hunk line of it. The owner approved (b) for rechecks and may restrict it to them, which would take a flag through the launcher
 and the benchmark runner.
 
 **The measurements' results.**
