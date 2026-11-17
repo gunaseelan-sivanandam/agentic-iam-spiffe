@@ -562,8 +562,55 @@ Why review did not catch it:
   requires, such as a test for new behaviour, and whether to run RC-3 and RC-2 under the shipped wording (decision
   concern 17); the process files leave out the benchmark runner, its key and the skills (decision concern 15); the
   plan list's question 8 still states the rule before R2-4 (growth proposal 14).
+- Round 3 of slice 4 (2026-11-17, approved by the owner): decision concern 15 is folded into R3-1 (`PROCESS_FILES`
+  adds the benchmark runner, its key and the skills), growth proposal 14 is built as R3-4, and decision concern 17's
+  carve-out as R3-3 (what an existing rule already requires of a fix is not an added mechanism). Run once each on
+  `recheck-A`, RC-2 accepted its fix that adds tests, citing the carve-out, and RC-3 was re-raised at high under the
+  shipped wording. Still open: a growth case other than RC-3, the initial cases under the wording, and decision
+  concern 16.
 
 ### Lesson
 Let a rule, not the reviewer's rating, decide what gets fixed; make a rejection rest on a fact the recheck must quote;
 and ask the growth question where the fix is written and judged. A rule that lives only in the rulebook is not yet a
 question anyone asks.
+
+## DPL-014: A blind-confirmation token was not tied to its result line
+
+- Status: Open until slice 4's final PR merges; fixed on the slice 4 branch (`a9ec037`) before the runs it would
+  have affected
+- Introduced: slice 4.5a's blinding (`1cf8734`, 2026-11-09), where `read_tokens` in `scripts/run_review_benchmark.py`
+  keyed a token by case, configuration and finding (the run was added later), never by the result line's prompt
+  identity
+- Found: 2026-11-17, by the author's lookup of the runner before round 3's RC-1 to RC-4 runs
+  ([decision page](slices/agentic-sdlc-poc/slice_4_decisions.md), discovered issue 44)
+
+### What happened
+- A case is run again as a new `run: 1` line when its prompt identity changes (S45-D2). Round 3 was about to run RC-1
+  to RC-4 again under a new recheck. RC-1's new line on `recheck-A` would re-raise R1-1 again, and its finding would
+  have found the earlier line's token (T016) under the same key, so it would have taken that token's verdict without a
+  blind confirmation of its own; `--export-rescore` would have skipped it as already held. The measurement could have
+  reported a detection no one had confirmed.
+- No result was affected: the defect was found and fixed before the runs, and the 2026-11-16 RC-3 reruns, whose
+  earlier line held a token only for another finding, were judged blind as M147 and M148.
+
+### Root causes
+Why it happened:
+- RC1: the token's key named the result by the fields that were unique when the blinding was built, one run per case
+  and configuration, and was not widened when runs under new prompt identities became possible.
+
+Why review did not catch it:
+- RC2: no test had a second line of a case and configuration under another prompt identity with the same finding ID,
+  and no committed results held one before round 3, so 4.5's reviews of the blinding had no case that showed it.
+
+### Actions
+- Corrective: `a9ec037` keys every token by the line's case, configuration, prompt identity, run and finding
+  (`token_key`); every row of the three committed key files already held its line's prompt identity. `--export-rescore`
+  keeps its own earlier rows with their tokens and gives new tokens, after the last, only to findings no export holds.
+  The stage-B report was byte-identical afterwards and `--rescore B` gave all 62 recorded scores.
+- Preventive: `test_a_new_line_under_another_prompt_takes_no_earlier_lines_token_and_its_findings_are_exported` and
+  `test_the_third_export_keeps_its_rows_and_tokens_and_adds_a_new_lines_findings_after_the_last`
+  (`tests/tools/test_run_review_benchmark.py`), each failing on the code before the fix.
+
+### Lesson
+A key that joins a verdict to a result must name everything that makes the result distinct, including what a later
+rerun changes.

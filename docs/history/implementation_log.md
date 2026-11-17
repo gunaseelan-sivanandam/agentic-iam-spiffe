@@ -5,6 +5,118 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-11-17 Slice agentic-sdlc-poc 4: round 3, rechecks that look before they accept
+
+- Branch `poc/slice-4-implementation`, 17 commits `292f270` to `fa7953f`, then these records: round 3, approved by the
+  owner on 2026-11-17 ("Round 3 of slice 4: I approve R3-1 to R3-4, the budget 85 → 95, and the probe and replays"),
+  in the owner's words on the [decision page](../slices/agentic-sdlc-poc/slice_4_decisions.md) (section "Round 3",
+  which holds the as-built paragraphs and the measurements' results).
+- The probe (`185f93f`, USD 0.49, CLI 2.1.326): one recheck on the launcher at `292f270` accepted a real fix and
+  re-raised a false rejection, quoting the cited test's request and assertion from a 70-line read of the harness at
+  the answer's `file:line`; it set R3-2's details (a) to (d).
+- R3-1 (`d586664`, `1ed4a2f`): a recheck's change, files under review, upstream items (the governing plan kept),
+  changed script lines and trace gaps come from the commits since the reviewed round's commit, while the copy holds
+  the whole branch; a reviewed round's commit that is not an ancestor is refused before any call; `PROCESS_FILES`
+  adds the benchmark runner, its answer key and `.claude/skills/` (decision concern 15); `AGENTS.md`, What the reviewer
+  receives.
+- R3-2 (`bba4840`, `f7928ae`, and `29061a7`, wording only): a file is seen at the lines a Read showed or a content
+  Grep printed; every file a `fixed:` answer names or a `rejected:` answer cites must be seen; every fix and rejection
+  a recheck accepts or re-raises is quoted from a named or cited file as it is in the copy (`change.diff` only for a
+  named file the range deletes), within two lines of a shown line; `opened` is no longer checked and `searched` left
+  the schema; `AGENTS.md`, Modes and prompts. The fake CLI (`tests/tools/fakes/fake_claude.py`) shows each Read's
+  window and takes a Grep's result.
+- R3-3 (`e4ebda4`, `9a57a88` wording only, `de44fdd`): what an existing rule already requires of a fix, such as a test
+  for new behaviour or a handoff record, is not an added mechanism, in the recheck's mechanism question, the shared
+  kind bullet and `AGENTS.md` (Fixes stay within the agreed decisions).
+- R3-4 (`06fa912`, `3df47b7`): the plan list's question 8 asks the fix rule since R2-4 (growth proposal 14), and a
+  false small-slice claim blocks at the plan review (decision 7, option (a)); 12 questions.
+- Measurement 3's runner (`a3f1835`, `07f024a`, `a9ec037`): the stage-B hard stop and the key's budget are 95 (key
+  version 7, naming version 6's hash); a confirmation token is keyed with its line's prompt identity, and
+  `--export-rescore` keeps its earlier rows and tokens (discovered issue 44,
+  [DPL-014](../delivery_problem_log.md#dpl-014-a-blind-confirmation-token-was-not-tied-to-its-result-line)). After
+  `a9ec037` the stage-B report was byte-identical, `--rescore B` gave all 62 recorded scores, and `--export-rescore`
+  on the committed results exported nothing.
+- Tests first, each new or changed test run on the unchanged code with the test changes (`python3 -m pytest -q
+  -p no:cacheprovider` or `-p no:randomly --tb=line`, by test ID), with its first failure line:
+  - R3-1 (base `292f270`, each test alone): `test_an_initial_review_gets_the_branch_and_a_recheck_only_the_commits_since_the_reviewed_round`
+    `assert 'the report d... was not read' == 'the review r... under review'`;
+    `test_a_recheck_whose_reviewed_round_commit_is_not_an_ancestor_is_refused_before_any_call` `assert 1 == 2`;
+    `test_a_recheck_whose_commits_since_the_reviewed_round_change_no_file_still_runs`
+    `assert '7ca6ecc9fc08...7d17da018b538' == 'e3b0c44298fc...5991b7852b855'` (the branch's diff, not the empty
+    range's); `test_recheck_that_does_not_account_for_every_answer_fails[nothing-under-review-read]` (changed)
+    `assert (1 == 1 and 'failed' == 'failed'` (another reason); `test_review_inputs.py`:
+    `test_process_file_evidence_lists_a_changed_skill_and_the_benchmark_runner_with_its_answer_key`
+    `assert [] == ['EV1: proces...t> <commit>)']`,
+    `test_a_recheck_takes_upstream_items_and_evidence_from_the_commits_since_the_reviewed_round`
+    `assert ('REQ-T-R1 (found' not in ...` (an item edited before round 1 still listed), and 3 of the 35 cases of
+    `test_process_files_are_the_rulebook_gates_ci_templates_checklists_and_the_launcher` (the runner, the key, a skill)
+    `assert False is True`; added at implementation,
+    `test_a_recheck_whose_reviewers_reviewed_different_commits_starts_at_their_common_ancestor`
+    `AttributeError: module 'run_independent_review' has no attribute 'recheck_inputs'`. Not red, by design:
+    `test_fixed_answer_naming_a_file_the_change_deletes_is_accepted_and_needs_the_diff_read` (changed: the deletion
+    moved into the fix commit, and it is in the merge-base diff too).
+  - R3-2 (base `1ed4a2f`; the launcher, record-check, inputs and benchmark tests: 25 failed, 536 passed):
+    `test_failed_read_of_the_only_path_under_review_does_not_count` `:639 assert ('failed' == 'failed'` (another
+    reason); `test_output_section_holds_the_reporting_bounds_and_the_credential_note_verbatim` `:837 AttributeError:
+    ... no attribute 'SEEN_RULE'`; `test_fixed_file_that_was_not_seen_fails_even_when_a_path_under_review_was` `:1097`
+    and `test_a_rejection_citing_a_root_level_file_must_see_it` `:1135` (the reason says "was not read", not "was not
+    seen"); `test_a_rejection_counts_only_when_the_files_it_cites_were_seen[cited-file-not-read]` `:1118 assert (1,
+    False) == (1, True)`; `test_an_opened_file_the_attempt_did_not_read_no_longer_fails` `:1151 ... X1 names an opened
+    file the attempt did not read`; `test_a_report_with_a_searched_field_is_refused_by_the_schema` (2 cases) `:1168
+    assert [] == ['accounted 0...m the schema']`; `test_the_schema_offers_the_question_field_as_optional_and_no_searched_field`
+    `:1175` (`searched` still in the schema); `test_every_fix_and_rejection_the_recheck_accepts_or_re_raises_is_quoted`
+    (3 cases) `:1519` (the old rejection-only message, or no failure for an unquoted fix);
+    `test_a_quote_comes_from_a_file_the_recheck_read_and_one_the_rejection_cites` (2 cases) `:1549` (the old
+    messages); `test_an_initial_review_gets_the_branch_and_a_recheck_only_the_commits_since_the_reviewed_round` `:1653`
+    and `test_review_inputs.py::test_review_that_opened_none_of_the_hint_files_fails_even_when_it_opened_other_listed_files`
+    `:192` ("read" where "saw" is expected); `test_the_lines_shown_come_from_read_windows_and_the_lines_a_content_grep_printed`
+    `:1819 AttributeError: ... no attribute 'lines_shown'`; `test_a_quote_counts_only_within_the_lines_the_attempt_was_shown[start-minus-3,
+    end-plus-3]` `:1841 assert (0 == 1)`; `test_a_file_seen_only_by_a_content_grep_counts_as_seen_and_one_only_listed_or_counted_does_not`
+    (4 cases) `:1870` and `:1872` (a content Grep not counted; "not read" for a listing or a count);
+    `test_a_review_that_saw_its_only_path_under_review_through_a_content_grep_completes` `:1879 the review read none of
+    the paths under review`; `test_a_fix_quoted_only_from_the_change_diff_fails_unless_the_range_deletes_the_named_file[in-the-copy]`
+    `:1910 assert (0 == 1)`; and, run apart with the launcher of `1ed4a2f`,
+    `test_run_review_benchmark.py::test_a_benchmark_recheck_that_accepts_a_rejection_or_a_fix_without_a_quote_fails`
+    `:1421` (the old rejection-only message). Not red, by design: the four cases within two lines of a shown line,
+    `[deleted-by-the-range]`, `[undetermined-fix-needs-no-quote]`, `[accepted-fix-quoted]`, and
+    `test_the_repository_records_released_with_searched_and_unquoted_fixes_still_pass_the_record_check`.
+  - R3-3 and R3-4 (base `29061a7`; the launcher and checklist tests: 5 failed, 276 passed):
+    `test_a_simpler_alternative_is_only_a_mechanism_the_owner_approved` (the kind bullet lacks the carve-out);
+    `test_what_an_existing_rule_requires_of_a_fix_is_not_an_added_mechanism` (the recheck's mechanism rule lacks it);
+    `test_the_fix_rule_in_agents_md_says_what_an_existing_rule_requires_is_not_an_added_mechanism` `:1786`;
+    `test_stage_checklists.py`: `test_the_plan_lists_question_8_asks_the_fix_rule_since_r2_4` (question 8's old text)
+    and `test_a_false_small_slice_claim_blocks_at_the_plan_review` `:147` (no such bullet). Not red, by design:
+    `test_each_review_asks_whether_the_change_or_a_fix_adds_a_mechanism` (changed only to allow the carve-out's "such
+    as").
+  - Measurement 3's runner (base `3df47b7`, `tests/tools/test_run_review_benchmark.py`):
+    `test_stage_b_stops_at_its_budget_counting_retries_and_the_canary` `:332 assert 85 == 95`;
+    `test_the_committed_keys_budget_is_the_stage_b_hard_stop_of_95` `:1550 assert 85 == 95`;
+    `test_repeats_table_reads_the_confirmed_verdicts_and_shows_a_failed_run` `:1016 AssertionError: assert ('RM
+    short+list: True, False' in ...)`; `test_a_new_line_under_another_prompt_takes_no_earlier_lines_token_and_its_findings_are_exported`
+    `:1639 assert ({'E1'} == set()` (the second line inherits T001's verdict);
+    `test_the_third_export_keeps_its_rows_and_tokens_and_adds_a_new_lines_findings_after_the_last`
+    `:1671 assert (set() == {'E1'}` (the re-export reshuffles, and the later row takes the first line's key). Not red,
+    by design: `test_the_third_export_holds_only_findings_no_earlier_export_holds_and_confirms_a_medium_match` (its
+    fixture only adds the prompt identity every committed key row carries).
+- Measurements: the replays (USD 3.07, CLI 2.1.323): `owner-decisions` and `growth` round 2 completed and accepted
+  every answer, `mechanics` round 2 failed the new recheck on two causes, so the criterion is not met (decision concern
+  18, open); RC-1 to RC-4 on `recheck-A` (`c818c15`, calls 83 to 86 of 95, USD 0.94, CLI 2.1.323): RC-1, RC-3 and RC-4
+  re-raised, RC-2 accepted, and a fresh session's blind verdicts (`fa7953f`) confirm M149, M150 and M152 and not M151,
+  so the criterion is met on confirmed verdicts.
+- Validation, local: `make tooling-test` on `fa7953f`, in a clean worktree, 963 passed, with the 2 deprecation
+  warnings of untouched tests (discovered issue 42), and 9 shell tests (with a scratch shellcheck). On these records:
+  `make qa-trace` passed (requirements 170, architecture 34, design 131, tests 386, coverage gaps 113; gap gate
+  against the merge-base of `origin/poc/agentic-sdlc`: 0 new), `make docs-check` (15 live documents), `make lint` (0
+  new or worsened findings), `make test-lint`, `make unit-guard-check` (357 passed) and `make qa-deploy` (18 known
+  violations, 22 warnings) passed. Not run: `make gate-consistency` (round 3 changed no CI job, Makefile target or
+  Quality gates row); the full E2E suite (`git diff --name-only 4cb7e9b fa7953f` lists `AGENTS.md`, the plan list, the launcher, the
+  inputs, the benchmark runner and its key, their tooling tests and fake, the decision page and the benchmark's
+  result files: no service, policy, compose, harness or CI file; CI's `e2e` job runs it on the PR), `make unit-trust`,
+  `make unit-mutation` and `make unit-diff-cov` (no `services/` change), and CI (the branch is not pushed).
+- Review: the unit `round-3` has not run; it waits for the owner's decision on decision concern 18. Discovered issues
+  44 to 55 are on the decision page; of the replays' new findings, the growth replay's G2-1 (medium) and part of the
+  mechanics replay's R2-1 (high) still hold at HEAD and are open.
+
 ## 2026-11-16 Slice agentic-sdlc-poc 4: the owner's decisions on decision concerns 11 and 13
 
 - Branch `poc/slice-4-implementation`, 5 commits `5941c56` to `03c02c0`, then their records; then the fixes to their
