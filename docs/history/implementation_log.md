@@ -61,7 +61,26 @@ is first); every heading carries its date.
   `test_an_initial_review_that_saw_neither_its_path_under_review_nor_a_hunk_line_of_it_in_the_change_diff_fails`,
   passes on both, by design. Then, at `f75bc7a`: `make lint`, `make docs-check`, `make qa-trace`, `make test-lint`,
   `make unit-guard-check` (357), `make qa-deploy` and `make tooling-test` (976 passed; shell 9 passed) passed.
-- Review: the unit `round-3` runs next, under the recheck as (b) changed it.
+- Review: the unit `round-3`, round 1 (`round-3/c1/r1/A/1`, Opus at high, CLI 2.1.326, USD 2.54, reviewed commit
+  `af9ba98`): approvable, 3 medium and 3 low (`15c6667`). Fixed: F1, by the owner's decision ("Rechecks only"): diff
+  lines count as seen only in a recheck (`c105c9d`); F2, a recheck's rebuild and a retry in the same round take the range
+  from every reviewer of the round, as the launcher does (`1d728fd`); F3, a test of tool results given as a list of
+  blocks and of a content Grep outside the copy (`06857a7`); F6, `change_diff` runs `git diff` in git's default format
+  whatever the repository configures (`8ec83b6`; the 89 logged ranges give the same bytes). F4 and F5 (low) rejected.
+  Each new test's first failure on the code before it: F1's
+  `test_an_initial_or_final_review_that_saw_its_only_path_under_review_only_as_a_hunk_of_the_change_diff_fails`
+  `[initial]` and `[final]` `AssertionError: assert 0 == 1`, and the benchmark's
+  `test_recheck_prompt_holds_the_earlier_report_and_the_false_fix` `AttributeError: 'Accounting' object has no attribute
+  'mode'` (on `8ec83b6`); F2's
+  `test_a_recheck_of_reviewers_who_reviewed_different_commits_is_rebuilt_from_its_entry_with_no_mismatch` `At index 1
+  diff: ['paths_sha256', 'diff_sha256', 'full_prompt_sha256'] != []`; F6's
+  `test_change_diff_has_git_default_format_whatever_the_repository_configures` `AssertionError: assert '' ==
+  'diff --git a...\n+première\n'` (both on `15c6667`); F3's
+  `test_a_tool_result_given_as_a_list_of_blocks_shows_the_lines_of_its_text_blocks` passed on `15c6667`, by design
+  (the branches were untested, not wrong). Gates at `c105c9d`: `make lint` and `make qa-trace` passed; `make
+  docs-check` and `make tooling-test` (979 passed, 1 failed; shell 9 passed) failed only on the round's missing answers,
+  which these records and the answers end. Discovered issue 60 (git file lists without `core.quotePath=false`) came from
+  F6's search for the same cause.
 
 ## 2026-11-17 Slice agentic-sdlc-poc 4: round 3, rechecks that look before they accept
 
