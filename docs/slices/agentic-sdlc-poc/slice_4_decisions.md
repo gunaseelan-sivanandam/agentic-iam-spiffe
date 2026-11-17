@@ -305,6 +305,7 @@ mechanics and defects not found, not ratings.
 | 2026-11-16 | Decision concern 13: option B, the wording change (a step added or repeated and a second copy of a fact kept current are mechanisms; a fix that adds one is re-raised at its severity, not reported as a simpler alternative; a simpler alternative is a mechanism the owner approved), then RC-3 run once on each recheck wording (2 calls). Decision concern 11: the stage-B budget of 85 confirmed, so the hard stop goes from 80 to 85 | "okay go ahead and also increase the review counts to 85", in reply to the author's explanation of decision concern 13, which recommended option B |
 | 2026-11-17 | Round 3 (the section below): R3-1 to R3-4; the stage-B budget from 85 to 95; the probe and the three replays. Round 3 runs inside slice 4, not in the next slice | "Round 3 of slice 4: I approve R3-1 to R3-4, the budget 85 → 95, and the probe and replays"; earlier the same day, on the author's plan to close slice 4 first: "Why wait till next slice, this slice 4 is to fix the review checklist, prompts and make sure the review part is reliably covered I still feel like we are missing that" |
 | 2026-11-17 | Decision concern 18, option (b): lines a recheck read in `change.diff` count as seen lines of the files they belong to (each hunk's line numbers); a quote still names the file, and its text must be at that place; then the `mechanics` replay runs once more and is reported whatever it shows. This changes R3-2's "seen" and the round's stop rule for this one change | "Count diff lines (Recommended)", the option the owner chose when asked; then, in a message: "I choose your recommendation" |
+| 2026-11-17 | The review unit `round-3`, round 1, finding F1: decision concern 18 (b) counts diff lines as seen in rechecks only, as approved; the author's choice to apply it to every mode is reversed, so an initial or final review that saw its paths only as hunks of `change.diff` fails the empty-review rule again | "Rechecks only", the option the owner chose when asked |
 
 ## Round 2: the owner's findings and the fixes (2026-11-14)
 
@@ -575,8 +576,8 @@ author's choice, stated as such:** one definition of "seen" for every mode. `cla
 gives for every mode, so an initial review's empty-review rule (a review that saw none of the paths under review
 fails; `_confinement_failure`) also counts diff lines, and an initial review that saw a path under review only as
 hunks of `change.diff` no longer fails it. Two tests pin it (`f75bc7a`): `test_an_initial_review_that_saw_its_only_path_under_review_only_as_a_hunk_of_the_change_diff_completes`
-(red on the launcher of `3df47b7`) and its twin, which fails a review that saw neither the path nor a hunk line of it. The owner approved (b) for rechecks and may restrict it to them, which would take a flag through the launcher
-and the benchmark runner.
+(red on the launcher of `3df47b7`) and its twin, which fails a review that saw neither the path nor a hunk line of it. The owner approved (b) for rechecks and, asked after the `round-3` review's F1, restricted it to them
+("Rechecks only", 2026-11-17); the change follows as F1's fix.
 
 **The measurements' results.**
 1. The probe: "The probe's result" above.
