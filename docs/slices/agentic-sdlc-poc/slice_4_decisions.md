@@ -7,7 +7,7 @@ file current during the run and says in it what was decided on the owner's behal
 checklists, the benchmark counts, every decision concern, every parked unit, every process-growth proposal and
 every discovered issue with its disposition.
 
-Last updated: 2026-11-17: decision concern 18 decided by the owner as option (b) and built (`04a0ae3` to `5627de7`): the lines of `change.diff` a review was shown count as seen lines of their files; then the `mechanics` replay ran once more and passed the new recheck (completed, approvable, H1 re-raised), with its findings as discovered issues 56 to 59 (section "Round 3" below). The review unit `round-3` runs next. Earlier the same day: round 3 built and measured (`292f270` to `fa7953f`): R3-1 to R3-4, the stage-B budget of 95 and a confirmation token kept to its result line; the probe; the three replays, whose criterion was not met (the `mechanics` replay failed the new recheck: decision concern 18); and RC-1 to RC-4 on `recheck-A` (calls 83 to 86 of 95), whose criterion is met on confirmed verdicts; before that, the owner approved round 3. Before, on 2026-11-16: the owner's decisions on decision concerns 11 and 13 decided and implemented (`5941c56` to `03c02c0`): the mechanism wording of option B in the launcher and `AGENTS.md`, RC-3 run again on both recheck wordings (both re-raised its fix, calls 81 and 82), and the stage-B hard stop at the confirmed 85. Their review unit `owner-decisions-2` ran round 1 (approvable: 4 medium, 2 low), whose findings are answered (`10f2977` to `f22bb89`, and the records): an unapproved mechanism is a defect of at least medium; the mechanism definition loses its example "again after every push", so RC-3's two runs were of a wording no longer shipped; the leak search reads the whole prompt; decision concern 17 goes to the owner. Its recheck, round 2, was approvable with no new finding, so the review ended; the brief is rebuilt under "Review outcome". Before, on 2026-11-14: round 2 implemented (R2-1 to R2-10, `8a82388` to `c79ed96`); its review unit `round-2` ran round 1, whose findings are answered (`6d8de53` to `03ffc55`), and its recheck, round 2, was approvable, so the review ended; the brief is rebuilt under "Review outcome". Before, on 2026-11-13: the owner's decisions on decision concerns 2, 3, 4, 7, 8 and 10 implemented (small slices, the decision page, the second recheck case, the severity measurement, worse, nothing adopted) and reviewed (unit `owner-decisions`, ended after round 2), with decision 7, decision concern 11 and growth proposal 12 for the owner. Before that: every sub-issue implemented and reviewed, the benchmark run and its report reviewed, the dry slice and the final review run (2026-11-10).
+Last updated: 2026-11-17: the review unit `round-3` ended after round 2. Round 1 was approvable (3 medium, 3 low; F1, F2, F3 and F6 fixed, F1 by the owner's decision "Rechecks only", F4 and F5 rejected); its recheck, round 2, was approvable, accepted all six answers with quotes and raised one new low, N1, fixed (`9e6b3e1`). So round 3 is built, measured and reviewed, its measurement 4 is met, and the brief is rebuilt under "Review outcome"; what remains is the owner's: the decisions under "Decisions to make", decision concern 16, growth proposal 12 and the discovered issues open for the owner. Earlier the same day: decision concern 18 decided by the owner as option (b) and built (`04a0ae3` to `5627de7`): the lines of `change.diff` a review was shown count as seen lines of their files; then the `mechanics` replay ran once more and passed the new recheck (completed, approvable, H1 re-raised), with its findings as discovered issues 56 to 59 (section "Round 3" below). Before that the same day: round 3 built and measured (`292f270` to `fa7953f`): R3-1 to R3-4, the stage-B budget of 95 and a confirmation token kept to its result line; the probe; the three replays, whose criterion was not met (the `mechanics` replay failed the new recheck: decision concern 18); and RC-1 to RC-4 on `recheck-A` (calls 83 to 86 of 95), whose criterion is met on confirmed verdicts; before that, the owner approved round 3. Before, on 2026-11-16: the owner's decisions on decision concerns 11 and 13 decided and implemented (`5941c56` to `03c02c0`): the mechanism wording of option B in the launcher and `AGENTS.md`, RC-3 run again on both recheck wordings (both re-raised its fix, calls 81 and 82), and the stage-B hard stop at the confirmed 85. Their review unit `owner-decisions-2` ran round 1 (approvable: 4 medium, 2 low), whose findings are answered (`10f2977` to `f22bb89`, and the records): an unapproved mechanism is a defect of at least medium; the mechanism definition loses its example "again after every push", so RC-3's two runs were of a wording no longer shipped; the leak search reads the whole prompt; decision concern 17 goes to the owner. Its recheck, round 2, was approvable with no new finding, so the review ended; the brief is rebuilt under "Review outcome". Before, on 2026-11-14: round 2 implemented (R2-1 to R2-10, `8a82388` to `c79ed96`); its review unit `round-2` ran round 1, whose findings are answered (`6d8de53` to `03ffc55`), and its recheck, round 2, was approvable, so the review ended; the brief is rebuilt under "Review outcome". Before, on 2026-11-13: the owner's decisions on decision concerns 2, 3, 4, 7, 8 and 10 implemented (small slices, the decision page, the second recheck case, the severity measurement, worse, nothing adopted) and reviewed (unit `owner-decisions`, ended after round 2), with decision 7, decision concern 11 and growth proposal 12 for the owner. Before that: every sub-issue implemented and reviewed, the benchmark run and its report reviewed, the dry slice and the final review run (2026-11-10).
 
 ## Goal (the owner's, 2026-11-09)
 
@@ -97,7 +97,7 @@ Parked units, decision concerns and growth proposals collect below as the run go
 | The owner's decisions (2026-11-13) | Implemented (`44a040c` to `ea4e100`): small slices, the decision page, RC-2, the budget, the severity measurement; then the fixes to their review (record `review_owner_decisions.md`) | Ended after round 2. Round 1: attempt 1 failed the read check (issue 21); attempt 2 not approvable: 1 blocking, 2 high, 5 medium, one of them a decision concern; fixed, or put to the owner (decision 7, decision concern 11). Round 2: attempt 1 failed the read check (issue 22); attempt 2 approvable, all 8 answers accepted, no new finding |
 | Round 2 (2026-11-14) | Implemented (`8a82388` to `c79ed96`): R2-1 to R2-10, as built in the section "Round 2" below; the fixes to its review's round 1 (`6d8de53` to `cdfce97`) | Review: unit `round-2`. Round 1: attempt 1 failed the read check (issue 36); attempt 2 not approvable: 0 blocking, 2 high, 2 medium, 3 low; 5 fixed, F4 to the owner (decision concern 16), F6 rejected. Round 2, the recheck (`round-2/c1/r2/A/1`, medium effort): approvable; all 7 answers accepted, F6's rejection with three quotes checked in the copy (R2-7's first live use); 1 new low (F8), fixed. Ended after round 2 |
 | The owner's decisions (2026-11-16) | Implemented (`5941c56` to `03c02c0`): decision concern 13's mechanism wording in the launcher's output section and `AGENTS.md` (option B), RC-3 run again on both recheck wordings, and decision concern 11's hard stop of 85, as the rows of decision concerns 11 and 13 below say; the fixes to its review's round 1 (`10f2977` to `f22bb89`) | Review: unit `owner-decisions-2`. Round 1 (`owner-decisions-2/c1/r1/A/1`, high effort): approvable; 0 blocking, 0 high, 4 medium, 2 low; F1 to F3 fixed, F4 to the owner (decision concern 17), F5 and F6 rejected. Round 2 (`owner-decisions-2/c1/r2/A/1`, medium): approvable; all 6 answers accepted, F5's and F6's rejections with quotes the launcher checked in the copy; no new finding. Ended after round 2 |
-| Round 3 (2026-11-17) | Implemented (`d586664` to `3df47b7`, then `a3f1835` to `a9ec037` for measurement 3): R3-1 to R3-4, the stage-B budget of 95 and a confirmation token kept to its result line, as built in the section "Round 3" below; measured by the probe, the three replays (criterion not met: decision concern 18) and RC-1 to RC-4 on `recheck-A` (criterion met on confirmed verdicts); then decision concern 18, option (b) (`04a0ae3` to `5627de7`), and the `mechanics` replay once more, which passed | Review: unit `round-3`, not yet run; it runs next |
+| Round 3 (2026-11-17) | Implemented (`d586664` to `3df47b7`, then `a3f1835` to `a9ec037` for measurement 3): R3-1 to R3-4, the stage-B budget of 95 and a confirmation token kept to its result line, as built in the section "Round 3" below; measured by the probe, the three replays (criterion not met: decision concern 18) and RC-1 to RC-4 on `recheck-A` (criterion met on confirmed verdicts); then decision concern 18, option (b) (`04a0ae3` to `5627de7`), and the `mechanics` replay once more, which passed; the fixes to its review (`a6943e6` to `35dbead`, and `9e6b3e1`) | Review: unit `round-3` ([record](review_round_3.md)). Round 1 (`round-3/c1/r1/A/1`, high effort, USD 2.54): approvable; 0 blocking, 0 high, 3 medium, 3 low; F1, F2, F3 and F6 fixed (F1 by the owner's decision "Rechecks only"), F4 and F5 rejected. Round 2, the recheck (`round-3/c1/r2/A/1`, medium effort, USD 0.66; range `af9ba98` to `35dbead`, 5 files under review): approvable; all 6 answers accepted with quotes; 1 new low (N1), fixed. Ended after round 2 |
 
 ## Decisions and their proof
 
@@ -628,7 +628,18 @@ empty-review rule again.
    run each gives no rate; and RC-1 quoted the harness (`scripts/rogue_node_tests.sh:1935`) while its `paths_read`
    lists only `change.diff` and `docs/test_spec.md`. Its third tool call was not a successful Read, so by the check a
    content Grep showed line 1935; the runner keeps no stream, so this is not verified (discovered issue 45).
-4. The review unit `round-3` runs next, under the recheck as decision concern 18 (b) changed it; it has not run yet.
+4. The review unit `round-3` ([record](review_round_3.md)), under the recheck as decision concern 18 (b) changed it.
+   Round 1 (`round-3/c1/r1/A/1`, Opus at high, CLI 2.1.326, USD 2.54, reviewed commit `af9ba98`): approvable; 0
+   blocking, 0 high, 3 medium, 3 low. F1, F2, F3 and F6 were fixed, F1 by the owner's decision "Rechecks only" (lines
+   of `change.diff` count as seen lines only in a recheck, `c105c9d`); F4 and F5 (low) were rejected. Round 2, the
+   recheck (`round-3/c1/r2/A/1`, Opus at medium, CLI 2.1.326, USD 0.66), reviewed the range `af9ba98` to `35dbead`: 5
+   files under review, the unit's own record and attempt log apart. It was approvable, accepted all six answers with
+   quotes (none re-raised, none undetermined; F4's and F5's rejections among them) and raised one new low, N1
+   (`changed_lines` read `git diff -U0` under the repository's own git configuration), fixed in `9e6b3e1`. It was the
+   first live recheck under round 3's whole recheck: the range since the reviewed round (R3-1), seen lines and quotes
+   (R3-2), and the lines of `change.diff` seen in rechecks only (decision concern 18 (b), as F1's fix restricted it).
+   **Criterion met**: the criterion as fixed, "an initial review and its recheck, under the new recheck", holds. With
+   no blocking, high or medium finding open, the review ended after round 2. One review and one recheck give no rate.
 
 **Stop rule.** The results are reported, not tuned on this branch. When `round-3`'s review ends, slice 4 closes.
 
@@ -772,7 +783,7 @@ ran every check it could without Docker. What the next user would trip on, with 
 
 ### Decision brief
 
-Built by `scripts/review_brief.py` from the review units this PR adds (head `d53ae3f62f04`, merge-base `3347754ef038`). The plans and records are worth reading where this brief points.
+Built by `scripts/review_brief.py` from the review units this PR adds (head `faa6df4fbe5f`, merge-base `3347754ef038`). The plans and records are worth reading where this brief points.
 
 | Unit | Last verdict | Rounds | Blocking | High | Medium | Low | Open |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -781,6 +792,7 @@ Built by `scripts/review_brief.py` from the review units this PR adds (head `d53
 | `agentic-sdlc-poc` `owner-decisions` | yes | 2 | 1 | 2 | 5 | 0 | 2 for the owner |
 | `agentic-sdlc-poc` `round-2` | yes | 2 | 0 | 2 | 2 | 4 | 1 for the owner |
 | `agentic-sdlc-poc` `owner-decisions-2` | yes | 2 | 0 | 0 | 4 | 2 | 1 for the owner |
+| `agentic-sdlc-poc` `round-3` | yes | 2 | 0 | 0 | 3 | 4 | nothing open |
 | `poc-4-1-review-prompts` `implementation` | yes | 2 | 0 | 2 | 6 | 5 | 1 for the owner |
 | `poc-4-2-review-inputs` `implementation` | yes | 2 | 0 | 3 | 4 | 4 | nothing open |
 | `poc-4-3-review-records` `implementation` | yes | 2 | 2 | 1 | 3 | 4 | 1 for the owner |
@@ -820,13 +832,13 @@ None.
 
 **Where findings started** (origin stage of each finding, against the review that found it: its `--stage` lists, or its unit when it had none)
 
-| Origin | critique | final | growth | implementation | mechanics | owner-decisions | owner-decisions-2 | report | round-2 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| architecture and interfaces | 0 | 0 | 0 | 3 | 2 | 1 | 0 | 0 | 0 |
-| discovery | 5 | 0 | 0 | 8 | 0 | 0 | 0 | 0 | 0 |
-| implementation | 14 | 9 | 7 | 32 | 14 | 6 | 5 | 9 | 8 |
-| requirements | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |
-| tests first | 3 | 1 | 1 | 10 | 4 | 1 | 0 | 1 | 0 |
+| Origin | critique | final | growth | implementation | mechanics | owner-decisions | owner-decisions-2 | report | round-2 | round-3 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| architecture and interfaces | 0 | 0 | 0 | 3 | 2 | 1 | 0 | 0 | 0 | 0 |
+| discovery | 5 | 0 | 0 | 8 | 0 | 0 | 0 | 0 | 0 | 0 |
+| implementation | 14 | 9 | 7 | 32 | 14 | 6 | 5 | 9 | 8 | 6 |
+| requirements | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 |
+| tests first | 3 | 1 | 1 | 10 | 4 | 1 | 0 | 1 | 0 | 1 |
 
 **The test-plan questions.** Slice 4's implementation reviews ran before the rule that they answer the three
 test-plan questions as findings (2026-11-13), so no finding is mapped to a question here; every finding is in its
@@ -835,8 +847,11 @@ Round 2's unit `round-2` reviewed against the round's table on this page, which 
 questions' content: question 1 (a wrong failure that would still pass a new or changed test): F1, a negative
 control that planted nothing, and F3, a quote check a recheck could pass without reading what it quotes; question 2
 (a key, socket or secret reaching a non-holder): no finding; question 3 (purpose comments and names): no finding.
+Round 3's unit `round-3` reviewed against the section "Round 3" on this page, which has no test plan either; by the
+questions' content: question 1: F3, a tool result given as a list of blocks, which no test sent, so a wrong branch
+there would still have passed every test; question 2: no finding; question 3: no finding.
 
-Round 2's review unit `round-2` ended after round 2, and so did the unit `owner-decisions-2` for the owner's decisions of 2026-11-16; the brief above was rebuilt after it (head `d53ae3f`).
+Round 2's review unit `round-2` ended after round 2, and so did the unit `owner-decisions-2` for the owner's decisions of 2026-11-16 and the unit `round-3` for round 3; the brief above was rebuilt after the last of them (head `faa6df4`).
 
 ## How the owner can check the work
 

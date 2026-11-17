@@ -90,6 +90,15 @@ is first); every heading carries its date.
   set() == {2, 5, 6, 7}`. Gates at `9e6b3e1`: `make lint` and `make qa-trace` passed, `make tooling-test` 980 passed and
   the one test that runs the record check failed only on the round's missing answers, as `make docs-check` did, until
   these answers. With no blocking, high or medium finding open, the review ended after round 2.
+- Handoff of round 3 (docs only): the decision page's measurement 4 states the result (criterion met), its Progress row
+  and "Last updated" line say the review ended, and the brief is rebuilt under "Review outcome" with
+  `python3 scripts/review_brief.py --base origin/poc/agentic-sdlc` (head `faa6df4`; unit `round-3`: yes, 2 rounds, 0
+  blocking, 0 high, 3 medium, 4 low, nothing open); `docs/STATUS.md` and the slice index list what remains for the
+  owner. Gates on the handoff tree: `make docs-check`, `make qa-trace` (0 new gaps, 113 coverage gaps remain), `make
+  lint` (0 new or worsened), `make test-lint`, `make unit-guard-check` (357), `make qa-deploy` (18 known violations, 22
+  warnings) and `make tooling-test` (981 passed, with a scratch shellcheck; shell 9 passed) passed. Not run: the E2E
+  suite and gate-consistency (no service, policy, compose, harness or CI file changed), and CI (the branch is not
+  pushed).
 
 ## 2026-11-17 Slice agentic-sdlc-poc 4: round 3, rechecks that look before they accept
 
