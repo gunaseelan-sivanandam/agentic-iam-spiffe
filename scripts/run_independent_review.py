@@ -125,9 +125,12 @@ CREDENTIAL_NOTE = ("Write `<token>` for any credential value, even a made-up exa
               "withholds a report that holds one.")
 ABSENCE_RULE = "A finding about something missing states \"X has no Y; searched A, B, C\"."
 # R3-2 (the owner, 2026-11-17): what a recheck must have seen, as the launcher checks it; `opened` is the reviewer's note.
+# Decision concern 18 (b) (the owner, 2026-11-17): the lines of the change's diff it was shown count too.
 SEEN_RULE = ("`opened` lists the files you opened for that item, as your note. The launcher fails a recheck that did not "
              "see every file a `fixed:` answer names or a `rejected:` answer cites: a file is seen at the lines a Read "
-             "showed or a Grep printed in content mode, and a Grep that lists files or counts shows none.")
+             "showed or a Grep printed in content mode, and at the lines of `_review_inputs/change.diff` you were "
+             "shown, each at its place in the file (a removed line only for a file the change deletes); a Grep that "
+             "lists files or counts shows none.")
 QUESTION_RULE = ("When a question of the stage checklist prompted a finding, name it in `question` as the list's name "
                  "and the question's number, for example `code:10`; leave `question` out otherwise.")
 GATE_RULE = "do not report what a passing gate already checks; do report defects in the gates themselves"
