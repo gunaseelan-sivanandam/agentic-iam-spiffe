@@ -561,10 +561,30 @@ counted every such run as a further first run (discovered issue 39): `recheck-B`
 RC-2 failed once, both RC-3 runs per wording in the recheck lines, and a rating agreement of 3 the same and 4
 different under R2-9. The rows of the earlier runs, which the runner over today's results no longer gives, are in the
 counts above. The per-review rows below still list every run, the replaced ones too; read round 3's by their prompt
-identities: RC-1 `12670029`, RC-2 `b1a96364`, RC-3 `f9a54a8f`, RC-4 `083c54f6`, the last four rows.
+identities: RC-1 `12670029`, RC-2 `b1a96364`, RC-3 `f9a54a8f`, RC-4 `083c54f6`, the four rows before round 4's
+nineteen.
+
+Built again in round 4 of slice 4 (R4-4, 2026-11-17) after the 19 runs of round 4's mandates (`660f57b`; 105 of the
+120 calls now used, USD 13.58, the pinned CLI 2.1.323): `open-R4+list`, R4-1's initial wording with the stage lists,
+on the 15 initial cases, and `recheck-R4`, its recheck wording, on RC-1 to RC-4. Their 85 findings to judge were
+exported blind as M153 to M237 (`78116f7`); two fresh sessions, each given a folder holding only half of the export
+and the committed match rule and asked only to apply the rule to each line, opened nothing else and found 20 matches,
+appended to `rescore_confirmation.jsonl`, so no line is left not yet confirmed. Under R2-9, `open-R4+list` detects 10
+of 11 against `open+list`'s 8, with 8 false alarms in 4 no-defect reviews (CL-1 3, CL-2 4, CL-3 0, DC-1 1) against 7
+(3, 3, 0, 1), and 1 failed review each (FS-1, withheld by the publication check). Under blocking or high only, the
+rule of the earlier runs, for which the report has no `open-R4+list` row, computed from the confirmed matches and their
+findings' severities: 9 of 11 against 7, and 2 false alarms against 2 (one high each on CL-1 and CL-2). `recheck-R4`
+re-raised RC-1, RC-3 and RC-4, each confirmed (M178, M191, M219), and passed RC-2. Unread files (72 against 42) count,
+over a setup's completed first runs, the files under review the reviewer never read; RM-5 gives 43 against 29.
+Decision concern 19's confound applies to both comparisons: every `open+list` line ran under CLI 2.1.321, key version
+2 and the prompt sections of that time. The sessions marked some verdicts unsure: M166, M168 and M235 (RM-6) match
+only through the absence clause, their lines outside the ranges; M219 (RC-4) matched though the recheck clause is not
+visible in the export; M229 (RM-2) and M154 (PB-3) meet the rule beside other matches of the same review; and M187,
+RM-3's RV-3 (blocking), meets it by "no test" while arguing a contradiction, not missing proof, so under blocking or
+high RM-3's detection rests on RV-3 alone (under R2-9 also on RV-6, medium).
 
 ````markdown
-Stage B. Answer key SHA-256: `0ee2ad1414c00d49f6aef68f69df749ce2f653b232edbc76ad2126192035721a`; match rule SHA-256: `422d32c2be493a13c8a715f815763d95f3a76d6285daabe959af4dbdebb465fb`; lists at `04f8df4`.
+Stage B. Answer key SHA-256: `3e12e84226b3fcdc997ad0a9a35477e78a2dbb4d4a67c892225cb712a3b85392`; match rule SHA-256: `422d32c2be493a13c8a715f815763d95f3a76d6285daabe959af4dbdebb465fb`; lists at `04f8df4`.
 
 Detections are confirmed by the author's blinded verdicts, and the findings that no earlier export held by a fresh session's blinded verdicts on the third export.
 
@@ -598,8 +618,10 @@ Under the key's rule (R2-9: blocking, high or medium), every review, those recor
 | open+list | 8 of 11 | 0.39–0.94 | 5 | 7 (4) | 7 | 1 | 42 | 0 | 1.53 | 4.6 |
 | open+list+sev | 9 of 11 | 0.48–0.98 | 6 | 7 (4) | 6 | 0 | 20 | 0 | 1.45 | 4.6 |
 | open-B+list | 8 of 11 | 0.39–0.94 | 5 | 6 (2) | 7 | 1 | 50 | 0 | 1.52 | 4.4 |
+| open-R4+list | 10 of 11 | 0.59–1.00 | 7 | 8 (4) | 7 | 1 | 72 | 0 | 1.26 | 3.8 |
 | recheck-A | 3 of 3 | 0.29–1.00 | 2 | 0 (1) | 0 | 0 | 2 | 0 | 0.31 | 0.6 |
 | recheck-B | 3 of 3 | 0.29–1.00 | 2 | 0 (1) | 0 | 0 | 1 | 0 | 0.33 | 0.5 |
+| recheck-R4 | 3 of 3 | 0.29–1.00 | 1 | 0 (1) | 0 | 0 | 1 | 0 | 0.34 | 0.7 |
 | short+list | 9 of 11 | 0.48–0.98 | 6 | 4 (4) | 6 | 1 | 42 | 0 | 1.27 | 3.7 |
 
 Discordant cases, short+list against open+list: `{"only short+list": ["FS-1", "RM-4"], "only open+list": ["RM-6"]}`
@@ -614,11 +636,11 @@ Decision concern 8's measurement, open+list+sev against open+list, by the second
 | open+list | 8 of 11 | FS-2, PB-1, PB-2, PB-3, RM-1, RM-2, RM-3, RM-6 | 5 | CL-1 3, CL-2 3, CL-3 0, DC-1 1 | 7 | 1 | 12.22 | 36.4 |
 | open+list+sev | 9 of 11 | FS-1, FS-2, PB-1, PB-2, PB-3, RM-1, RM-2, RM-3, RM-4 | 6 | CL-1 4, CL-2 3, CL-3 0, DC-1 0 | 6 | 0 | 13.03 | 41.8 |
 
-Origin stage of the findings against the list of the review that found them: `{"architecture and interfaces": {"architecture-and-interfaces": 16, "code": 16, "e2e-tests": 1, "requirements": 3}, "discovery": {"architecture-and-interfaces": 1, "code": 1, "plan-and-test-plan": 19}, "implementation": {"code": 124, "e2e-tests": 34, "plan-and-test-plan": 27, "requirements": 20}, "requirements": {"code": 2, "e2e-tests": 1, "plan-and-test-plan": 14, "requirements": 36}, "tests first": {"code": 39, "e2e-tests": 34, "plan-and-test-plan": 31, "requirements": 1}, "unknown": {"architecture-and-interfaces": 1, "code": 2, "e2e-tests": 1}}`
+Origin stage of the findings against the list of the review that found them: `{"architecture and interfaces": {"architecture-and-interfaces": 19, "code": 18, "e2e-tests": 2, "requirements": 3}, "discovery": {"architecture-and-interfaces": 1, "code": 1, "plan-and-test-plan": 24}, "implementation": {"code": 167, "e2e-tests": 41, "plan-and-test-plan": 33, "requirements": 27}, "requirements": {"code": 3, "e2e-tests": 1, "plan-and-test-plan": 18, "requirements": 44}, "tests first": {"code": 48, "e2e-tests": 45, "plan-and-test-plan": 37, "requirements": 2}, "unknown": {"architecture-and-interfaces": 1, "code": 2, "e2e-tests": 1}}`
 Canary: `[{"cli_version": "2.1.321 (Claude Code)", "valid": false, "passed": true, "twin_ran_hook": true}, {"cli_version": "2.1.321 (Claude Code)", "valid": false, "passed": true, "twin_ran_hook": true}, {"cli_version": "2.1.321 (Claude Code)", "valid": true, "passed": true, "twin_ran_hook": true}, {"cli_version": "2.1.323 (Claude Code)", "valid": true, "passed": true, "twin_ran_hook": true}]`. A canary is valid when its twin, without the launcher's flags, followed the planted CLAUDE.md and ran the planted hook (S45-D9); one whose twin ran only the hook shows that the flags keep settings out, not that they keep instruction files out.
-Rechecks of false answers (detected when the recheck lists the earlier finding as re-raised and reports it again under its ID, by the confirmed verdicts; a review that did not complete is a miss): RC-1 recheck-B: detected (R1-1 re-raised); RC-4 recheck-B: detected (R1-1 re-raised); RC-3 recheck-B: detected (R1-1 re-raised); RC-1 recheck-A: detected (R1-1 re-raised); RC-3 recheck-A: detected (R1-1 re-raised); RC-4 recheck-A: detected (R1-1 re-raised).
-Rechecks of answers that hold (passed when every answer is accepted and none is reported again; a review that did not complete is a miss): RC-2 recheck-B: passed (R1-1 accepted, R1-2 accepted); RC-2 recheck-A: passed (R1-1 accepted, R1-2 accepted).
-Findings that name their checklist question: 70 of 424 (architecture-and-interfaces:2 2, architecture-and-interfaces:6 2, code:10 3, code:11 4, code:12 3, code:2 1, code:3 2, code:4 1, code:5 1, code:7 1, code:8 8, e2e:1 5, e2e:10 1, e2e:11 1, e2e:2 1, e2e:4 1, e2e:5 2, e2e:6 1, e2e:8 1, e2e:9 3, plan-review-checklist:6 1, plan-review:1 1, plan-review:11 1, plan-review:12 1, plan-review:2 2, plan-review:4 1, plan-review:7 1, plan:1 2, plan:10 1, plan:2 1, plan:4 1, plan:6 2, plan:7 1, plan:8 1, requirements:1 2, requirements:4 2, requirements:5 2, requirements:6 1, requirements:7 1, requirements:9 1).
+Rechecks of false answers (detected when the recheck lists the earlier finding as re-raised and reports it again under its ID, by the confirmed verdicts; a review that did not complete is a miss): RC-1 recheck-B: detected (R1-1 re-raised); RC-4 recheck-B: detected (R1-1 re-raised); RC-3 recheck-B: detected (R1-1 re-raised); RC-1 recheck-A: detected (R1-1 re-raised); RC-3 recheck-A: detected (R1-1 re-raised); RC-4 recheck-A: detected (R1-1 re-raised); RC-1 recheck-R4: detected (R1-1 re-raised); RC-3 recheck-R4: detected (R1-1 re-raised); RC-4 recheck-R4: detected (R1-1 re-raised).
+Rechecks of answers that hold (passed when every answer is accepted and none is reported again; a review that did not complete is a miss): RC-2 recheck-B: passed (R1-1 accepted, R1-2 accepted); RC-2 recheck-A: passed (R1-1 accepted, R1-2 accepted); RC-2 recheck-R4: passed (R1-1 accepted, R1-2 accepted).
+Findings that name their checklist question: 115 of 538 (architecture-and-interfaces:2 2, architecture-and-interfaces:6 2, architecture:10 1, architecture:2 1, architecture:6 1, code:10 4, code:11 5, code:12 5, code:2 1, code:3 2, code:4 2, code:5 1, code:7 1, code:8 8, code:9 1, e2e:1 8, e2e:10 2, e2e:11 3, e2e:2 2, e2e:4 2, e2e:5 3, e2e:6 2, e2e:8 1, e2e:9 7, plan-checklist:1 1, plan-checklist:10 1, plan-checklist:6 1, plan-review-checklist:6 1, plan-review:1 1, plan-review:11 1, plan-review:12 1, plan-review:2 2, plan-review:4 1, plan-review:7 1, plan:1 2, plan:10 1, plan:11 1, plan:2 2, plan:4 1, plan:6 3, plan:7 2, plan:8 1, requirements:1 5, requirements:2 2, requirements:4 3, requirements:5 4, requirements:6 2, requirements:7 1, requirements:9 2, test-plan:1 1, test-plan:4 1, test-plan:6 1, test-plan:7 1, test-plan:8 1).
 Second confirmer: agrees with the author on 9 of 10 sampled findings.
 
 What these sizes can show: with about 15 cases and one run each, a difference of two or three cases between two configurations is within chance; the intervals say how wide each count's uncertainty is. Both setups carry the stage lists, so the counts do not measure the lists' own effect. The owner decides from the counts; no rule decides.
@@ -709,6 +731,25 @@ Per-review rows: the automatic first pass of each review, under the rule of its 
 | RC-2 | recheck_holds | recheck-A | completed | yes |  |  |  |  |  |  | 1 |
 | RC-3 | recheck | recheck-A | completed | no | R1 |  |  |  |  |  | 1 |
 | RC-4 | recheck | recheck-A | completed | no | R1 | R1 |  |  |  |  | 1 |
+| RM-1 | real_miss | open-R4+list | completed | no | E1 | E1 |  |  | F2 | F2, F3, F4, F5, F6, F7, F8 | 1 |
+| RM-2 | real_miss | open-R4+list | completed | no | E1 | E1 |  |  |  | F6, F7, F8, F9, F11, F12 | 1 |
+| RM-3 | real_miss | open-R4+list | completed | no | E1 | E1 |  |  | RV-1, RV-4 | RV-1, RV-2, RV-4, RV-5, RV-7, RV-8, RV-9, RV-10 | 1 |
+| RM-4 | real_miss | open-R4+list | completed | no | E1 |  |  |  | F1 | F1, F2, F3, F4, F5, F6, F8, F9 | 1 |
+| RM-5 | real_miss | open-R4+list | completed | no | E1 |  |  |  | F1, F2, F3 | F1, F2, F3, F5, F6, F7, F8, F9, F10, F11, F12, F13, F14, F15, F17 | 1 |
+| RM-6 | real_miss | open-R4+list | completed | no | E1 | E1 |  |  |  | RL-M1, RL-M3, RL-M5, RL-M7 | 1 |
+| PB-1 | planted | open-R4+list | completed | no | E1 | E1 |  |  |  |  | 1 |
+| PB-2 | planted | open-R4+list | completed | no | E1 | E1 |  |  |  |  | 1 |
+| PB-3 | planted | open-R4+list | completed | no | E1 | E1 |  |  |  | F4, F5 | 1 |
+| FS-1 | planted | open-R4+list | withheld | no |  |  |  |  |  |  | 1 |
+| FS-2 | planted | open-R4+list | completed | no | E1 |  |  |  |  |  | 1 |
+| RC-1 | recheck | recheck-R4 | completed | no | R1 | R1 |  |  |  |  | 1 |
+| RC-2 | recheck_holds | recheck-R4 | completed | yes |  |  |  |  |  |  | 1 |
+| RC-3 | recheck | recheck-R4 | completed | no | R1 |  |  |  |  |  | 1 |
+| RC-4 | recheck | recheck-R4 | completed | no | R1 |  |  |  |  |  | 1 |
+| CL-1 | clean | open-R4+list | completed | no |  |  |  |  |  | F1, F2, F3 | 1 |
+| CL-2 | clean | open-R4+list | completed | yes |  |  |  |  |  | CL2-F1, CL2-F2, CL2-F3, CL2-F4 | 1 |
+| CL-3 | clean | open-R4+list | completed | yes |  |  |  |  |  |  | 1 |
+| DC-1 | decoy | open-R4+list | completed | yes |  |  |  |  |  | F1 | 1 |
 
 Detected: a finding rated as a detection (blocking or high before R2-9; blocking, high or medium under it) at the expected place with one of its terms; Detected (blocking): the same, by a blocking finding; Not blocking: a match rated below that (medium or low before R2-9, low under it; stage A: advisory); Unmatched blocking, and Unmatched (rated as a detection): findings at no expected place, the false blockers and false alarms on a clean case. "False blocker" names the metric, not a verdict: step 1 of decision concern 8 found all 20 of the first runs' to be real defects of the reviewed commits outside the planted ones.
 ````
