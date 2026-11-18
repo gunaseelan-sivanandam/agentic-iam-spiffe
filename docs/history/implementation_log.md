@@ -5,6 +5,36 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-11-18 Slice agentic-sdlc-poc 4: the final review's rerun (count 2) and the issues for the work not done
+
+- The unit `final` ran again over the whole slice under R4-1's final mandate, after the owner's reset comment on
+  PR #49 (count 2). Round 1 (`final/c2/r1/A/1`, Opus at high, USD 3.64, reviewed commit `d818d8c`): approvable;
+  0 blocking, 1 high, 1 medium, 1 low (`068edb2`). FR2-1 (high): the decision page's proof table named tests, rule
+  text and launcher behaviour that later rounds had changed; fixed in `ea4d440` (every row the finding named, and the
+  same cause searched across the page, `docs/STATUS.md` and the slice index, with every `test_…` name checked
+  against `tests/`). FR2-2 (medium): work found but not done had no tracking; fixed in `d76035e` (the discovered
+  issues' Tracking column, each open trip point's tracking, decision 9 for trip points 2 and 9).
+  FR2-3 (low, the brief's "Open" column counts decided `owner:` items) deferred to #50, since slice 4 freezes its
+  process tooling (DPL-016, action 4). Answers in `f7fd411`.
+- The work found but not done went to issues #50 (the author-prompts slice), #51 (the next benchmark run) and #52
+  (a reviewer that runs and writes tests), labelled `slice`, locked, each body starting "Needed before:", and to a
+  comment on #13 (trip point 8). The owner had them opened as `guna-agent[bot]` ("yes, open the issues as
+  guna-agent[bot]"), and the branch pushed and PR #49's body updated the same way ("yes, push and update the PR body
+  as guna-agent[bot]"); the deviation from `AGENTS.md`'s Git rules
+  is one line under "Decisions made" on the decision page, until the next slice settles those rules.
+- Round 2, the recheck (`final/c2/r2/A/1`, Opus at medium, USD 0.83, reviewed commit `f7fd411`): approvable; all three
+  answers accepted with quotes; no new finding. So the final review has ended. A first run of this recheck, on an
+  earlier commit that was never pushed, was discarded with that commit when the rule-deviation row was reworded
+  before the push; its one low finding (STATUS's branch row still listed the issues as the owner's) is fixed in
+  `5519c77`. The brief is rebuilt on the decision page with
+  `python3 scripts/review_brief.py --base origin/poc/agentic-sdlc` (head `5519c77`; unit `final` (count 2): yes,
+  2 rounds, 0 blocking, 1 high, 1 medium, 1 low, nothing open); the final review's findings answer no test-plan
+  question (final mode, no list).
+- Validation, local: `make docs-check` passed after each step. Not run: the other gates and the E2E suite (only
+  records changed since `d818d8c`, whose CI run passed), and CI, which runs on the push.
+- Next: the branch is pushed and PR #49's body updated as `guna-agent[bot]`; the PR's checks run, and the owner
+  merges; decision 3 (recreate the hidden issues, about 2026-11-23) stays the owner's.
+
 ## 2026-11-18 Slice agentic-sdlc-poc 4: round 4, decision 8 (the owner): the launcher ships R4-1's initial mandate
 
 - The owner decided decision 8 as option (a): "yes, ship the R4-1 initial mandate and review it", after the author's
