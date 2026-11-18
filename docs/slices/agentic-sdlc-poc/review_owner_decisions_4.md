@@ -162,3 +162,9 @@ No trace gap among the upstream items (python3 scripts/validate_traceability.py 
 }
 ```
 
+
+#### Answers to owner-decisions-4/c1/r1/A/1
+
+| Finding | Severity | Answer |
+| --- | --- | --- |
+| F1 | low | fixed: docs/slices/poc-4-5-benchmark/benchmark_report.md, tests/review_benchmark/prompts/mandate_initial_r4.md, tests/review_benchmark/prompts/mandate_recheck_r4.md: the Configurations bullet now lists all seven configurations (`open+list+sev`, `open-R4+list` and `recheck-R4` added) and says that `open+list` and `recheck-A`, the launcher's own mandates, ran 4.1's in their recorded runs and are R4-1's since `6ca3d60` and `1f905a9`; both round-4 prompt files' purpose lines say their text was measured before it shipped and is now the launcher's own (the recheck file, searched for the same cause, had it too); the runner's stage-B report is byte-identical before and after |
