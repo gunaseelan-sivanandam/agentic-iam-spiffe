@@ -60,17 +60,24 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
      `owner-decisions-3` ended after round 2: round 1 was approvable (2 medium, 3 low; F1, F2, F4 and F5 fixed, among
      them DPL-015 for discovered issue 56; F3 rejected), and the recheck, the first under round 4's recheck mandate,
      was approvable (all five answers accepted, no new finding); the brief is rebuilt on the decision page. So round 4
-     is built, measured and reviewed. Open for the owner before slice 4 closes, on the decision page: decision
-     concerns 16 (R2-9's blind verdicts) and 19 (the `open+list` baseline ran
-     under an older CLI); growth proposal 12 (resuming a review that failed the read check); discovered issue 53, open
-     in part, and discovered issues 62 to 65, recorded; and the owner's actions of decisions 3 (recreate the hidden
-     issues, about 2026-11-23) and 4 (remove the personal copy of the grill-me skill), outside the repository. Then
-     the push and the final PR, which the owner does, since the agent account cannot write to GitHub.
+     is built, measured and reviewed. On 2026-11-18 the owner decided decision concern 19 (comparisons keep the recorded
+     baselines unless the author finds a reason to re-run them), withdrew growth proposal 12 (resuming a review that
+     failed the read check; no such failure since round 3's changes to the check), closed discovered issue 53 and left
+     discovered issues 62 to 65 as recorded. Open for the owner before slice 4 closes, on the decision page: decision
+     concern 16 (R2-9's blind verdicts), being settled with the owner; and the owner's actions of decisions 3
+     (recreate the hidden issues, about 2026-11-23) and 4 (remove the personal copy of the grill-me skill), outside
+     the repository. Then the push and the final PR, which the owner does, since the agent account cannot write to
+     GitHub. The final review runs again (the owner, 2026-11-18): the unit `final` ended on 2026-11-10, before rounds
+     2 to 4, so it reviews the whole slice once more under R4-1's final mandate, after the owner opens the PR and
+     posts the reset of its count as a PR comment, the only form the launcher's `--reset` takes.
      Progress and the owner's decisions: [`slice_4_decisions.md`](slices/agentic-sdlc-poc/slice_4_decisions.md);
      Next, before slice 5: a slice of author prompts and their benchmark (owner, 2026-11-09: "let's
      continue this slice for just review, after this let's run a new slice of author prompts and
      benchmark them, since the review prompts are finalized that would give us bit of data for
-     selecting good author prompts");
+     selecting good author prompts"), into which the owner's direction of 2026-11-18 folds the review prompts as
+     agent definitions in files that the launcher reads from the base branch, so author and reviewer agents are
+     defined the same way; then a reviewer that runs and writes tests to back its findings, in its own slice; each
+     through a plan the owner approves (decision page, "Direction for the next slices");
   2. before slice 5: QA-tooling gaps ([#44](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/44)) and publication scanning ([#21](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/21));
   3. slice 5 (one real backlog item through the whole cycle) and slice 6 (gates that run shows);
      inputs recorded on 2026-11-09 from the research of agent-first delivery (owner's decision; they
@@ -116,6 +123,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Last verification
 | Check | Date | Result |
 | --- | --- | --- |
+| `make docs-check`, `make tooling-test` on `poc/slice-4-implementation` (the owner's decisions of 2026-11-18 recorded on `489fccf`: the direction for the next slices, decision concern 19, growth proposal 12, discovered issues 53 and 62 to 65, the final review; docs only) | 2026-11-18 | PASSED; 1001 pytest (with a scratch shellcheck), 9 shell. Not run: the E2E suite and the other gates (no service, policy, compose, harness, script or CI file changed) |
 | `make docs-check`, `make tooling-test` on `poc/slice-4-implementation` (round 4's review handoff on `e6f78d3`: the review unit `owner-decisions-3` ended, the brief rebuilt; docs only) | 2026-11-18 | PASSED; 1000 pytest (with a scratch shellcheck), 9 shell. Not run: the E2E suite and the other gates (no service, policy, compose, harness, script or CI file changed) |
 | `make docs-check`, `make qa-trace`, `make lint`, `make tooling-test` on `poc/slice-4-implementation` (round 4's handoff on `1f905a9`: discovered issues 56, 57 and 60 fixed, R4-4 measured, the recheck and final mandates shipped; docs only); at `1f905a9`, `make tooling-test`, `make docs-check`, `make lint` and `make gate-consistency`, as the commit records | 2026-11-18 | PASSED; qa-trace: 0 new gaps, 113 coverage gaps remain; lint 0 new or worsened; 1000 pytest (with a scratch shellcheck), 9 shell. Not run: the E2E suite (no service, policy, compose, harness or CI file changed; CI runs it on the PR) |
 | `make docs-check`, `make qa-trace`, `make lint`, `make test-lint`, `make unit-guard-check`, `make qa-deploy`, `make tooling-test` on `poc/slice-4-implementation` (round 3's handoff on `faa6df4`: the review unit `round-3` ended, the brief rebuilt; docs only) | 2026-11-17 | PASSED; qa-trace: 0 new gaps, 113 coverage gaps remain; lint 0 new or worsened; unit guard 357; qa-deploy 18 known violations, 22 warnings; 981 pytest (with a scratch shellcheck), 9 shell. Not run: the E2E suite and gate-consistency (no service, policy, compose, harness or CI file changed) |
@@ -141,7 +149,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `poc/slice-4-implementation` | agentic-sdlc-poc slice 4: the six sub-issues (#38–#43), on the plans merged with PR #48 | Implemented and reviewed, local; the owner's decisions of 2026-11-13 implemented and reviewed; round 2 (R2-1 to R2-10, 2026-11-14) implemented, its review unit `round-2` ended after round 2 (approvable; decision concern 16 to the owner); the owner's decisions of 2026-11-16 (decision concerns 11 and 13) implemented, their review unit `owner-decisions-2` ran round 1 (approvable; F1 to F3 fixed, decision concern 17 to the owner) and ended after its recheck, round 2; round 3 (R3-1 to R3-4, 2026-11-17) implemented and measured, then decision concern 18 decided by the owner (option (b)) and built, and the `mechanics` replay run once more (passed); its review unit `round-3` ended after round 2 (approvable; F1, F2, F3 and F6 fixed, F4 and F5 rejected; the recheck's one new low fixed); the owner's decisions of 2026-11-17 recorded (decisions 1, 3, 4 and 5 accepted, decision 2 revisited as round 4); round 4 (R4-1 to R4-6) built and measured: discovered issues 56, 57 and 60 fixed, the recheck and final mandates shipped; its review unit `owner-decisions-3` ended after round 2; the initial mandate shipped by the owner's decision 8 (2026-11-18), its review unit `owner-decisions-4` ended after round 1 (approvable; one low finding, fixed); open for the owner: decision concerns 16 and 19, growth proposal 12, discovered issues 62 to 65 as recorded, the actions of decisions 3 and 4; one final PR into `poc/agentic-sdlc` when the owner pushes |
+| `poc/slice-4-implementation` | agentic-sdlc-poc slice 4: the six sub-issues (#38–#43), on the plans merged with PR #48 | Implemented and reviewed, local; the owner's decisions of 2026-11-13 implemented and reviewed; round 2 (R2-1 to R2-10, 2026-11-14) implemented, its review unit `round-2` ended after round 2 (approvable; decision concern 16 to the owner); the owner's decisions of 2026-11-16 (decision concerns 11 and 13) implemented, their review unit `owner-decisions-2` ran round 1 (approvable; F1 to F3 fixed, decision concern 17 to the owner) and ended after its recheck, round 2; round 3 (R3-1 to R3-4, 2026-11-17) implemented and measured, then decision concern 18 decided by the owner (option (b)) and built, and the `mechanics` replay run once more (passed); its review unit `round-3` ended after round 2 (approvable; F1, F2, F3 and F6 fixed, F4 and F5 rejected; the recheck's one new low fixed); the owner's decisions of 2026-11-17 recorded (decisions 1, 3, 4 and 5 accepted, decision 2 revisited as round 4); round 4 (R4-1 to R4-6) built and measured: discovered issues 56, 57 and 60 fixed, the recheck and final mandates shipped; its review unit `owner-decisions-3` ended after round 2; the initial mandate shipped by the owner's decision 8 (2026-11-18), its review unit `owner-decisions-4` ended after round 1 (approvable; one low finding, fixed); the owner's decisions of 2026-11-18 recorded (the direction for the next slices, decision concern 19 decided, growth proposal 12 withdrawn, discovered issue 53 closed, discovered issues 62 to 65 left as recorded); open for the owner: decision concern 16, the actions of decisions 3 and 4; one final PR into `poc/agentic-sdlc` when the owner pushes, on which the final review runs again after the owner's reset comment |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
