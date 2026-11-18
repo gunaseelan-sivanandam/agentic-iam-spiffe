@@ -1,6 +1,6 @@
 # Round-4 recheck mandate of the review benchmark
 
-The recheck mandate the owner approved in round 4 of slice 4 (R4-1 of `docs/slices/agentic-sdlc-poc/slice_4_decisions.md`), which the benchmark's configuration recheck-R4 puts in place of the launcher's own, so that it is measured before it ships (R4-4). It is R4-1's text verbatim, one line per paragraph; the runner sends only the text under the heading below.
+The recheck mandate the owner approved in round 4 of slice 4 (R4-1 of `docs/slices/agentic-sdlc-poc/slice_4_decisions.md`), which the benchmark's configuration recheck-R4 put in place of the launcher's own, so that it was measured before it shipped (R4-4); since `1f905a9` the launcher's own mandate is the same text. It is R4-1's text verbatim, one line per paragraph; the runner sends only the text under the heading below.
 
 ## Mandate
 

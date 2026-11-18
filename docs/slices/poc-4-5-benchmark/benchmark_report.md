@@ -43,9 +43,12 @@ detection with the checklist question behind it, and the misses. The runner's ow
   used. They ran under the same pinned CLI 2.1.323. Round 3's probe and replays ran through the launcher, not this
   runner, and are not counted here (the decision page, section "Round 3"). The fresh sessions that confirmed
   findings blind (below) are not reviewer calls and are not counted, as in round 2.
-- **Configurations:** `short+list` (stage A's short prompt without its retired kinds sentence), `open+list` (4.1's
-  mandate, the launcher's until decision 8), `open-B+list` (4.4's drafted initial mandate), `recheck-A` (4.1's recheck mandate)
-  and `recheck-B` (4.4's drafted recheck mandate). Every configuration carries its case's stage list.
+- **Configurations:** `short+list` (stage A's short prompt without its retired kinds sentence), `open+list` (the
+  launcher's own initial mandate: 4.1's in its recorded runs, R4-1's since decision 8, `6ca3d60`), `open-B+list` (4.4's
+  drafted initial mandate), `open+list+sev` (`open+list` with decision concern 8's severity paragraph), `open-R4+list`
+  (R4-1's initial mandate, measured before it shipped), `recheck-A` (the launcher's own recheck mandate: 4.1's in its
+  recorded runs, R4-1's since `1f905a9`), `recheck-B` (4.4's drafted recheck mandate) and `recheck-R4` (R4-1's recheck
+  mandate, measured before it shipped). Every configuration carries its case's stage list.
 
 ## Counts
 
