@@ -37,9 +37,15 @@ is first); every heading carries its date.
   1 round, 0 blocking, 0 high, 0 medium, 1 low, nothing open); F1 answers no test-plan question. Validation, local:
   `make docs-check` and `make tooling-test` (1001 passed; shell 9 passed) passed; no other gate, since only records
   changed.
-- Next, the owner's: decision concerns 16 and 19; growth proposal 12; discovered issues 62 to 65 are recorded; the
-  actions of decisions 3 (recreate the hidden issues, about 2026-11-23) and 4 (remove the personal copy of the grill-me
-  skill); and the push and the final PR, which the agent account cannot write.
+- The owner's decisions of 2026-11-18 recorded in `a832737` (decision page and `docs/STATUS.md`): the direction for
+  the next slices (agent definitions in files, in the author-prompts slice; a reviewer that runs and writes tests, in
+  its own slice); decision concern 19 decided; growth proposal 12 withdrawn (no read-check failure since round 3's
+  change, against 9 between 2026-11-09 and 2026-11-14); discovered issue 53 closed and 62 to 65 left as recorded; the
+  final review to run again. `make docs-check` and `make tooling-test` (1001 passed; shell 9) passed.
+- Next: decision concern 16 (the owner asked for both confirmers; the rule is being settled); the owner pushes and
+  opens the final PR and posts the final review's reset as a PR comment, which the launcher's `--reset` takes; then
+  the unit `final` runs again over the whole slice under R4-1's final mandate; the owner's actions of decisions 3
+  (recreate the hidden issues, about 2026-11-23) and 4 (remove the personal copy of the grill-me skill).
 
 ## 2026-11-18 Slice agentic-sdlc-poc 4: round 4, the review mandates and the runner fixes
 
