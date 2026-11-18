@@ -42,7 +42,9 @@ is first); every heading carries its date.
   its own slice); decision concern 19 decided; growth proposal 12 withdrawn (no read-check failure since round 3's
   change, against 9 between 2026-11-09 and 2026-11-14); discovered issue 53 closed and 62 to 65 left as recorded; the
   final review to run again. `make docs-check` and `make tooling-test` (1001 passed; shell 9) passed.
-- Next: decision concern 16 (the owner asked for both confirmers; the rule is being settled); the owner pushes and
+- Decision concern 16 decided by the owner ("yes, DC16 both as you proposed"): from the next benchmark on, a fresh
+  session judges blind and its verdicts set the counts, the author judges the same rows, and disagreements go on the
+  decision page. Next: the owner pushes and
   opens the final PR and posts the final review's reset as a PR comment, which the launcher's `--reset` takes; then
   the unit `final` runs again over the whole slice under R4-1's final mandate; the owner's actions of decisions 3
   (recreate the hidden issues, about 2026-11-23) and 4 (remove the personal copy of the grill-me skill).

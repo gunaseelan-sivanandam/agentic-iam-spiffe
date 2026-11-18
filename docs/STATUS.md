@@ -63,8 +63,8 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
      is built, measured and reviewed. On 2026-11-18 the owner decided decision concern 19 (comparisons keep the recorded
      baselines unless the author finds a reason to re-run them), withdrew growth proposal 12 (resuming a review that
      failed the read check; no such failure since round 3's changes to the check), closed discovered issue 53 and left
-     discovered issues 62 to 65 as recorded. Open for the owner before slice 4 closes, on the decision page: decision
-     concern 16 (R2-9's blind verdicts), being settled with the owner; and the owner's actions of decisions 3
+     discovered issues 62 to 65 as recorded. Decision concern 16 is decided (both confirmers from the next benchmark on;
+     the blind verdicts count). Open for the owner before slice 4 closes: the owner's actions of decisions 3
      (recreate the hidden issues, about 2026-11-23) and 4 (remove the personal copy of the grill-me skill), outside
      the repository. Then the push and the final PR, which the owner does, since the agent account cannot write to
      GitHub. The final review runs again (the owner, 2026-11-18): the unit `final` ended on 2026-11-10, before rounds
