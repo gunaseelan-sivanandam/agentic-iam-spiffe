@@ -102,16 +102,25 @@ PR_COMMENT_URL = re.compile(
 LABEL = re.compile(r"^[A-Za-z0-9_-]+$")
 GLOB_CHARS = re.compile(r"[*?\[{]")
 
-# S41-D4: the mandate of each mode, verbatim; every start entry records the SHA-256 of the one used. The recheck and
-# final mandates are round 4's (R4-1 of slice 4's decision page), one line per paragraph as the benchmark's prompt files
-# hold them: the recheck mandate is the one `recheck-R4` measured under R4-4, the final mandate no case can measure. The
-# initial mandate stays 4.1's (S41-D14) until the owner's decision 8, since round 4's did not meet R4-4's criterion.
+# S41-D4: the mandate of each mode, verbatim; every start entry records the SHA-256 of the one used. All three are
+# round 4's (R4-1 of slice 4's decision page), one line per paragraph as the benchmark's prompt files hold them: the
+# initial and recheck mandates are the ones `open-R4+list` and `recheck-R4` measured under R4-4, the final mandate no
+# case can measure. The recheck and final ship under R4-4's outcome, the initial by the owner's decision 8 (2026-11-18).
 MANDATES = {
     "initial": (
         "Find anything a working delivery process must catch in this change and has not caught yet: anything "
-        "missing, wrong, untested, stale, overclaimed, unsafe or unclear, inside or outside the paths under review. "
-        "The checklist and the questions below are a minimum, not the limit. Think for yourself; the author's "
-        "framing, including the task text, can be wrong or narrow, and saying so is part of the review."),
+        "missing, wrong, untested, stale, overclaimed, unsafe or unclear. The checklist is a minimum, not the limit. "
+        "The author's framing may be wrong or incomplete.\n\n"
+        "Read the surrounding implementation, dependencies, tests and documentation to understand the complete effect "
+        "of the change, including effects outside the changed files. Judge it against the intent you were given and "
+        "the approved rules: the owner-approved plan and the owner's recorded decisions or, when the change is the "
+        "plan itself, the owner's request. Existing behavior, implementation choices and the author's explanations do "
+        "not establish approval.\n\n"
+        "Report departures from the plan. When the plan leaves a material design decision unresolved, identify it for "
+        "the owner rather than assuming the implementation settles it. Support each finding with concrete evidence "
+        "and consequences: the file and line you read, not an inference from names, and the failure it causes. Report "
+        "every finding you can support, each at the severity its consequence earns; a review with no findings is "
+        "valid.\n"),
     "recheck": (
         "Verify every author answer to your earlier findings against the owner-approved plan and the owner's "
         "recorded decisions (for a plan review, the owner's request) and the actual files and evidence. Read every "

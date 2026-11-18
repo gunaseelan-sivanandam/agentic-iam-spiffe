@@ -1619,14 +1619,17 @@ def test_the_round_4_configurations_send_r4_1s_mandates_verbatim(name: str, mode
     assert all(config.mandates[m] == launcher.MANDATES[m] for m in launcher.MODES if m != mode)
 
 
-@pytest.mark.parametrize(("mode", "label"), [("recheck", "Recheck"), ("final", "Final")])
-def test_the_launcher_ships_r4_1s_recheck_and_final_mandates(mode: str, label: str) -> None:
-    """R4-1, under R4-4's outcome: the launcher's recheck and final mandates are the decision page's text, and its
-    recheck mandate is byte for byte the one `recheck-R4` measured. The initial mandate stays 4.1's (decision 8)."""
+@pytest.mark.parametrize(("mode", "label"), [("initial", "Initial"), ("recheck", "Recheck"), ("final", "Final")])
+def test_the_launcher_ships_r4_1s_mandates_in_all_three_modes(mode: str, label: str) -> None:
+    """R4-1: the launcher's initial, recheck and final mandates are the decision page's text, and its initial and
+    recheck mandates are byte for byte the ones `open-R4+list` and `recheck-R4` measured under R4-4. The recheck and
+    final ship under R4-4's outcome, the initial by the owner's decision 8 (2026-11-18: "yes, ship the R4-1 initial
+    mandate and review it")."""
     assert launcher.MANDATES[mode] == _r4_mandate(label)
-    if mode == "recheck":
-        mandates, _hashes = bench._mandates(bench.load_key(ROOT), "recheck-R4")
-        assert mandates["recheck"] == launcher.MANDATES["recheck"]
+    measured = {"initial": "open-R4+list", "recheck": "recheck-R4"}
+    if mode in measured:
+        mandates, _hashes = bench._mandates(bench.load_key(ROOT), measured[mode])
+        assert mandates[mode] == launcher.MANDATES[mode]
 
 
 def _false_rejection_inputs(r: Repo) -> dict:

@@ -44,7 +44,7 @@ detection with the checklist question behind it, and the misses. The runner's ow
   runner, and are not counted here (the decision page, section "Round 3"). The fresh sessions that confirmed
   findings blind (below) are not reviewer calls and are not counted, as in round 2.
 - **Configurations:** `short+list` (stage A's short prompt without its retired kinds sentence), `open+list` (4.1's
-  mandate, the launcher's today), `open-B+list` (4.4's drafted initial mandate), `recheck-A` (4.1's recheck mandate)
+  mandate, the launcher's until decision 8), `open-B+list` (4.4's drafted initial mandate), `recheck-A` (4.1's recheck mandate)
   and `recheck-B` (4.4's drafted recheck mandate). Every configuration carries its case's stage list.
 
 ## Counts
@@ -546,10 +546,13 @@ mandate, the lists at `04f8df4`, each case's base rules and the model at high ef
   the owner's final wording, which no case measures. The owner's initial wording (`open-R4+list`) detected 10 of 11
   against `open+list`'s 8 under R2-9 (9 against 7 under blocking or high) but raised 8 false alarms in 4 no-defect
   reviews against 7 (one more medium finding, on CL-2; 2 against 2 under blocking or high), so it failed the criterion
-  by one false alarm; the owner decides ([decision 8](../agentic-sdlc-poc/slice_4_decisions.md#decisions-to-make)).
+  by one false alarm. The owner decided on 2026-11-18 to ship it anyway ("yes, ship the R4-1 initial mandate and
+  review it"; [decision 8](../agentic-sdlc-poc/slice_4_decisions.md#decisions-to-make)); the criterion's outcome stays
+  as recorded.
 
-The launcher's initial mandate stays 4.1's until the owner chooses (S45-D8, decision 8); since `1f905a9` its recheck
-and final mandates are round 4's (R4-1).
+Since `1f905a9` the launcher's recheck and final mandates are round 4's (R4-1), and since decision 8 (2026-11-18) its
+initial mandate too, byte for byte the one `open-R4+list` measured; `open+list`'s and `recheck-A`'s recorded runs ran
+4.1's.
 
 ## The runner's report, verbatim
 

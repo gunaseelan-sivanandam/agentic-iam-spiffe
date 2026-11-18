@@ -106,6 +106,7 @@ DEFECT_KINDS = ("real_miss", "planted", "recheck")
 # (None: the launcher's own mandate).
 CONFIGURATIONS: dict[str, dict[str, Any]] = {
     "short+list": {"mode": "initial", "mandate_file": "prompts/short_list.md", "list": True},
+    # Since decision 8 the launcher's initial mandate is open-R4+list's; open+list(+sev)'s recorded lines ran 4.1's.
     "open+list": {"mode": "initial", "mandate_file": None, "list": True},
     "open-B+list": {"mode": "initial", "mandate_file": "prompts/mandate_initial_b.md", "list": True},
     # Since R4-1 the launcher's recheck mandate is recheck-R4's; recheck-A's recorded lines ran 4.1's (prompt_identity).

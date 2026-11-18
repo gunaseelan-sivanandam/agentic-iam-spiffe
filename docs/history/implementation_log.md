@@ -5,6 +5,29 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-11-18 Slice agentic-sdlc-poc 4: round 4, decision 8 (the owner): the launcher ships R4-1's initial mandate
+
+- The owner decided decision 8 as option (a): "yes, ship the R4-1 initial mandate and review it", after the author's
+  answer to why the wording runs could not settle it (one run per wording; the criterion had no margin; the false
+  alarms counted, never judged; decision concern 19's confound). The criterion's outcome stays as recorded. On the
+  [decision page](../slices/agentic-sdlc-poc/slice_4_decisions.md): decision row 8, section "Round 4", paragraph
+  "Decision 8", the Progress row and discovered issue 64.
+- The change: the launcher's initial mandate (`MANDATES` in `scripts/run_independent_review.py`) is R4-1's text
+  verbatim, so all three are round 4's; the benchmark notes that `open+list` now means that text while its recorded
+  lines (and `open+list+sev`'s) ran 4.1's. Byte identity, built with no reviewer call: on the 15 initial cases the
+  launcher's own initial prompt (`open+list`) equals `open-R4+list`'s whole prompt, and `open-R4+list`'s prompt
+  identity equals its recorded runs' (15 of 15). An unfiltered `--run` still selects the same 66 reviews (issue 64).
+- Tests first, red on the base code (`b354446`):
+  `test_run_review_benchmark.py::test_the_launcher_ships_r4_1s_mandates_in_all_three_modes[initial-Initial]` (renamed
+  from `..._recheck_and_final_mandates`): `AssertionError: assert 'Find anythin...f the review.' == 'Find anythin...s
+  is valid.\n'`.
+- Validation, local: `make tooling-test` (1001 passed; shell 9 passed), `make docs-check`, `make lint` (0 new or
+  worsened) and `make qa-trace` (requirements 170, architecture 34, design 131, tests 386, coverage gaps 113; 0 new
+  against the merge-base) passed. Not run: the full E2E suite and the unit gates (no `services/`, harness, compose or CI
+  change), and CI (not pushed).
+- Next: the review unit `owner-decisions-4` (default by the author, as R4-6); then the owner's decision concerns 16
+  and 19, growth proposal 12, the actions of decisions 3 and 4, the push and the final PR.
+
 ## 2026-11-18 Slice agentic-sdlc-poc 4: round 4, the review mandates and the runner fixes
 
 - Branch `poc/slice-4-implementation`, 11 commits after round 3's handoff (`96e3b22`): `8ab80e5` (discovered issue
