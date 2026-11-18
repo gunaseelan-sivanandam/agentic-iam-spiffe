@@ -180,11 +180,17 @@ Full entries, root causes and lessons in [`docs/delivery_problem_log.md`](delive
   answered by decision concern 13's wording (both rechecks re-raised it, one run each, on the case the wording was
   written from, under a first wording whose example has since been removed); in round 3, under the shipped wording
   and R3-3's carve-out, `recheck-A` re-raised RC-3 and accepted RC-2's fix that adds tests (one run each); open:
-  whether the wording holds beyond RC-3, and who confirms R2-9's new matches and RC-3's re-raises (decision concern
-  16).
+  whether the wording holds beyond RC-3; who confirms new matches is decided (decision concern 16, 2026-11-18).
 - **DPL-014** A blind-confirmation token of the benchmark was not tied to its result line, so a rerun under a new
   prompt could have inherited an earlier verdict; fixed on the slice 4 branch before round 3's runs, closing it when
   slice 4 merges.
+- **DPL-015** A review run again under another prompt was counted beside the run it replaced, and two rechecks
+  accepted the fix that left it; fixed on the slice 4 branch (round 4), closing it when slice 4 merges.
+- **DPL-016** Slice 4 was declared done before its goal was tested, so the owner found the gaps in three rounds
+  after done; its six corrective actions, adopted by the owner on 2026-11-18, go into the rulebook and templates
+  with the next slice's plan, closing it when that plan PR merges.
+- **DPL-017** Round 4's records and recommendations that a review or the owner had to correct; fixed on the slice 4
+  branch, closing it when slice 4 merges.
 - DPL-008 closed on 2026-11-04.
 
 ## Known gaps and debt
