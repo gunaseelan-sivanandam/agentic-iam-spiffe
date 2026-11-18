@@ -73,7 +73,8 @@ fresh session, given a directory holding only a copy of that export and the comm
 (`rescore_confirmation.jsonl`): 15 match. It never saw the token map, the results or the prompts; the author started
 it, as for decision concern 8's measurement (decision concern 3 keeps the author as the confirmer; this follows the
 measurement's practice, and whether it stands is the owner's decision concern 16 on the
-[decision page](../agentic-sdlc-poc/slice_4_decisions.md)). Every new detection below rests on such a verdict. RC-3's
+[decision page](../agentic-sdlc-poc/slice_4_decisions.md); decided 2026-11-18: it stands for these batches, and
+from the next benchmark on a fresh session and the author both confirm). Every new detection below rests on such a verdict. RC-3's
 two re-raises under decision concern 13's wording came after that export. They were appended to it as `M147` and
 `M148`, by the runner's own selection of the findings no export held, under tokens after the last and without
 reshuffling the 146 (`--export-rescore` reshuffles every row under new tokens, which would detach the verdicts
@@ -81,11 +82,13 @@ already given). A second fresh session, given a directory holding only those two
 a match (by its report it opened nothing else), on the rule's place-and-term clause: each re-raise is at
 `AGENTS.md` lines 168 and 169 with its own words "step", "leave out" or "mechanism". The export shows a finding without
 the recheck's accounting, so the confirmer cannot apply the recheck sentence itself; the ID it sees, R1-1, is the
-earlier finding's. Whether these verdicts stand is also decision concern 16. Round 3's four new runs (2026-11-17)
+earlier finding's. Whether these verdicts stand is also decision concern 16 (decided 2026-11-18: they
+stand). Round 3's four new runs (2026-11-17)
 came after these. Their four findings were appended the same way, as `M149` to `M152`, under tokens that are now
 keyed by each result line's prompt identity (discovered issue 44), and a fresh session, given a directory holding
 only those four rows and the match rule, judged M149 (RC-1's R1-1), M150 (RC-4's) and M152 (RC-3's) a match and
-M151, RC-1's new R2-1, no match (by its report it opened nothing else); decision concern 16 applies to it too. Cost
+M151, RC-1's new R2-1, no match (by its report it opened nothing else); decision concern 16 applies to it too (decided
+2026-11-18: they stand). Cost
 and minutes include the failed reviews.
 
 Stage A's results carry the retired kinds `blocking` and `advisory`, and `advisory` held medium and low alike, so they

@@ -567,7 +567,8 @@ Why review did not catch it:
   carve-out as R3-3 (what an existing rule already requires of a fix is not an added mechanism). Run once each on
   `recheck-A`, RC-2 accepted its fix that adds tests, citing the carve-out, and RC-3 was re-raised at high under the
   shipped wording. Still open: a growth case other than RC-3, the initial cases under the wording, and decision
-  concern 16.
+  concern 16 (decided 2026-11-18: both confirmers from the next benchmark on; the first two are inputs for that
+  run, tracked in #ISSUE-B).
 
 ### Lesson
 Let a rule, not the reviewer's rating, decide what gets fixed; make a rejection rest on a fact the recheck must quote;
