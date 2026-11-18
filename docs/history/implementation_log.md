@@ -25,8 +25,21 @@ is first); every heading carries its date.
   worsened) and `make qa-trace` (requirements 170, architecture 34, design 131, tests 386, coverage gaps 113; 0 new
   against the merge-base) passed. Not run: the full E2E suite and the unit gates (no `services/`, harness, compose or CI
   change), and CI (not pushed).
-- Next: the review unit `owner-decisions-4` (default by the author, as R4-6); then the owner's decision concerns 16
-  and 19, growth proposal 12, the actions of decisions 3 and 4, the push and the final PR.
+- Review: the unit `owner-decisions-4` (default by the author, as R4-6), round 1 (`owner-decisions-4/c1/r1/A/1`, Opus
+  at high, CLI 2.1.327, USD 1.55, 4.5 minutes, reviewed commit `6ca3d60`), the first live review under R4-1's initial
+  mandate: approvable, 1 low (`40943e3`). F1: the benchmark report's configuration list left out `open+list+sev`,
+  `open-R4+list` and `recheck-R4` and did not say that `recheck-A` was the launcher's mandate only until `1f905a9`, and
+  the purpose line of `mandate_initial_r4.md` still called its text one measured before it ships; fixed in `eb419c0`
+  (all seven configurations listed; both round-4 prompt files' purpose lines, the recheck file having the same cause;
+  the runner's stage-B report byte-identical), answered `fixed:` in `2db41fe`.
+- With no blocking, high or medium finding, the review ended after round 1. The brief is rebuilt on the decision page
+  with `python3 scripts/review_brief.py --base origin/poc/agentic-sdlc` (head `2db41fe`; unit `owner-decisions-4`: yes,
+  1 round, 0 blocking, 0 high, 0 medium, 1 low, nothing open); F1 answers no test-plan question. Validation, local:
+  `make docs-check` and `make tooling-test` (1001 passed; shell 9 passed) passed; no other gate, since only records
+  changed.
+- Next, the owner's: decision concerns 16 and 19; growth proposal 12; discovered issues 62 to 65 are recorded; the
+  actions of decisions 3 (recreate the hidden issues, about 2026-11-23) and 4 (remove the personal copy of the grill-me
+  skill); and the push and the final PR, which the agent account cannot write.
 
 ## 2026-11-18 Slice agentic-sdlc-poc 4: round 4, the review mandates and the runner fixes
 
