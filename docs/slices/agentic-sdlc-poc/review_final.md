@@ -488,3 +488,195 @@ No trace gap among the upstream items (python3 scripts/validate_traceability.py 
 | ID | Severity | Answer |
 | --- | --- | --- |
 | FR-10 | low | fixed: docs/delivery_problem_log.md, docs/STATUS.md: DPL-011's preventive bullet says the `<token>` note is implemented in 4.1 (`CREDENTIAL_NOTE`), and STATUS gives DPL-008's closing its own line |
+
+## Round 1 (count 2)
+
+### Attempt final/c2/r1/A/1
+
+Reviewer `A`: `claude-opus-5-5`, effort high, mode final, commit `d818d8c57cc4`, base `3347754ef038`.
+
+Status: completed; approvable within the threat model: yes.
+
+#### Prompt
+
+```markdown
+# Final review of slice 4 of the agentic-SDLC PoC, run again over the whole slice (2026-11-18)
+
+## Intent
+
+Slice 4's six plans and test plans are in `docs/slices/poc-4-1-review-prompts/` to `docs/slices/poc-4-6-stage-rules/`
+(decisions S41-D* to S46-D*), merged into `poc/agentic-sdlc` by plan PR #48, the base of this review. Everything the
+owner decided after them is on the decision page `docs/slices/agentic-sdlc-poc/slice_4_decisions.md`: the owner's
+decisions of 2026-11-13, round 2 (2026-11-14), the owner's decisions of 2026-11-16, round 3 (2026-11-17), round 4
+(2026-11-17, R4-1 to R4-6), decision 8 (2026-11-18), the section "Direction for the next slices (the owner,
+2026-11-18)" and the rows of "Decisions to make" and "Parked units, decision concerns and growth proposals" decided on
+2026-11-18. The change is the whole slice: PR #49 into `poc/agentic-sdlc`.
+
+The unit `final` first ran on 2026-11-10, before rounds 2 to 4. The owner reset its count to run it again over the
+whole slice under the final mandate the launcher now ships (R4-1), in the owner's words on PR #49: "Reset the review
+count of the unit `final` of slice 4: rerun the final review over the whole slice under the new final mandate". Every
+other unit's review record, including those of the rounds after 2026-11-10, is in the copy.
+
+## The author's self-review of the whole slice (claims to verify, not facts)
+
+1. **Facts outside the repository.** CI on PR #49 at the reviewed commit: all 12 jobs passed, `e2e`,
+   `unit-mutation`, `unit-trust` and `unit-diff-cov` among them. The agent's GitHub account has been suspended since
+   2026-11-08, so the owner pushes, opens the PR and posts comments; the issues the PR body closes (#33, #38 to #43)
+   were opened by that account and are hidden. The benchmark's reviewer calls ran on the pinned CLI 2.1.323; live
+   reviews ran on the installed CLI of their day, as each attempt log records.
+2. **Each check added or changed, and its test.** `tests/tools/` (1001 pass locally, and the shell tests 9): the
+   launcher (`test_run_independent_review.py`), the computed inputs (`test_review_inputs.py`), the records and their
+   check (`test_check_review_records.py`), the lists (`test_stage_checklists.py`), the benchmark runner
+   (`test_run_review_benchmark.py`, including the tests that pin the three mandates to R4-1), the stage table and
+   templates (`test_stage_rules.py`), the brief (`test_review_brief.py`), the docs check (`test_check_docs.py`) and the
+   lint gate (`test_lint_changed_files.py`). Each new test's first failure on its base is in the commit bodies or
+   `docs/history/implementation_log.md`.
+3. **Claims and what checks them mechanically.** Record blocks against attempt logs, answers against findings:
+   `make docs-check`. The benchmark's counts: the runner's report, kept verbatim in
+   `docs/slices/poc-4-5-benchmark/benchmark_report.md`. Not mechanical: the blind verdicts, the research record's
+   quotes against their sources, and the text of each `AGENTS.md` rule against its decision.
+4. **Fixes and their upstream choice.** Every review record holds each finding and its answer; the decision page's
+   discovered issues 1 to 65 hold what the work found, each with its disposition; `docs/delivery_problem_log.md`
+   DPL-010 to DPL-017 hold the delivery misses, among them DPL-016: the slice was declared done on 2026-11-10 before
+   its goal was tested, and the owner adopted six corrective actions that the next slice's plan writes into the
+   rulebook, since one of them freezes process rules within a slice.
+5. **Tried the way the next user runs it.** The dry slice of the decision page, under the rules of its day; a trial of
+   the goal with the owner hands-off has not been run for this slice (DPL-016).
+6. **Where each rule lives.** `AGENTS.md`, `tests/unit/AGENTS.md`, `docs/review_checklists/`, the slice templates,
+   `.claude/skills/grill-me/`, the launcher (`MANDATES` and its prompt sections) and the benchmark's answer key.
+7. **What was removed.** The four-step workflow text; stage A's run path of the benchmark; 4.1's three mandates; the
+   `searched` field (round 3); the final question "What did everyone before you miss?" (R4-5).
+
+Known and on the decision page: discovered issues 62 to 65 left as recorded by the owner; DPL-016's corrective actions
+open until the next slice's plan merges.
+```
+
+#### Evidence
+
+```text
+Each numbered entry must be listed under `accounted`.
+
+EV1: scripts/check_docs.py: changed lines not run: 215; branches not taken: 214->215 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV2: scripts/check_review_records.py: changed lines not run: 48, 227-230, 234; branches not taken: 47->48, 228->229, 228->230, 233->234 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV3: scripts/review_brief.py: changed lines not run: 43, 304, 308; branches not taken: 42->43, 236->229, 307->308 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV4: scripts/review_inputs.py: changed lines not run: 316; branches not taken: 315->316 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV5: scripts/review_records.py: changed lines not run: none; branches not taken: 189->191, 228->230 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV6: scripts/run_independent_review.py: changed lines not run: 265, 1285, 1343-1344; branches not taken: 1284->1285, 1961->1963 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV7: scripts/run_review_benchmark.py: changed lines not run: 362, 409, 742, 986, 1306, 1856-1857; branches not taken: 361->362, 365->364, 408->409, 500->504, 741->742, 911->908, 917->911, 984->986, 1035->1038, 1287->1285, 1855->1856 (python3 -m pytest -q -p no:cacheprovider tests/tools --cov=scripts --cov-branch --cov-report=json:<scratch>/coverage.json)
+EV8: CI run CI 44323928711 (pull_request): completed/success; jobs: qa-deploy: completed/success; unit-trust: completed/success; qa-trace: completed/success; unit-diff-cov: completed/success; tooling-test: completed/success; test-lint: completed/success; lint: completed/success; docs-check: completed/success; e2e: completed/success; unit-mutation: completed/success; gate-consistency: completed/success; unit-guard-check: completed/success
+
+Every changed line and branch run by the tooling tests: scripts/lint_changed_files.py.
+A script the tooling tests run only as a subprocess shows as not run here, because coverage is measured in-process (issue #44).
+No trace gap among the upstream items (python3 scripts/validate_traceability.py --mode pr --base <base> --report-json <scratch>/trace.json --design-report-json <scratch>/design.json).
+```
+
+#### Report
+
+```json
+{
+  "accounted": [
+    {
+      "item": "EV1",
+      "note": "scripts/check_docs.py:215 is the error return for when check_review_records.py cannot be loaded. It is a loader guard for a file that is always in the repository, and docs-check fails closed on it (it returns a problem). It is not a security decision path.",
+      "opened": [
+        "scripts/check_docs.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV2",
+      "note": "Line 48 is the loader guard in _load_launcher, and lines 227-234 are main(). The tooling tests call check_review_records() in-process and `make docs-check` runs it through check_docs.check_records, so only the CLI entry point and the cannot-load guard go unrun. Both fail closed.",
+      "opened": [
+        "scripts/check_review_records.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV3",
+      "note": "Line 43 is the loader guard, and lines 304 and 308 are main()'s success return and the __main__ hook. Branch 236->229 is an accounted entry whose status is an evidence status (explained or flagged); _collect_rechecks correctly ignores it. None of these can hide a brief item.",
+      "opened": [
+        "scripts/review_brief.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV4",
+      "note": "Line 316 returns early when the interpreter has no user site-packages directory, so there is nothing to link into the scratch HOME. It is environment-dependent and harmless: the evidence commands then run without --user packages and would show as failed.",
+      "opened": [
+        "scripts/review_inputs.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV5",
+      "note": "No changed line of review_records.py is unrun; two branch arcs are untaken. Record writing and parsing are proved end to end by test_check_review_records.py, for example test_completed_attempt_leaves_prompt_evidence_and_report_blocks_that_the_check_accepts.",
+      "opened": [
+        "scripts/check_review_records.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV6",
+      "note": "Line 265 is the module-loader guard. Line 1285 guards against an attempt log without a record. Lines 1343-1344 are _complete_record's ValueError return when the section is missing, which, as the docstring says, is left to the record check to report. Branch 1961->1963 is a HOME equal to '/'. None of these is a decision that could pass a bad review.",
+      "opened": [
+        "scripts/run_independent_review.py"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV7",
+      "note": "Benchmark runner lines: 362 skips an expected file absent from the copy, 409 handles a key without lists_commit, and the others are dispatch and retry arcs. Benchmark tooling only. The owner closed discovered issue 53 on 2026-11-18, accepting that the runner's similar retry and dispatch paths stay untested.",
+      "opened": [
+        "scripts/run_review_benchmark.py",
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "EV8",
+      "note": "The CI run on the PR succeeded with all 12 jobs, including e2e, unit-mutation, unit-trust and unit-diff-cov. This matches the author's claim 1.",
+      "opened": [
+        "_review_inputs/change.diff"
+      ],
+      "status": "explained"
+    }
+  ],
+  "findings": [
+    {
+      "evidence": "S41-D8 (line 123) cites `test_fixed_file_that_was_not_read_fails_even_when_a_path_under_review_was` and `test_a_rejection_counts_only_when_the_files_it_cites_were_read`; the tests are now `..._not_seen_...` (tests/tools/test_run_independent_review.py:1123) and `..._were_seen` (:1140). The same row cites `test_a_searched_file_need_not_be_read_but_an_opened_one_must`, which exists nowhere under tests/tools, and still describes `searched`, which R3-2 removed (scripts/run_independent_review.py:81-83). S41-D14 (line 129) says \"the launcher's mandates stay 4.1's\", but all three are R4-1's (scripts/run_independent_review.py:105-108). S45-D1 (line 164) cites `..._hard_stop_of_95` and says \"86 of 95 now\"; the test is `..._of_120` (tests/tools/test_run_review_benchmark.py:1590), BUDGETS is 120 (scripts/run_review_benchmark.py:70), and the page itself says 105 of 120 (line 742). S46-D6 (line 180) quotes \"Only the user waives a blocker that is still disputed\" as its AGENTS.md text; round 2 removed that sentence (review_round_2.md:80-81), and a grep of AGENTS.md finds no match. S44-D11 (line 161) quotes \"proposes the list item or the wording in the PR\"; AGENTS.md:409 now says \"on the slice's decision page\". Parked row 5 (line 828) still describes `searched` as done, and decision concern 11's row (line 829) cites `test_the_committed_keys_budget_is_the_stage_b_hard_stop`, which does not exist under that name.",
+      "failure_scenario": "The owner checks a decision's proof on the one page the slice gives them. For S41-D8 they look for three named tests and a `searched` field: one test exists nowhere, two only under other names, and the field is gone. For S46-D6 and S44-D11 they look for quoted rule text that AGENTS.md no longer holds, and S41-D14 tells them the launcher still ships 4.1's mandates. The \"Done when\" claim rests on a table nobody re-checked against the current tree. This is the same cause DPL-017 records (records written from memory, not from the current state), recurring after DPL-017 was written. A frozen record with these errors misleads every later slice that reads it.",
+      "file": "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+      "id": "FR2-1",
+      "kind": "defect",
+      "line": 123,
+      "origin_stage": "implementation",
+      "problem": "The decision page's table \"Decisions and their proof\", where the owner checks the first \"Done when\" criterion (every decision implemented and proven), still shows the slice as it stood around 2026-11-10 to 2026-11-13. Several rows name tests that no longer exist, quote rule text that has since been removed from AGENTS.md, or describe a launcher state that has changed.",
+      "severity": "high"
+    },
+    {
+      "evidence": "Dry-slice trip points 2 (\"Open: the owner's naming choice\"), 9 (\"Open: a rules question for the owner\"), 12 (\"Open, medium\"), and 3, 4, 8 and 16 (\"Open, low\") carry no issue reference (lines 923-937). Discovered issue 23 (line 869: \"A later benchmark run needs that pin or a new canary\") and issue 41 (line 887: \"once this branch merges, the launcher's copy can point to the rules instead\") are deferred work with no tracking. The discovered-issues table has no Tracking column, although the new template has one (docs/slices/_template/decisions.md:44). \"Decisions to make\" (lines 804-813) and the \"What remains for the owner\" text (line 10) list only decisions 3 and 4, the push and the reset, not trip points 2 or 9. Searched the decision page for \"Needed before\", \"issue to open\" and \"new issue\": no match.",
+      "failure_scenario": "The page is frozen when slice 4 merges. The owner's two open choices (branch naming, and whether a low wording defect filed as a decision concern should go to the owner) and the medium trip point 12 (`--path` hints that fail the empty-review rule) exist only in a frozen table. No issue holds them and no \"needed before\" point is set, so the next slice never sees them: \"work lost in PR notes\", the failure S46-D9 exists to catch. The agent account's suspension explains why no issue could be opened, but not why these items are missing from the owner's list of actions.",
+      "file": "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+      "id": "FR2-2",
+      "kind": "defect",
+      "line": 920,
+      "origin_stage": "implementation",
+      "problem": "Work found but not done, including items the page itself calls the owner's to decide, has no issue, no tracking reference and no entry among the owner's open items. The Handoff rule (S46-D9; base AGENTS.md step 4 and the new Handoff section) asks that such work become a GitHub issue, or a comment on the issue it belongs to, with each issue's link on the page.",
+      "severity": "medium"
+    },
+    {
+      "evidence": "`_unit_row` computes `opened` from len(brief.owner)+len(brief.concerns)+... and renders \"N for the owner\" (scripts/review_brief.py:201-203). On the decision page the brief shows `owner-decisions` \"2 for the owner\" and `poc-4-1-review-prompts` \"1 for the owner\" (lines 951, 957), but the items behind them (decision 7, decision concerns 1 and 11) are marked decided in lines 812, 819 and 829.",
+      "failure_scenario": "An owner who reads the brief first, as AGENTS.md's Handoff tells them to, counts nine units with open items, then has to cross-check each against the rest of the page to find that none is still open. A label such as \"answered owner:\" instead of \"Open\" would avoid that.",
+      "file": "scripts/review_brief.py",
+      "id": "FR2-3",
+      "kind": "defect",
+      "line": 201,
+      "origin_stage": "implementation",
+      "problem": "The brief's \"Open\" column counts every `owner:` answer and every decision concern as \"for the owner\", including those the owner has already decided, so the owner's page shows decided items as open.",
+      "severity": "low"
+    }
+  ],
+  "verdict": "yes"
+}
+```
+
