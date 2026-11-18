@@ -687,3 +687,121 @@ No trace gap among the upstream items (python3 scripts/validate_traceability.py 
 | FR2-1 | high | fixed: docs/slices/agentic-sdlc-poc/slice_4_decisions.md, docs/STATUS.md, docs/slices/README.md: every row the finding names now states the current tree, keeping the decision's text and adding "since <decision>: …" with today's proof (S41-D8 names `..._not_seen_...`, `..._were_seen` and `test_a_report_with_a_searched_field_is_refused_by_the_schema` and says R3-2 removed `searched`; S41-D14 and S46-D5 say all three mandates are R4-1's, `test_the_launcher_ships_r4_1s_mandates_in_all_three_modes`; S44-D11 quotes today's "on the slice's decision page"; S45-D1 and decision concern 11 name `..._of_120`, 105 of 120 used; S46-D6 says round 2 removed the sentence and quotes today's Review loop and Review findings text; parked row 5 says R3-2 removed `searched`). Same cause searched for on the whole page, in `docs/STATUS.md` and the slice index: every `test_…` name checked against `def <name>` under `tests/`, every quoted `AGENTS.md` sentence of the proof table against `AGENTS.md`, every file path and `file:line` of the proof, decisions-to-make and parked tables; found and fixed S45-D5 (20 cases since R2-10), S46-D13 (the brief is on the decision page), decision 2's row, the final review's progress row, STATUS's branch row and owner list, the slice index row, and decision concern 16 still called open on the page, in `docs/slices/poc-4-5-benchmark/benchmark_report.md` and in `docs/delivery_problem_log.md`. Left as they are: three names in the round 2 and round 3 sections, which record what held then |
 | FR2-2 | medium | fixed: docs/slices/agentic-sdlc-poc/slice_4_decisions.md, docs/STATUS.md, docs/slices/README.md, docs/delivery_problem_log.md: the work found but not done is in three locked issues labelled `slice`, each opening with "Needed before:", and a comment on #13: #50 (the author-prompts slice: DPL-016's actions, agent definitions, the authors' own check, discovered issue 41, trip points 3, 4, 5, 6, 12 and 16, FR2-3), #51 (the next benchmark run: discovered issues 15, 18, 23 and 37, decision concerns 16 and 19 as rules, 62 to 65 as set aside), #52 (a reviewer that runs tests), and #13 for trip point 8; the discovered issues have the template's Tracking column (an issue, `none:` with the reason, or `—` when closed); each open trip point names its tracking; trip points 2 and 9 are decision 9 under "Decisions to make", for the author-prompts slice's plan (#50); "What remains for the owner" is current on the page, in STATUS and in the slice index. The issues were opened as `guna-agent[bot]` by the owner's decision of 2026-11-18, recorded as a one-line rule deviation under "Decisions made" |
 | FR2-3 | low | deferred: #50: the brief's "Open" column is listed there among the low items for the author-prompts slice, which changes the launcher and brief anyway; slice 4 freezes its process tooling (DPL-016, action 4) |
+
+## Round 2 (count 2)
+
+### Attempt final/c2/r2/A/1
+
+Reviewer `A`: `claude-opus-5-5`, effort medium, mode recheck, commit `f7fd4117db19`, base `3347754ef038`.
+
+Status: completed; approvable within the threat model: yes.
+
+#### Prompt
+
+```markdown
+# Recheck of slice 4's final review (count 2), round 2
+
+The intent is unchanged from round 1 of this count: slice 4's six plans (merged with plan PR #48, the base), the
+owner's later decisions on the decision page `docs/slices/agentic-sdlc-poc/slice_4_decisions.md`, and the question
+what a plan or decision promises that the change does not do, and what the change does that none asked for. Round 1's
+report and the author's answers are below; the fixes are what the reviewed commit adds after `068edb2`. The author
+claims, as claims to verify: the proof table "Decisions and their proof" and the page's status cells state the current
+tree, and the same cause was searched for across the page, `docs/STATUS.md` and the slice index; the work found but not
+done is tracked in issues #50, #51 and #52 and a comment on #13 (the reviewer cannot open GitHub; the issue texts are
+not in the repository, so the page's Tracking column and lists are what can be checked), with the owner's open choices
+in "Decisions to make"; the issues were opened as `guna-agent[bot]` under a rule deviation the owner decided on
+2026-11-18, recorded under "Decisions made"; the brief's "Open" column (FR2-3) is deferred to #50.
+```
+
+#### Evidence
+
+```text
+Each numbered entry must be listed under `accounted`.
+
+EV1: no CI run for this commit (GET https://api.github.com/repos/<owner>/<repo>/actions/runs?head_sha=<commit> (no token))
+
+No trace gap among the upstream items (python3 scripts/validate_traceability.py --mode pr --base <base> --report-json <scratch>/trace.json --design-report-json <scratch>/design.json).
+No process file changed since the reviewed round (d818d8c57cc4 to f7fd4117db19; git diff --numstat --no-renames <earlier attempt's commit> <commit>).
+```
+
+#### Report
+
+```json
+{
+  "accounted": [
+    {
+      "item": "EV1",
+      "note": "There is no CI run for this commit. The change since d818d8c touches only five Markdown files under docs/ (see the diff headers). Under the base rules a gate's result is its CI conclusion on the PR, which the owner sees on PR #49. Nothing in this recheck rests on a gate result.",
+      "opened": [
+        "_review_inputs/change.diff"
+      ],
+      "status": "explained"
+    },
+    {
+      "item": "FR2-1",
+      "note": "Every row the finding named now states the current tree. S41-D8 names the renamed tests (tests/tools/test_run_independent_review.py:1123 and :1140) and the schema test at :1197, and says R3-2 removed `searched`. S41-D14 and S46-D5 name test_the_launcher_ships_r4_1s_mandates_in_all_three_modes (tests/tools/test_run_review_benchmark.py:1623). S45-D1 and decision concern 11 name ..._of_120 (:1590) and 105 of 120. S44-D11 quotes AGENTS.md:409. S46-D6 quotes the Review loop (AGENTS.md:113) and the Review findings text (AGENTS.md:79-80). It also names the test at :1472. Parked row 5 now says `searched` is removed. Every test name the fix cites was found as a `def` under tests/. The same-cause edits (S45-D5, S46-D13, decision 2, the final review's progress row, the status of decision concern 16 in benchmark_report.md and delivery_problem_log.md, and the STATUS and slice-index rows) are in the diff. The fix adds no mechanism: it corrects existing records.",
+      "opened": [
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+        "_review_inputs/change.diff",
+        "tests/tools/test_run_independent_review.py",
+        "tests/tools/test_run_review_benchmark.py",
+        "AGENTS.md",
+        "docs/STATUS.md",
+        "docs/slices/README.md"
+      ],
+      "quotes": [
+        {
+          "end_line": 123,
+          "file": "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+          "line": 123,
+          "text": "| S41-D8 | `Accounting`, the read check; widened by the owner's growth of 2026-11-13 to the files a `rejected:` answer cites, with `searched` for files only searched; since R3-2 (round 3): a file counts as seen where a Read or a content Grep showed its lines (in a recheck also its lines in `change.diff`, decision concern 18), `opened` is unchecked and `searched` is removed | `test_recheck_that_does_not_account_for_every_answer_fails`, `test_fixed_file_that_was_not_seen_fails_even_when_a_path_under_review_was`, `test_a_rejection_counts_only_when_the_files_it_cites_were_seen`, `test_a_report_with_a_searched_field_is_refused_by_the_schema` |"
+        },
+        {
+          "end_line": 129,
+          "file": "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+          "line": 129,
+          "text": "| S41-D14 | the launcher's mandates stay 4.1's; since R4-1 (round 4): all three are R4-1's, the recheck and final by R4-4's outcome, the initial by decision 8 | the benchmark report; decision 2, revisited as round 4, and decision 8; `test_the_launcher_ships_r4_1s_mandates_in_all_three_modes` |"
+        }
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "FR2-2",
+      "note": "The discovered-issues table now has the template's Tracking column (line 848). Each row gives an issue, a reason after `none:`, or a dash when the issue is closed. Every open trip point of the dry slice names its tracking: #50, or #13 for trip point 8 (lines 926-940). Trip points 2 and 9 are decision 9 under \"Decisions to make\". That decision is timed for the author-prompts slice's plan and tracked in #50. The \"What remains for the owner\" text on the page, in STATUS and in the slice index is current. The issues were opened as guna-agent[bot] instead of gunaseelan-agent. That departs from the Git rules, but it is the owner's recorded decision, written as a one-line rule deviation with an expiry under \"Decisions made\", which meets the one-line-exception rule. I cannot check the contents of issues #50 to #52 here. Adding the Tracking column applies the existing template; it adds no new mechanism.",
+      "opened": [
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+        "_review_inputs/change.diff",
+        "docs/STATUS.md",
+        "docs/slices/README.md",
+        "docs/delivery_problem_log.md"
+      ],
+      "quotes": [
+        {
+          "end_line": 926,
+          "file": "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+          "line": 926,
+          "text": "| 2 | Branch names: `poc/slice-<n>-<topic>` has no `<n>` for a slice named by topic | Open: the owner's naming choice; decision 9; tracking: #50 |"
+        },
+        {
+          "end_line": 936,
+          "file": "docs/slices/agentic-sdlc-poc/slice_4_decisions.md",
+          "line": 936,
+          "text": "| 12 | `--path` hints made the implementation review fail the empty-review rule when it read only the plan | Open, medium: growth proposal 5 is related; tracking: #50 |"
+        }
+      ],
+      "status": "accepted"
+    },
+    {
+      "item": "FR2-3",
+      "note": "The answer is deferred to #50, not fixed or rejected. The finding is low, so it is the author's choice, and the launcher and brief are frozen for this slice (DPL-016). The brief on the page (lines 950-961) still shows \"N for the owner\" for units whose items have been decided, as the finding said. I can't confirm here that #50 actually lists this item.",
+      "opened": [
+        "docs/slices/agentic-sdlc-poc/slice_4_decisions.md"
+      ],
+      "status": "accepted"
+    }
+  ],
+  "findings": [],
+  "verdict": "yes"
+}
+```
+
