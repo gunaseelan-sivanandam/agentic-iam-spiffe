@@ -684,3 +684,131 @@ Why review did not catch it earlier:
 ### Lesson
 When results are only appended, decide once which line is current and read every count through that rule. When a
 count is seen to be wrong, fix it at its source, not the numbers in the report.
+
+## DPL-016: Slice 4 was declared done before its goal was tested, so the owner found the gaps in three rounds after done
+
+- Status: Open until the next slice's plan PR merges; that plan writes the six preventive actions below into
+  `AGENTS.md` and the slice templates as its first change
+- Introduced: slice 4's "Done when" (2026-11-09; [decision page](slices/agentic-sdlc-poc/slice_4_decisions.md),
+  section "Goal (the owner's, 2026-11-09)"), which counted what was delivered, not the goal
+- Found: by the owner's questions, which opened rounds 2, 3 and 4 (2026-11-14 to 2026-11-17) and the final review's
+  rerun (2026-11-18); recorded from the author's retrospective of 2026-11-18, counted from `git log` and the seven
+  attempt logs of slice 4's bundles
+
+### What happened
+- The goal was that the next slice "can run the review process end to end without the owner checking by hand", with
+  one owner review at the end. "Done when" counted delivery: every decision implemented and proven, the benchmark run
+  within 60 reviewer runs, a fresh reviewer with no open blocker, the records current, and one dry slice, whose reviews
+  got the old rules and no stage list because slice 4 had not merged. The run met it on 2026-11-10, about 14 hours
+  after the plan merged.
+- The slice ran on to 2026-11-18, about 10 days in all: 189 commits, of which 129 of the implementation branch's 171
+  (75%) came after the final review of 2026-11-10 and 76 of the 171 touch only `docs/`; 25 review units, 63 rounds,
+  78 attempts (14 failed), about USD 90 of reviewer cost. The owner had seven decision rounds after 2026-11-10, where
+  the plan had one, and 38 of the 49 quotes of the owner's words on the decision page are from 2026-11-13 on.
+- Rounds 2, 3 and 4 each began with the owner's own question, not a review finding: "still 6 feels short sighted, it
+  is not clear review severity word change has any impact …" (2026-11-14,
+  [DPL-013](#dpl-013-review-severity-decided-what-got-fixed-a-rejection-could-stand-on-the-authors-word-and-fixes-grew-the-process));
+  "Why wait till next slice, this slice 4 is to fix the review checklist, prompts and make sure the review part is
+  reliably covered I still feel like we are missing that" (2026-11-17, refusing the author's proposal to close the
+  slice); "I feel like you settled on the wording without making industry research or best practices" (2026-11-17).
+- The wording measurement could not decide: 95 reviewer runs over 7 rounds, 105 benchmark calls (about USD 70) against
+  the 60 planned, the budget raised five times; 7 of the 8 recorded conclusions were within chance, gave no rate or
+  rested on a one-case difference. The author's own assessment for the owner on 2026-11-16 (given in conversation, not in
+  the repository) concluded that late wording tuning should wait for live evidence or a measurement with more
+  than one run per case. Round 4 still ran one run per case against a criterion without margin, which the initial
+  wording failed by one false alarm, counted and never judged, so the owner had to decide it (decision 8).
+- The process rules changed inside the slice that used them: the read check five times in five days (the `searched`
+  list added on 2026-11-13 and removed on 2026-11-17), and the rule against growth and its wording from round 2 to
+  round 3.
+- The benchmark runner's counting defects (discovered issues 39 and 56, 44, 55 and 57;
+  [DPL-014](#dpl-014-a-blind-confirmation-token-was-not-tied-to-its-result-line),
+  [DPL-015](#dpl-015-a-review-run-again-under-another-prompt-was-counted-beside-the-run-it-replaced-and-two-rechecks-accepted-the-fix-that-left-it))
+  were found by the author and by round 3's replays, not by the reviews of the runner; the owner was shown wrong
+  recheck counts until 2026-11-17.
+- The owner's page grew from 54 KB at the final review to 201 KB. The six plans were large: five of the six plan
+  reviews ran to round 5 on an extension.
+
+### Root causes
+Why it happened:
+- RC1: "done" counted the units delivered and reviewed, not a trial of the goal; the one trial, the dry slice, ran
+  under the old rules, so nothing showed a slice running the process without the owner.
+- RC2: the measurement was planned, and run again, without checking that one run per case could show the difference
+  that mattered at an affordable cost; when it could not, the budget was raised and the method kept.
+- RC3: wordings and defaults were recommended from the counts and the author's view before any research (round 4's
+  premise).
+- RC4: what each round found was fixed inside the slice by changing the rules the slice was still using, so each
+  change needed its own review and left new items for the owner.
+- RC5: everything for the owner went on one page, the detail too, so what needed the owner was hard to find.
+- RC6: the runner's counts were tested on data without reruns under a new prompt or repeats, so its counting defects
+  showed only on the slice's own results.
+
+Why review did not catch it:
+- RC7: each review judged its unit against its plan, and the final review of 2026-11-10 the change against the plans;
+  no review was asked whether the goal had been tried.
+
+### Actions
+- Corrective: none beyond slice 4's own rounds; the final review's rerun is recorded in
+  [DPL-017](#dpl-017-round-4s-records-and-recommendations-that-a-review-or-the-owner-had-to-correct).
+- Preventive: the six actions the owner adopted on 2026-11-18 ("yes, add both DPLs and adopt all corrective
+  actions"). Action 4 freezes the process rules within a slice, so slice 4 does not write them; the next slice's plan
+  writes them into `AGENTS.md` and the slice templates (`docs/slices/_template/`) as its first change, each where that
+  plan names:
+  1. a slice's done is a trial of its goal: one small real change through the whole process, with the owner
+     hands-off, before the slice is declared done (RC1, RC7);
+  2. before any measurement, check that it can show the difference that matters at an affordable cost; if it cannot,
+     decide by research and principle and watch live evidence (RC2);
+  3. research before recommending a wording or a default (RC3);
+  4. freeze the process rules during a slice: what is found goes to the next slice unless it blocks (RC4);
+  5. one short page of what needs the owner, the detail in the records (RC5);
+  6. test a measuring tool against realistic data (reruns, repeats) before showing its numbers (RC6).
+
+### Lesson
+A slice is done when its goal has been tried the way its next user will run it, not when every unit is delivered.
+Before measuring, check that the measurement can decide; before recommending, research; and keep the rules still
+while the slice uses them.
+
+## DPL-017: Round 4's records and recommendations that a review or the owner had to correct
+
+- Status: Open until slice 4's final PR merges; (a) and (b) are corrected on the slice 4 branch (`ec4b2a4`,
+  `a832737`), and (c)'s correction, the final review's rerun, runs on that PR
+- Introduced: slice 4's round 4 and its handoff records (2026-11-17 to 2026-11-18)
+- Found: (a) by the review unit `owner-decisions-3`, round 1, F2 (medium); (b) and (c) by the owner's questions on
+  2026-11-18 ([decision page](slices/agentic-sdlc-poc/slice_4_decisions.md), growth proposal 12 and the Progress row
+  "Final review")
+
+### What happened
+- (a) The records of R4-4's blind confirmation (the benchmark report, the decision page, the implementation log) left
+  out that a first pair of confirmer sessions, whose prompt added a test beyond the match rule, was stopped before it
+  wrote a verdict, and that the committed rows (`6add324`) set `expected_id` to null on the 65 no-match rows where the
+  sessions had named one. F2 found it; `ec4b2a4` adds both to each record.
+- (b) The author recommended that the owner approve growth proposal 12 (resuming a review that failed the read check)
+  or park it, without checking its premise again. The owner approved it ("GP 12 - Approved"), then asked "Sorry, is
+  GP 12 still needed, …". The attempt logs showed no read-check failure since round 3's change to the check on
+  2026-11-17 (0 in 5 live reviews and 23 benchmark runs, against 9 from 2026-11-09 to 2026-11-14), and the proposal
+  was withdrawn (`a832737`).
+- (c) The handoff records after `owner-decisions-3` (`b354446`) said round 4 was "built, measured and reviewed" and
+  listed what remained for the owner without saying that the slice's final review, which ended on 2026-11-10,
+  predated rounds 2 to 4. The owner was told when asking what was pending, and decided to run it again ("3. no we
+  need a final review rerun").
+
+### Root causes
+Why it happened:
+- RC1: the records and the recommendation were written from the plan or memory, not from a check of the current
+  state: the sessions and the committed rows (a), the attempt logs since the read check changed (b), the date of the
+  last final review against the rounds since (c). The same class as
+  [DPL-012](#dpl-012-slice-4s-implementation-run-made-claims-and-checks-that-did-not-hold)'s RC1.
+
+Why review did not catch it earlier:
+- RC2: a recommendation or an answer to the owner passes no review; the line of (c) was in the copy of the later
+  review `owner-decisions-4` (reviewed commit `6ca3d60`), which did not raise it.
+
+### Actions
+- Corrective: (a) `ec4b2a4`; (b) withdrawn in `a832737`; (c) the unit `final` runs again over the whole slice under
+  R4-1's final mandate, after the owner opens the final PR and posts the reset (decision page, Progress row "Final
+  review").
+- Preventive: none new. DPL-016's action 3 (research before recommending a wording or a default) and DPL-012's lesson
+  that a claim is written from the check's output cover these misses; this entry records them.
+
+### Lesson
+Before writing a record, a recommendation or a list of what remains, check the current state it describes: the
+sessions, the attempt logs, and the date of the last review against what changed since.

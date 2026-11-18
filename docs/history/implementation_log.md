@@ -48,6 +48,11 @@ is first); every heading carries its date.
   opens the final PR and posts the final review's reset as a PR comment, which the launcher's `--reset` takes; then
   the unit `final` runs again over the whole slice under R4-1's final mandate; the owner's actions of decisions 3
   (recreate the hidden issues, about 2026-11-23) and 4 (remove the personal copy of the grill-me skill).
+- DPL-016 (slice 4 declared done before its goal was tested) and DPL-017 (round 4's records and recommendations
+  that a review or the owner had to correct) added to `docs/delivery_problem_log.md` from the author's retrospective
+  of slice 4; the owner answered "yes, add both DPLs and adopt all corrective actions". DPL-016's six actions are for
+  the next slice's plan to write into `AGENTS.md` and the slice templates as its first change (decision page,
+  "Direction for the next slices", point 4; `docs/STATUS.md`). Validation, local: `make docs-check` and `make tooling-test` (1001 passed; shell 9 passed) passed.
 
 ## 2026-11-18 Slice agentic-sdlc-poc 4: round 4, the review mandates and the runner fixes
 

@@ -77,7 +77,10 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
      selecting good author prompts"), into which the owner's direction of 2026-11-18 folds the review prompts as
      agent definitions in files that the launcher reads from the base branch, so author and reviewer agents are
      defined the same way; then a reviewer that runs and writes tests to back its findings, in its own slice; each
-     through a plan the owner approves (decision page, "Direction for the next slices");
+     through a plan the owner approves (decision page, "Direction for the next slices"); the next slice's plan
+     first writes into `AGENTS.md` and the slice templates the six corrective actions of
+     [DPL-016](delivery_problem_log.md#dpl-016-slice-4-was-declared-done-before-its-goal-was-tested-so-the-owner-found-the-gaps-in-three-rounds-after-done)
+     that the owner adopted on 2026-11-18;
   2. before slice 5: QA-tooling gaps ([#44](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/44)) and publication scanning ([#21](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/21));
   3. slice 5 (one real backlog item through the whole cycle) and slice 6 (gates that run shows);
      inputs recorded on 2026-11-09 from the research of agent-first delivery (owner's decision; they
