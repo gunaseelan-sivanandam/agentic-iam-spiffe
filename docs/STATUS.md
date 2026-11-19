@@ -64,9 +64,8 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
      baselines unless the author finds a reason to re-run them), withdrew growth proposal 12 (resuming a review that
      failed the read check; no such failure since round 3's changes to the check), closed discovered issue 53 and left
      discovered issues 62 to 65 as recorded. Decision concern 16 is decided (both confirmers from the next benchmark on;
-     the blind verdicts count). Open for the owner before slice 4 closes (the decision page's list): decision 3
-     (recreate the hidden issues, about 2026-11-23), outside the repository; and the merge of PR #49 (the final
-     review has ended; the branch is pushed as `guna-agent[bot]`). The work found but not done is tracked in #50 (the author-prompts slice), #51 (the next
+     the blind verdicts count). The owner merged PR #49 on 2026-11-19, which closed slice 4. Open for the owner (the decision page's list):
+     decision 3 (recreate the hidden issues, about 2026-11-23), outside the repository. The work found but not done is tracked in #50 (the author-prompts slice), #51 (the next
      benchmark run), #52 (a reviewer that runs tests) and a comment on #13, opened as `guna-agent[bot]` (the owner,
      2026-11-18). Decision 4 is done: the personal copy of the grill-me skill no longer exists (checked 2026-11-18).
      Decision 10 (the checklist wording, 2026-11-19) is the owner's too; it goes to the next slice's first change
@@ -79,7 +78,8 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
      Progress and the owner's decisions: [`slice_4_decisions.md`](slices/agentic-sdlc-poc/slice_4_decisions.md);
      Next, before slice 5: first, the PoC's goal defined with the owner at the level of its agents (each role, its
      competence from an industry standard, how it is started, its reliability measure and bar, a walk-through of one
-     change), before any plan (owner, 2026-11-19; DPL-016's RC8); then a slice of author prompts and
+     change), before any plan (owner, 2026-11-19; DPL-016's RC8), drafted for the owner's correction on the
+     [decision page of slice poc-5-agent-roles](slices/poc-5-agent-roles/decisions.md); then a slice of author prompts and
      their benchmark (owner, 2026-11-09: "let's
      continue this slice for just review, after this let's run a new slice of author prompts and
      benchmark them, since the review prompts are finalized that would give us bit of data for
@@ -117,10 +117,10 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
     Redis authorization state accepts unauthenticated writes.
   - [OPL-008](open_problem_log.md#opl-008-spire-token-init-mounts-the-whole-spire-server-data-directory):
     the SPIRE bootstrap container can read the server's signing keys and datastore.
-- **Last slice:** [agentic-sdlc-poc](slices/agentic-sdlc-poc/plan.md) slice 3, the changed-files lint
-  (`make lint`), merged into `poc/agentic-sdlc` in PR #37, after slice 1 (the PoC's rules, PR #34) and slice 2
-  (the review launcher and benchmark, PR #35). Slice 4's plans merged with PR #48; slice 4 itself is not merged yet
-  (PR #49).
+- **Last slice:** [agentic-sdlc-poc](slices/agentic-sdlc-poc/plan.md) slice 4, the review process (prompts,
+  inputs, records, stage checklists, benchmark, stage rules), merged into `poc/agentic-sdlc` in PR #49 on 2026-11-19,
+  after its plans (PR #48), slice 3 (the changed-files lint, PR #37), slice 2 (the review launcher and benchmark,
+  PR #35) and slice 1 (the PoC's rules, PR #34).
 - **Next work** is tracked as [GitHub issues](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues) (label `slice`): the proposed `gate-register`
   ([#13](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/13)), `asset-classification` ([#14](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/14)) and 100% coverage ([#15](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/15)) slices,
   slice 3, review design and orchestration ([#16](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/16)), and the pilot that fixes OPL-005 to
@@ -160,7 +160,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `poc/slice-4-implementation` | agentic-sdlc-poc slice 4: the six sub-issues (#38–#43), on the plans merged with PR #48 | Implemented and reviewed, pushed (PR #49); the owner's decisions of 2026-11-13 implemented and reviewed; round 2 (R2-1 to R2-10, 2026-11-14) implemented, its review unit `round-2` ended after round 2 (approvable; decision concern 16 to the owner); the owner's decisions of 2026-11-16 (decision concerns 11 and 13) implemented, their review unit `owner-decisions-2` ran round 1 (approvable; F1 to F3 fixed, decision concern 17 to the owner) and ended after its recheck, round 2; round 3 (R3-1 to R3-4, 2026-11-17) implemented and measured, then decision concern 18 decided by the owner (option (b)) and built, and the `mechanics` replay run once more (passed); its review unit `round-3` ended after round 2 (approvable; F1, F2, F3 and F6 fixed, F4 and F5 rejected; the recheck's one new low fixed); the owner's decisions of 2026-11-17 recorded (decisions 1, 3, 4 and 5 accepted, decision 2 revisited as round 4); round 4 (R4-1 to R4-6) built and measured: discovered issues 56, 57 and 60 fixed, the recheck and final mandates shipped; its review unit `owner-decisions-3` ended after round 2; the initial mandate shipped by the owner's decision 8 (2026-11-18), its review unit `owner-decisions-4` ended after round 1 (approvable; one low finding, fixed); the owner's decisions of 2026-11-18 recorded (the direction for the next slices, decision concern 19 decided, growth proposal 12 withdrawn, discovered issue 53 closed, discovered issues 62 to 65 left as recorded); decision concern 16 decided (both confirmers from the next benchmark on); open for the owner: decision 3 and the merge (decision 4 done), and decision 10 (the checklist wording) for the next slice's first change (#50); the work found but not done is tracked in #50, #51, #52 and a comment on #13, opened as `guna-agent[bot]` (the owner, 2026-11-18); the final PR #49 into `poc/agentic-sdlc`, opened by the owner, on which the final review ran again after the owner's reset comment (count 2: round 1 approvable, 1 high, 1 medium, 1 low; round 2 approvable, so it ended) |
+| `poc/slice-5-agent-roles` | agentic-sdlc-poc slice 5: the PoC's goal at the level of its agents (DPL-016's RC8), before any plan | Research on roles and on reliability in the bundle; the goal page ([decisions.md](slices/poc-5-agent-roles/decisions.md)) drafted for the owner's correction; no plan yet |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
