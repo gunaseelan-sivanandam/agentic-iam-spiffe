@@ -754,6 +754,21 @@ Why review did not catch it:
 - RC7: each review judged its unit against its plan, and the final review of 2026-11-10 the change against the plans;
   no review was asked whether the goal had been tried.
 
+Why it started this way:
+- RC8 (the owner, 2026-11-19): implementation started without a clear goal or a shared view of how it would work
+  inside. The goal ("the next slice can run the review process end to end without the owner checking by hand") was
+  written after the six plans were approved and never turned into what each plan must deliver; the author's default
+  decisions, about half of the plans' rows, were made per sub-slice and reviewed against those plans, so choices that
+  did not serve the goal (S42-D3's inputs for requirements and architecture reviews; no review run with `--stage`)
+  were found only by the owner, after done. The PoC's goal has the same gap: it names the stages, their artifacts and
+  checks, but not the agents that author and review each artifact, what each must be able to do, or how reliably; so
+  every stage rests on the author's prompting. In the owner's words: "we started the slice implementation without
+  clear goal to be achieved and the internals of it and your decision where either short sighted and did not cover
+  the goal we had in mind", and "We have not defined how relaibly different sub agents can be spinned (for example
+  requirement agent who can create requirement like a requirement engineer looking at 360 from the plan) or
+  requirement review engieer or architect agent who architects the SW like an senior architects. Everything somehow
+  feel like based on your prompting capability."
+
 ### Actions
 - Corrective: none beyond slice 4's own rounds; the final review's rerun is recorded in
   [DPL-017](#dpl-017-round-4s-records-and-recommendations-that-a-review-or-the-owner-had-to-correct).
@@ -770,6 +785,11 @@ Why review did not catch it:
   4. freeze the process rules during a slice: what is found goes to the next slice unless it blocks (RC4);
   5. one short page of what needs the owner, the detail in the records (RC5);
   6. test a measuring tool against realistic data (reruns, repeats) before showing its numbers (RC6).
+- Preventive for RC8 (the owner, 2026-11-19: "Let's do this and we should use industry best practise all the time
+  under our threat model"): before any plan, the next slice defines with the owner the PoC's goal at the level of its
+  agents: each role (requirements engineer, architect, test engineer, implementer and their reviewers), its
+  competence from an industry standard, how it is started, how its reliability is measured and the bar it must meet,
+  and a walk-through of one change through every role; industry best practice throughout, within the threat model.
 
 ### Lesson
 A slice is done when its goal has been tried the way its next user will run it, not when every unit is delivered.

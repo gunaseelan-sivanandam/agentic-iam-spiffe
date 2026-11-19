@@ -77,7 +77,10 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
      1 high, 1 medium, 1 low; FR2-1 and FR2-2 fixed, FR2-3 deferred to #50). Its recheck, round 2, on `f7fd411`, was
      approvable, accepted the three answers and found nothing new, so the final review has ended.
      Progress and the owner's decisions: [`slice_4_decisions.md`](slices/agentic-sdlc-poc/slice_4_decisions.md);
-     Next, before slice 5: a slice of author prompts and their benchmark (owner, 2026-11-09: "let's
+     Next, before slice 5: first, the PoC's goal defined with the owner at the level of its agents (each role, its
+     competence from an industry standard, how it is started, its reliability measure and bar, a walk-through of one
+     change), before any plan (owner, 2026-11-19; DPL-016's RC8); then a slice of author prompts and
+     their benchmark (owner, 2026-11-09: "let's
      continue this slice for just review, after this let's run a new slice of author prompts and
      benchmark them, since the review prompts are finalized that would give us bit of data for
      selecting good author prompts"), into which the owner's direction of 2026-11-18 folds the review prompts as
