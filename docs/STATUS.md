@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-11-18. Update this page at the end of every slice (see `AGENTS.md`, slice workflow, handoff).
+Last updated: 2026-11-19. Update this page at the end of every slice (see `AGENTS.md`, slice workflow, handoff).
 Detailed history: [`docs/history/implementation_log.md`](history/implementation_log.md).
 
 ## Where the project stands
@@ -68,9 +68,11 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
      (recreate the hidden issues, about 2026-11-23), outside the repository; and the merge of PR #49 (the final
      review has ended; the branch is pushed as `guna-agent[bot]`). The work found but not done is tracked in #50 (the author-prompts slice), #51 (the next
      benchmark run), #52 (a reviewer that runs tests) and a comment on #13, opened as `guna-agent[bot]` (the owner,
-     2026-11-18). Decision 4 is done: the personal copy of the grill-me skill no longer exists (checked 2026-11-18). The owner pushed the branch and opened the final PR, #49 (the agent account cannot write to
-     GitHub). The final review runs again (the owner, 2026-11-18): the unit `final` ended on 2026-11-10, before rounds
-     2 to 4, so it reviews the whole slice once more under R4-1's final mandate. Its count was reset by the owner's
+     2026-11-18). Decision 4 is done: the personal copy of the grill-me skill no longer exists (checked 2026-11-18).
+     Decision 10 (the checklist wording, 2026-11-19) is the owner's too; it goes to the next slice's first change
+     (#50) and does not block PR #49. The owner opened the final PR, #49; the branch is pushed as `guna-agent[bot]`.
+     The final review ran again (the owner, 2026-11-18): the unit `final` had ended on 2026-11-10, before rounds 2 to
+     4, so it reviewed the whole slice once more under R4-1's final mandate. Its count was reset by the owner's
      comment on PR #49, the only form the launcher's `--reset` takes, and its round 1 ran on `d818d8c` (approvable;
      1 high, 1 medium, 1 low; FR2-1 and FR2-2 fixed, FR2-3 deferred to #50). Its recheck, round 2, on `f7fd411`, was
      approvable, accepted the three answers and found nothing new, so the final review has ended.
@@ -112,12 +114,10 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
     Redis authorization state accepts unauthenticated writes.
   - [OPL-008](open_problem_log.md#opl-008-spire-token-init-mounts-the-whole-spire-server-data-directory):
     the SPIRE bootstrap container can read the server's signing keys and datastore.
-- **Last slice:** [agentic-delivery-process](slices/agentic-delivery-process/plan.md) slice 2 of 3,
-  [`ci-evidence-trace`](slices/ci-evidence-trace/plan.md), is implemented: Increment A (CI E2E as a
-  required check, no secrets in evidence) in PR #11, Increment B (static tests, status from the
-  register, `Implemented by:`, the gap gate, gate consistency) in PR #12. Slice 1 (exact E2E outcomes,
-  `make test-lint`, mutation scoring, `security/invariants.yaml` and `make qa-deploy`) merged in PR #5
-  and PR #6.
+- **Last slice:** [agentic-sdlc-poc](slices/agentic-sdlc-poc/plan.md) slice 3, the changed-files lint
+  (`make lint`), merged into `poc/agentic-sdlc` in PR #37, after slice 1 (the PoC's rules, PR #34) and slice 2
+  (the review launcher and benchmark, PR #35). Slice 4's plans merged with PR #48; slice 4 itself is not merged yet
+  (PR #49).
 - **Next work** is tracked as [GitHub issues](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues) (label `slice`): the proposed `gate-register`
   ([#13](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/13)), `asset-classification` ([#14](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/14)) and 100% coverage ([#15](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/15)) slices,
   slice 3, review design and orchestration ([#16](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/16)), and the pilot that fixes OPL-005 to
@@ -130,6 +130,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Last verification
 | Check | Date | Result |
 | --- | --- | --- |
+| `make docs-check`, `make qa-trace`, `make tooling-test` on `poc/slice-4-implementation` (slice 4's close-out on `dfbc55a`; records only); CI on `dfbc55a` | 2026-11-19 | docs-check and qa-trace PASSED (exit 0); qa-trace: 0 new gaps, 113 coverage gaps remain; tooling-test: 992 pytest passed, 9 failed, the shellcheck tests, since shellcheck is not installed locally (discovered issue 1), and 9 shell passed; CI: 12 of 12 jobs passed on `dfbc55a` (`gate-consistency` had failed on `c1faa5d` on a rate-limited read of the ruleset). Not run: the E2E suite (records only; CI runs on the push) |
 | `make docs-check`, `make tooling-test` on `poc/slice-4-implementation` (the owner's decisions of 2026-11-18 recorded on `489fccf`: the direction for the next slices, decision concern 19, growth proposal 12, discovered issues 53 and 62 to 65, the final review; docs only) | 2026-11-18 | PASSED; 1001 pytest (with a scratch shellcheck), 9 shell. Not run: the E2E suite and the other gates (no service, policy, compose, harness, script or CI file changed) |
 | `make docs-check`, `make tooling-test` on `poc/slice-4-implementation` (round 4's review handoff on `e6f78d3`: the review unit `owner-decisions-3` ended, the brief rebuilt; docs only) | 2026-11-18 | PASSED; 1000 pytest (with a scratch shellcheck), 9 shell. Not run: the E2E suite and the other gates (no service, policy, compose, harness, script or CI file changed) |
 | `make docs-check`, `make qa-trace`, `make lint`, `make tooling-test` on `poc/slice-4-implementation` (round 4's handoff on `1f905a9`: discovered issues 56, 57 and 60 fixed, R4-4 measured, the recheck and final mandates shipped; docs only); at `1f905a9`, `make tooling-test`, `make docs-check`, `make lint` and `make gate-consistency`, as the commit records | 2026-11-18 | PASSED; qa-trace: 0 new gaps, 113 coverage gaps remain; lint 0 new or worsened; 1000 pytest (with a scratch shellcheck), 9 shell. Not run: the E2E suite (no service, policy, compose, harness or CI file changed; CI runs it on the PR) |
@@ -156,7 +157,7 @@ Detailed history: [`docs/history/implementation_log.md`](history/implementation_
 ## Work in flight
 | Branch | Purpose | State |
 | --- | --- | --- |
-| `poc/slice-4-implementation` | agentic-sdlc-poc slice 4: the six sub-issues (#38–#43), on the plans merged with PR #48 | Implemented and reviewed, pushed (PR #49); the owner's decisions of 2026-11-13 implemented and reviewed; round 2 (R2-1 to R2-10, 2026-11-14) implemented, its review unit `round-2` ended after round 2 (approvable; decision concern 16 to the owner); the owner's decisions of 2026-11-16 (decision concerns 11 and 13) implemented, their review unit `owner-decisions-2` ran round 1 (approvable; F1 to F3 fixed, decision concern 17 to the owner) and ended after its recheck, round 2; round 3 (R3-1 to R3-4, 2026-11-17) implemented and measured, then decision concern 18 decided by the owner (option (b)) and built, and the `mechanics` replay run once more (passed); its review unit `round-3` ended after round 2 (approvable; F1, F2, F3 and F6 fixed, F4 and F5 rejected; the recheck's one new low fixed); the owner's decisions of 2026-11-17 recorded (decisions 1, 3, 4 and 5 accepted, decision 2 revisited as round 4); round 4 (R4-1 to R4-6) built and measured: discovered issues 56, 57 and 60 fixed, the recheck and final mandates shipped; its review unit `owner-decisions-3` ended after round 2; the initial mandate shipped by the owner's decision 8 (2026-11-18), its review unit `owner-decisions-4` ended after round 1 (approvable; one low finding, fixed); the owner's decisions of 2026-11-18 recorded (the direction for the next slices, decision concern 19 decided, growth proposal 12 withdrawn, discovered issue 53 closed, discovered issues 62 to 65 left as recorded); decision concern 16 decided (both confirmers from the next benchmark on); open for the owner: decision 3 and the merge (decision 4 done); the work found but not done is tracked in #50, #51, #52 and a comment on #13, opened as `guna-agent[bot]` (the owner, 2026-11-18); the final PR #49 into `poc/agentic-sdlc`, opened by the owner, on which the final review ran again after the owner's reset comment (count 2: round 1 approvable, 1 high, 1 medium, 1 low; round 2 approvable, so it ended) |
+| `poc/slice-4-implementation` | agentic-sdlc-poc slice 4: the six sub-issues (#38–#43), on the plans merged with PR #48 | Implemented and reviewed, pushed (PR #49); the owner's decisions of 2026-11-13 implemented and reviewed; round 2 (R2-1 to R2-10, 2026-11-14) implemented, its review unit `round-2` ended after round 2 (approvable; decision concern 16 to the owner); the owner's decisions of 2026-11-16 (decision concerns 11 and 13) implemented, their review unit `owner-decisions-2` ran round 1 (approvable; F1 to F3 fixed, decision concern 17 to the owner) and ended after its recheck, round 2; round 3 (R3-1 to R3-4, 2026-11-17) implemented and measured, then decision concern 18 decided by the owner (option (b)) and built, and the `mechanics` replay run once more (passed); its review unit `round-3` ended after round 2 (approvable; F1, F2, F3 and F6 fixed, F4 and F5 rejected; the recheck's one new low fixed); the owner's decisions of 2026-11-17 recorded (decisions 1, 3, 4 and 5 accepted, decision 2 revisited as round 4); round 4 (R4-1 to R4-6) built and measured: discovered issues 56, 57 and 60 fixed, the recheck and final mandates shipped; its review unit `owner-decisions-3` ended after round 2; the initial mandate shipped by the owner's decision 8 (2026-11-18), its review unit `owner-decisions-4` ended after round 1 (approvable; one low finding, fixed); the owner's decisions of 2026-11-18 recorded (the direction for the next slices, decision concern 19 decided, growth proposal 12 withdrawn, discovered issue 53 closed, discovered issues 62 to 65 left as recorded); decision concern 16 decided (both confirmers from the next benchmark on); open for the owner: decision 3 and the merge (decision 4 done), and decision 10 (the checklist wording) for the next slice's first change (#50); the work found but not done is tracked in #50, #51, #52 and a comment on #13, opened as `guna-agent[bot]` (the owner, 2026-11-18); the final PR #49 into `poc/agentic-sdlc`, opened by the owner, on which the final review ran again after the owner's reset comment (count 2: round 1 approvable, 1 high, 1 medium, 1 low; round 2 approvable, so it ended) |
 
 ## Open problems
 Full entries in [`docs/open_problem_log.md`](open_problem_log.md).
@@ -194,7 +195,11 @@ Full entries, root causes and lessons in [`docs/delivery_problem_log.md`](delive
   after done; its six corrective actions, adopted by the owner on 2026-11-18, go into the rulebook and templates
   with the next slice's plan, closing it when that plan PR merges.
 - **DPL-017** Round 4's records and recommendations that a review or the owner had to correct; fixed on the slice 4
-  branch, closing it when slice 4 merges.
+  branch, with (d) to (g), the recurrences since; the next slice's plan (#50) proposes a preventive action, closing
+  it when slice 4 merges and the owner has decided that action.
+- **DPL-018** Commits prepared for a push carried operational details of the agents' GitHub identity; the author's
+  scan caught them before the push, and nothing reached GitHub; the preventive action goes to the owner in the next
+  slice's plan (#50), closing it when that plan PR merges.
 - DPL-008 closed on 2026-11-04.
 
 ## Known gaps and debt

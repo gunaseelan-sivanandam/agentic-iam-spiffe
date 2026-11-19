@@ -728,6 +728,13 @@ count is seen to be wrong, fix it at its source, not the numbers in the report.
   recheck counts until 2026-11-17.
 - The owner's page grew from 54 KB at the final review to 201 KB. The six plans were large: five of the six plan
   reviews ran to round 5 on an extension.
+- Slice 4 added no requirement and no architecture section, so its own reviews never ran the requirements and
+  architecture stages, and the benchmark had two cases per list, no clean case, and computed evidence off. On
+  2026-11-19 the owner's question found that a requirements- or architecture-stage review gets few trace links around
+  the change: 4.2's decision S42-D3 (`docs/slices/poc-4-2-review-inputs/plan.md:41`) links only through
+  `Implemented by:` lines, DD tags and the edited headings, not the architecture that satisfies an edited requirement,
+  its proofs, or the requirements an edited architecture section satisfies; and that two checklist questions have
+  gaps ([decision page](slices/agentic-sdlc-poc/slice_4_decisions.md), decision 10).
 
 ### Root causes
 Why it happened:
@@ -755,7 +762,8 @@ Why review did not catch it:
   writes them into `AGENTS.md` and the slice templates (`docs/slices/_template/`) as its first change, each where that
   plan names:
   1. a slice's done is a trial of its goal: one small real change through the whole process, with the owner
-     hands-off, before the slice is declared done (RC1, RC7);
+     hands-off, before the slice is declared done (RC1, RC7). (2026-11-19, the owner with the close-out: the trial
+     goes through every stage, requirements and architecture included.)
   2. before any measurement, check that it can show the difference that matters at an affordable cost; if it cannot,
      decide by research and principle and watch live evidence (RC2);
   3. research before recommending a wording or a default (RC3);
@@ -770,12 +778,15 @@ while the slice uses them.
 
 ## DPL-017: Round 4's records and recommendations that a review or the owner had to correct
 
-- Status: Open until slice 4's final PR merges; (a) and (b) are corrected on the slice 4 branch (`ec4b2a4`,
-  `a832737`), and (c)'s correction, the final review's rerun, runs on that PR
-- Introduced: slice 4's round 4 and its handoff records (2026-11-17 to 2026-11-18)
+- Status: Open until slice 4's final PR merges and the owner decides the preventive action that the next slice's
+  plan proposes (#50); (a), (b), (d), (f) and (g) are corrected on the slice 4 branch, (e) before the push, and (c)'s
+  correction, the final review's rerun, has ended (final review count 2, rounds 1 and 2, on PR #49)
+- Introduced: slice 4's round 4 and its handoff records (2026-11-17 to 2026-11-18); (d)'s stale rows since round 2
+  (2026-11-14)
 - Found: (a) by the review unit `owner-decisions-3`, round 1, F2 (medium); (b) and (c) by the owner's questions on
   2026-11-18 ([decision page](slices/agentic-sdlc-poc/slice_4_decisions.md), growth proposal 12 and the Progress row
-  "Final review")
+  "Final review"); (d) and (g) by the final review count 2, round 1 (FR2-1, FR2-2); (e) by the author before the
+  push (2026-11-18); (f) by the author's close-out audit (2026-11-19)
 
 ### What happened
 - (a) The records of R4-4's blind confirmation (the benchmark report, the decision page, the implementation log) left
@@ -791,6 +802,18 @@ while the slice uses them.
   listed what remained for the owner without saying that the slice's final review, which ended on 2026-11-10,
   predated rounds 2 to 4. The owner was told when asking what was pending, and decided to run it again ("3. no we
   need a final review rerun").
+- After this entry was written, the same class recurred:
+  - (d) FR2-1 (high, final review count 2, round 1): the decision page's proof table "Decisions and their proof"
+    and its status cells named tests, rule text and launcher behaviour that later rounds had changed; fixed in
+    `ea4d440`.
+  - (e) 2026-11-18: the handoff records, cherry-picked after unpushed commits were rewritten, held stale commit
+    hashes and claimed a recheck finding that the rerun did not make; the author caught it before the push.
+  - (f) 2026-11-19: `docs/STATUS.md` and the slice index rows 4.1 to 4.6 still described the branch as pushed by
+    the owner, the final review as running and the final PR as pending, after the final review had ended. The
+    author's close-out audit found it when the owner asked what was open; fixed in the close-out commit.
+  - (g) FR2-2 (medium, final review count 2, round 1): work found but not done was not tracked in issues until the
+    final review found it, a handoff step skipped; fixed in `d76035e`, the issues opened and the answers in
+    `f7fd411`.
 
 ### Root causes
 Why it happened:
@@ -804,12 +827,50 @@ Why review did not catch it earlier:
   review `owner-decisions-4` (reviewed commit `6ca3d60`), which did not raise it.
 
 ### Actions
-- Corrective: (a) `ec4b2a4`; (b) withdrawn in `a832737`; (c) the unit `final` runs again over the whole slice under
-  R4-1's final mandate, after the owner opens the final PR and posts the reset (decision page, Progress row "Final
-  review").
-- Preventive: none new. DPL-016's action 3 (research before recommending a wording or a default) and DPL-012's lesson
-  that a claim is written from the check's output cover these misses; this entry records them.
+- Corrective: (a) `ec4b2a4`; (b) withdrawn in `a832737`; (c) the unit `final` ran again over the whole slice under
+  R4-1's final mandate after the owner's reset on PR #49, and count 2 ended after round 2 (decision page, Progress
+  row "Final review"); (d) `ea4d440`; (e) the records corrected before the push; (f) the close-out commit;
+  (g) `d76035e` and `f7fd411`.
+- Preventive: at first none new, on the view that DPL-016's action 3 (research before recommending a wording or a
+  default) and DPL-012's lesson that a claim is written from the check's output covered these misses. That did not
+  hold: the class recurred in (d) to (f). The next slice's plan (#50) proposes one preventive action for the owner to
+  approve.
 
 ### Lesson
 Before writing a record, a recommendation or a list of what remains, check the current state it describes: the
 sessions, the attempt logs, and the date of the last review against what changed since.
+
+## DPL-018: Commits prepared for a push carried operational details of the agents' GitHub identity; the author's scan caught them before the push
+
+- Status: Open until the next slice's plan PR merges; that plan proposes the preventive action below to the owner
+  ([#50](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/50))
+- Introduced: slice 4's handoff for the push (2026-11-18)
+- Found: 2026-11-18, by the author's scan of the commits before the push
+
+### What happened
+- While preparing slice 4's handoff for the push, the author wrote into two public records, the rule-deviation row
+  under "Decisions made" on the [decision page](slices/agentic-sdlc-poc/slice_4_decisions.md) and the
+  [implementation log](history/implementation_log.md), details of how the agents' GitHub identity is set up.
+- The author's scan of the commits before the push found them. The unpushed commits were rewritten without them
+  before anything was published, and the first run of the final review's round-2 recheck, whose report quoted the
+  text, was discarded with those commits (implementation log, 2026-11-18, the final review's rerun).
+- Nothing reached GitHub.
+
+### Root causes
+Why it happened:
+- RC1: the rule that operational details of identities, credentials and local setup stay out of the public
+  repository, its issues and its PR bodies lives in the author's notes (and as a source of 4.2's S42-D8), not in
+  `AGENTS.md`. Coding rule 1 covers secrets, and the evidence secret check (`make qa-evidence`) matches secrets by
+  shape, so neither covers prose.
+
+Why review did not catch it:
+- RC2: no review or gate checks a record for operational details.
+
+### Actions
+- Corrective: the unpushed commits rewritten without the details, before the push (2026-11-18).
+- Preventive: proposed to the owner in the next slice's plan (#50): a line in `AGENTS.md` that keeps operational
+  details out of what is published, and the author's scan of what goes public before each push. Publication
+  scanning is [#21](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/21).
+
+### Lesson
+Check what goes public before the push, for operational details as well as secrets.

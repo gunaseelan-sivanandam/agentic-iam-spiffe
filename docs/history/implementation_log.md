@@ -5,6 +5,39 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-11-19 Slice agentic-sdlc-poc 4: the close-out (records only)
+
+- The owner approved the close-out ("yes, go ahead with the close-out commit and comments"). Records only: no code,
+  test, checklist, template, review record or `AGENTS.md` changed.
+- `docs/STATUS.md`: the passage on the final PR says that the owner opened PR #49, the branch is pushed as
+  `guna-agent[bot]` and the final review ran again (it still said that the owner pushed the branch, that the agent
+  account cannot write to GitHub and that the review runs again); decision 10 noted; "Last slice" is the PoC's
+  slice 3 (PR #37), the last merged; DPL-017 and DPL-018 under the open delivery problems; a row under "Last
+  verification".
+- `docs/slices/README.md`: rows 4.1 to 4.6 say that every review ended and that the final PR #49 is open (they said
+  "in review; final PR pending"); the parent row names decision 10.
+- `docs/delivery_problem_log.md`: DPL-016 records that slice 4's reviews never ran the requirements and architecture
+  stages and what the owner's question of 2026-11-19 found, and the owner's note under action 1 (the trial goes
+  through every stage); DPL-017's status, the recurrences (d) to (g), and its preventive line ("none new" did not
+  hold; the next slice's plan, #50, proposes one); DPL-018 (new): commits prepared for a push carried operational
+  details of the agents' GitHub identity, caught by the author's scan before the push.
+- `docs/slices/agentic-sdlc-poc/slice_4_decisions.md`: decision 10 (three checklist wordings) under "Decisions to
+  make", for the next slice's first change (#50), not blocking PR #49; discovered issues 66 to 70; a line beside the
+  brief on its "Open" column (FR2-3); the Progress row "Final review" in the past tense; the "Last updated" line.
+- The same staleness searched for ("final PR pending", "runs again", "cannot write", "pushed the branch", "in review",
+  "opens the final PR", "the push and the final PR") in `docs/STATUS.md`, `docs/slices/README.md` and the decision
+  page; besides the fixes above, the hits are dated history (the page's "Last updated" line, the rule-deviation row)
+  or other subjects, left as recorded.
+- CI on `dfbc55a`: 12 of 12 jobs passed. `gate-consistency` had failed on `c1faa5d` on the rate-limited read of the
+  ruleset (discovered issue 66) and passed on `dfbc55a`.
+- Validation, local: `make docs-check` and `make qa-trace` passed (exit 0; requirements 170, architecture 34, design
+  131, tests 386, coverage gaps 113; 0 new against the merge-base). `make tooling-test` (exit 2): 992 passed, 9 failed,
+  the shellcheck tests of `tests/tools/test_lint_changed_files.py`, since shellcheck is not installed locally
+  (discovered issue 1); `tests/shell/` run on its own: 9 passed. Not run: the E2E suite (records only), and CI, which
+  runs on the push.
+- Next: the owner merges PR #49; decision 3 (recreate the hidden issues, about 2026-11-23) stays the owner's;
+  decision 10 goes to the next slice's first change (#50).
+
 ## 2026-11-18 Slice agentic-sdlc-poc 4: the final review's rerun (count 2) and the issues for the work not done
 
 - The unit `final` ran again over the whole slice under R4-1's final mandate, after the owner's reset comment on
