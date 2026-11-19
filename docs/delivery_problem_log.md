@@ -237,6 +237,9 @@ Why review did not catch it:
   - the reviewer may check metadata of secret files, never their content;
   - a plan that depends on a fact outside the repository records the probe and its result (plan
     template "Environment facts").
+- Later (2026-11-14): fixes kept growing the process while the first preventive action stayed rule text only;
+  round 2 of slice 4 has a fix add no mechanism and asks it in every initial review and recheck
+  ([DPL-013](#dpl-013-review-severity-decided-what-got-fixed-a-rejection-could-stand-on-the-authors-word-and-fixes-grew-the-process)).
 
 ### Lesson
 Before fixing a finding, ask which upstream choice causes it and whether changing that choice removes
@@ -303,7 +306,10 @@ A gate without a negative control can be silently empty. Prove each gate fails o
 
 ## DPL-010: Slice 2's reviews accepted answers on the author's word, and closed questions let gaps through
 
-- Status: Open (preventive actions are inputs for slice 4, issue #33)
+- Status: Open; its preventive actions are implemented on the slice 4 branch and close it when slice 4's final PR
+  merges: the open mandate first in every prompt and rechecks that must open what each answer names (4.1),
+  computed evidence that every review accounts for (4.2), and review records written by the launcher and
+  checked by `make docs-check` against the attempt log (4.3)
 - Found: 2026-11-08, by the owner (untested refusal paths in the review launcher) and by slice 2's review
   round 5, an extra round the owner asked for before merging PR #35
 
@@ -352,13 +358,13 @@ Why review did not catch it:
   - How the CLI reports a failed Read was probed on 2026-11-08 (CLI 2.1.319: an error result with the
     matching call ID).
   - By the owner's decision, the untested refusal paths stay as they are in this PR.
-- Preventive (pending, slice 4, issue #33):
-  - every stage's prompt opens with an open mandate, and specific questions are a minimum;
+- Preventive (implemented on the slice 4 branch, issue #33):
+  - every stage's prompt opens with an open mandate, and specific questions are a minimum (4.1);
   - every stage gets the evidence (coverage, tool-computed lists of what is missing), not the
-    author's conclusions;
-  - a recheck opens the changed code and tests for each answer it accepts, and says what it read;
-  - an open final review;
-  - a check of review records against the attempt log (slice 6 candidate).
+    author's conclusions (4.2);
+  - a recheck opens the changed code and tests for each answer it accepts, and says what it read (4.1);
+  - an open final review (4.1, 4.6);
+  - a check of review records against the attempt log (4.3, in `make docs-check`).
 
 ### Lesson
 A question decides what an agent looks at. Give every stage the open mandate and the evidence, and
@@ -367,7 +373,8 @@ make rechecks verify the fix rather than trust the answer.
 
 ## DPL-011: Slice 2's launcher and the secret check broke on slice 4's parallel plan reviews
 
-- Status: Open (fixes and their tests are in slice 4's plan PR; closed when it merges)
+- Status: Open until slice 4's final PR merges: its fixes merged with slice 4's plan PR (#48), and its last
+  preventive action, the `<token>` note of S41-D1, is in the slice 4 branch's launcher (`CREDENTIAL_NOTE`)
 - Introduced: slice 2 (`5a5aba7`, PR #35), which wrote report paths from the unit name, added R5-A4's
   rule on other tools and applied the evidence secret check to review reports
 - Found: 2026-11-08, by the author, when slice 4's six plan reviews ran in parallel through the
@@ -405,10 +412,485 @@ Why review did not catch it:
   error, is logged instead of failing (`8d80ce8`); a credential value must be token-like (`d56c69a`)
   and is found in code spans and quotes (`f8b6200`, `8d80ce8`).
 - Preventive: tests for two slices with the same unit, for prose and quoted forms of the header, for
-  the rulebook passing the check, and for offered and unoffered tools. Pending in 4.1 (S41-D1): the
-  launcher's output section tells reviewers to write `<token>` for any credential, so a review of the
-  secret check is not withheld for a made-up example.
+  the rulebook passing the check, and for offered and unoffered tools. Implemented in 4.1 (S41-D1) on the
+  slice 4 branch: the launcher's output section tells reviewers to write `<token>` for any credential
+  (`CREDENTIAL_NOTE`), so a review of the secret check is not withheld for a made-up example.
 
 ### Lesson
 Try a tool the way its next user will run it: in parallel, with the same names, on its own prose.
 
+## DPL-012: Slice 4's implementation run made claims and checks that did not hold
+
+- Status: Open until slice 4's final PR merges; every miss below was found and fixed on the slice 4 branch
+- Introduced: slice 4's implementation run (`poc/slice-4-implementation`, 2026-11-09 to 2026-11-10)
+- Found: by the run's own reviews (4.4's implementation review, 4.5b's report review, the final review) and by
+  its dry slice ([decision page](slices/agentic-sdlc-poc/slice_4_decisions.md), discovered issues 9, 12 and 13)
+
+### What happened
+- 4.4's self-review said the benchmark's dry run built every prompt with the lists. That dry run ran while the
+  key named no lists commit, so its +list prompts held none, and the dry run did not refuse as a run does.
+- The canary was built on the review prompt, whose data clause no twin could pass. The author blamed the plan's
+  validity rule (S45-D9), loosened the runner's gate, and ran 51 reviews before the cause was found; a canary on its
+  own prompt was valid at once.
+- The benchmark report said RM-6 was detected twice: the runner's repeat line read automatic scores, while the
+  counts read confirmed verdicts; the rating agreement paired two runs' findings by IDs each session chose itself.
+- The author's blinded verdicts applied the match rule's absence clause to one RM-6 finding and not to two others
+  that met it equally.
+- `README.md` still called the workflow "four-phase" after 4.6 rewrote it; 4.6's step-reference test looked only
+  for "step N", and its review relied on that test.
+- Three rule edits were not recorded as the author's decisions, and one plan decision (the brief on plan PRs,
+  S46-D13) had no rule text.
+- The benchmark never gave a reviewer the `unit-tests` list, nor the tests-first pair with `e2e-tests`: the author
+  gave no case a unit-test change, and neither the author nor any review checked that every list had a case. The
+  owner found it by asking (2026-11-11).
+- The author proposed to stop failing a review whose `opened` names a file it did not read (growth proposal 5),
+  saying the rule had cost four review sessions, without checking what each failure guarded. One of the four had
+  accepted five answers on files it never read; the proposal would have passed it. The owner's question stopped it
+  (2026-11-13), and a stricter change replaced it.
+
+### Root causes
+Why it happened:
+- RC1: claims in self-reviews and reports were written from the intended state, not from the output of the check
+  that shows it.
+- RC2: when an approved rule looked impossible, the author changed the mechanism around it before looking for the
+  author's own choice that made it so.
+- RC3: a data source added late (the confirmed verdicts) was not carried into every function that reports on the
+  same results.
+- RC4: a check for stale wording was written for the planned phrase only.
+- RC6: the benchmark's cases were chosen per past miss and per plant, not checked against what the benchmark was
+  meant to measure (every stage list).
+- RC7: a proposal to loosen a check was argued from the cost of its failures, not from what each failure caught.
+
+Why review did not catch it earlier:
+- RC5: each miss was caught by the next review that looked at the claim itself, not by the author's self-review.
+
+### Actions
+- Corrective: the unit-test gap is recorded in the benchmark report, and measuring it is the owner's decision 5; the
+  loosening was withdrawn, and the owner approved instead that rejections are read like fixes and that searched files
+  have their own list (2026-11-13). The dry run refuses as a run does; the canary has its own prompt and the gate requires a valid
+  canary again; the repeats and the rating agreement read the confirmed verdicts and pair runs by defect; RM-6's
+  two findings were re-judged by the absence clause, said openly in the report; `README.md` is current; the
+  rule edits are recorded on the decision page, and the plan-PR brief has its rule.
+- Preventive: each fix has a test that fails without it (the dry run's refusal, the canary gate and prompt, the
+  repeats, the rating pairing, the brief's final and unreviewed units, the merged plan reviews in the final review's
+  history); the step-reference test also looks for "four-phase".
+
+### Lesson
+Write a claim from the check's output, not from the plan. When an approved rule seems impossible, look first for
+the author's own choice that makes it so. Before loosening a check, look at what each of its failures caught.
+
+## DPL-013: Review severity decided what got fixed, a rejection could stand on the author's word, and fixes grew the process
+
+- Status: Open until slice 4's final PR merges; round 2's preventive actions (R2-1 to R2-8) are implemented on the
+  slice 4 branch; RC-3's miss is answered by decision concern 13's wording (2026-11-16), measured on RC-3 alone, and
+  what stays open is under Actions
+- Introduced: the review rules, where severity has decided what gets fixed since "everything else is advisory … not
+  fixed by default", kept in four levels by slice 4.1 (S41-D6, S41-D12); the rule against growth has been rule text
+  only since [DPL-007](#dpl-007-plan-review-answered-every-finding-by-adding-mechanisms)
+- Found: 2026-11-14, by the owner, after the review of the owner's decisions on slice 4's decision concerns
+  ([decision page](slices/agentic-sdlc-poc/slice_4_decisions.md), section "Round 2")
+
+### What happened
+- The reviewer's severity decided what was fixed: a medium finding could be deferred to an issue, or rejected without
+  a later round accepting the rejection. RM-3 of the benchmark (requirements added without proof, DPL-004's miss) was
+  found by every review and rated medium, so under these rules it could merge unfixed. Severity is also the least
+  reliable part of a review: 16 of the 39 defects that several reviews found got different severities
+  ([severity analysis](slices/poc-4-5-benchmark/severity_analysis.md)).
+- A rejection needed only "a reason the reviewer can check", and the recheck that judged it was the same reviewer
+  reading the author's argument; LLM judges tend to give in to rebuttals
+  ([industry research](slices/agentic-sdlc-poc/industry_research.md), finding 5). A dispute went to the owner only
+  when rechecks re-raised the same finding in two rounds in a row, so it could loop or end on the author's word.
+- Fixes grew the process: DPL-007's check that read every registered secret (the base64 case), 4.6's brief written
+  again after CI and after every push (4.6 review F3's first fix, reverted; decision concern 10), and the benchmark's
+  budget raised from 60 to 85 calls (decision concern 11). The rule against it was in `AGENTS.md`, but no review
+  question asked it where a fix is written or judged.
+
+### Root causes
+Why it happened:
+- RC1: severity did two jobs, saying how serious a finding is and deciding whether it is fixed.
+- RC2: a rejection's reason had no required form, and nothing made the recheck show what the reason rests on.
+- RC3: DPL-007's preventive action stopped at rule text; it put no question where a fix is written or judged.
+
+Why review did not catch it:
+- RC4: no review prompt asked whether a fix adds a mechanism, and a recheck did not see which process files the fixes
+  had changed.
+- RC5: a recheck could accept or re-raise a rejection without quoting the lines its decision rests on.
+
+### Actions
+- Corrective: the benchmark is re-scored under the new rule (R2-9: a match rated medium is detected, the earlier
+  results re-scored apart and the new matches confirmed blind, by a fresh session: decision concern 16):
+  `short+list` 9, `open+list` 8 and `open-B+list` 8 of 11 defect cases, against 6, 7 and 6 under the rule of the runs.
+- Preventive (round 2 of slice 4, implemented on the slice 4 branch; the decision page names each one's tests):
+  - R2-1: blocking, high and medium findings are fixed; only a low finding may be deferred (`AGENTS.md`, Review
+    findings and Review loop; `ALLOWED_ANSWERS` in `scripts/run_independent_review.py`, which the launcher applies
+    before a recheck and `make docs-check` after);
+  - R2-2: a rejection of a blocking, high or medium finding cites a checkable fact, by its shape (`CHECKABLE_FACT`);
+  - R2-3: one dispute round: a rejection the recheck re-raises or cannot determine is fixed or goes to the owner;
+  - R2-4: a fix adds no mechanism, and a finding only a mechanism would answer goes to the owner with a one-line
+    proposal (`AGENTS.md`, Fixes stay within the agreed decisions);
+  - R2-5: the review prompt asks an initial review whether the change adds a mechanism, and a recheck the same of
+    each fix (`MECHANISM_RULES`);
+  - R2-6: a recheck's evidence lists the process files changed since the reviewed round (`PROCESS_FILES` in
+    `scripts/review_inputs.py`);
+  - R2-7: a recheck quotes the lines each rejection it accepts or re-raises rests on, and the launcher checks the
+    quote in the copy;
+  - R2-8: the decision brief lists medium findings answered `rejected`.
+- Measured (R2-10, one run per case and recheck wording): both wordings re-raised RC-4's false rejection, and both
+  accepted RC-3's fix that adds a step where leaving the CI result out would do.
+- Found by round 2's own review (round 1, F1): a rulebook edit after the validation (`eb46b58`) was checked with
+  `make docs-check` and `make lint` only and broke a tooling test that pins its text; fixed, and every gate rerun on
+  `1f224d1`, after which the commits change only `docs/` ([DPL-012](#dpl-012-slice-4s-implementation-run-made-claims-and-checks-that-did-not-hold)'s lesson:
+  a claim is written from the check's output).
+- Corrective for RC-3's miss (decision concern 13, option B, the owner, 2026-11-16): the review prompt
+  (`MECHANISM_RULES` and the output section's kind bullet in `scripts/run_independent_review.py`) and `AGENTS.md`
+  (Fixes stay within the agreed decisions, Report sections) now count a step added or repeated and a second copy of a
+  fact that must be kept current as mechanisms; an initial review reports an unapproved mechanism as a defect, not a
+  simpler alternative, and a recheck re-raises a fix that adds one at the finding's severity. Run again once on each
+  recheck wording, RC-3 was re-raised at high by both. That shows little beyond RC-3: the wording's example ("again
+  after every push") is RC-3's own answer phrase, since the wording was written from that case; RC-3's reviewers got
+  a base rulebook that only prefers removing a mechanism, so their prompt held two definitions; and one run per
+  wording gives no rate.
+- Found by the review of those decisions (unit `owner-decisions-2`, round 1, F2): the example went beyond the owner's
+  option B, which names none. It is removed from the launcher and `AGENTS.md`, so RC-3's two re-raises ran under a
+  wording that is no longer shipped, and the shipped wording is unmeasured (decision concern 17). The same review had
+  an unapproved mechanism rated a defect of at least medium, so it is fixed (F1), and the benchmark's leak search read
+  the whole prompt the reviewer gets, the output section included (F3).
+- Open: whether decision concern 13's wording catches growth other than RC-3's (a recheck case with another growth
+  fix would show it, for example DPL-007's base64 scan where changing the key format would do), still lets a recheck
+  accept answers that hold (RC-2 did not run under it) and keeps initial reviews from over-reporting mechanisms (no
+  initial case ran under it); whether the rule makes a recheck re-raise good fixes that add what another rule
+  requires, such as a test for new behaviour, and whether to run RC-3 and RC-2 under the shipped wording (decision
+  concern 17); the process files leave out the benchmark runner, its key and the skills (decision concern 15); the
+  plan list's question 8 still states the rule before R2-4 (growth proposal 14).
+- Round 3 of slice 4 (2026-11-17, approved by the owner): decision concern 15 is folded into R3-1 (`PROCESS_FILES`
+  adds the benchmark runner, its key and the skills), growth proposal 14 is built as R3-4, and decision concern 17's
+  carve-out as R3-3 (what an existing rule already requires of a fix is not an added mechanism). Run once each on
+  `recheck-A`, RC-2 accepted its fix that adds tests, citing the carve-out, and RC-3 was re-raised at high under the
+  shipped wording. Still open: a growth case other than RC-3, the initial cases under the wording, and decision
+  concern 16 (decided 2026-11-18: both confirmers from the next benchmark on; the first two are inputs for that
+  run, tracked in #51).
+
+### Lesson
+Let a rule, not the reviewer's rating, decide what gets fixed; make a rejection rest on a fact the recheck must quote;
+and ask the growth question where the fix is written and judged. A rule that lives only in the rulebook is not yet a
+question anyone asks.
+
+## DPL-014: A blind-confirmation token was not tied to its result line
+
+- Status: Open until slice 4's final PR merges; fixed on the slice 4 branch (`a9ec037`) before the runs it would
+  have affected
+- Introduced: slice 4.5a's blinding (`1cf8734`, 2026-11-09), where `read_tokens` in `scripts/run_review_benchmark.py`
+  keyed a token by case, configuration and finding (the run was added later), never by the result line's prompt
+  identity
+- Found: 2026-11-17, by the author's lookup of the runner before round 3's RC-1 to RC-4 runs
+  ([decision page](slices/agentic-sdlc-poc/slice_4_decisions.md), discovered issue 44)
+
+### What happened
+- A case is run again as a new `run: 1` line when its prompt identity changes (S45-D2). Round 3 was about to run RC-1
+  to RC-4 again under a new recheck. RC-1's new line on `recheck-A` would re-raise R1-1 again, and its finding would
+  have found the earlier line's token (T016) under the same key, so it would have taken that token's verdict without a
+  blind confirmation of its own; `--export-rescore` would have skipped it as already held. The measurement could have
+  reported a detection no one had confirmed.
+- No result was affected: the defect was found and fixed before the runs, and the 2026-11-16 RC-3 reruns, whose
+  earlier line held a token only for another finding, were judged blind as M147 and M148.
+
+### Root causes
+Why it happened:
+- RC1: the token's key named the result by the fields that were unique when the blinding was built, one run per case
+  and configuration, and was not widened when runs under new prompt identities became possible.
+
+Why review did not catch it:
+- RC2: no test had a second line of a case and configuration under another prompt identity with the same finding ID,
+  and no committed results held one before round 3, so 4.5's reviews of the blinding had no case that showed it.
+
+### Actions
+- Corrective: `a9ec037` keys every token by the line's case, configuration, prompt identity, run and finding
+  (`token_key`); every row of the three committed key files already held its line's prompt identity. `--export-rescore`
+  keeps its own earlier rows with their tokens and gives new tokens, after the last, only to findings no export holds.
+  The stage-B report was byte-identical afterwards and `--rescore B` gave all 62 recorded scores.
+- Preventive: `test_a_new_line_under_another_prompt_takes_no_earlier_lines_token_and_its_findings_are_exported` and
+  `test_the_third_export_keeps_its_rows_and_tokens_and_adds_a_new_lines_findings_after_the_last`
+  (`tests/tools/test_run_review_benchmark.py`), each failing on the code before the fix.
+
+### Lesson
+A key that joins a verdict to a result must name everything that makes the result distinct, including what a later
+rerun changes.
+
+## DPL-015: A review run again under another prompt was counted beside the run it replaced, and two rechecks accepted the fix that left it
+
+- Status: Open until slice 4's final PR merges; fixed on the slice 4 branch (`02281b0`, R4-3)
+- Introduced: slice 4.5's runner, where stage-B results are only appended (`append_result`) and counted by case,
+  configuration and run (`configuration_counts`), never by prompt identity; it first showed when RC-3 ran again on
+  both recheck wordings (2026-11-16)
+- Found: the effect on 2026-11-16, by the author (discovered issue 39); the cause on 2026-11-17, by round 3's second
+  mechanics replay, H1 (high, re-raised) ([decision page](slices/agentic-sdlc-poc/slice_4_decisions.md), discovered
+  issue 56)
+
+### What happened
+- A case is run again as a new `run: 1` line when its prompt identity changes (S45-D2). The runner counted the new
+  line beside the one it replaced: after RC-3's reruns on both recheck wordings and round 3's runs of RC-1 to RC-4 on
+  `recheck-A`, its stage-B report read, under R2-9, `recheck-B` 3 of 4 and `recheck-A` 6 of 7, where each case's last
+  run gives 3 of 3 on both.
+- Discovered issue 39 recorded the effect and left the runner unchanged; the benchmark report gave the counts per
+  wording beside the runner's. Until R4-3, decision 2's options to the owner quoted the runner's wrong `3 of 4`, and
+  the benchmark report its `recheck-A` 6 of 7.
+- A finding of 4.5's mechanics review was answered by a fix that made the prompt identity cover the whole prompt and
+  the commit, so a changed input runs again. Its recheck (A/2) and round 3's first mechanics replay accepted the fix;
+  the second replay's H1 re-raised it: a changed input ran again, but the counts still held the line it replaced.
+
+### Root causes
+Why it happened:
+- RC1: results are only appended and keyed by case, configuration and run, with no allowance for a rerun under a new
+  prompt identity: the root of DPL-014, whose corrective action widened only the token key.
+- RC2: when the effect showed (discovered issue 39), the author corrected the numbers in the report by hand, not the
+  count in the runner, so the runner's numbers stayed wrong and were quoted to the owner.
+
+Why review did not catch it earlier:
+- RC3: the recheck A/2 and the first mechanics replay checked that a changed input runs again, which the fix did, not
+  what the counts did with the line the rerun replaced; no test had two `run: 1` lines of one case and configuration.
+
+### Actions
+- Corrective: `02281b0` (R4-3): `rule_views` keeps, in both views, the last line in file order of each case,
+  configuration and run (`current_lines`); results stay append-only. Under R2-9 `recheck-A` and `recheck-B` read 3 of
+  3. `ebdb0e8` puts the rebuilt report in the benchmark report and corrects decision 2's options.
+- Preventive: `test_a_review_run_again_under_another_prompt_replaces_the_earlier_line_in_the_counts` and
+  `test_a_recheck_run_again_under_another_prompt_is_listed_once` (`tests/tools/test_run_review_benchmark.py`), each
+  failing on the code before the fix.
+- Same cause, searched on 2026-11-18 (review unit `owner-decisions-3`, F1) in every place of
+  `scripts/run_review_benchmark.py` that groups, counts or keys result lines, and in the attempt-log readers of
+  `scripts/review_brief.py` and `scripts/run_independent_review.py`. The committed stage-B results hold six replaced
+  lines, five of them completed, all on `recheck-A` or `recheck-B`:
+  - `configuration_counts`, `severity_agreement`, `repeats_table`, `measurement_rows`, `false_answer_line` and
+    `holds_line` read a view's current lines only (`rule_views`), so no replaced line reaches them in the view under
+    the key's rule. The view under the earlier rule takes the last line among the lines recorded under that rule, so
+    it keeps RC-1's and RC-2's first `recheck-A` lines, which round 3's runs under the key's rule replaced; its title
+    scopes it to the reviews recorded before the key's rule.
+  - `origin_table` and `question_line` read every line: the five replaced completed lines' 7 findings (of 538; one
+    names its question) are in the stage-B report's origin table and question line. `02281b0` left both unchanged
+    (discovered issue 56); whether they should count each review once is not decided here.
+  - `report_rows` lists every run, the replaced ones too, as the benchmark report says.
+  - `--export-rescore` (`export_rescore`) exports the findings of every completed defect-case line that no export
+    holds, a replaced line's too, and `--rescore B` (`rescore_stage_b`) re-scores every completed line recorded under
+    an earlier rule, RC-1's replaced `recheck-A` line among its 62 rows. Neither reaches a count: a verdict counts only
+    through a current line's token key, and a re-score only through a current line's `review_id`, both holding the
+    prompt identity. Round 4's 85 exported rows come from its 13 completed defect-case lines, none replaced.
+  - `_completed_reviews`, read by `--export-measurement` and stage A's comparison, keeps the first completed line of
+    each case and configuration (or prompt), so a rerun would be read in place of the current line. No committed line
+    reaches it: no stage-A case and prompt, and no `open+list` or `open+list+sev` case, has a second completed line.
+    Latent; not changed.
+  - `previous_state` sums every line's calls, the replaced ones too, as the budget should.
+  - `finding_counts` and `last_verdicts` in `review_brief.py` and the launcher's `_round_state` key attempts by their
+    unique attempt ID, round and reviewer; no attempt replaces another's line, so the cause does not apply.
+
+### Lesson
+When results are only appended, decide once which line is current and read every count through that rule. When a
+count is seen to be wrong, fix it at its source, not the numbers in the report.
+
+## DPL-016: Slice 4 was declared done before its goal was tested, so the owner found the gaps in three rounds after done
+
+- Status: Open until the next slice's plan PR merges; that plan writes the six preventive actions below into
+  `AGENTS.md` and the slice templates as its first change
+- Introduced: slice 4's "Done when" (2026-11-09; [decision page](slices/agentic-sdlc-poc/slice_4_decisions.md),
+  section "Goal (the owner's, 2026-11-09)"), which counted what was delivered, not the goal
+- Found: by the owner's questions, which opened rounds 2, 3 and 4 (2026-11-14 to 2026-11-17) and the final review's
+  rerun (2026-11-18); recorded from the author's retrospective of 2026-11-18, counted from `git log` and the seven
+  attempt logs of slice 4's bundles
+
+### What happened
+- The goal was that the next slice "can run the review process end to end without the owner checking by hand", with
+  one owner review at the end. "Done when" counted delivery: every decision implemented and proven, the benchmark run
+  within 60 reviewer runs, a fresh reviewer with no open blocker, the records current, and one dry slice, whose reviews
+  got the old rules and no stage list because slice 4 had not merged. The run met it on 2026-11-10, about 14 hours
+  after the plan merged.
+- The slice ran on to 2026-11-18, about 10 days in all: 189 commits, of which 129 of the implementation branch's 171
+  (75%) came after the final review of 2026-11-10 and 76 of the 171 touch only `docs/`; 25 review units, 63 rounds,
+  78 attempts (14 failed), about USD 90 of reviewer cost. The owner had seven decision rounds after 2026-11-10, where
+  the plan had one, and 38 of the 49 quotes of the owner's words on the decision page are from 2026-11-13 on.
+- Rounds 2, 3 and 4 each began with the owner's own question, not a review finding: "still 6 feels short sighted, it
+  is not clear review severity word change has any impact …" (2026-11-14,
+  [DPL-013](#dpl-013-review-severity-decided-what-got-fixed-a-rejection-could-stand-on-the-authors-word-and-fixes-grew-the-process));
+  "Why wait till next slice, this slice 4 is to fix the review checklist, prompts and make sure the review part is
+  reliably covered I still feel like we are missing that" (2026-11-17, refusing the author's proposal to close the
+  slice); "I feel like you settled on the wording without making industry research or best practices" (2026-11-17).
+- The wording measurement could not decide: 95 reviewer runs over 7 rounds, 105 benchmark calls (about USD 70) against
+  the 60 planned, the budget raised five times; 7 of the 8 recorded conclusions were within chance, gave no rate or
+  rested on a one-case difference. The author's own assessment for the owner on 2026-11-16 (given in conversation, not in
+  the repository) concluded that late wording tuning should wait for live evidence or a measurement with more
+  than one run per case. Round 4 still ran one run per case against a criterion without margin, which the initial
+  wording failed by one false alarm, counted and never judged, so the owner had to decide it (decision 8).
+- The process rules changed inside the slice that used them: the read check five times in five days (the `searched`
+  list added on 2026-11-13 and removed on 2026-11-17), and the rule against growth and its wording from round 2 to
+  round 3.
+- The benchmark runner's counting defects (discovered issues 39 and 56, 44, 55 and 57;
+  [DPL-014](#dpl-014-a-blind-confirmation-token-was-not-tied-to-its-result-line),
+  [DPL-015](#dpl-015-a-review-run-again-under-another-prompt-was-counted-beside-the-run-it-replaced-and-two-rechecks-accepted-the-fix-that-left-it))
+  were found by the author and by round 3's replays, not by the reviews of the runner; the owner was shown wrong
+  recheck counts until 2026-11-17.
+- The owner's page grew from 54 KB at the final review to 201 KB. The six plans were large: five of the six plan
+  reviews ran to round 5 on an extension.
+- Slice 4 added no requirement and no architecture section, so its own reviews never ran the requirements and
+  architecture stages, and the benchmark had two cases per list, no clean case, and computed evidence off. On
+  2026-11-19 the owner's question found that a requirements- or architecture-stage review gets few trace links around
+  the change: 4.2's decision S42-D3 (`docs/slices/poc-4-2-review-inputs/plan.md:41`) links only through
+  `Implemented by:` lines, DD tags and the edited headings, not the architecture that satisfies an edited requirement,
+  its proofs, or the requirements an edited architecture section satisfies; and that two checklist questions have
+  gaps ([decision page](slices/agentic-sdlc-poc/slice_4_decisions.md), decision 10).
+
+### Root causes
+Why it happened:
+- RC1: "done" counted the units delivered and reviewed, not a trial of the goal; the one trial, the dry slice, ran
+  under the old rules, so nothing showed a slice running the process without the owner.
+- RC2: the measurement was planned, and run again, without checking that one run per case could show the difference
+  that mattered at an affordable cost; when it could not, the budget was raised and the method kept.
+- RC3: wordings and defaults were recommended from the counts and the author's view before any research (round 4's
+  premise).
+- RC4: what each round found was fixed inside the slice by changing the rules the slice was still using, so each
+  change needed its own review and left new items for the owner.
+- RC5: everything for the owner went on one page, the detail too, so what needed the owner was hard to find.
+- RC6: the runner's counts were tested on data without reruns under a new prompt or repeats, so its counting defects
+  showed only on the slice's own results.
+
+Why review did not catch it:
+- RC7: each review judged its unit against its plan, and the final review of 2026-11-10 the change against the plans;
+  no review was asked whether the goal had been tried.
+
+Why it started this way:
+- RC8 (the owner, 2026-11-19): implementation started without a clear goal or a shared view of how it would work
+  inside. The goal ("the next slice can run the review process end to end without the owner checking by hand") was
+  written after the six plans were approved and never turned into what each plan must deliver; the author's default
+  decisions, about half of the plans' rows, were made per sub-slice and reviewed against those plans, so choices that
+  did not serve the goal (S42-D3's inputs for requirements and architecture reviews; no review run with `--stage`)
+  were found only by the owner, after done. The PoC's goal has the same gap: it names the stages, their artifacts and
+  checks, but not the agents that author and review each artifact, what each must be able to do, or how reliably; so
+  every stage rests on the author's prompting. In the owner's words: "we started the slice implementation without
+  clear goal to be achieved and the internals of it and your decision where either short sighted and did not cover
+  the goal we had in mind", and "We have not defined how relaibly different sub agents can be spinned (for example
+  requirement agent who can create requirement like a requirement engineer looking at 360 from the plan) or
+  requirement review engieer or architect agent who architects the SW like an senior architects. Everything somehow
+  feel like based on your prompting capability."
+
+### Actions
+- Corrective: none beyond slice 4's own rounds; the final review's rerun is recorded in
+  [DPL-017](#dpl-017-round-4s-records-and-recommendations-that-a-review-or-the-owner-had-to-correct).
+- Preventive: the six actions the owner adopted on 2026-11-18 ("yes, add both DPLs and adopt all corrective
+  actions"). Action 4 freezes the process rules within a slice, so slice 4 does not write them; the next slice's plan
+  writes them into `AGENTS.md` and the slice templates (`docs/slices/_template/`) as its first change, each where that
+  plan names:
+  1. a slice's done is a trial of its goal: one small real change through the whole process, with the owner
+     hands-off, before the slice is declared done (RC1, RC7). (2026-11-19, the owner with the close-out: the trial
+     goes through every stage, requirements and architecture included.)
+  2. before any measurement, check that it can show the difference that matters at an affordable cost; if it cannot,
+     decide by research and principle and watch live evidence (RC2);
+  3. research before recommending a wording or a default (RC3);
+  4. freeze the process rules during a slice: what is found goes to the next slice unless it blocks (RC4);
+  5. one short page of what needs the owner, the detail in the records (RC5);
+  6. test a measuring tool against realistic data (reruns, repeats) before showing its numbers (RC6).
+- Preventive for RC8 (the owner, 2026-11-19: "Let's do this and we should use industry best practise all the time
+  under our threat model"): before any plan, the next slice defines with the owner the PoC's goal at the level of its
+  agents: each role (requirements engineer, architect, test engineer, implementer and their reviewers), its
+  competence from an industry standard, how it is started, how its reliability is measured and the bar it must meet,
+  and a walk-through of one change through every role; industry best practice throughout, within the threat model.
+
+### Lesson
+A slice is done when its goal has been tried the way its next user will run it, not when every unit is delivered.
+Before measuring, check that the measurement can decide; before recommending, research; and keep the rules still
+while the slice uses them.
+
+## DPL-017: Round 4's records and recommendations that a review or the owner had to correct
+
+- Status: Open until slice 4's final PR merges and the owner decides the preventive action that the next slice's
+  plan proposes (#50); (a), (b), (d), (f) and (g) are corrected on the slice 4 branch, (e) before the push, and (c)'s
+  correction, the final review's rerun, has ended (final review count 2, rounds 1 and 2, on PR #49)
+- Introduced: slice 4's round 4 and its handoff records (2026-11-17 to 2026-11-18); (d)'s stale rows since round 2
+  (2026-11-14)
+- Found: (a) by the review unit `owner-decisions-3`, round 1, F2 (medium); (b) and (c) by the owner's questions on
+  2026-11-18 ([decision page](slices/agentic-sdlc-poc/slice_4_decisions.md), growth proposal 12 and the Progress row
+  "Final review"); (d) and (g) by the final review count 2, round 1 (FR2-1, FR2-2); (e) by the author before the
+  push (2026-11-18); (f) by the author's close-out audit (2026-11-19)
+
+### What happened
+- (a) The records of R4-4's blind confirmation (the benchmark report, the decision page, the implementation log) left
+  out that a first pair of confirmer sessions, whose prompt added a test beyond the match rule, was stopped before it
+  wrote a verdict, and that the committed rows (`6add324`) set `expected_id` to null on the 65 no-match rows where the
+  sessions had named one. F2 found it; `ec4b2a4` adds both to each record.
+- (b) The author recommended that the owner approve growth proposal 12 (resuming a review that failed the read check)
+  or park it, without checking its premise again. The owner approved it ("GP 12 - Approved"), then asked "Sorry, is
+  GP 12 still needed, …". The attempt logs showed no read-check failure since round 3's change to the check on
+  2026-11-17 (0 in 5 live reviews and 23 benchmark runs, against 9 from 2026-11-09 to 2026-11-14), and the proposal
+  was withdrawn (`a832737`).
+- (c) The handoff records after `owner-decisions-3` (`b354446`) said round 4 was "built, measured and reviewed" and
+  listed what remained for the owner without saying that the slice's final review, which ended on 2026-11-10,
+  predated rounds 2 to 4. The owner was told when asking what was pending, and decided to run it again ("3. no we
+  need a final review rerun").
+- After this entry was written, the same class recurred:
+  - (d) FR2-1 (high, final review count 2, round 1): the decision page's proof table "Decisions and their proof"
+    and its status cells named tests, rule text and launcher behaviour that later rounds had changed; fixed in
+    `ea4d440`.
+  - (e) 2026-11-18: the handoff records, cherry-picked after unpushed commits were rewritten, held stale commit
+    hashes and claimed a recheck finding that the rerun did not make; the author caught it before the push.
+  - (f) 2026-11-19: `docs/STATUS.md` and the slice index rows 4.1 to 4.6 still described the branch as pushed by
+    the owner, the final review as running and the final PR as pending, after the final review had ended. The
+    author's close-out audit found it when the owner asked what was open; fixed in the close-out commit.
+  - (g) FR2-2 (medium, final review count 2, round 1): work found but not done was not tracked in issues until the
+    final review found it, a handoff step skipped; fixed in `d76035e`, the issues opened and the answers in
+    `f7fd411`.
+
+### Root causes
+Why it happened:
+- RC1: the records and the recommendation were written from the plan or memory, not from a check of the current
+  state: the sessions and the committed rows (a), the attempt logs since the read check changed (b), the date of the
+  last final review against the rounds since (c). The same class as
+  [DPL-012](#dpl-012-slice-4s-implementation-run-made-claims-and-checks-that-did-not-hold)'s RC1.
+
+Why review did not catch it earlier:
+- RC2: a recommendation or an answer to the owner passes no review; the line of (c) was in the copy of the later
+  review `owner-decisions-4` (reviewed commit `6ca3d60`), which did not raise it.
+
+### Actions
+- Corrective: (a) `ec4b2a4`; (b) withdrawn in `a832737`; (c) the unit `final` ran again over the whole slice under
+  R4-1's final mandate after the owner's reset on PR #49, and count 2 ended after round 2 (decision page, Progress
+  row "Final review"); (d) `ea4d440`; (e) the records corrected before the push; (f) the close-out commit;
+  (g) `d76035e` and `f7fd411`.
+- Preventive: at first none new, on the view that DPL-016's action 3 (research before recommending a wording or a
+  default) and DPL-012's lesson that a claim is written from the check's output covered these misses. That did not
+  hold: the class recurred in (d) to (f). The next slice's plan (#50) proposes one preventive action for the owner to
+  approve.
+
+### Lesson
+Before writing a record, a recommendation or a list of what remains, check the current state it describes: the
+sessions, the attempt logs, and the date of the last review against what changed since.
+
+## DPL-018: Commits prepared for a push carried operational details of the agents' GitHub identity; the author's scan caught them before the push
+
+- Status: Open until the next slice's plan PR merges; that plan proposes the preventive action below to the owner
+  ([#50](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/50))
+- Introduced: slice 4's handoff for the push (2026-11-18)
+- Found: 2026-11-18, by the author's scan of the commits before the push
+
+### What happened
+- While preparing slice 4's handoff for the push, the author wrote into two public records, the rule-deviation row
+  under "Decisions made" on the [decision page](slices/agentic-sdlc-poc/slice_4_decisions.md) and the
+  [implementation log](history/implementation_log.md), details of how the agents' GitHub identity is set up.
+- The author's scan of the commits before the push found them. The unpushed commits were rewritten without them
+  before anything was published, and the first run of the final review's round-2 recheck, whose report quoted the
+  text, was discarded with those commits (implementation log, 2026-11-18, the final review's rerun).
+- Nothing reached GitHub.
+
+### Root causes
+Why it happened:
+- RC1: the rule that operational details of identities, credentials and local setup stay out of the public
+  repository, its issues and its PR bodies lives in the author's notes (and as a source of 4.2's S42-D8), not in
+  `AGENTS.md`. Coding rule 1 covers secrets, and the evidence secret check (`make qa-evidence`) matches secrets by
+  shape, so neither covers prose.
+
+Why review did not catch it:
+- RC2: no review or gate checks a record for operational details.
+
+### Actions
+- Corrective: the unpushed commits rewritten without the details, before the push (2026-11-18).
+- Preventive: proposed to the owner in the next slice's plan (#50): a line in `AGENTS.md` that keeps operational
+  details out of what is published, and the author's scan of what goes public before each push. Publication
+  scanning is [#21](https://github.com/gunaseelan-sivanandam/agentic-iam-spiffe/issues/21).
+
+### Lesson
+Check what goes public before the push, for operational details as well as secrets.

@@ -11,7 +11,7 @@ How to read it:
   `sha256:<fingerprint>`. A token file or the `token` field of a saved mint response therefore
   holds the fingerprint; the same token has the same fingerprint in every file of a test.
 
-Maintenance rule (see `AGENTS.md`, slice workflow step 4): every change that adds or changes an E2E or static test updates this file in the same change. `make docs-check` fails if a harness test ID or a static test in `trace/tests.yaml` is missing here, or a heading names neither.
+Maintenance rule (see `AGENTS.md`, slice workflow, tests first): every change that adds or changes an E2E or static test updates this file in the same change. `make docs-check` fails if a harness test ID or a static test in `trace/tests.yaml` is missing here, or a heading names neither.
 
 ## Milestone 1 - Server and agent connection and successful entry
 

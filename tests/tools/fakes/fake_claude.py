@@ -7,10 +7,12 @@ input and the files it could see. A scenario may set:
     sleep         seconds to wait after recording, before any output (for kill and lock tests)
     exit          the exit code (default 0)
     raw_stdout    print exactly this instead of a built stream
-    reads         paths for Read calls ("{cwd}" is replaced by the working directory)
+    reads         Read calls: a path, or the Read input with `file_path`, `offset` and `limit` ("{cwd}" is replaced
+                  by the working directory); a Read that succeeds shows its window of the file, as the CLI does
     read_errors   paths among `reads` whose Read result is an error (for example a file too large to read)
     tool_errors   names of other tools whose result is an error (for example a tool the CLI does not offer)
-    tool_uses     [name, input] pairs for other tool calls
+    tool_uses     [name, input] pairs for other tool calls, or [name, input, result] with the CLI's
+                  `tool_use_result` for that call (a Grep's `mode` and `content`, for example)
     denials       [name, input] pairs for the result's permission_denials
     rate_limit    {"status", "five_hour", "seven_day", "resetsAt"}, or null for no event
     result        null for no result event, or {"is_error", "structured_output", "result"}
@@ -25,7 +27,7 @@ import sys
 import time
 from pathlib import Path
 
-DEFAULT_REPLY = {"findings": [], "verdict": "yes"}
+DEFAULT_REPLY = {"findings": [], "accounted": [], "verdict": "yes"}
 
 
 def next_scenario(home: Path) -> dict:
@@ -47,26 +49,46 @@ def record_call(home: Path, stdin: str) -> None:
     (calls / f"{time.time_ns()}-{os.getpid()}.json").write_text(json.dumps(record), encoding="utf-8")
 
 
+def expanded(args: dict, cwd: str) -> dict:
+    return {k: v.replace("{cwd}", cwd) if isinstance(v, str) else v for k, v in args.items()}
+
+
 def tool_use(name: str, args: dict, cwd: str, call_id: str) -> dict:
-    args = {k: v.replace("{cwd}", cwd) if isinstance(v, str) else v for k, v in args.items()}
+    args = expanded(args, cwd)
     return {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": call_id, "name": name, "input": args}]}}
 
 
-def tool_result(call_id: str, is_error: bool) -> dict:
-    return {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": call_id, "is_error": is_error,
-                                                     "content": "error" if is_error else "ok"}]}}
+def tool_result(call_id: str, is_error: bool, result: dict | None = None) -> dict:
+    content = "error" if is_error else str((result or {}).get("content", "ok"))
+    event = {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": call_id, "is_error": is_error,
+                                                      "content": content}]}}
+    return {**event, "tool_use_result": result} if result is not None and not is_error else event
+
+
+def read_result(args: dict, cwd: str) -> dict | None:
+    """The CLI's `tool_use_result` of a Read: the window of the file it showed (first line and count)."""
+    path = os.path.join(cwd, str(args.get("file_path", "")))
+    if not os.path.isfile(path):
+        return None
+    lines = Path(path).read_text(encoding="utf-8", errors="replace").splitlines()
+    start = int(args.get("offset") or 1)
+    shown = lines[start - 1:start - 1 + int(args.get("limit") or 2000)]
+    return {"type": "text", "file": {"filePath": path, "content": "\n".join(shown), "startLine": start,
+                                     "numLines": len(shown), "totalLines": len(lines)}}
 
 
 def build_stream(scenario: dict, cwd: str) -> list[dict]:
     offered = scenario.get("offered", ["Glob", "Grep", "Read", "StructuredOutput"])
     events: list[dict] = [{"type": "system", "subtype": "init", **({"tools": offered} if offered is not None else {})}]
-    calls = [("Read", {"file_path": path}) for path in scenario.get("reads", ["scripts/review_me.py"])]
-    calls += [(name, args) for name, args in scenario.get("tool_uses", [])]
+    reads = [r if isinstance(r, dict) else {"file_path": r} for r in scenario.get("reads", ["scripts/review_me.py"])]
+    calls = [("Read", args, None) for args in reads]
+    calls += [(use[0], use[1], use[2] if len(use) > 2 else None) for use in scenario.get("tool_uses", [])]
     errors, tool_errors = set(scenario.get("read_errors", [])), set(scenario.get("tool_errors", []))
-    for index, (name, args) in enumerate(calls):
+    for index, (name, args, given) in enumerate(calls):
         failed = (name == "Read" and args.get("file_path") in errors) or name in tool_errors
         events.append(tool_use(name, args, cwd, f"tu{index}"))
-        events.append(tool_result(f"tu{index}", failed))
+        shown = read_result(expanded(args, cwd), cwd) if name == "Read" else given
+        events.append(tool_result(f"tu{index}", failed, shown))
     limit = scenario.get("rate_limit", {"status": "allowed", "five_hour": 0.1, "seven_day": 0.05, "resetsAt": 1})
     if limit is not None:
         windows = {"five_hour": {"utilization": limit.get("five_hour"), "resetsAt": limit.get("resetsAt")},
@@ -75,7 +97,7 @@ def build_stream(scenario: dict, cwd: str) -> list[dict]:
             "status": limit["status"], "resetsAt": limit.get("resetsAt"), "unifiedWindows": windows}})
     result = scenario.get("result", {"structured_output": DEFAULT_REPLY})
     if result is not None:
-        ids = {json.dumps([n, a]): f"tu{i}" for i, (n, a) in enumerate(calls)}
+        ids = {json.dumps([n, a]): f"tu{i}" for i, (n, a, _given) in enumerate(calls)}
         denials = [{"tool_name": n, "tool_use_id": ids.get(json.dumps([n, a]), "denied"), "tool_input": a}
                    for n, a in scenario.get("denials", [])]
         events.append({"type": "result", "subtype": "success", "is_error": result.get("is_error", False),

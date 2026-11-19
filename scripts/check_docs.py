@@ -8,11 +8,14 @@ Checks (see docs/slices/docs-consolidation/test_plan.md):
 - images: every image in docs/ is referenced by a live document; every .puml has its .svg
 - slices: every slice bundle directory has a row in docs/slices/README.md
 - ids:    every test ID in a documented TEST_ONLY= example exists in the harness
+- records: every review record the launcher writes matches its attempt log, and every finding has an allowed
+          answer (scripts/check_review_records.py, slice 4.3)
 """
 
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import re
 import subprocess  # nosec B404 - fixed git argv, no shell
 import sys
@@ -121,7 +124,7 @@ def _link_problem(doc: Path, doc_text: str, target: str) -> str | None:
 def tracked_files(root: Path, subdir: str) -> list[Path]:
     """Files git tracks directly in `subdir`, so local untracked renders do not count."""
     out = subprocess.run(  # nosec B603 B607 - fixed argv
-        ["git", "-C", str(root), "ls-files", "--", subdir],
+        ["git", "-C", str(root), "-c", "core.quotePath=false", "ls-files", "--", subdir],  # names unquoted
         check=True,
         capture_output=True,
         text=True,
@@ -199,7 +202,21 @@ def run_checks(root: Path, harness: Path, spec: Path, trace: Path | None = None)
     problems += check_images(root, docs)
     problems += check_slice_index(root)
     problems += check_test_only_ids(root, docs, set(harness_ids(harness_text)))
+    problems += check_records(root)
     return problems
+
+
+def check_records(root: Path) -> list[str]:
+    """records: every review record written by the launcher matches its attempt log and answers every finding
+    (slice 4.3, `scripts/check_review_records.py`)."""
+    spec = importlib.util.spec_from_file_location("check_review_records", Path(__file__).resolve().parent /
+                                                  "check_review_records.py")
+    if spec is None or spec.loader is None:
+        return ["records: cannot load scripts/check_review_records.py"]
+    module = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault("check_review_records", module)  # dataclasses resolve their module by name
+    spec.loader.exec_module(module)
+    return module.check_review_records(root)
 
 
 def main() -> int:

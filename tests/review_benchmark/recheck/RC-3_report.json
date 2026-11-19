@@ -1,0 +1,17 @@
+{
+  "accounted": [],
+  "findings": [
+    {
+      "evidence": ".github/workflows/ci.yml:5-10 runs CI on pull_request and on pushes to main. AGENTS.md, Quality gates: \"A gate's result is its CI job's conclusion on GitHub; a local or offline rerun is a diagnosis and never replaces it.\" The new bullet (AGENTS.md:168-169) asks for each job's conclusion on the head commit in the summary the PR body opens with.",
+      "failure_scenario": "The author opens the PR and fills in the CI result from the last local run, which passed; the e2e job then fails on the head. The PR body still says every job passed, and the user, who reads the summary first, takes a red PR for a green one, as in DPL-006.",
+      "file": "AGENTS.md",
+      "id": "R1-1",
+      "kind": "defect",
+      "line": 168,
+      "origin_stage": "discovery",
+      "problem": "The new handoff summary states the CI result of the PR's head commit, each job with its conclusion, but the PR body is written when the PR is opened, and CI runs on the pull request, so the head has no CI result yet: the summary can only show no run, a local rerun or an earlier commit's result, and after a later push it says nothing true about the head.",
+      "severity": "high"
+    }
+  ],
+  "verdict": "no"
+}

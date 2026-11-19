@@ -260,11 +260,23 @@ def _python_header(path: str, text: str) -> str | None:
 
 
 def _markdown_header(path: str, text: str) -> str | None:
-    """A Markdown file starts with a `#` title followed by a paragraph (AGENTS.md coding rule 8)."""
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    """A Markdown file starts with a `#` title followed by a paragraph (AGENTS.md coding rule 8). A leading YAML
+    front-matter block, which a skill file needs to load (S46-D14), is skipped first; the title and paragraph must
+    follow it."""
+    lines = [line.strip() for line in _without_front_matter(text).splitlines() if line.strip()]
     if len(lines) >= 2 and lines[0].startswith("# ") and not NOT_A_PARAGRAPH.match(lines[1]):
         return None
     return f"{path}: an added Markdown file needs a `#` title followed by a paragraph that says what it is for"
+
+
+def _without_front_matter(text: str) -> str:
+    """The text after a leading front-matter block (a `---` line, then lines up to the next `---` line); the text
+    unchanged when it has none or the block is never closed."""
+    lines = text.split("\n")
+    if not lines or lines[0].strip() != "---":
+        return text
+    closing = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+    return text if closing is None else "\n".join(lines[closing + 1:])
 
 
 def _comment_header(path: str, text: str) -> str | None:

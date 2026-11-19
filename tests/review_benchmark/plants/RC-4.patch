@@ -1,0 +1,33 @@
+Recheck case RC-4 of the review benchmark, stage B (round 2 of slice 4, R2-10): the evidence secret check reads a
+value that starts with a backtick as prose, which also hides a credential written in a code span; the answer
+rejects the finding with a real test whose fixture holds no code span.
+
+diff --git a/scripts/evidence_secrets.py b/scripts/evidence_secrets.py
+index adde41a..126ef33 100644
+--- a/scripts/evidence_secrets.py
++++ b/scripts/evidence_secrets.py
+@@ -35,8 +35,10 @@ CREDENTIAL_LINE = re.compile(
+     r"(?:JIRA_API_TOKEN\s*=|Authorization\s*:[ \t]*(?:(?:Bearer|Basic|Token)[ \t]+)?)[ \t]*['\"]?(?P<value>[^\s'\"]+)",
+     re.IGNORECASE,
+ )
+-# A value that names a variable or a redaction marker is not a credential.
+-PLACEHOLDER = re.compile(r"^(?:\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|<[^>]*>|\[?REDACTED\]?|\*+|Bearer|Basic)$", re.IGNORECASE)
++# A value that names a variable or a redaction marker is not a credential, nor is a Markdown code span: the rulebook
++# and the test spec name the rule's own lines in backticks ("a `JIRA_API_TOKEN=` or `Authorization:` line"), and a
++# value that starts with a backtick is that prose, not a credential.
++PLACEHOLDER = re.compile(r"^(?:\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|<[^>]*>|\[?REDACTED\]?|\*+|Bearer|Basic|`.*)$", re.IGNORECASE)
+ ATLASSIAN_TOKEN = re.compile(r"ATATT3[A-Za-z0-9_=-]{20,}")
+ 
+ 
+diff --git a/tests/tools/test_evidence_secrets.py b/tests/tools/test_evidence_secrets.py
+index 9ce521c..0a4a224 100644
+--- a/tests/tools/test_evidence_secrets.py
++++ b/tests/tools/test_evidence_secrets.py
+@@ -117,6 +117,7 @@ ACCEPTED = {
+     "3000-character run of one character": lambda: "A" * 3000,
+     "credential line naming a variable": lambda: 'curl -H "Authorization: Bearer $token" https://tool-b\n',
+     "credential env name without a value": lambda: "JIRA_API_TOKEN=\n",
++    "the rule's own lines named in a code span": lambda: "a `JIRA_API_TOKEN=` or `Authorization:` line with a value\n",
+ }
+ 
+ 

@@ -1,0 +1,16 @@
+Planted defect FS-1 of the review benchmark, stage B (slice 4.5), planted by a fresh session from the source
+`owasp-code-review` of slice 4.4's research record, without the stage lists: an architecture change that logs the
+Jira credential in the gateway's audit event.
+
+diff --git a/docs/architecture.md b/docs/architecture.md
+index 8b07bda..c4dadc5 100644
+--- a/docs/architecture.md
++++ b/docs/architecture.md
+@@ -563,6 +563,7 @@ The gateway verifies capiss-signed tokens, token expiry, token subject, audience
+ 
+ Interactions:
+ `POST /mcp/jira/project-summary` requires `act=read_project_summary`. `POST /mcp/jira/stories` requires `act=create_story`. The gateway calls `jira-mcp-mock` in deterministic mode or Jira Cloud only in explicit live mode. It uses Redis for the existing M4 `m4:budget:<root_token_id>` and request-rate keys.
++When a live upstream call returns a non-2xx status, the `jiramcp_gateway_decision` event also carries `upstream_request`: the method, the full upstream URL, and the request headers built by `upstream_headers`, so an operator diagnosing a Jira Cloud 401 or 404 can see exactly what the gateway sent.
+ 
+ ## ARCH-031 jira-mcp-mock and M5 Live Smoke Proof
+ 

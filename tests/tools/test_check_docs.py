@@ -144,6 +144,17 @@ def test_images_puml_without_svg_is_reported(tmp_path: Path) -> None:
     assert check_docs.check_images(tmp_path, [doc]) == ["images: docs/flow.puml has no rendered flow.svg"]
 
 
+def test_images_unreferenced_render_with_a_non_ascii_name_is_reported(tmp_path: Path) -> None:
+    """Discovered issue 60 (the owner, 2026-11-17): git quotes a non-ASCII name in `ls-files` unless
+    core.quotePath=false, so a tracked render with such a name is still checked in a repository that quotes it."""
+    _git_repo(tmp_path)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "core.quotePath", "true"], check=True)  # noqa: S603, S607 - test git
+    _write(tmp_path / "docs" / "é.png", "png")
+    doc = _write(tmp_path / "README.md", "no images\n")
+    _git_add(tmp_path)
+    assert check_docs.check_images(tmp_path, [doc]) == ["images: docs/é.png is not referenced by any live document"]
+
+
 # --- slices -----------------------------------------------------------------
 
 

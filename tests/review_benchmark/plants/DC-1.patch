@@ -1,0 +1,18 @@
+Decoy DC-1 of the review benchmark, stage B (slice 4.5): a teardown that looks like a swallowed failure but
+is correct, because the request's status is decided before it runs.
+
+diff --git a/scripts/rogue_node_tests.sh b/scripts/rogue_node_tests.sh
+index b9cb870..c5dce2e 100644
+--- a/scripts/rogue_node_tests.sh
++++ b/scripts/rogue_node_tests.sh
+@@ -1552,7 +1552,9 @@ verified_https_request() {
+     ' >"$out" 2>/dev/null || true
+   fi
+ 
+-  rm -f "$req_file" "$body_file" "$http_file" "$http_norm_file" "$diag_file" "$server_cert"
++  # Teardown only: a temp file that cannot be removed must not abort the run under set -e or change this
++  # request's status, which is already decided above.
++  rm -f "$req_file" "$body_file" "$http_file" "$http_norm_file" "$diag_file" "$server_cert" 2>/dev/null || true
+   printf '%s' "$status"
+ }
+ 

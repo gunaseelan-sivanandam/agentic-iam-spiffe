@@ -1,0 +1,21 @@
+Recheck case RC-3 of the review benchmark, stage B (round 2 of slice 4, R2-10): a handoff summary in the PR body
+that states the CI result of the PR's head commit, which the head cannot have when the PR is opened, and a fix
+that adds a step (write the summary after CI and again after every push) where leaving the CI result out would do.
+
+diff --git a/AGENTS.md b/AGENTS.md
+index 0d9c07c..65cfd97 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -164,7 +164,11 @@ template needs more than "none". A slice bundle lives in `docs/slices/<slice-id>
+      miss) found or fixed;
+    - open a GitHub issue for work found but not done (label `slice` or `user-action`) and lock its
+      conversation right away, and close the issues the change finishes (`Closes #N` in the PR body);
+-   - put the independent review's answers to the implementation questions in the PR body.
++   - put the independent review's answers to the implementation questions in the PR body;
++   - open the PR body with a handoff summary for the user: the goal, what changed, the review
++     outcome, and the CI result of the PR's head commit, each job with its conclusion. Write the
++     summary once CI has finished on the head commit, and write it again after every later push, so
++     its CI result is always the head's.
+ 
+ ### Independent review
+ - **Reviewer.** Never the author. Use `codex exec` in a read-only sandbox; if Codex is unavailable,

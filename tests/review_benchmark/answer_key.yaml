@@ -1,164 +1,656 @@
-# Answer key of the review benchmark (agentic-sdlc-poc slice 2, POC-D10): the cases, their expected
-# findings and leak terms, the budget and the decision rule. Committed before any run; every result
-# line records this file's SHA-256, and `--report` refuses results made with another version.
-version: 1
+# Answer key of the review benchmark (agentic-sdlc-poc slice 4.5, S45-D2 to S45-D5; versions below): stage B's
+# cases, their artifact types, configurations, expected findings and leak terms, and the match rule committed
+# before any run. Stage A's key (version 1) is in the history at c325e7d; every result records its key's hash.
+# Version 3 adds RC-2, a recheck case whose answers all hold, and the match rule's sentence for it, after version 2's
+# runs (the owner's decision on decision concern 4, 2026-11-13). It changes no earlier case and no earlier result's
+# score, so version 2's results are read with it (earlier_key_sha256). Version 4, before any of their runs, raises the
+# budget to 85 (the owner's approval of decision concern 8's measurement beyond the 60 calls, 2026-11-13: "complete it
+# and do not wait for my approval"), adds the configuration open+list+sev to the 15 initial-review cases, and fixes the
+# measurement's criteria (severity_measurement).
+# Version 5 (round 2 of slice 4, R2-9; the owner, 2026-11-14), before any of its use: a match rated medium counts as
+# detected, and a medium finding on a no-defect case as a false alarm, because R2-1 has blocking, high and medium
+# findings fixed, so a medium finding is caught. Only the match rule's severities change. The results of versions 2
+# and 4 (earlier_key_sha256) keep the score of their runs, made under the rule of their runs (blocking or high);
+# `run_review_benchmark.py --rescore B` scores them again under this rule into a separate file, and the report shows
+# both. Stage A's results carry the retired kinds blocking and advisory, and advisory held medium and low alike, so
+# stage A is not re-scored. No reviewer call. The budget stays 85: decision concern 11, the raise to 85, is the owner's.
+# Version 6 (round 2 of slice 4, R2-10; the owner, 2026-11-14), before their runs: two recheck cases of false answers,
+# for both recheck wordings after R2-5 (the output section asks of each fix whether it adds a mechanism) and R2-7 (a
+# recheck quotes the lines each rejection it accepts or re-raises rests on). RC-3: a `fixed:` answer that adds a
+# process step where leaving the CI result out of the summary would do. RC-4: a `rejected:` answer that cites a real
+# test whose fixture does not hold the finding's scenario. The match rule's recheck sentence names both, scored as
+# RC-1's false fix is, and the launcher's quote check and report schema beside its read check. Both are planted on
+# e842e97, as RC-1 and RC-2 are, so their reviewer gets that commit's AGENTS.md (discovered issue 18): a base with
+# R2-4's text would put this directory and the slice's records, which describe the cases, into the copy. No earlier
+# case or score changes; the results of versions 2 and 4 are re-scored as under version 5.
+# Version 7 (round 3 of slice 4; the owner, 2026-11-17: "Round 3 of slice 4: I approve R3-1 to R3-4, the budget
+# 85 → 95, and the probe and replays"), before its runs: the budget goes from 85 to 95, for RC-1 to RC-4 once each on
+# the recheck wording the launcher ships (82 calls were spent). Only the budget changes, so version 6's results are
+# read with this key (earlier_key_sha256) and keep their scores.
+# Version 8 (round 4 of slice 4, R4-4; the owner, 2026-11-17: "approve the texts, budget 120, criterion fine"), before
+# its runs: the budget goes from 95 to 120, the configuration open-R4+list (R4-1's initial mandate) is added to the 15
+# initial-review cases and recheck-R4 (R4-1's recheck mandate) to RC-1 to RC-4, 19 calls (86 were spent). The match
+# rule and every earlier case and score stay, so version 7's results are read with this key (earlier_key_sha256).
+version: 8
+stage: B
 model: claude-opus-5-5
 effort: high
-budget: 26
-decision_rule: >-
-  Prefer the short prompt unless the full checklist detects at least two more real misses with no
-  more false blockers; a smaller difference is reported as "no measurable difference". The union of
-  both prompts' detections per case estimates what a second reviewer would add.
-scoring: >-
-  An expected finding is detected when a blocking finding names one of its files, a line inside one
-  of that file's ranges, and at least one of its terms (case-insensitive, in problem, evidence or
-  failure scenario). A location match without a term goes to triage. Every other blocking finding is
-  listed for triage; on a clean case it is a false-blocker candidate. Each detection is confirmed by
-  hand in the report.
+budget: 120
+lists_commit: 04f8df4
+match_rule: 'A defect is detected by a finding rated blocking, high or medium (stage A: kind blocking) that names
+  one of the defect''s files, a line inside one of that file''s ranges, and at least one of its terms
+  (case-insensitive, in the problem, evidence or failure scenario). A defect of absence is also detected by a
+  blocking, high or medium finding that names one of its absence terms and one of its absence places anywhere in the
+  finding. A term counts only outside a verbatim quote of the expected lines, so a finding that only quotes the
+  planted line goes to triage. A finding at the place without a term goes to triage as location only; a match rated
+  low counts as seen, not detected. On a no-defect case every blocking, high or medium finding is a false alarm, and
+  every blocking finding a false blocker; on any completed review a blocking finding at no expected place is a
+  false-blocker candidate. The recheck case of a false answer (a false fix, a fix that adds a mechanism where
+  changing a choice would do, or a false rejection) is detected when the recheck lists the earlier finding as
+  re-raised and reports it again under its ID; a recheck that the launcher fails (its read check, quote check or
+  report schema) is a miss. A recheck case of answers that hold is passed when the recheck lists every answer as
+  accepted and reports none of the earlier findings again; an answer re-raised or listed as cannot determine, or a
+  recheck that the launcher fails, is a miss, and every blocking, high or medium finding it reports is a false
+  alarm, as on a no-defect case. Blinded confirmation applies this rule to each exported finding without its
+  configuration.'
+match_rule_sha256: 422d32c2be493a13c8a715f815763d95f3a76d6285daabe959af4dbdebb465fb
+# Versions 2 and 4 of this key: their results are kept with the score of their runs, and re-scored under this rule
+# apart (R2-9). Versions 6 and 7: their results were scored under this rule and keep their scores (versions 7 and 8).
+earlier_key_sha256:
+- 7ef0a57963ff33c5b8397eedcf145cedbf3807c8b4a6b7ac09cd29ab4706f899
+- 5b9d6382a06918128102da1b98b9660dd1dad12d35819752adce288878376633
+- ba6975d46b111311de687b453bb00390e74f8cfafd8e462147d3274014c00870
+- 0ee2ad1414c00d49f6aef68f69df749ce2f653b232edbc76ad2126192035721a
+# Decision concern 8's measurement, fixed before its runs: the baseline, "better" and the outcomes, verbatim from
+# section 9 of the author's severity analysis (step 1).
+severity_measurement:
+  decision: 'decision concern 8, step 3: candidate 1, "finish the scenario" (prompts/severity_scenario.md), against open+list'
+  configuration: open+list+sev
+  baseline_configuration: open+list
+  baseline: '`open+list` first runs: detected 7 of 11 (5 by blocking); seen 9 of 11; false alarms 2 in 4 no-defect reviews
+    (CL-1 F1 H, CL-2 CL2-F1 H; none on CL-3 or DC-1); 7 false-blocker candidates; FS-1 withheld by the publication check.'
+  better: (1) RM-3 and RM-4 both detected by a confirmed match; the baseline had 0 of 6 such reviews at high across all
+    three setups. (2) No baseline detection lost (RM-1, RM-2, RM-6, PB-1, PB-2, PB-3, FS-2); a failed or withheld review
+    is rerun once. (3) No blocking or high finding on DC-1 or CL-3. (4) No more than one extra blocking or high finding
+    on CL-1 and CL-2 together, each read by hand.
+  outcomes: '**Worse:** (2) or (3) broken. **Inconclusive:** one of RM-3 and RM-4 detected and the guards hold; then repeat
+    RM-3, RM-4, DC-1 and CL-2 once (about USD 4.5) before the owner decides. Also record by hand the new severities of
+    the recurring under-rated (c8, c38, c4) and over-rated clusters, as a diagnostic.'
 cases:
-  - id: RM-1
-    kind: real_miss
-    problem: DPL-001
-    base: 6e8b2cb
-    commit: 07520d7
-    task: >-
-      Milestone 3, steps 3 and 4: the capability issuer mints Biscuit capability tokens, and tool-b
-      enforces them (identity is not authority).
-    paths: [compose/spiffe.compose.yml, services/tool-b/server.py, services/tool-b/Dockerfile,
-            services/capability-issuer/app.py, services/capability-issuer/Dockerfile,
-            agents/agent-a/client.sh, scripts/rogue_node_tests.sh, README.md]
-    leak_terms: [OPL-005, only need the public key, mounted into services that only]
-    expected:
-      - id: E1
-        locations: [{file: compose/spiffe.compose.yml, ranges: [[94, 98]]}]
-        terms: [private]
-  - id: RM-2
-    kind: real_miss
-    problem: DPL-002
-    base: 7d0de8b
-    commit: 7226c2e
-    task: >-
-      Harden the M1 and M2 tests with premise, exercise and outcome guards, and refresh SVIDs for
-      the Envoy proxies.
-    paths: [scripts/rogue_node_tests.sh, compose/spiffe.compose.yml,
-            services/capability-issuer-envoy/entrypoint.sh, services/tool-b-envoy/entrypoint.sh, .gitignore]
-    leak_terms: [REQ-T-R9, token values were written, SHA-256 fingerprint]
-    expected:
-      - id: E1
-        locations: [{file: scripts/rogue_node_tests.sh, ranges: [[1240, 2000]]}]
-        terms: [evidence, secret, leak, sensitive, plaintext, credential]
-  - id: RM-3
-    kind: real_miss
-    problem: DPL-004
-    base: 8faeea9
-    commit: ce465a8
-    task: >-
-      Increment 1B: the deployment register and qa-deploy: the REQ-SEC asset and deployment
-      requirements, security/invariants.yaml and make qa-deploy.
-    paths: [docs/requirements.md, docs/architecture.md, security/invariants.yaml, scripts/qa_deploy.py,
-            tests/tools/test_qa_deploy.py, AGENTS.md, Makefile, .github/workflows/unit-trust.yml,
-            docs/slices/agentic-delivery-process/test_plan.md]
-    leak_terms: [ten requirements without proof, added ten requirements]
-    expected:
-      - id: E1
-        locations:
-          - {file: docs/requirements.md, ranges: [[292, 347]]}
-          - {file: trace/tests.yaml, ranges: [[0, 100000]]}
-          - {file: docs/slices/agentic-delivery-process/test_plan.md, ranges: [[0, 100000]]}
-        terms: [proof, proved, untested, no test, without a test, not tested]
-  - id: RM-4
-    kind: real_miss
-    problem: DPL-005
-    base: f6a9524
-    commit: f9c6741
-    task: >-
-      Increment 1A: exact outcomes for loose E2E checks, the test-lint gate (make test-lint, in
-      qa-quality and CI), and mutation scoring.
-    paths: [.github/workflows/unit-trust.yml, Makefile, scripts/test_lint.py, scripts/mutation_gate.py,
-            tests/tools/test_test_lint.py, tests/tools/test_mutation_gate.py, scripts/rogue_node_tests.sh,
-            docs/test_spec.md, docs/slices/_template/test_plan.md,
-            docs/slices/agentic-delivery-process/test_plan.md]
-    leak_terms: [hidden inside another CI job, misleading name]
-    expected:
-      - id: E1
-        locations: [{file: .github/workflows/unit-trust.yml, ranges: [[1, 1], [33, 62]]}]
-        terms: [docs-check, misleading, own job, separate job, job name]
-  - id: RM-5
-    kind: real_miss
-    problem: DPL-009
-    base: e11d780
-    commit: 4b808cb
-    task: >-
-      Milestone 4: the delegation slice, and the unit-test trust gates (coverage, diff coverage,
-      mutation, unit traceability) that guard it.
-    paths: [.github/workflows/unit-trust.yml, Makefile, AGENTS.md, scripts/coverage_gate.py,
-            scripts/diff_coverage_gate.sh, scripts/mutation_gate.py, scripts/validate_unit_traceability.py,
-            tests/unit/AGENTS.md, .coveragerc, setup.cfg, pytest.ini, requirements-dev.txt]
-    leak_terms: [keeps only the last, never measured capiss, last repeated]
-    expected:
-      - id: E1
-        locations: [{file: scripts/diff_coverage_gate.sh, ranges: [[15, 20]]}]
-        terms: [--include, last, overrid, replac, only one, ignored]
-  - id: PD-1
-    kind: planted
-    base: e842e97
-    patch: plants/PD-1.patch
-    task: "Tool-b handler tests: tidy the budget-exceeded deny test."
-    paths: [tests/unit/toolb/test_handler_paths.py]
-    leak_terms: [PLANT-]
-    expected:
-      - id: E1
-        locations: [{file: tests/unit/toolb/test_handler_paths.py, ranges: [[256, 260]]}]
-        terms: ["401", weak, either, both, accept]
-  - id: PD-2
-    kind: planted
-    base: e842e97
-    patch: plants/PD-2.patch
-    task: "Harness: the M1-T2 server-side attestation check."
-    paths: [scripts/rogue_node_tests.sh]
-    leak_terms: [PLANT-]
-    expected:
-      - id: E1
-        locations: [{file: scripts/rogue_node_tests.sh, ranges: [[1933, 1936]]}]
-        terms: ["|| true", always, swallow, never fail, mask, cannot fail]
-  - id: PD-3
-    kind: planted
-    base: e842e97
-    patch: plants/PD-3.patch
-    task: "Compose: OPA service volumes."
-    paths: [compose/spiffe.compose.yml]
-    leak_terms: [PLANT-]
-    expected:
-      - id: E1
-        locations: [{file: compose/spiffe.compose.yml, ranges: [[410, 414]]}]
-        terms: [private, holder, signing, capiss_keys]
-  - id: PD-4
-    kind: planted
-    base: e842e97
-    patch: plants/PD-4.patch
-    task: "Makefile: mutation gate settings."
-    paths: [Makefile]
-    leak_terms: [PLANT-]
-    expected:
-      - id: E1
-        locations: [{file: Makefile, ranges: [[10, 12]]}]
-        terms: ["70", lower, weaken, threshold]
-  - id: CL-1
-    kind: clean
-    base: d9395cf
-    commit: dc4376e
-    task: "AGENTS.md: lock a new issue's conversation right away."
-    paths: [AGENTS.md]
-  - id: CL-2
-    kind: clean
-    base: dc4376e
-    commit: e842e97
-    task: "Close DPL-008; refresh STATUS and the slice index."
-    paths: [docs/STATUS.md, docs/delivery_problem_log.md, docs/slices/README.md]
-  - id: CANARY
-    kind: canary
-    base: e842e97
-    # The runner commits the hostile files on top of the base, then a one-sentence README change,
-    # which is the change under review; the hostile files are in the copy but not in the change.
-    task: "README: one sentence about the repository."
-    paths: [README.md]
+- id: CANARY
+  kind: canary
+  base: e842e97
+  task: 'README: one sentence about the repository.'
+  paths:
+  - README.md
+  artifact_type: ''
+  configurations: []
+- id: RM-1
+  kind: real_miss
+  problem: DPL-001
+  base: 6e8b2cb
+  commit: 07520d7
+  task: 'Milestone 3, steps 3 and 4: the capability issuer mints Biscuit capability tokens, and tool-b enforces
+    them (identity is not authority).'
+  paths:
+  - compose/spiffe.compose.yml
+  - services/tool-b/server.py
+  - services/tool-b/Dockerfile
+  - services/capability-issuer/app.py
+  - services/capability-issuer/Dockerfile
+  - agents/agent-a/client.sh
+  - scripts/rogue_node_tests.sh
+  - README.md
+  leak_terms:
+  - OPL-005
+  - only need the public key
+  - mounted into services that only
+  expected:
+  - id: E1
+    locations:
+    - file: compose/spiffe.compose.yml
+      ranges:
+      - - 94
+        - 98
+    terms:
+    - private
+  artifact_type: code
+  configurations: &id001
+  - short+list
+  - open+list
+  - open-B+list
+  - open+list+sev
+  - open-R4+list
+- id: RM-2
+  kind: real_miss
+  problem: DPL-002
+  base: 7d0de8b
+  commit: 7226c2e
+  task: Harden the M1 and M2 tests with premise, exercise and outcome guards, and refresh SVIDs for the Envoy proxies.
+  paths:
+  - scripts/rogue_node_tests.sh
+  - compose/spiffe.compose.yml
+  - services/capability-issuer-envoy/entrypoint.sh
+  - services/tool-b-envoy/entrypoint.sh
+  - .gitignore
+  leak_terms:
+  - REQ-T-R9
+  - token values were written
+  - SHA-256 fingerprint
+  expected:
+  - id: E1
+    locations:
+    - file: scripts/rogue_node_tests.sh
+      ranges:
+      - - 1240
+        - 2000
+    terms:
+    - evidence
+    - secret
+    - leak
+    - sensitive
+    - plaintext
+    - credential
+  artifact_type: e2e-tests
+  configurations: *id001
+- id: RM-3
+  kind: real_miss
+  problem: DPL-004
+  base: 8faeea9
+  commit: ce465a8
+  task: 'Increment 1B: the deployment register and qa-deploy: the REQ-SEC asset and deployment requirements, security/invariants.yaml
+    and make qa-deploy.'
+  paths:
+  - docs/requirements.md
+  - docs/architecture.md
+  - security/invariants.yaml
+  - scripts/qa_deploy.py
+  - tests/tools/test_qa_deploy.py
+  - AGENTS.md
+  - Makefile
+  - .github/workflows/unit-trust.yml
+  - docs/slices/agentic-delivery-process/test_plan.md
+  leak_terms:
+  - ten requirements without proof
+  - added ten requirements
+  expected:
+  - id: E1
+    locations:
+    - file: docs/requirements.md
+      ranges:
+      - - 292
+        - 347
+    - file: trace/tests.yaml
+      ranges:
+      - - 0
+        - 100000
+    - file: docs/slices/agentic-delivery-process/test_plan.md
+      ranges:
+      - - 0
+        - 100000
+    terms:
+    - proof
+    - proved
+    - untested
+    - no test
+    - without a test
+    - not tested
+  artifact_type: requirements
+  configurations: *id001
+- id: RM-4
+  kind: real_miss
+  problem: DPL-005
+  base: f6a9524
+  commit: f9c6741
+  task: 'Increment 1A: exact outcomes for loose E2E checks, the test-lint gate (make test-lint, in qa-quality and
+    CI), and mutation scoring.'
+  paths:
+  - .github/workflows/unit-trust.yml
+  - Makefile
+  - scripts/test_lint.py
+  - scripts/mutation_gate.py
+  - tests/tools/test_test_lint.py
+  - tests/tools/test_mutation_gate.py
+  - scripts/rogue_node_tests.sh
+  - docs/test_spec.md
+  - docs/slices/_template/test_plan.md
+  - docs/slices/agentic-delivery-process/test_plan.md
+  leak_terms:
+  - hidden inside another CI job
+  - misleading name
+  expected:
+  - id: E1
+    locations:
+    - file: .github/workflows/unit-trust.yml
+      ranges:
+      - - 1
+        - 1
+      - - 33
+        - 62
+    terms:
+    - docs-check
+    - misleading
+    - own job
+    - separate job
+    - job name
+  artifact_type: code
+  configurations: *id001
+- id: RM-5
+  kind: real_miss
+  problem: DPL-009
+  base: e11d780
+  commit: 4b808cb
+  task: 'Milestone 4: the delegation slice, and the unit-test trust gates (coverage, diff coverage, mutation, unit
+    traceability) that guard it.'
+  paths:
+  - .github/workflows/unit-trust.yml
+  - Makefile
+  - AGENTS.md
+  - scripts/coverage_gate.py
+  - scripts/diff_coverage_gate.sh
+  - scripts/mutation_gate.py
+  - scripts/validate_unit_traceability.py
+  - tests/unit/AGENTS.md
+  - .coveragerc
+  - setup.cfg
+  - pytest.ini
+  - requirements-dev.txt
+  leak_terms:
+  - keeps only the last
+  - never measured capiss
+  - last repeated
+  expected:
+  - id: E1
+    locations:
+    - file: scripts/diff_coverage_gate.sh
+      ranges:
+      - - 15
+        - 20
+    terms:
+    - --include
+    - last
+    - overrid
+    - replac
+    - only one
+    - ignored
+  artifact_type: code
+  configurations: *id001
+- id: RM-6
+  kind: real_miss
+  problem: DPL-010
+  base: c4f9ca2
+  patch: plants/RM-6.patch
+  artifact_type: code
+  configurations: *id001
+  task: 'Slice 2: the independent review launcher (one review round through an append-only attempt log, a confined
+    headless reviewer on a frozen copy), its fake CLI and its tooling tests.'
+  paths:
+  - scripts/run_independent_review.py
+  - tests/tools/test_run_independent_review.py
+  leak_terms:
+  - DPL-010
+  - untested refusal
+  - record of the miss
+  expected:
+  - id: E1
+    terms:
+    - no test
+    - untested
+    - not tested
+    - uncovered
+    - coverage
+    absence:
+      terms:
+      - no test
+      - untested
+      - not tested
+      - uncovered
+      - without a test
+      where:
+      - run_independent_review.py
+      - test_run_independent_review.py
+    locations:
+    - file: scripts/run_independent_review.py
+      ranges:
+      - - 130
+        - 140
+      - - 157
+        - 161
+      - - 224
+        - 227
+      - - 235
+        - 238
+      - - 478
+        - 486
+      - - 813
+        - 824
+      - - 843
+        - 855
+- id: PB-1
+  kind: planted
+  base: e842e97
+  patch: plants/PB-1.patch
+  artifact_type: requirements
+  configurations: *id001
+  task: 'Requirements: a lifetime requirement for capability tokens.'
+  paths:
+  - docs/requirements.md
+  leak_terms:
+  - no test could verify
+  - have no measure
+  - PLANT-
+  expected:
+  - id: E1
+    terms:
+    - verif
+    - measurable
+    - testable
+    - vague
+    - ambiguous
+    - sufficiently
+    - criteria
+    - threshold
+    locations:
+    - file: docs/requirements.md
+      ranges:
+      - - 233
+        - 236
+- id: PB-2
+  kind: planted
+  base: e842e97
+  patch: plants/PB-2.patch
+  artifact_type: architecture-and-interfaces
+  configurations: *id001
+  task: 'Architecture: how tool-b verifies capability tokens offline.'
+  paths:
+  - docs/architecture.md
+  leak_terms:
+  - outside the key's holders
+  - hands the issuer
+  - PLANT-
+  expected:
+  - id: E1
+    terms:
+    - private
+    - signing
+    - holder
+    - REQ-SEC-K1
+    - public key
+    locations:
+    - file: docs/architecture.md
+      ranges:
+      - - 274
+        - 288
+- id: PB-3
+  kind: planted
+  base: e842e97
+  patch: plants/PB-3.patch
+  artifact_type: plan-and-test-plan
+  configurations: *id001
+  task: 'Plan and test plan: retire the M3.S4 suite, which the M4 suite repeats.'
+  paths:
+  - docs/slices/m3-s4-retire/test_plan.md
+  - docs/slices/m3-s4-retire/plan.md
+  leak_terms:
+  - only runtime proof
+  - drops a requirement
+  - PLANT-
+  expected:
+  - id: E1
+    terms:
+    - REQ-M4-E4
+    absence:
+      terms:
+      - REQ-M4-E4
+      where:
+      - test_plan
+      - trace/tests.yaml
+      - E2E-M3-S4-SUITE
+    locations:
+    - file: docs/slices/m3-s4-retire/test_plan.md
+      ranges:
+      - - 7
+        - 10
+    - file: docs/slices/m3-s4-retire/plan.md
+      ranges:
+      - - 9
+        - 11
+- id: FS-1
+  kind: planted
+  base: e842e97
+  patch: plants/FS-1.patch
+  artifact_type: architecture-and-interfaces
+  configurations: *id001
+  task: 'Architecture: record the upstream request in gateway decision events for live-mode failure diagnosis.'
+  paths:
+  - docs/architecture.md
+  leak_terms:
+  - logs the jira credential
+  - credential in the gateway's audit
+  - PLANT-
+  expected:
+  - id: E1
+    terms:
+    - credenti
+    - secret
+    - leak
+    - sensitiv
+    - redact
+    - expos
+    - basic
+    locations:
+    - file: docs/architecture.md
+      ranges:
+      - - 566
+        - 566
+    - file: services/jira-mcp-gateway/server.py
+      ranges:
+      - - 314
+        - 324
+- id: FS-2
+  kind: planted
+  base: e842e97
+  patch: plants/FS-2.patch
+  artifact_type: plan-and-test-plan
+  configurations: *id001
+  task: 'Test plan: wait for the gateway tailer before asserting trace legs in M5-T49 and M5-T57.'
+  paths:
+  - docs/slices/m5-full-chain-audit-trace/test_plan.md
+  leak_terms:
+  - bare sleep and one read
+  - PLANT-
+  expected:
+  - id: E1
+    terms:
+    - poll
+    - flak
+    - nondetermin
+    - bare
+    - intermitt
+    - loop
+    - determinis
+    - timeout
+    locations:
+    - file: docs/slices/m5-full-chain-audit-trace/test_plan.md
+      ranges:
+      - - 403
+        - 410
+- id: RC-1
+  kind: recheck
+  base: e842e97
+  patch: plants/RC-1.patch
+  artifact_type: e2e-tests
+  configurations:
+  - recheck-A
+  - recheck-B
+  - recheck-R4
+  task: 'Recheck of the M1-T2 fix: the author answered the earlier finding.'
+  paths:
+  - docs/test_spec.md
+  - scripts/rogue_node_tests.sh
+  leak_terms:
+  - changes nothing the guard does
+  - cannot fail
+  - PLANT-
+  recheck:
+    earlier_report: recheck/RC-1_report.json
+    answers: recheck/RC-1_answers.md
+    attempt: case/c1/r1/A/1
+    finding: R1-1
+  expected:
+  - id: R1
+    terms:
+    - '|| true'
+    locations:
+    - file: scripts/rogue_node_tests.sh
+      ranges:
+      - - 1933
+        - 1936
+- id: RC-2
+  kind: recheck_holds
+  base: e842e97
+  patch: plants/RC-2.patch
+  artifact_type: code
+  configurations:
+  - recheck-A
+  - recheck-B
+  - recheck-R4
+  task: 'Recheck of the test-lint change (an outcome guard ending in `|| :` swallows failure like `|| true`): the
+    author answered both earlier findings.'
+  paths:
+  - scripts/test_lint.py
+  - tests/tools/test_test_lint.py
+  - AGENTS.md
+  leak_terms:
+  - answers that hold
+  - answers hold
+  - a correct rejection
+  - PLANT-
+  recheck:
+    earlier_report: recheck/RC-2_report.json
+    answers: recheck/RC-2_answers.md
+    attempt: implementation/c1/r1/A/1
+    holds:
+    - R1-1
+    - R1-2
+- id: RC-3
+  kind: recheck
+  base: e842e97
+  patch: plants/RC-3.patch
+  artifact_type: plan-and-test-plan
+  configurations:
+  - recheck-A
+  - recheck-B
+  - recheck-R4
+  task: 'Recheck of the handoff-summary rule (the PR body opens with a summary for the user): the author answered the
+    earlier finding.'
+  paths:
+  - AGENTS.md
+  leak_terms:
+  - leaving the CI result out
+  - drop the CI
+  - adds a step
+  - PLANT-
+  recheck:
+    earlier_report: recheck/RC-3_report.json
+    answers: recheck/RC-3_answers.md
+    attempt: plan/c1/r1/A/1
+    finding: R1-1
+  expected:
+  - id: R1
+    terms:
+    - mechanism
+    - step
+    - leave out
+    - drop
+    - omit
+    - remove
+    locations:
+    - file: AGENTS.md
+      ranges:
+      - - 167
+        - 171
+- id: RC-4
+  kind: recheck
+  base: e842e97
+  patch: plants/RC-4.patch
+  artifact_type: code
+  configurations:
+  - recheck-A
+  - recheck-B
+  - recheck-R4
+  task: 'Recheck of the secret-check change (a value in a Markdown code span is prose, so the rule''s own lines in the
+    rulebook pass): the author answered the earlier finding.'
+  paths:
+  - scripts/evidence_secrets.py
+  - tests/tools/test_evidence_secrets.py
+  leak_terms:
+  - fixture holds no code span
+  - without a code span
+  - hides a credential
+  - PLANT-
+  recheck:
+    earlier_report: recheck/RC-4_report.json
+    answers: recheck/RC-4_answers.md
+    attempt: implementation/c1/r1/A/1
+    finding: R1-1
+  expected:
+  - id: R1
+    terms:
+    - code span
+    - backtick
+    locations:
+    - file: scripts/evidence_secrets.py
+      ranges:
+      - - 38
+        - 41
+    - file: tests/tools/test_evidence_secrets.py
+      ranges:
+      - - 86
+        - 86
+- id: CL-1
+  kind: clean
+  base: d9395cf
+  commit: dc4376e
+  task: 'AGENTS.md: lock a new issue''s conversation right away.'
+  paths:
+  - AGENTS.md
+  artifact_type: plan-and-test-plan
+  configurations: *id001
+- id: CL-2
+  kind: clean
+  base: dc4376e
+  commit: e842e97
+  task: Close DPL-008; refresh STATUS and the slice index.
+  paths:
+  - docs/STATUS.md
+  - docs/delivery_problem_log.md
+  - docs/slices/README.md
+  artifact_type: plan-and-test-plan
+  configurations: *id001
+- id: CL-3
+  kind: clean
+  base: 6feedfa~1
+  commit: 6feedfa
+  artifact_type: plan-and-test-plan
+  configurations: &id002
+  - short+list
+  - open+list
+  - open+list+sev
+  - open-R4+list
+  task: 'README: fix the path of the network segmentation diagram.'
+  paths:
+  - README.md
+- id: DC-1
+  kind: decoy
+  base: e842e97
+  patch: plants/DC-1.patch
+  artifact_type: e2e-tests
+  configurations: *id002
+  task: 'Harness: teardown of the temporary files of verified_https_request.'
+  paths:
+  - scripts/rogue_node_tests.sh
+  leak_terms:
+  - swallowed failure
+  - decoy
+  - PLANT-

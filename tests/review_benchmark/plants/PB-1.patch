@@ -1,0 +1,17 @@
+Planted defect PB-1 of the review benchmark, stage B (slice 4.5): a requirement that no test could verify,
+written with terms that have no measure.
+
+diff --git a/docs/requirements.md b/docs/requirements.md
+index d6c2024..4f2f4df 100755
+--- a/docs/requirements.md
++++ b/docs/requirements.md
+@@ -231,6 +231,9 @@ The capability token shall carry an enforceable expiry field limiting the token
+ ## REQ-M3-R16 — Capability TTL enforcement
+ The resource server or effective enforcement point shall deny expired capability tokens.
+ 
++## REQ-M3-R28 — Capability token lifetime
++Capability tokens shall stay short-lived enough for safe use, and the issuer shall keep them sufficiently secure in practice.
++
+ ## REQ-M3-R17 — Subject binding enforcement
+ The resource server shall deny use of a capability token when the authenticated caller identity does not match the token subject.
+ 

@@ -1,0 +1,20 @@
+Planted defect FS-2 of the review benchmark, stage B (slice 4.5), planted by a fresh session from the source
+`fowler-nondeterminism` of slice 4.4's research record, without the stage lists: a test-plan rule that waits for an
+asynchronous event with a bare sleep and one read.
+
+diff --git a/docs/slices/m5-full-chain-audit-trace/test_plan.md b/docs/slices/m5-full-chain-audit-trace/test_plan.md
+index 13e463a..d901003 100644
+--- a/docs/slices/m5-full-chain-audit-trace/test_plan.md
++++ b/docs/slices/m5-full-chain-audit-trace/test_plan.md
+@@ -400,3 +400,11 @@ Replaces "record the exact environment error rather than claim completion" with
+   env gate for that prefix, `skip_reason.txt` names that gate, premise evidence exists, and no exercise/outcome
+   artifacts exist. Any other combination is a failure (e.g. an undeclared skip, or a skip without
+   the gate evaluation recorded). The summary reports `validated` and `skipped` separately.
++
++### H4 — Gateway leg settle wait (M5-T49, T57)
++The gateway tailer copies `jiramcp_gateway_decision` from `docker logs --follow`, so on a loaded
++runner the event can reach `gateway_audit.jsonl` after the test has already run `varambu trace`;
++the chain then renders without its `gateway` and `upstream` legs and the leg-count assertion fails.
++Rule: after the MCP call returns, the exercise step runs `sleep 5` and then `varambu trace --json`
++once, and the outcome guards read that single render. Five seconds covers the slowest gateway
++flush seen in the `119/120` run with margin.

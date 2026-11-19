@@ -199,7 +199,7 @@ make unit-mutation        # mutation score gate (capiss, tool-b)
 ```bash
 make qa-trace             # validate REQ → ARCH → DD → UT → E2E linkage
 make qa-evidence          # check that passing E2E tests produced PEO artifacts
-make qa-quality           # qa-trace + unit traceability + unit guard + docs-check
+make qa-quality           # qa-trace + unit traceability + unit guard + docs-check + test-lint + qa-deploy
 make docs-check           # test spec covers every harness test; links, images, slice index
 ```
 
@@ -220,11 +220,15 @@ Reference documents:
 
 ## Development Workflow
 
-Security-relevant changes follow a four-phase slice workflow (plan → tests →
-implementation → verification) to keep requirements, architecture, code, and
-documentation in step. The rules, ID scheme, and quality gates are defined in
-[AGENTS.md](AGENTS.md), the repository rulebook. Slice bundles and their index
-are in [docs/slices/](docs/slices/README.md).
+Changes follow a slice workflow of seven stages (discovery → requirements →
+architecture and interfaces → tests first → implementation → final review →
+handoff), each with its review and its stage checklist in
+[docs/review_checklists/](docs/review_checklists/), to keep requirements,
+architecture, code, and documentation in step. The rules, ID scheme, and quality gates are defined in
+[AGENTS.md](AGENTS.md), the repository rulebook. A small slice, such as a typo or a
+broken link, runs as one PR without a final review. Each slice has a decision page in
+its bundle that holds everything the user must decide or check. Slice bundles and
+their index are in [docs/slices/](docs/slices/README.md).
 
 ---
 

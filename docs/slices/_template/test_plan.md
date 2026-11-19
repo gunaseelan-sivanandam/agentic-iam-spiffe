@@ -10,6 +10,13 @@ the document's purpose line (`AGENTS.md`, coding rule 8).
 - Link this test plan back to the approved `plan.md`.
 - List the requirements and agreed design choices this test plan covers.
 
+## Reviews per stage
+Each review gets its stage's list from `docs/review_checklists/` (`--stage`), read from the base branch:
+the plan review `plan-and-test-plan`, the requirements review `requirements`, the architecture review
+`architecture-and-interfaces`, the tests-first review `unit-tests` and `e2e-tests`, the implementation
+review `code`; the final review gets no list. The author reads the stage's list before writing that
+stage's artifact.
+
 ## Unit test plan
 - List the UT areas to add or change.
 - For each UT area, describe:
@@ -33,7 +40,7 @@ the document's purpose line (`AGENTS.md`, coding rule 8).
 | harness ID | component that must produce the outcome | exact outcome: status + `reason`, curl exit code, exact log line | positive control on the same route: a test ID, or `internal` (a premise in the same test) | `plan`, `probe@<commit>` (observed before the change), `existing@<commit>` | the loose check it replaces, or — |
 
 Every negative test has a twin. A `probe@` value is observed before any change; if it contradicts a
-`plan` value, stop for the user instead of changing the row (`AGENTS.md`, slice workflow step 2).
+`plan` value, stop for the user instead of changing the row (`AGENTS.md`, slice workflow, tests first).
 
 ## Assumptions and fixtures
 - List mock, live, or environment assumptions needed by the tests.
@@ -52,7 +59,8 @@ Every negative test has a twin. A `probe@` value is observed before any change; 
 
 ## Independent review at the implementation PR
 A reviewer that is not the author ([AGENTS.md — Independent review](../../../AGENTS.md#independent-review))
-answers in the PR body:
+answers the questions below as findings in its report; the slice's decision page (`decisions.md`) lists,
+for each question, the IDs of the findings that answer it, or "no finding":
 1. *Tests:* for each new or changed test, which wrong failure would still pass it (service down,
    another status, the right status with another reason, another component answering, a missing
    value or empty file read as success)? Does its assertion match the expected-outcome row?
@@ -63,5 +71,7 @@ answers in the PR body:
    ([AGENTS.md, coding rule 8](../../../AGENTS.md#coding-rules)), and do its names say what each part
    does?
 
-A "yes" to question 1 or 2 blocks, under [AGENTS.md — PoC scope and proportion](../../../AGENTS.md#poc-scope-and-proportion).
-Findings on question 3 are fix-or-defer: the author fixes them or the user defers them.
+A "yes" to question 1 or 2 is a blocking finding, under [AGENTS.md — PoC scope and proportion](../../../AGENTS.md#poc-scope-and-proportion).
+A purpose comment or name that does not say what it does (question 3) is a medium finding: the author
+fixes it, unless the user decides otherwise (`owner:`). Every other finding takes the severity scale
+of the same section (blocking, high, medium, low).

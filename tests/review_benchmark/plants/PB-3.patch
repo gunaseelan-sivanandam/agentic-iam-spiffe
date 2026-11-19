@@ -1,0 +1,45 @@
+Planted defect PB-3 of the review benchmark, stage B (slice 4.5): a test-plan row that drops a requirement's
+only runtime proof, while the plan claims every requirement stays proved.
+
+diff --git a/docs/slices/m3-s4-retire/plan.md b/docs/slices/m3-s4-retire/plan.md
+new file mode 100644
+index 0000000..c9be3cc
+--- /dev/null
++++ b/docs/slices/m3-s4-retire/plan.md
+@@ -0,0 +1,16 @@
++# Slice Plan — m3-s4-retire: retire the M3.S4 suite
++
++Plan to retire the E2E suite M3.S4 (subject binding), whose checks the M4 suite repeats on every protected request.
++
++## Decisions
++
++| ID | Decision | Source |
++| --- | --- | --- |
++| R4-D1 | Retire the M3.S4 harness tests (`M3.S4-T1` to `M3.S4-T7`) and their trace entry `E2E-M3-S4-SUITE`. | default by the author: the M4 suite exercises subject binding on every protected request |
++| R4-D2 | Every requirement the suite named stays proved by another suite. | default by the author |
++
++## Retirement
++
++- `scripts/rogue_node_tests.sh`: the M3.S4 tests are removed.
++- `trace/tests.yaml`: the entry `E2E-M3-S4-SUITE` is removed.
++- `docs/test_spec.md`: the M3.S4 headings are removed.
+diff --git a/docs/slices/m3-s4-retire/test_plan.md b/docs/slices/m3-s4-retire/test_plan.md
+new file mode 100644
+index 0000000..d45a15d
+--- /dev/null
++++ b/docs/slices/m3-s4-retire/test_plan.md
+@@ -0,0 +1,14 @@
++# Slice Test Plan — m3-s4-retire
++
++The tests that change when the M3.S4 suite is retired, and the proof each requirement keeps.
++
++## E2E test plan
++
++| Suite | Change | Requirements it proves after the change |
++| --- | --- | --- |
++| E2E-M3-S4-SUITE | retired | none: its requirements stay proved by E2E-M4-SUITE |
++| E2E-M4-SUITE | unchanged | its own, as today |
++
++## Unit test plan
++
++None: no service code changes.

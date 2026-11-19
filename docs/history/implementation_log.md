@@ -5,6 +5,744 @@ gitignored `docs/local_status_capture/implementation_status.md`; older entries s
 Current state is summarized in `docs/STATUS.md`. Entries are not in strict date order (the newest
 is first); every heading carries its date.
 
+## 2026-11-19 Slice agentic-sdlc-poc 4: the close-out (records only)
+
+- The owner approved the close-out ("yes, go ahead with the close-out commit and comments"). Records only: no code,
+  test, checklist, template, review record or `AGENTS.md` changed.
+- `docs/STATUS.md`: the passage on the final PR says that the owner opened PR #49, the branch is pushed as
+  `guna-agent[bot]` and the final review ran again (it still said that the owner pushed the branch, that the agent
+  account cannot write to GitHub and that the review runs again); decision 10 noted; "Last slice" is the PoC's
+  slice 3 (PR #37), the last merged; DPL-017 and DPL-018 under the open delivery problems; a row under "Last
+  verification".
+- `docs/slices/README.md`: rows 4.1 to 4.6 say that every review ended and that the final PR #49 is open (they said
+  "in review; final PR pending"); the parent row names decision 10.
+- `docs/delivery_problem_log.md`: DPL-016 records that slice 4's reviews never ran the requirements and architecture
+  stages and what the owner's question of 2026-11-19 found, and the owner's note under action 1 (the trial goes
+  through every stage); DPL-017's status, the recurrences (d) to (g), and its preventive line ("none new" did not
+  hold; the next slice's plan, #50, proposes one); DPL-018 (new): commits prepared for a push carried operational
+  details of the agents' GitHub identity, caught by the author's scan before the push.
+- `docs/slices/agentic-sdlc-poc/slice_4_decisions.md`: decision 10 (three checklist wordings) under "Decisions to
+  make", for the next slice's first change (#50), not blocking PR #49; discovered issues 66 to 70; a line beside the
+  brief on its "Open" column (FR2-3); the Progress row "Final review" in the past tense; the "Last updated" line.
+- The same staleness searched for ("final PR pending", "runs again", "cannot write", "pushed the branch", "in review",
+  "opens the final PR", "the push and the final PR") in `docs/STATUS.md`, `docs/slices/README.md` and the decision
+  page; besides the fixes above, the hits are dated history (the page's "Last updated" line, the rule-deviation row)
+  or other subjects, left as recorded.
+- CI on `dfbc55a`: 12 of 12 jobs passed. `gate-consistency` had failed on `c1faa5d` on the rate-limited read of the
+  ruleset (discovered issue 66) and passed on `dfbc55a`.
+- Validation, local: `make docs-check` and `make qa-trace` passed (exit 0; requirements 170, architecture 34, design
+  131, tests 386, coverage gaps 113; 0 new against the merge-base). `make tooling-test` (exit 2): 992 passed, 9 failed,
+  the shellcheck tests of `tests/tools/test_lint_changed_files.py`, since shellcheck is not installed locally
+  (discovered issue 1); `tests/shell/` run on its own: 9 passed. Not run: the E2E suite (records only), and CI, which
+  runs on the push.
+- Next: the owner merges PR #49; decision 3 (recreate the hidden issues, about 2026-11-23) stays the owner's;
+  decision 10 goes to the next slice's first change (#50).
+
+## 2026-11-18 Slice agentic-sdlc-poc 4: the final review's rerun (count 2) and the issues for the work not done
+
+- The unit `final` ran again over the whole slice under R4-1's final mandate, after the owner's reset comment on
+  PR #49 (count 2). Round 1 (`final/c2/r1/A/1`, Opus at high, USD 3.64, reviewed commit `d818d8c`): approvable;
+  0 blocking, 1 high, 1 medium, 1 low (`068edb2`). FR2-1 (high): the decision page's proof table named tests, rule
+  text and launcher behaviour that later rounds had changed; fixed in `ea4d440` (every row the finding named, and the
+  same cause searched across the page, `docs/STATUS.md` and the slice index, with every `test_…` name checked
+  against `tests/`). FR2-2 (medium): work found but not done had no tracking; fixed in `d76035e` (the discovered
+  issues' Tracking column, each open trip point's tracking, decision 9 for trip points 2 and 9).
+  FR2-3 (low, the brief's "Open" column counts decided `owner:` items) deferred to #50, since slice 4 freezes its
+  process tooling (DPL-016, action 4). Answers in `f7fd411`.
+- The work found but not done went to issues #50 (the author-prompts slice), #51 (the next benchmark run) and #52
+  (a reviewer that runs and writes tests), labelled `slice`, locked, each body starting "Needed before:", and to a
+  comment on #13 (trip point 8). The owner had them opened as `guna-agent[bot]` ("yes, open the issues as
+  guna-agent[bot]"), and the branch pushed and PR #49's body updated the same way ("yes, push and update the PR body
+  as guna-agent[bot]"); the deviation from `AGENTS.md`'s Git rules
+  is one line under "Decisions made" on the decision page, until the next slice settles those rules.
+- Round 2, the recheck (`final/c2/r2/A/1`, Opus at medium, USD 0.83, reviewed commit `f7fd411`): approvable; all three
+  answers accepted with quotes; no new finding. So the final review has ended. A first run of this recheck, on an
+  earlier commit that was never pushed, was discarded with that commit when the rule-deviation row was reworded
+  before the push; its one low finding (STATUS's branch row still listed the issues as the owner's) is fixed in
+  `5519c77`. The brief is rebuilt on the decision page with
+  `python3 scripts/review_brief.py --base origin/poc/agentic-sdlc` (head `5519c77`; unit `final` (count 2): yes,
+  2 rounds, 0 blocking, 1 high, 1 medium, 1 low, nothing open); the final review's findings answer no test-plan
+  question (final mode, no list).
+- Validation, local: `make docs-check` passed after each step. Not run: the other gates and the E2E suite (only
+  records changed since `d818d8c`, whose CI run passed), and CI, which runs on the push.
+- Next: the branch is pushed and PR #49's body updated as `guna-agent[bot]`; the PR's checks run, and the owner
+  merges; decision 3 (recreate the hidden issues, about 2026-11-23) stays the owner's.
+
+## 2026-11-18 Slice agentic-sdlc-poc 4: round 4, decision 8 (the owner): the launcher ships R4-1's initial mandate
+
+- The owner decided decision 8 as option (a): "yes, ship the R4-1 initial mandate and review it", after the author's
+  answer to why the wording runs could not settle it (one run per wording; the criterion had no margin; the false
+  alarms counted, never judged; decision concern 19's confound). The criterion's outcome stays as recorded. On the
+  [decision page](../slices/agentic-sdlc-poc/slice_4_decisions.md): decision row 8, section "Round 4", paragraph
+  "Decision 8", the Progress row and discovered issue 64.
+- The change: the launcher's initial mandate (`MANDATES` in `scripts/run_independent_review.py`) is R4-1's text
+  verbatim, so all three are round 4's; the benchmark notes that `open+list` now means that text while its recorded
+  lines (and `open+list+sev`'s) ran 4.1's. Byte identity, built with no reviewer call: on the 15 initial cases the
+  launcher's own initial prompt (`open+list`) equals `open-R4+list`'s whole prompt, and `open-R4+list`'s prompt
+  identity equals its recorded runs' (15 of 15). An unfiltered `--run` still selects the same 66 reviews (issue 64).
+- Tests first, red on the base code (`b354446`):
+  `test_run_review_benchmark.py::test_the_launcher_ships_r4_1s_mandates_in_all_three_modes[initial-Initial]` (renamed
+  from `..._recheck_and_final_mandates`): `AssertionError: assert 'Find anythin...f the review.' == 'Find anythin...s
+  is valid.\n'`.
+- Validation, local: `make tooling-test` (1001 passed; shell 9 passed), `make docs-check`, `make lint` (0 new or
+  worsened) and `make qa-trace` (requirements 170, architecture 34, design 131, tests 386, coverage gaps 113; 0 new
+  against the merge-base) passed. Not run: the full E2E suite and the unit gates (no `services/`, harness, compose or CI
+  change), and CI (not pushed).
+- Review: the unit `owner-decisions-4` (default by the author, as R4-6), round 1 (`owner-decisions-4/c1/r1/A/1`, Opus
+  at high, CLI 2.1.327, USD 1.55, 4.5 minutes, reviewed commit `6ca3d60`), the first live review under R4-1's initial
+  mandate: approvable, 1 low (`40943e3`). F1: the benchmark report's configuration list left out `open+list+sev`,
+  `open-R4+list` and `recheck-R4` and did not say that `recheck-A` was the launcher's mandate only until `1f905a9`, and
+  the purpose line of `mandate_initial_r4.md` still called its text one measured before it ships; fixed in `eb419c0`
+  (all seven configurations listed; both round-4 prompt files' purpose lines, the recheck file having the same cause;
+  the runner's stage-B report byte-identical), answered `fixed:` in `2db41fe`.
+- With no blocking, high or medium finding, the review ended after round 1. The brief is rebuilt on the decision page
+  with `python3 scripts/review_brief.py --base origin/poc/agentic-sdlc` (head `2db41fe`; unit `owner-decisions-4`: yes,
+  1 round, 0 blocking, 0 high, 0 medium, 1 low, nothing open); F1 answers no test-plan question. Validation, local:
+  `make docs-check` and `make tooling-test` (1001 passed; shell 9 passed) passed; no other gate, since only records
+  changed.
+- The owner's decisions of 2026-11-18 recorded in `a832737` (decision page and `docs/STATUS.md`): the direction for
+  the next slices (agent definitions in files, in the author-prompts slice; a reviewer that runs and writes tests, in
+  its own slice); decision concern 19 decided; growth proposal 12 withdrawn (no read-check failure since round 3's
+  change, against 9 between 2026-11-09 and 2026-11-14); discovered issue 53 closed and 62 to 65 left as recorded; the
+  final review to run again. `make docs-check` and `make tooling-test` (1001 passed; shell 9) passed.
+- Decision concern 16 decided by the owner ("yes, DC16 both as you proposed"): from the next benchmark on, a fresh
+  session judges blind and its verdicts set the counts, the author judges the same rows, and disagreements go on the
+  decision page. Next: the owner pushes and
+  opens the final PR and posts the final review's reset as a PR comment, which the launcher's `--reset` takes; then
+  the unit `final` runs again over the whole slice under R4-1's final mandate; the owner's actions of decisions 3
+  (recreate the hidden issues, about 2026-11-23) and 4 (remove the personal copy of the grill-me skill).
+- DPL-016 (slice 4 declared done before its goal was tested) and DPL-017 (round 4's records and recommendations
+  that a review or the owner had to correct) added to `docs/delivery_problem_log.md` from the author's retrospective
+  of slice 4; the owner answered "yes, add both DPLs and adopt all corrective actions". DPL-016's six actions are for
+  the next slice's plan to write into `AGENTS.md` and the slice templates as its first change (decision page,
+  "Direction for the next slices", point 4; `docs/STATUS.md`). Validation, local: `make docs-check` and `make tooling-test` (1001 passed; shell 9 passed) passed.
+
+## 2026-11-18 Slice agentic-sdlc-poc 4: round 4, the review mandates and the runner fixes
+
+- Branch `poc/slice-4-implementation`, 11 commits after round 3's handoff (`96e3b22`): `8ab80e5` (discovered issue
+  60), `4fb578d` (issue 57), `f5321cc` (the owner's decisions on the decision page), `02281b0` (issues 56 and 61),
+  `ebdb0e8` (the report and the page after issue 56; new issues 62 and 63), `90a15ed` (R4-2), `831b47a`, `660f57b`,
+  `78116f7` and `6add324` (R4-4), `1f905a9` (R4-1 and R4-5), then these records. The owner's decisions of 2026-11-17
+  ("Decision 1, 3, 4  and 5 - accept, I want to revisit the decision 2 again, fix the issue 56, 57 and 60.") and the
+  approval of round 4 ("approve the texts, budget 120, criterion fine.") are on the
+  [decision page](../slices/agentic-sdlc-poc/slice_4_decisions.md), section "Round 4", with R4-1 to R4-6 and the
+  measurement's result.
+- R4-1 (`1f905a9`): the launcher's recheck and final mandates (`MANDATES` in `scripts/run_independent_review.py`) are
+  R4-1's texts verbatim, one line per paragraph as the benchmark's prompt files hold them. The recheck mandate is byte
+  for byte the one `recheck-R4` measured: on RC-1 to RC-4 the launcher's recheck prompt (`recheck-A`) equals
+  `recheck-R4`'s, and `recheck-R4`'s prompt identity equals the measured runs'. The final mandate, which no case can
+  measure, was approved as written. The initial mandate stays 4.1's: round 4's did not meet R4-4's criterion, and the
+  owner decides (decision 8). The benchmark notes that `recheck-A` now means the new recheck text while its recorded
+  lines ran 4.1's.
+- R4-2 (`90a15ed`): the "Review prompt" section of slice 4.4's research record
+  ([`research.md`](../slices/poc-4-4-stage-checklists/research.md)) holds the words of R4-1's mandates that rest on
+  research, their 29 sources with verbatim quotes checked against the downloaded copies, the gaps the research leaves,
+  and the options considered and left out.
+- R4-3, the fixes, tests first:
+  - Discovered issue 60 (`8ab80e5`): every place that reads a git file list without `-z` passes the diff's `-c`
+    settings (`DEFAULT_DIFF_CONFIG` of `scripts/review_inputs.py`, `core.quotePath=false` among them), so git no longer
+    quotes a non-ASCII name: `changed_files` and `process_file_evidence` in `scripts/review_inputs.py`, `final_records`
+    and `stage_lists` in the launcher, `changed_logs` in `scripts/review_brief.py`, and `tracked_files` in
+    `scripts/check_docs.py`; `stage_lists` and `changed_logs` read one name per line, so a name with a space holds.
+  - Discovered issue 57 (`4fb578d`): after the whole-line removal, the scorer also removes each quoted span (backticks,
+    straight or curly double quotes) of `QUOTE_MIN` characters or more that occurs verbatim in an expected line, never
+    the finding's own words; stage A's rescore prepares each case's expected lines as stage B's does
+    (`rescore_quoted`). On the committed data `--rescore B` and `--report --stage B` gave the same bytes before and
+    after, and the 10 stage-A reviews kept their detections; the key's rule text and hash are unchanged.
+  - Discovered issue 56 (`02281b0`): `rule_views` keeps only the last line in file order of each case, configuration
+    and run (`current_lines`), in both views; results stay append-only. Under R2-9 `recheck-A` reads 3 of 3 (was 6 of
+    7) and `recheck-B` 3 of 3 (was 3 of 4). Discovered issue 61, in the same commit: `benchmark_rescore_B.jsonl`
+    refreshed by `--rescore B` (no reviewer call), key hash `ba6975d46b11` to `0ee2ad1414c0` on all 62 rows, every
+    other field unchanged. `ebdb0e8` keeps the rebuilt stage-B report verbatim in the benchmark report and records
+    discovered issues 62 and 63.
+- R4-4, the measurement: `831b47a` adds the configurations `open-R4+list` and `recheck-R4` (R4-1's initial and
+  recheck mandates verbatim, pinned by a test to the decision page), answer key version 8, the stage-B hard stop of
+  120 and, before the runs, decision concern 19 (the `open+list` baseline ran under CLI 2.1.321). `660f57b`: the 19
+  calls (`open-R4+list` on the 15 initial cases, `recheck-R4` on RC-1 to RC-4), one call each without retries, CLI
+  2.1.323, USD 13.58, 105 of 120 calls used; FS-1's line is withheld by the publication check. `78116f7`: the 85 new
+  judged findings exported as M153 to M237 (seed 45). `6add324`: two fresh sessions judged them blind, each given half
+  of the export and the match rule only: 20 matches. They were the second pair: a first pair, started with a prompt
+  that added a test beyond the match rule (whether each finding actually describes the expected defect), was stopped
+  after about a minute; by their session transcripts (not kept in the repository) each had made three read-only calls,
+  listing its folder and the match rule and printing export rows, and written no verdict, so the author's removal of
+  any verdict file in their folders before the relaunch removed nothing. The second pair was asked only to apply the
+  rule. The committed rows differ from the sessions' output in one field: `expected_id` is null on the 65 no-match
+  rows, as in the earlier rows, where the sessions had named `E1` or `R1` (`read_verdicts` reads only `token` and
+  `verdict`). Under R2-9 `open-R4+list` detects 10 of the 11 defect cases
+  against `open+list`'s 8, with 8 false alarms in 4 no-defect reviews against 7; under blocking or high, 9 against 7
+  detections and 2 against 2 false alarms. `recheck-R4` re-raised RC-1's, RC-3's and RC-4's false answers, each
+  re-raise confirmed, and accepted RC-2's. The criterion's outcome: the recheck wording meets it and ships; the
+  initial wording raised one more false alarm (a medium finding on CL-2), so it does not ship and the owner decides
+  (decision 8).
+- R4-5 (`1f905a9`): `AGENTS.md`'s Final review and stage table no longer state 4.1's question "What did everyone
+  before you miss?"; S46-D5 stays as recorded.
+- Tests first, each new or changed test run by ID on its fix commit's parent with only that commit's test files
+  copied in (`python3 -m pytest -q -p no:cacheprovider --tb=line <file>::<test>`), with its first failure line. The
+  lines of `8ab80e5`, `4fb578d` and `831b47a` were not recorded and are re-derived for these records in a scratch
+  worktree, since removed; those of `02281b0` and `1f905a9` are as their commit messages record them.
+  - Issue 60 (base `96e3b22`), one test per place, each setting `core.quotePath=true` in its scratch repository:
+    `test_check_docs.py::test_images_unreferenced_render_with_a_non_ascii_name_is_reported`
+    `tests/tools/test_check_docs.py:155: AssertionError: assert [] == ['images: doc...ive document']`;
+    `test_review_brief.py::test_changed_logs_keep_non_ascii_names_and_spaces_whatever_the_repository_configures`
+    `tests/tools/test_review_brief.py:210: AssertionError: assert [] == ['docs/slices...tempts.jsonl']`;
+    `test_review_inputs.py::test_changed_files_keep_a_non_ascii_name_whatever_the_repository_configures`
+    `tests/tools/test_review_inputs.py:799: assert ChangedFiles(...), deleted=()) == ChangedFiles(...), deleted=())`
+    (`to_open: ('"docs/\\303\\251.md"',) != ('docs/é.md',)`);
+    `test_review_inputs.py::test_process_file_evidence_keeps_a_non_ascii_name_whatever_the_repository_configures`
+    `tests/tools/test_review_inputs.py:812: assert [] == ['EV1: proces...t> <commit>)']`;
+    `test_run_independent_review.py::test_final_records_keep_non_ascii_names_whatever_the_repository_configures`
+    `tests/tools/test_run_independent_review.py:950: AssertionError: assert () == ('docs/slices...view_impl.md')`;
+    `test_stage_checklists.py::test_a_list_whose_name_is_not_ascii_or_holds_a_space_is_found_whatever_the_repository_configures`
+    `scripts/run_independent_review.py:2133: run_independent_review.ReviewRefusedError: --stage é names no list at the
+    base; the lists are: words`.
+  - Issue 57 (base `8ab80e5`, `tests/tools/test_run_review_benchmark.py`):
+    `test_a_finding_that_quotes_part_of_the_planted_line_detects_it_only_by_its_own_words`, `[backticks]`,
+    `[straight]` and `[curly]`, each `tests/tools/test_run_review_benchmark.py:1208: AssertionError: assert (['E1'] ==
+    []`; `test_a_quoted_span_is_removed_from_quote_min_on_and_only_when_an_expected_line_holds_it[at-quote-min]`
+    `tests/tools/test_run_review_benchmark.py:1220: AssertionError: assert ['E1'] == []`;
+    `test_rescore_a_applies_the_quote_rule_to_the_planted_line` `tests/tools/test_run_review_benchmark.py:778:
+    AssertionError: assert [(['E1'], []), (['E1'], [])] == [([], ['E1']), ([], ['E1'])]`. The twins
+    `[below-quote-min]` and `[not-in-an-expected-line]` passed on the base, by design.
+  - Issue 56 (base `f5321cc`): `test_a_review_run_again_under_another_prompt_replaces_the_earlier_line_in_the_counts`
+    `E AssertionError: assert ('1 of 2' == '0 of 1'`; `test_a_recheck_run_again_under_another_prompt_is_listed_once`
+    `E AssertionError: assert '1 of 2' == '1 of 1'`.
+  - R4-4 (base `90a15ed`): `test_the_committed_keys_budget_is_the_stage_b_hard_stop_of_120` (renamed from `_of_95`)
+    `tests/tools/test_run_review_benchmark.py:1594: assert 95 == 120`;
+    `test_the_round_4_configurations_send_r4_1s_mandates_verbatim[open-R4+list-initial-Initial]`
+    `scripts/run_review_benchmark.py:424: run_review_benchmark.BenchmarkRefusedError: unknown configuration
+    'open-R4+list'; the runner knows short+list, open+list, open-B+list, recheck-A, recheck-B, open+list+sev, canary`,
+    and `[recheck-R4-recheck-Recheck]` the same for `'recheck-R4'`.
+  - R4-1 and R4-5 (base `6add324`):
+    `test_run_review_benchmark.py::test_the_launcher_ships_r4_1s_recheck_and_final_mandates[recheck-Recheck]`
+    `AssertionError: assert 'For every an... fixes touch.' == 'Verify every...s is valid.\n'` and `[final-Final]`
+    `AssertionError: assert 'What did eve..., on purpose.' == 'Independentl...nal review.\n'`; the changed
+    `test_stage_rules.py::test_the_stage_table_check_fails_on_each_kind_of_violation[review-without-list-or-mode]`,
+    unchanged, on the new `AGENTS.md`: `AssertionError: []` (its edit no longer matched the stage table's row).
+- Validation, local: at `1f905a9`, `make tooling-test` (1000 passed; shell 9 passed), `make docs-check`, `make lint`
+  and `make gate-consistency` passed, as the commit records. On these records (docs only): `make docs-check`, `make
+  qa-trace` (requirements 170, architecture 34, design 131, tests 386, coverage gaps 113; gap gate against the
+  merge-base of `origin/poc/agentic-sdlc`: 0 new), `make lint` (0 new or worsened) and `make tooling-test` (1000
+  passed, with a scratch shellcheck; shell 9 passed) passed.
+- Not run: the full E2E suite (no service, policy, compose, harness or CI file changed, so no runtime change; CI runs
+  it on the PR), `make unit-trust`, `make unit-mutation` and `make unit-diff-cov` (no `services/` change), and CI (the
+  branch is not pushed).
+- Discovered issue 64 is on the decision page: a `--run` that names no case or configuration selects 66 reviews, every
+  configuration of every case but round 4's two, since their prompts changed after their recorded runs (probed with no
+  reviewer call); low, recorded only.
+- Review: the unit `owner-decisions-3` (R4-6), round 1 (`owner-decisions-3/c1/r1/A/1`, Opus at high, CLI 2.1.327,
+  USD 3.22, reviewed commit `5f5b404`): approvable, 2 medium and 3 low (`14435c4`). Fixed in `ec4b2a4`: F1, DPL-015
+  records discovered issue 56 as a review miss and where the author looked for the same cause; F2, the records of
+  R4-4's blind confirmation say that a first confirmer pair was stopped before any verdict and that the committed rows
+  set `expected_id` to null on the 65 no-match rows; F4, decision 8's recommendation reads as the author's; F5, row 60
+  says issue 60's fix covers non-ASCII names and spaces only. F3 (low, the call range "86 to 105") rejected. The
+  answers and discovered issue 65 (the origin table, the question line and `_completed_reviews` still read replaced
+  lines) are `34d76f5`.
+- Review: round 2, the recheck (`owner-decisions-3/c1/r2/A/1`, Opus at medium, USD 0.53; its range `5f5b404` to
+  `34d76f5`), the first under round 4's recheck mandate: approvable, all five answers accepted, no new finding
+  (`e6f78d3`). With no blocking, high or medium finding open, the review ended after round 2. The brief is rebuilt on
+  the decision page with `python3 scripts/review_brief.py --base origin/poc/agentic-sdlc` (head `e6f78d3`; unit
+  `owner-decisions-3`: yes, 2 rounds, 0 blocking, 0 high, 2 medium, 3 low, nothing open), with F5 under the test-plan
+  question 1 by its content.
+- Next, the owner's: decision 8 (round 4's initial wording); decision concerns 16 and 19; growth proposal 12;
+  discovered issues 62 to 65 are recorded; the actions of decisions 3 (recreate the hidden issues, about 2026-11-23)
+  and 4 (remove the personal copy of the grill-me skill); and the push and the final PR, which the agent account
+  cannot write.
+
+## 2026-11-17 Slice agentic-sdlc-poc 4: round 3, decision concern 18 (diff lines count as seen) and the second mechanics replay
+
+- Branch `poc/slice-4-implementation`, after the records of round 3 (`a6dfcce`): the owner's decision on decision
+  concern 18 recorded (`fd1b07e`, `4f5ea83`: option (b), "I choose your recommendation"), the benchmark report with
+  RC-1 to RC-4's runs (`2f2f1e2`), then (b) in `04a0ae3` (tests first), `753fc3e` and `5627de7`, then these records.
+  The [decision page](../slices/agentic-sdlc-poc/slice_4_decisions.md), section "Round 3", holds the as-built
+  paragraph and the replay's result.
+- What changed (`git diff --name-only 2f2f1e2 5627de7`: `AGENTS.md`, `scripts/run_independent_review.py`,
+  `tests/tools/test_run_independent_review.py`): `lines_shown` maps each line of `_review_inputs/change.diff` the
+  attempt was shown to the file line it shows (`diff_places`): a context or added line at its new path and line, a
+  removed line at its old path and line only for a file the diff deletes, a header line nowhere; the must-see check,
+  the quote's file rule and the place check use these lines too. `AGENTS.md` (Modes and prompts) says so, and the
+  output section's `SEEN_RULE` in its own commit (`5627de7`, wording only, decision 2). By the author's choice the
+  definition holds for every mode, so an initial review's empty-review rule counts diff lines too; the owner approved
+  (b) for rechecks and may restrict it.
+- Tests first (base `2f2f1e2`, the tests added in the working tree, each by ID with `python3 -m pytest -q
+  --tb=line`), with the first failure line:
+  `test_a_shown_context_or_added_line_of_the_change_diff_is_a_seen_line_of_its_file_and_a_header_line_of_none`
+  `E KeyError: 'scripts/kept.py'`;
+  `test_a_shown_removed_line_is_a_seen_line_only_of_a_file_the_change_deletes_at_its_old_line`
+  `E KeyError: 'scripts/kept.py'`;
+  `test_a_fix_seen_only_as_hunks_of_the_change_diff_is_seen_and_quoted_only_at_the_lines_they_showed`, the two cases
+  beyond two lines (`[three-before-the-hunk]`, `[three-past-the-hunk]`) `AssertionError: assert (1 == 1 and 'X1 quotes
+  scripts/cover.py:4-4, lines the attempt was not shown' in 'the report does not account for what it was given:
+  scripts/cover.py is named in a fixed: or rejected: answer and was not seen; ...')` (`:16-16` for the second), and
+  the four within (`[two-before-the-hunk]`, `[the-added-line]`, `[the-last-context-line]`, `[two-past-the-hunk]`)
+  `AssertionError: the report does not account for what it was given: scripts/cover.py is named in a fixed: or
+  rejected: answer and was not seen; X1 quotes scripts/cover.py, which the attempt did not see`. Not red, by design:
+  G2-1's test, `test_a_rejection_citing_a_file_the_change_deletes_must_see_the_change_diff_and_quote_from_it` (three
+  cases), passed on the unchanged code; the branch was right and the test pins it (discovered issue 51). The
+  commands and lines: `artifacts/work/round3_dc18_red.txt` (not tracked).
+- Measurement: the `mechanics` round-2 replay once more, on the launcher at `5627de7`, set up as the first replay
+  (one call, no retry, the pinned CLI 2.1.323, USD 1.37): completed and approvable, 15 answers accepted, 1 re-raised
+  (H1, high), 0 cannot determine, and two new findings (N1 medium, N2 high). Measurement 2's criterion, fixed before
+  the runs, was not met by the first replays; after the owner's decision 18 the failing replay ran once more and
+  passed. The counterfactual: the check of `3df47b7` on this attempt still gives the four "not seen" failures, the
+  check of `5627de7` none, and the check of `5627de7` on the first attempt still fails L1's misquote; so (b) passed
+  M4, and L1 passed because this reviewer quoted correctly. One run, and the evidence differed (4 entries instead of
+  5), so run-to-run variance cannot be separated. The analysis:
+  `artifacts/work/round3_replays/mechanics-dc18/analysis.md` (not tracked).
+- Validation, local: at `5627de7`, `make lint`, `make docs-check`, `make qa-trace` and `make tooling-test` passed, as
+  the build reported. On these records, rerun: `make qa-trace` passed (requirements 170, architecture 34, design 131,
+  tests 386, coverage gaps 113; gap gate against the merge-base of `origin/poc/agentic-sdlc`: 0 new) and `make
+  docs-check` passed. Not run: `make gate-consistency` (no CI job, Makefile target or Quality gates row changed), the
+  full E2E suite (no service, policy, compose, harness or CI file changed), `make unit-trust`, `make unit-mutation`
+  and `make unit-diff-cov` (no `services/` change), and CI (the branch is not pushed).
+- Discovered issues 56 to 59 are on the decision page: H1 (high) and N1 (medium) still hold at HEAD in slice 4.5's
+  runner and are open for the owner; N2 (high) no longer holds (both refusals are tested since `ea5697f`); the
+  evidence difference is not investigated. Discovered issue 51 (G2-1) has its test.
+- The author's choice (one definition of "seen", so an initial review's empty-review rule also counts diff lines)
+  got its test after these records (`f75bc7a`): `test_an_initial_review_that_saw_its_only_path_under_review_only_as_a_hunk_of_the_change_diff_completes`
+  fails on the launcher of `3df47b7` with `tests/tools/test_run_independent_review.py:2113: AssertionError: the
+  review saw none of the paths under review`; its twin,
+  `test_an_initial_review_that_saw_neither_its_path_under_review_nor_a_hunk_line_of_it_in_the_change_diff_fails`,
+  passes on both, by design. Then, at `f75bc7a`: `make lint`, `make docs-check`, `make qa-trace`, `make test-lint`,
+  `make unit-guard-check` (357), `make qa-deploy` and `make tooling-test` (976 passed; shell 9 passed) passed.
+- Review: the unit `round-3`, round 1 (`round-3/c1/r1/A/1`, Opus at high, CLI 2.1.326, USD 2.54, reviewed commit
+  `af9ba98`): approvable, 3 medium and 3 low (`15c6667`). Fixed: F1, by the owner's decision ("Rechecks only"): diff
+  lines count as seen only in a recheck (`c105c9d`); F2, a recheck's rebuild and a retry in the same round take the range
+  from every reviewer of the round, as the launcher does (`1d728fd`); F3, a test of tool results given as a list of
+  blocks and of a content Grep outside the copy (`06857a7`); F6, `change_diff` runs `git diff` in git's default format
+  whatever the repository configures (`8ec83b6`; every distinct range of the attempt logs, 78 by the recount of N1's
+  fix, gives the same bytes; F6's answer said 89, counted another way). F4 and F5 (low) rejected.
+  Each new test's first failure on the code before it: F1's
+  `test_an_initial_or_final_review_that_saw_its_only_path_under_review_only_as_a_hunk_of_the_change_diff_fails`
+  `[initial]` and `[final]` `AssertionError: assert 0 == 1`, and the benchmark's
+  `test_recheck_prompt_holds_the_earlier_report_and_the_false_fix` `AttributeError: 'Accounting' object has no attribute
+  'mode'` (on `8ec83b6`); F2's
+  `test_a_recheck_of_reviewers_who_reviewed_different_commits_is_rebuilt_from_its_entry_with_no_mismatch` `At index 1
+  diff: ['paths_sha256', 'diff_sha256', 'full_prompt_sha256'] != []`; F6's
+  `test_change_diff_has_git_default_format_whatever_the_repository_configures` `AssertionError: assert '' ==
+  'diff --git a...\n+première\n'` (both on `15c6667`); F3's
+  `test_a_tool_result_given_as_a_list_of_blocks_shows_the_lines_of_its_text_blocks` passed on `15c6667`, by design
+  (the branches were untested, not wrong). Gates at `c105c9d`: `make lint` and `make qa-trace` passed; `make
+  docs-check` and `make tooling-test` (979 passed, 1 failed; shell 9 passed) failed only on the round's missing answers,
+  which these records and the answers end. Discovered issue 60 (git file lists without `core.quotePath=false`) came from
+  F6's search for the same cause.
+- Review: the unit `round-3`, round 2, the recheck (`round-3/c1/r2/A/1`, Opus at medium, CLI 2.1.326, USD 0.66; its
+  range `af9ba98` to `35dbead`, 5 files under review): approvable, all six answers accepted with quotes, one new low
+  finding, N1: `changed_lines` read `git diff -U0` under the repository's own git configuration. Fixed (`9e6b3e1`): git's
+  default diff format is defined once in `scripts/review_inputs.py` and used by `changed_lines` and `change_diff`;
+  `test_changed_lines_reads_git_default_format_whatever_the_repository_configures` failed on `b2cceb3` with `assert
+  set() == {2, 5, 6, 7}`. Gates at `9e6b3e1`: `make lint` and `make qa-trace` passed, `make tooling-test` 980 passed and
+  the one test that runs the record check failed only on the round's missing answers, as `make docs-check` did, until
+  these answers. With no blocking, high or medium finding open, the review ended after round 2.
+- Handoff of round 3 (docs only): the decision page's measurement 4 states the result (criterion met), its Progress row
+  and "Last updated" line say the review ended, and the brief is rebuilt under "Review outcome" with
+  `python3 scripts/review_brief.py --base origin/poc/agentic-sdlc` (head `faa6df4`; unit `round-3`: yes, 2 rounds, 0
+  blocking, 0 high, 3 medium, 4 low, nothing open); `docs/STATUS.md` and the slice index list what remains for the
+  owner. Gates on the handoff tree: `make docs-check`, `make qa-trace` (0 new gaps, 113 coverage gaps remain), `make
+  lint` (0 new or worsened), `make test-lint`, `make unit-guard-check` (357), `make qa-deploy` (18 known violations, 22
+  warnings) and `make tooling-test` (981 passed, with a scratch shellcheck; shell 9 passed) passed. Not run: the E2E
+  suite and gate-consistency (no service, policy, compose, harness or CI file changed), and CI (the branch is not
+  pushed).
+
+## 2026-11-17 Slice agentic-sdlc-poc 4: round 3, rechecks that look before they accept
+
+- Branch `poc/slice-4-implementation`, 17 commits `292f270` to `fa7953f`, then these records: round 3, approved by the
+  owner on 2026-11-17 ("Round 3 of slice 4: I approve R3-1 to R3-4, the budget 85 → 95, and the probe and replays"),
+  in the owner's words on the [decision page](../slices/agentic-sdlc-poc/slice_4_decisions.md) (section "Round 3",
+  which holds the as-built paragraphs and the measurements' results).
+- The probe (`185f93f`, USD 0.49, CLI 2.1.326): one recheck on the launcher at `292f270` accepted a real fix and
+  re-raised a false rejection, quoting the cited test's request and assertion from a 70-line read of the harness at
+  the answer's `file:line`; it set R3-2's details (a) to (d).
+- R3-1 (`d586664`, `1ed4a2f`): a recheck's change, files under review, upstream items (the governing plan kept),
+  changed script lines and trace gaps come from the commits since the reviewed round's commit, while the copy holds
+  the whole branch; a reviewed round's commit that is not an ancestor is refused before any call; `PROCESS_FILES`
+  adds the benchmark runner, its answer key and `.claude/skills/` (decision concern 15); `AGENTS.md`, What the reviewer
+  receives.
+- R3-2 (`bba4840`, `f7928ae`, and `29061a7`, wording only): a file is seen at the lines a Read showed or a content
+  Grep printed; every file a `fixed:` answer names or a `rejected:` answer cites must be seen; every fix and rejection
+  a recheck accepts or re-raises is quoted from a named or cited file as it is in the copy (`change.diff` only for a
+  named file the range deletes), within two lines of a shown line; `opened` is no longer checked and `searched` left
+  the schema; `AGENTS.md`, Modes and prompts. The fake CLI (`tests/tools/fakes/fake_claude.py`) shows each Read's
+  window and takes a Grep's result.
+- R3-3 (`e4ebda4`, `9a57a88` wording only, `de44fdd`): what an existing rule already requires of a fix, such as a test
+  for new behaviour or a handoff record, is not an added mechanism, in the recheck's mechanism question, the shared
+  kind bullet and `AGENTS.md` (Fixes stay within the agreed decisions).
+- R3-4 (`06fa912`, `3df47b7`): the plan list's question 8 asks the fix rule since R2-4 (growth proposal 14), and a
+  false small-slice claim blocks at the plan review (decision 7, option (a)); 12 questions.
+- Measurement 3's runner (`a3f1835`, `07f024a`, `a9ec037`): the stage-B hard stop and the key's budget are 95 (key
+  version 7, naming version 6's hash); a confirmation token is keyed with its line's prompt identity, and
+  `--export-rescore` keeps its earlier rows and tokens (discovered issue 44,
+  [DPL-014](../delivery_problem_log.md#dpl-014-a-blind-confirmation-token-was-not-tied-to-its-result-line)). After
+  `a9ec037` the stage-B report was byte-identical, `--rescore B` gave all 62 recorded scores, and `--export-rescore`
+  on the committed results exported nothing.
+- Tests first, each new or changed test run on the unchanged code with the test changes (`python3 -m pytest -q
+  -p no:cacheprovider` or `-p no:randomly --tb=line`, by test ID), with its first failure line:
+  - R3-1 (base `292f270`, each test alone): `test_an_initial_review_gets_the_branch_and_a_recheck_only_the_commits_since_the_reviewed_round`
+    `assert 'the report d... was not read' == 'the review r... under review'`;
+    `test_a_recheck_whose_reviewed_round_commit_is_not_an_ancestor_is_refused_before_any_call` `assert 1 == 2`;
+    `test_a_recheck_whose_commits_since_the_reviewed_round_change_no_file_still_runs`
+    `assert '7ca6ecc9fc08...7d17da018b538' == 'e3b0c44298fc...5991b7852b855'` (the branch's diff, not the empty
+    range's); `test_recheck_that_does_not_account_for_every_answer_fails[nothing-under-review-read]` (changed)
+    `assert (1 == 1 and 'failed' == 'failed'` (another reason); `test_review_inputs.py`:
+    `test_process_file_evidence_lists_a_changed_skill_and_the_benchmark_runner_with_its_answer_key`
+    `assert [] == ['EV1: proces...t> <commit>)']`,
+    `test_a_recheck_takes_upstream_items_and_evidence_from_the_commits_since_the_reviewed_round`
+    `assert ('REQ-T-R1 (found' not in ...` (an item edited before round 1 still listed), and 3 of the 35 cases of
+    `test_process_files_are_the_rulebook_gates_ci_templates_checklists_and_the_launcher` (the runner, the key, a skill)
+    `assert False is True`; added at implementation,
+    `test_a_recheck_whose_reviewers_reviewed_different_commits_starts_at_their_common_ancestor`
+    `AttributeError: module 'run_independent_review' has no attribute 'recheck_inputs'`. Not red, by design:
+    `test_fixed_answer_naming_a_file_the_change_deletes_is_accepted_and_needs_the_diff_read` (changed: the deletion
+    moved into the fix commit, and it is in the merge-base diff too).
+  - R3-2 (base `1ed4a2f`; the launcher, record-check, inputs and benchmark tests: 25 failed, 536 passed):
+    `test_failed_read_of_the_only_path_under_review_does_not_count` `:639 assert ('failed' == 'failed'` (another
+    reason); `test_output_section_holds_the_reporting_bounds_and_the_credential_note_verbatim` `:837 AttributeError:
+    ... no attribute 'SEEN_RULE'`; `test_fixed_file_that_was_not_seen_fails_even_when_a_path_under_review_was` `:1097`
+    and `test_a_rejection_citing_a_root_level_file_must_see_it` `:1135` (the reason says "was not read", not "was not
+    seen"); `test_a_rejection_counts_only_when_the_files_it_cites_were_seen[cited-file-not-read]` `:1118 assert (1,
+    False) == (1, True)`; `test_an_opened_file_the_attempt_did_not_read_no_longer_fails` `:1151 ... X1 names an opened
+    file the attempt did not read`; `test_a_report_with_a_searched_field_is_refused_by_the_schema` (2 cases) `:1168
+    assert [] == ['accounted 0...m the schema']`; `test_the_schema_offers_the_question_field_as_optional_and_no_searched_field`
+    `:1175` (`searched` still in the schema); `test_every_fix_and_rejection_the_recheck_accepts_or_re_raises_is_quoted`
+    (3 cases) `:1519` (the old rejection-only message, or no failure for an unquoted fix);
+    `test_a_quote_comes_from_a_file_the_recheck_read_and_one_the_rejection_cites` (2 cases) `:1549` (the old
+    messages); `test_an_initial_review_gets_the_branch_and_a_recheck_only_the_commits_since_the_reviewed_round` `:1653`
+    and `test_review_inputs.py::test_review_that_opened_none_of_the_hint_files_fails_even_when_it_opened_other_listed_files`
+    `:192` ("read" where "saw" is expected); `test_the_lines_shown_come_from_read_windows_and_the_lines_a_content_grep_printed`
+    `:1819 AttributeError: ... no attribute 'lines_shown'`; `test_a_quote_counts_only_within_the_lines_the_attempt_was_shown[start-minus-3,
+    end-plus-3]` `:1841 assert (0 == 1)`; `test_a_file_seen_only_by_a_content_grep_counts_as_seen_and_one_only_listed_or_counted_does_not`
+    (4 cases) `:1870` and `:1872` (a content Grep not counted; "not read" for a listing or a count);
+    `test_a_review_that_saw_its_only_path_under_review_through_a_content_grep_completes` `:1879 the review read none of
+    the paths under review`; `test_a_fix_quoted_only_from_the_change_diff_fails_unless_the_range_deletes_the_named_file[in-the-copy]`
+    `:1910 assert (0 == 1)`; and, run apart with the launcher of `1ed4a2f`,
+    `test_run_review_benchmark.py::test_a_benchmark_recheck_that_accepts_a_rejection_or_a_fix_without_a_quote_fails`
+    `:1421` (the old rejection-only message). Not red, by design: the four cases within two lines of a shown line,
+    `[deleted-by-the-range]`, `[undetermined-fix-needs-no-quote]`, `[accepted-fix-quoted]`, and
+    `test_the_repository_records_released_with_searched_and_unquoted_fixes_still_pass_the_record_check`.
+  - R3-3 and R3-4 (base `29061a7`; the launcher and checklist tests: 5 failed, 276 passed):
+    `test_a_simpler_alternative_is_only_a_mechanism_the_owner_approved` (the kind bullet lacks the carve-out);
+    `test_what_an_existing_rule_requires_of_a_fix_is_not_an_added_mechanism` (the recheck's mechanism rule lacks it);
+    `test_the_fix_rule_in_agents_md_says_what_an_existing_rule_requires_is_not_an_added_mechanism` `:1786`;
+    `test_stage_checklists.py`: `test_the_plan_lists_question_8_asks_the_fix_rule_since_r2_4` (question 8's old text)
+    and `test_a_false_small_slice_claim_blocks_at_the_plan_review` `:147` (no such bullet). Not red, by design:
+    `test_each_review_asks_whether_the_change_or_a_fix_adds_a_mechanism` (changed only to allow the carve-out's "such
+    as").
+  - Measurement 3's runner (base `3df47b7`, `tests/tools/test_run_review_benchmark.py`):
+    `test_stage_b_stops_at_its_budget_counting_retries_and_the_canary` `:332 assert 85 == 95`;
+    `test_the_committed_keys_budget_is_the_stage_b_hard_stop_of_95` `:1550 assert 85 == 95`;
+    `test_repeats_table_reads_the_confirmed_verdicts_and_shows_a_failed_run` `:1016 AssertionError: assert ('RM
+    short+list: True, False' in ...)`; `test_a_new_line_under_another_prompt_takes_no_earlier_lines_token_and_its_findings_are_exported`
+    `:1639 assert ({'E1'} == set()` (the second line inherits T001's verdict);
+    `test_the_third_export_keeps_its_rows_and_tokens_and_adds_a_new_lines_findings_after_the_last`
+    `:1671 assert (set() == {'E1'}` (the re-export reshuffles, and the later row takes the first line's key). Not red,
+    by design: `test_the_third_export_holds_only_findings_no_earlier_export_holds_and_confirms_a_medium_match` (its
+    fixture only adds the prompt identity every committed key row carries).
+- Measurements: the replays (USD 3.07, CLI 2.1.323): `owner-decisions` and `growth` round 2 completed and accepted
+  every answer, `mechanics` round 2 failed the new recheck on two causes, so the criterion is not met (decision concern
+  18, open); RC-1 to RC-4 on `recheck-A` (`c818c15`, calls 83 to 86 of 95, USD 0.94, CLI 2.1.323): RC-1, RC-3 and RC-4
+  re-raised, RC-2 accepted, and a fresh session's blind verdicts (`fa7953f`) confirm M149, M150 and M152 and not M151,
+  so the criterion is met on confirmed verdicts.
+- Validation, local: `make tooling-test` on `fa7953f`, in a clean worktree, 963 passed, with the 2 deprecation
+  warnings of untouched tests (discovered issue 42), and 9 shell tests (with a scratch shellcheck). On these records:
+  `make qa-trace` passed (requirements 170, architecture 34, design 131, tests 386, coverage gaps 113; gap gate
+  against the merge-base of `origin/poc/agentic-sdlc`: 0 new), `make docs-check` (15 live documents), `make lint` (0
+  new or worsened findings), `make test-lint`, `make unit-guard-check` (357 passed) and `make qa-deploy` (18 known
+  violations, 22 warnings) passed. Not run: `make gate-consistency` (round 3 changed no CI job, Makefile target or
+  Quality gates row); the full E2E suite (`git diff --name-only 4cb7e9b fa7953f` lists `AGENTS.md`, the plan list, the launcher, the
+  inputs, the benchmark runner and its key, their tooling tests and fake, the decision page and the benchmark's
+  result files: no service, policy, compose, harness or CI file; CI's `e2e` job runs it on the PR), `make unit-trust`,
+  `make unit-mutation` and `make unit-diff-cov` (no `services/` change), and CI (the branch is not pushed).
+- Review: the unit `round-3` has not run; it waits for the owner's decision on decision concern 18. Discovered issues
+  44 to 55 are on the decision page; of the replays' new findings, the growth replay's G2-1 (medium) and part of the
+  mechanics replay's R2-1 (high) still hold at HEAD and are open.
+
+## 2026-11-16 Slice agentic-sdlc-poc 4: the owner's decisions on decision concerns 11 and 13
+
+- Branch `poc/slice-4-implementation`, 5 commits `5941c56` to `03c02c0`, then their records; then the fixes to their
+  review's round 1, 3 commits `10f2977` to `f22bb89`, and these records: the owner's decisions of 2026-11-16, in the owner's words on the [decision page](../slices/agentic-sdlc-poc/slice_4_decisions.md) ("okay go
+  ahead and also increase the review counts to 85", in reply to the author's explanation of decision concern 13, which
+  recommended option B). Logged under
+  [DPL-013](../delivery_problem_log.md#dpl-013-review-severity-decided-what-got-fixed-a-rejection-could-stand-on-the-authors-word-and-fixes-grew-the-process).
+- Decision concern 13, option B (`5941c56`, the launcher's wording only, in its own commit as decision 2 asks;
+  `42aef6a`, the rulebook): the mechanism wording in `MECHANISM_RULES` and the output section's kind bullet of
+  `scripts/run_independent_review.py` now counts "a step that is added or repeated (such as "again after every push")
+  and a second copy of a fact that must be kept current" as mechanisms; an initial review reports an unapproved
+  mechanism as a `defect`, not a `simpler_alternative`; a recheck re-raises a fix that adds one at the finding's
+  severity; a simpler alternative is a mechanism the owner approved. Both recheck wordings share the output section.
+  `AGENTS.md` says the same (Fixes stay within the agreed decisions, Report sections; Modes and prompts links to the
+  definition instead of repeating it). The stage checklists are not changed.
+- Decision concern 11 (`ed061ba`): the owner confirmed the stage-B budget of 85, so the hard stop (`BUDGETS["B"]`)
+  goes from 80 to 85, equal to the key's `budget: 85`. The runner checks the key's budget against the hard stop again,
+  besides the run's, so a plain `--run` works and round 2's `--budget` workaround is gone.
+- RC-3 again (`6627268`, `03c02c0`): calls 81 and 82 of 85, by a plain `--run` with `--case RC-3` and both recheck
+  configurations, under the pinned install of CLI 2.1.323 in a scratch folder whose canary is done; both completed at
+  the first try and re-raised R1-1 at high, verdict no, with no new finding (`recheck-A` USD 0.23, 0.3 minutes;
+  `recheck-B` USD 0.22, 0.2 minutes). The two re-raises were appended to the third export as `M147` and `M148`
+  without reshuffling its 146 rows; a fresh session, given only those two rows and the match rule, judged both a
+  match (decision concern 16 applies). Under R2-9 the recheck rows read 2 of 3 with RC-3 under R2-5's wording and 3
+  of 3 under decision concern 13's; the runner's own report counts both RC-3 runs and reads 3 of 4. The report
+  ([`benchmark_report.md`](../slices/poc-4-5-benchmark/benchmark_report.md)) says what this cannot show: the
+  wording's example is RC-3's own answer phrase, RC-3's reviewers got the base `e842e97`'s rulebook, which only
+  prefers removing a mechanism, and with one run per wording there is no rate; RC-2 and the initial cases did not run
+  under the new wording.
+- Tests first, rerun for this entry in a scratch clone of each parent commit with the commit's test file:
+  - Launcher (base `e2399c7`, `python3 -m pytest -q -p no:cacheprovider --tb=line
+    tests/tools/test_run_independent_review.py -k "<names>"`; 2 failed):
+    `test_each_review_asks_whether_the_change_or_a_fix_adds_a_mechanism` `:1635 assert 'a step that is added or
+    repeated (such as "again after every push")' in "Mechanisms: ask whether the change adds a mechanism …"`;
+    `test_a_simpler_alternative_is_only_a_mechanism_the_owner_approved` `:1662 AssertionError` (the narrowed
+    `simpler_alternative` bullet is not in the output section). The rulebook commit `42aef6a` is rule text only.
+  - Runner (base `42aef6a`, `python3 -m pytest -q -p no:cacheprovider --tb=line tests/tools/test_run_review_benchmark.py
+    -k "<names>"`; 3 failed): `test_stage_b_stops_at_its_budget_counting_retries_and_the_canary`
+    `:307 assert 80 == 85`; `test_a_key_whose_budget_is_above_the_hard_stop_is_refused_though_the_runs_budget_is_within_it`
+    `:1511 assert (0 == 2)` (the run naming `--budget 80` ran instead of being refused);
+    `test_the_committed_keys_budget_is_the_stage_b_hard_stop` `:1518 assert 85 == 80`.
+- Validation, local, on `03c02c0` (the commits after it change only `docs/`): `make qa-quality` passed (qa-trace in PR
+  mode against `origin/poc/agentic-sdlc`: requirements 170, architecture 34, design 131, tests 386, coverage gaps
+  113, 0 new; unit traceability with 28 mapped requirements, the unit guard over 357 tests, docs-check, test-lint, and
+  qa-deploy with 18 known violations and 22 warnings); `make tooling-test` 929 passed and 9 shell tests (with a
+  scratch shellcheck); `make lint` passed (0 new or worsened findings); `make unit-guard-check` and
+  `make gate-consistency` passed. Not run: the full E2E suite (`git diff --name-only e2399c7 03c02c0` lists
+  `AGENTS.md`, the launcher, the benchmark runner, their two tooling tests and the benchmark's report and result
+  files: no service, policy, compose, harness or CI file, and none since the last E2E run on `11667c5`; CI's `e2e` job
+  runs it on the PR), `make unit-trust`, `make unit-mutation` and `make unit-diff-cov` (no `services/` change), and CI
+  (the branch is not pushed).
+- Review, unit `owner-decisions-2`, round 1 (attempt `owner-decisions-2/c1/r1/A/1`, Opus, high effort, on `f0eb19e`):
+  approvable; 0 blocking, 0 high, 4 medium, 2 low, each answered in the
+  [review record](../slices/agentic-sdlc-poc/review_owner_decisions_2.md):
+  - F1 (medium), fixed: a mechanism added without the owner's approval is a `defect` of at least `medium` severity, so
+    it is fixed (R2-1), in the launcher's `MECHANISM_RULES["initial"]` and the output section's kind bullet
+    (`10f2977`, wording only, in its own commit as decision 2 asks) and in `AGENTS.md` (Report sections, Modes and
+    prompts; `db39dd5`). Before, only the recheck half named a severity.
+  - F2 (medium), fixed: the mechanism definition's example, "again after every push", RC-3's own answer phrase, which
+    the owner's option B does not hold, is removed from `_MECHANISM` (`10f2977`) and from `AGENTS.md` (Fixes stay
+    within the agreed decisions; `db39dd5`). RC-3's two re-raises of 2026-11-16 (calls 81 and 82) ran with the
+    example, so the shipped wording is unmeasured; the benchmark report, decision concern 13 and DPL-013 say so, and
+    the stored results are unchanged.
+  - F3 (medium), fixed (`f22bb89`): the benchmark's `leak_hits` reads the whole prompt each configuration builds
+    (`case_prompt(...).prompt`, what the reviewer is sent) in place of the rules, the upstream items and the task with
+    its configuration's prompt files, which that prompt holds; the copy is scanned as before, and `_prompt_text` is
+    gone. This also covers a recheck case's earlier report and answers (discovered issue 28). `--dry-run` over every
+    case afterwards: 20 of 20 cases pass the leak search, 67 prompts built, as before the change; no case hits a leak
+    term.
+  - F4 (medium, decision concern): to the owner as decision concern 17 (good fixes that add what a rule requires may
+    be re-raised; RC-3 and RC-2 under the shipped wording, 4 calls, the budget to 89).
+  - F5 (low), rejected: the prompt carries its own copy of the definition while this branch is unmerged, since the
+    reviewer receives the base branch's `AGENTS.md`; discovered issue 41, after the merge.
+  - F6 (low, simpler alternative), rejected: the key's `budget` is part of the hashed answer key, and the two copies
+    are pinned equal by a test and checked before any call.
+- Tests first for the fixes, rerun in a scratch clone of each parent commit with the commit's test file:
+  - Launcher (base `f0eb19e`, `python3 -m pytest -q -p no:cacheprovider --tb=line
+    tests/tools/test_run_independent_review.py -k "<names>"`; 2 failed):
+    `test_each_review_asks_whether_the_change_or_a_fix_adds_a_mechanism` `:1636 assert 'a step that is added or
+    repeated and a second copy of a fact that must be kept current are mechanisms too' in "Mechanisms: a mecha…"`;
+    `test_a_simpler_alternative_is_only_a_mechanism_the_owner_approved` `:1665 AssertionError` (the kind bullet with
+    "of at least `medium` severity" is not in the output section). The rulebook commit `db39dd5` is rule text only.
+  - Runner (base `db39dd5`, `python3 -m pytest -q -p no:cacheprovider --tb=line tests/tools/test_run_review_benchmark.py
+    -k "<names>"`; 5 failed): the three cases of
+    `test_a_leak_term_only_in_a_part_of_the_prompt_the_launcher_builds_is_found` (a term only in the initial or the
+    recheck mechanism rule, or only in a recheck case's answers) `:239 AssertionError: assert [] == ['prompt (…):
+    SECRET-LEAK-TERM', …]`, after the twin's assertion that the case without the term passes (`:232`) held; and
+    `test_problem_id_or_leak_term_in_the_inputs_is_refused[rules-prompt]` and `[task-prompt]` `:208 assert False` (the
+    earlier search labelled such a hit `rules` or `task`, not `prompt`).
+- Validation of the fixes, local, on `f22bb89` in a clean worktree of that commit (the commits after it change only
+  `docs/`): `make qa-quality` passed (qa-trace in PR mode against `origin/poc/agentic-sdlc`: requirements 170,
+  architecture 34, design 131, tests 386, coverage gaps 113, 0 new; unit traceability with 28 mapped requirements, the
+  unit guard over 357 tests, docs-check over 15 live documents, test-lint, and qa-deploy with 18 known violations and
+  22 warnings); `make tooling-test` 932 passed, with 2 deprecation warnings of untouched tests (discovered issue 42),
+  and 9 shell tests (with a scratch shellcheck); `make lint` passed (0 new or worsened findings); `make
+  unit-guard-check` (357 passed) and `make gate-consistency` passed. Not run, as above: the full E2E suite (no
+  service, policy, compose, harness or CI file changed), `make unit-trust`, `make unit-mutation`, `make unit-diff-cov`
+  (no `services/` change), and CI (the branch is not pushed).
+- Review: round 2 of the unit `owner-decisions-2`, the recheck (`owner-decisions-2/c1/r2/A/1`, medium): approvable; all
+  6 answers accepted, F5's and F6's rejections with quotes the launcher checked in the copy; no new finding; the review
+  ended. The brief, rebuilt on the decision page, builds over every unit. Discovered issue 43: one uncaptured test
+  failure in the first of five reruns of the launcher and benchmark tests, not reproduced in the next four.
+
+## 2026-11-14 Slice agentic-sdlc-poc 4: round 2, the owner's findings on review severity
+
+- Branch `poc/slice-4-implementation`, 15 commits `8a82388` to `c79ed96`: round 2 (R2-1 to R2-10), from the owner's
+  findings of 2026-11-14, in the owner's words on the [decision page](../slices/agentic-sdlc-poc/slice_4_decisions.md)
+  (section "Round 2"); it replaces decision 6. Logged as
+  [DPL-013](../delivery_problem_log.md#dpl-013-review-severity-decided-what-got-fixed-a-rejection-could-stand-on-the-authors-word-and-fixes-grew-the-process).
+- The answer rules (R2-1 to R2-4, R2-8; `8a82388`, `5e62097`, `83eabdf`, `0007f65`): blocking, high and medium
+  findings are fixed and take `fixed`, `rejected` or `owner` (a medium finding is no longer deferred); a rejected
+  medium finding, like a blocking or high one, stands only when the next round accepts it, and the review loop handles
+  a medium finding as a high one, defining the end of a review once (review round 1, F2, replaced `0007f65`'s extra
+  clause); a rejection of those severities cites a checkable fact, checked by shape
+  only; one dispute round (a re-raised rejection is fixed or goes `owner:`, never `rejected:` again; a later `fixed:`
+  settles it; a low finding may be rejected again); a fix adds no mechanism (rule text, `AGENTS.md`, Fixes stay within
+  the agreed decisions); the brief lists medium rejections. A probe of every record the check reads (23 attempts, 107
+  answer rows) found none that the new rules refuse, so no transition rule was added.
+- The review prompt and the recheck (R2-5 to R2-7; `67b0402`, `f884421`, `a549e19`, `7b524b2`, `6e88d19`,
+  `f8f19c5`): the answer rules live once in `scripts/run_independent_review.py` (`FIXED_SEVERITIES`,
+  `ALLOWED_ANSWERS`, `CHECKABLE_FACT`, `answer_rule_problems`), and the launcher refuses before a recheck what
+  `make docs-check` refuses after; a finding a recheck accounted `cannot determine` can be answered `fixed:` or
+  `owner:` (before, its record could never turn green). The output section, shared by every mandate wording, asks an
+  initial review whether the change adds a mechanism without the owner's approval where changing a choice would do,
+  and a recheck the same of each `fixed:` answer; the final review gets no such question. This wording is its own
+  commit, `7b524b2`. A recheck's evidence lists every process file (`PROCESS_FILES` in `scripts/review_inputs.py`)
+  changed since the reviewed round, with line counts; a recheck quotes the lines each rejection it accepts or re-raises
+  rests on, and the launcher checks each quote in the copy (whitespace aside, Read line prefixes dropped, within the
+  named lines give or take two; since review round 1, F3, also from a file the attempt read, holding a whole line, and
+  for a rejection that cites files, at least one quote from one of them).
+- The benchmark (R2-9, R2-10; `294d85b`, `ff276bc`, committed before any run, `e4943aa`, `7fd4723`, `c79ed96`): a
+  match rated medium counts as detected, and a medium finding on a no-defect case as a false alarm; the earlier results
+  are re-scored apart (`--rescore B`, which writes nothing unless the earlier rule reproduces every recorded score: 62
+  of 62); the 146 findings no earlier export held were judged blind by a fresh session (15 match); stage A is not
+  re-scored. First runs, blocking or high against R2-9: `short+list` 6 and 9 of 11, `open+list` 7 and 8, `open-B+list`
+  6 and 8. RC-3 (a `fixed:` answer that adds a step) and RC-4 (a rejection citing a test that does not cover the
+  scenario) ran on `recheck-A` and `recheck-B`, base `e842e97`: RC-4 re-raised by both, RC-3 accepted by both. Calls 77
+  to 80 of the hard stop of 80, under a pinned install of CLI 2.1.323 in a scratch folder (the installed CLI had
+  updated itself to 2.1.325, which has no canary). The key kept `budget: 85`; the runner checked the run's `--budget`
+  against the hard stop (until 2026-11-16, entry above). Report: [`benchmark_report.md`](../slices/poc-4-5-benchmark/benchmark_report.md).
+- Tests first, the failures on the base of each change:
+  - Record check and brief (base `4316724`, `python3 -m pytest -q --tb=line tests/tools/test_check_review_records.py
+    tests/tools/test_review_brief.py`; 13 failed): `…next_round_accepts_passes[medium]` `:299 assert False`;
+    `…cites_no_checkable_fact_fails` (5 cases) `:331 AssertionError: []`; `…rules_do_not_allow_fails[medium-deferred,
+    medium-rejected-alone]` `:357 AssertionError: []`; `…answered_rejected_again_fails[blocking, high]` `:449`, only the
+    old "no later round accepted" message, `[medium]` `:449 AssertionError: []`;
+    `…answered_with_a_fix_settles_the_rejection` `:456`; `test_the_brief_lists_every_item_the_owner_must_see`
+    `test_review_brief.py:66`, heading missing. Passing on the base by design: the 10 fact shapes, low-deferred,
+    medium-owner, the re-raised low finding, a re-raised fix rejected once.
+  - Launcher (base `83eabdf`, `python3 -m pytest -q -p no:cacheprovider --tb=line <ids>`):
+    `…refused_before_the_recheck[3]` `:1410 assert 1 == 2`; `…did_not_accept…`, the undetermined cases `:1447` (refused
+    "answer row for X1, which the report does not hold"), the re-raised cases `:1424 assert 1 == 0`;
+    `…quote_counts…[10]` `:1485/1487`, fields differ from the schema; `…is_quoted` 5 of 7 `:1513` (the two twins pass);
+    `…wrong_shape[7]` `:1527`; `…schema_offers_quotes…` `:1532 KeyError: 'quotes'`; `…process_file_changed…`
+    `:1548 assert 0 == 1`; `…no_process_file_change…` `:1569`; `…adds_a_mechanism` `:1576 AttributeError
+    MECHANISM_RULES`; `…severity_rule_and_the_quote_rule` `:1598`; `test_review_inputs.py:699/710 AttributeError
+    is_process_file / process_file_evidence`; record check `:525` no attribute `answer_rule_problems`, `:557` (4
+    cases), `:564`, `:436`; benchmark `:1365 AttributeError MECHANISM_RULES`, `:1384 'completed' == 'failed'`,
+    `:1396 DID NOT RAISE`; brief `test_review_brief.py:54 assert 1 == 0`. Tests that need a quote could fail on the
+    old schema only ("fields differ").
+  - Benchmark (the runner of the previous commit, `python3 -m pytest -q --tb=line
+    tests/tools/test_run_review_benchmark.py -k <names>`): R2-9's medium detection `assert ([] == ['E1']`, medium false
+    alarm `assert ([] == ['X1']`, the case that holds `assert [] == ['R1-2']`, the measurement's export
+    `assert (8 == 12)`, the re-score report `assert 0 == 2`, the re-score refusal `invalid choice: 'B'`, the third
+    export's not yet confirmed `'0'`, the rating agreement a dict mismatch, the unjudged fix `assert '0' == '1'`;
+    R2-10's budget `assert 76 == 80`, a run within the hard stop `assert (2 == 0)`, the recheck line
+    `no attribute 'false_answer_line'`. Not red: `test_a_false_rejection_is_scored_as_a_false_fix_is` (the scorer was
+    already generic; kept as a regression test).
+  - Review round 1, F3, the quote check (base `2270e4a`, `python3 -m pytest -q -p no:cacheprovider --tb=line
+    tests/tools/test_run_independent_review.py -k "a_quote_comes_from_a_file or holds_at_least_one_whole_line"`; 4
+    failed, 5 passed): `[quote-from-an-unread-file]` and `[quotes-only-from-uncited-files]` `:1544 assert (0 == 1)`,
+    `[one-word]` and `[parts-of-two-lines]` `:1566 assert (0 == 1)` (each recheck completed); the five twins pass.
+    After the change, `test_a_rejection_counts_only_when_the_files_it_cites_were_read[cited-file-read]` quotes the file
+    its answer cites instead of the reviewed file.
+  - The brief over a frozen record (base `e621f36`, `python3 -m pytest -q -p no:cacheprovider --tb=line
+    tests/tools/test_review_brief.py -k before_4_3`; 1 failed, 1 passed): `[True]` `review_brief.BriefError: the
+    records cannot give a complete brief`; the twin `[False]` (the record check reads the attempt) passes. Fixed in
+    `5245997`: from `f884421` the brief applied today's answer rules to attempts logged before slice 4.3, so
+    `python3 scripts/review_brief.py --base origin/poc/agentic-sdlc` refused to build over 4.1's medium finding
+    answered `deferred: #42` (discovered issue 35); it builds again.
+- Review round 1 of unit `round-2` (record `docs/slices/agentic-sdlc-poc/review_round_2.md`): attempt 1 failed the
+  read check (discovered issue 36); attempt 2 not approvable: 2 high, 2 medium, 3 low. Fixed (`6d8de53` to
+  `cdfce97`): F1, the stage-table test's `DISCOVERY_EXIT` held the exit cell `eb46b58` had rewritten, so
+  `make tooling-test` failed (discovered issue 34); F2, the review loop handles a medium finding as a high one and
+  states the end of a review once; F3, a quote counts only from a file the attempt read, with a whole line, and a
+  rejection that cites files is quoted from one of them (`QUOTE_RULE` in its own commit, `99eee9e`); F5, the call
+  numbers below; F7, discovered issue 35 (frozen records the check does not read). F4 went to the owner as decision
+  concern 16; F6 was rejected with the lines it rests on. Answers committed in `03ffc55`. Round 2, the recheck
+  (`round-2/c1/r2/A/1`, medium): approvable; all 7 answers accepted, F6's rejection with three quotes the launcher
+  checked in the copy; 1 new low, F8 (the validation named `1f224d1`, not the reviewed commit), fixed in `05c0894`;
+  the review ended. The brief, rebuilt on the decision page (`40aecde`), builds over every unit.
+- Validation, local, on `1f224d1` (after the brief's fix; first on `03ffc55`, with 925 tooling tests): `make qa-quality` passed (qa-trace in PR mode against `origin/poc/agentic-sdlc`:
+  requirements 170, architecture 34, design 131, tests 386, coverage gaps 113, 0 new; docs-check, test-lint, and
+  qa-deploy with 18 known violations and 22 warnings); `make tooling-test` 927 passed and 9 shell tests (with a scratch
+  shellcheck); `make lint` passed (0 new or worsened findings); `make unit-guard-check` and `make gate-consistency`
+  passed. Not run: the full E2E suite (`git diff --name-only 4316724 1f224d1` lists no service, policy, compose,
+  harness or CI file; CI's `e2e` job runs it on the PR), `make unit-trust`, `make unit-mutation` and
+  `make unit-diff-cov` (no `services/` change), and CI (the branch is not pushed). The validation on `c79ed96` before
+  the review had passed `make tooling-test` with 916 tests, but `eb46b58` came after it and was not rerun (F1).
+- Review: unit `round-2` of `docs/slices/agentic-sdlc-poc/`, round 1, then round 2 (the recheck), approvable; the review ended (the round-1 and round-2 bullets above).
+
+## 2026-11-13 Slice agentic-sdlc-poc 4: the owner's decisions on the decision concerns
+
+- Branch `poc/slice-4-implementation`, commits `44a040c` to `ea4e100` and the commit with the fixes to their review:
+  the owner's decisions of 2026-11-13 on decision concerns 2, 3, 4, 7, 8 and 10, in the owner's words on the
+  [decision page](../slices/agentic-sdlc-poc/slice_4_decisions.md). Decision concerns 2 and 3 keep what was built.
+- Small slices (decision concern 7): `AGENTS.md` (Slice workflow, Small slices, Discovery, Final review) defines a
+  small slice by four conditions and runs it as one PR whose review units are the plan review and the implementation
+  review, with no final review; the plan template's Small slice part asks why each condition holds.
+- The decision page (decision concern 10): every slice starts `decisions.md` from `docs/slices/_template/`; it holds
+  the decision brief, the implementation review's findings on the test-plan questions and every discovered issue,
+  and the PR body states the goal and what changed and links it. `scripts/review_brief.py` no longer reads or prints
+  a CI result.
+- RC-2 (decision concern 4): a recheck case whose answers hold (a correct rejection beside a correct fix), answer key
+  version 3. On both recheck wordings: `recheck-B` accepted both answers, `recheck-A` failed the launcher's read check.
+- The budget: stage B's 60 calls raised to 85 for the canary, RC-2 and the measurement (key version 4); 76 spent. The
+  runner's hard stop is now 76, so no further stage-B call runs without a new decision (decision concern 11).
+- A canary per CLI version: the CLI updated itself from 2.1.321 to 2.1.323 mid-benchmark; a canary now counts as done
+  only for its own CLI version, and a new pair under 2.1.323 is valid and passed.
+- Severity (decision concern 8): the [analysis](../slices/poc-4-5-benchmark/severity_analysis.md) found that reviewers
+  rate a failure scenario's first symptom, often under base rules that support the low rating. Its candidate "finish
+  the scenario" ran as `open+list+sev` on the 15 initial-review cases and was judged blind against criteria fixed
+  before the runs: worse (RM-3 and RM-4 still medium, RM-6 lost, two extra blocking or high findings on CL-1), so
+  nothing is adopted. The launcher's output section and `AGENTS.md` stay as they were; decision 6 asks the owner what
+  to do instead.
+- Review: unit `owner-decisions` of `docs/slices/agentic-sdlc-poc/`, round 1: attempt 1 failed the read check
+  (discovered issue 21); attempt 2 not approvable, 1 blocking, 2 high, 5 medium. The fixes: the implementation review
+  answers the test-plan questions as findings; condition 4 counts the change, not the bundle or the handoff files;
+  the confirmation's two departures from the plan are recorded; the report holds the clusters' severities; a test of
+  the severity file's refusal. Decision 7, decision concern 11 and growth proposal 12 go to the owner.
+  Round 2: attempt 1 failed the read check again; attempt 2 approvable, all 8 answers accepted, no new finding; the
+  review ended after round 2.
+- Validation, local: `make tooling-test` 800 passed and 9 shell tests (with a scratch shellcheck); `ruff check
+  services scripts` clean; `make lint` against `origin/poc/agentic-sdlc` passed (0 new or worsened findings);
+  `make docs-check` passed on the commit, in a clone without this review's record, which fails it in the working
+  tree until its answers are written. Not run: the E2E suite (`git diff --stat 2da4333 HEAD` lists only rulebook,
+  document, template, review-tooling and test files, no service, harness or compose file) and CI (the branch is not
+  pushed).
+
+## 2026-11-13 Slice agentic-sdlc-poc 4: the owner's growth to the review launcher
+
+- Branch `poc/slice-4-implementation`, after the final review; approved by the owner on 2026-11-13 ("yes, replace it
+  and implement both with proposal 9"; [decision page](../slices/agentic-sdlc-poc/slice_4_decisions.md)).
+- `scripts/run_independent_review.py`: a recheck must read every file a `rejected:` answer cites, as for a `fixed:`
+  answer, with or without a directory part (`AGENTS.md`, `Makefile`), and a cited path the copy does not hold is
+  refused before any call; a reviewer lists files it only searched under `searched`, so `opened` stays a checked
+  claim; a finding may name the checklist question that prompted it (`question`, for example `code:10`). An entry
+  logged with the earlier report schema is refused for a rebuild. `scripts/run_review_benchmark.py`: the report counts
+  the findings that name their question (0 for the stage-B runs, which predate the field).
+- Decision concern 1 is resolved; the decision page records why the first proposal was withdrawn (DPL-012).
+- Review: unit `growth` of `docs/slices/agentic-sdlc-poc/` ([record](../slices/agentic-sdlc-poc/review_growth.md)).
+- Validation, local: `make tooling-test` 786 passed (with a scratch shellcheck); `make qa-quality` and the trace gate
+  in PR mode passed (0 new gaps); `make lint` passed. Not run: the E2E suite (no service, harness or compose file
+  changed since the 2026-11-10 run) and CI (the branch is not pushed).
+
+## 2026-11-10 Slice agentic-sdlc-poc 4: review prompts, inputs, records, stage checklists, benchmark, stage rules
+
+- Branch `poc/slice-4-implementation`, from `poc/agentic-sdlc` at `3347754` (plan PR #48), local until the owner
+  pushes; one final PR with a section per sub-issue (#38 to #43). The owner's decision page, with every author
+  decision, decision concern, growth proposal and discovered issue:
+  [`slice_4_decisions.md`](../slices/agentic-sdlc-poc/slice_4_decisions.md).
+- 4.1 (#38): the launcher writes every prompt in fixed sections, opening with the mandate of the review's mode
+  (initial, recheck, final), with quoted text fenced; findings carry a severity, a kind and an origin stage; rechecks
+  account for every answer and must read the files a `fixed:` answer names.
+- 4.2 (#39): the files under review come from the diff; upstream items and evidence (uncovered changed lines, trace
+  gaps, CI results) are computed in a scratch clone (`scripts/review_inputs.py`).
+- 4.3 (#40): the launcher writes the review record, and `make docs-check` checks every record against its attempt
+  log and every answer against its finding (`scripts/review_records.py`, `scripts/check_review_records.py`).
+- 4.4 (#41): six stage checklists in `docs/review_checklists/` from researched sources
+  (`docs/slices/poc-4-4-stage-checklists/research.md`), critiqued by Opus and Sonnet; `--stage` reads a list from
+  the base commit.
+- 4.5 (#42): the stage-B benchmark (`scripts/run_review_benchmark.py`, `tests/review_benchmark/`) ran within 57 of
+  60 reviewer calls; the report is [`benchmark_report.md`](../slices/poc-4-5-benchmark/benchmark_report.md):
+  `open+list` 7 of 11 defect cases, `short+list` 6, `open-B+list` 6, both recheck wordings 1 of 1, all within
+  chance. The launcher's mandates stay 4.1's until the owner chooses.
+- 4.6 (#43): `AGENTS.md`'s slice workflow has seven stages, each with its review, list, checks and exit; the
+  templates carry the stage table, decision sources and rule deviations; `scripts/review_brief.py` builds a PR's
+  decision brief; the grill-me skill lives in `.claude/skills/grill-me/`.
+- Reviews: every sub-issue's implementation review ended with no blocking or high finding open (records in each
+  bundle); 4.4 had a two-model critique; a dry slice from a clean session recorded 18 trip points, in the decision
+  page. The final review of the slice is the unit `final` of `docs/slices/agentic-sdlc-poc/`.
+- Validation, local (CI's verdict comes when the owner pushes): `make tooling-test` 764 passed (with a scratch
+  shellcheck; this machine has none installed); `make qa-quality` passed (qa-trace, traceability, unit guard,
+  docs-check, test-lint, qa-deploy); `make lint` passed; the full E2E suite on a clean stack passed 120 of 120 with
+  one warning (M5-T55, live Jira not configured, skipped by its env gate); `make qa-evidence` passed (119 validated,
+  1 skipped). Not run: CI (the branch is not pushed) and `make unit-diff-cov` and `make unit-mutation` as CI runs
+  them on a PR (slice 4 changes no service code).
+
 ## 2026-11-08 Fixes to the review launcher and the secret check (slice 4 plan branch)
 
 - Branch `poc/slice-4-plans`, commits `f070669`, `d56c69a`, `f8b6200`, `8d80ce8` and the commit that ends a
